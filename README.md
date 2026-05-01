@@ -78,3 +78,8 @@ node start
 
 Have a lovely moderation bot hosting, dm me at my discord user: 1427299411049840640 for bugs that you found, and with that have a lovely day!
 Send me friend request to my discord: https://www.discord.com/users/1427299411049840640 for discussing, constructive feedback is very much welcomed!
+
+## Credit
+
+If you use this project, please give credit to the original author, aka me, CyberNovaX
+
