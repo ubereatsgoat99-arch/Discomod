@@ -2794,6 +2794,118 @@ const SERVICE_INTENT_PHRASE_EXTRA = [
     "message me for raids",
     "message me for raid",
 ];
+
+const SERVICE_INTENT_PHRASE_EXTRA2 = [
+    // high-skill / sweaty requests
+    "looking for insane carry",
+    "need insane carry",
+    "lf insane players",
+    "lf insane carry",
+    "need god tier players",
+    "looking for god tier carry",
+    "need god tier team",
+    "lf god tier help",
+    "need pro level carry",
+    "looking for pro level team",
+    "need pro level players",
+    "lf pro level raid team",
+    "need elite raid carry",
+    "lf elite raid team",
+    "looking for elite raiders",
+    "need max level raid carry",
+    "lf max level team",
+    "need max level players",
+    "looking for max lvl carry",
+    "need max lvl raid team",
+
+    // competitive / hardcore
+    "need hardcore raid team",
+    "lf hardcore players",
+    "looking for hardcore carry",
+    "need tryhard team",
+    "lf tryhard players",
+    "looking for tryhard carry",
+    "need competitive team",
+    "lf competitive players",
+    "need ranked players",
+    "lf ranked team",
+    "looking for ranked carry",
+    "need leaderboard grind team",
+    "lf leaderboard players",
+    "looking for leaderboard push",
+
+    // experienced / veteran
+    "need veteran players",
+    "lf veteran raid team",
+    "looking for veteran carry",
+    "need experienced raiders only",
+    "lf experienced raid team only",
+    "looking for experienced players only",
+    "need pro veterans",
+    "lf raid veterans only",
+    "need skilled veterans",
+    "looking for veteran squad",
+
+    // endgame / late game
+    "need endgame raid team",
+    "lf endgame players",
+    "looking for endgame carry",
+    "need late game players",
+    "lf late game team",
+    "looking for late game carry",
+    "need post game help",
+    "lf post game players",
+
+    // grind / farming escalation
+    "need insane grind help",
+    "lf grinding team high level",
+    "looking for hardcore farming team",
+    "need efficient farming squad",
+    "lf fast grind carry",
+    "need speed farm team",
+    "looking for farming pros",
+    "need farming veterans",
+
+    // raids / bosses advanced
+    "need advanced raid carry",
+    "lf raid specialists",
+    "looking for raid experts only",
+    "need boss farming team",
+    "lf boss grinding squad",
+    "looking for boss killers",
+    "need dungeon carry elite",
+    "lf dungeon experts",
+    "looking for dungeon carry",
+
+    // PvP / skill-based
+    "need pvp gods",
+    "lf pvp sweats",
+    "looking for pvp carry",
+    "need ranked pvp team",
+    "lf arena players",
+    "looking for arena carry",
+    "need duel experts",
+    "lf duelists only",
+
+    // rare / stacked team requests
+    "need stacked team",
+    "lf stacked players",
+    "looking for stacked raid team",
+    "need full stacked carry",
+    "lf full stacked squad",
+    "looking for overpowered team",
+    "need op players only",
+    "lf op carry team",
+
+    // urgency + high demand
+    "need urgent elite carry",
+    "lf fast god carry",
+    "looking for asap pro team",
+    "need immediate high level help",
+    "lf instant raid carry",
+    "looking for quick elite team",
+];
+
 const BEG_WORDS = [
     "pls","plss","plsss","please","pleese","plz","plzz","plzzz",
     "pleasee","plx","plez","pleas","plee",
@@ -4722,32 +4834,56 @@ client.on('interactionCreate', async interaction => {
                 .setColor(0x00FF88)
                 .addFields(
                     { name: 'Cleaned Input',     value: `\`${cleaned.slice(0,300)}\``,   inline: false },
-                    { name: 'Fruits',            value: fruits.join(', ')   || 'None',   inline: false },
-                    { name: 'Bosses',            value: bosses.join(', ')   || 'None',   inline: false },
-                    { name: 'Swords',            value: swords.join(', ')   || 'None',   inline: false },
-                    { name: 'Enchants',          value: enchants.join(', ') || 'None',   inline: false },
-                    { name: 'Haki Colors',       value: haki.join(', ')     || 'None',   inline: false },
-                    { name: 'Fighting Styles',   value: styles.join(', ')   || 'None',   inline: false },
-                    { name: 'Guns',              value: guns.join(', ')     || 'None',   inline: false },
-                    { name: 'Accessories',       value: accs.join(', ')     || 'None',   inline: false },
-                    { name: 'Quests',            value: quests.join(', ')   || 'None',   inline: false },
-                    { name: 'Sea Events',        value: seaEv.join(', ')    || 'None',   inline: false },
-                    { name: 'Races',             value: races.join(', ')    || 'None',   inline: false },
-                    { name: 'Pain Upgrades',     value: painUpg.join(', ')  || 'None',   inline: false },
-                    { name: 'Lightning Upgrades',value: lightUpg.join(', ') || 'None',   inline: false },
-                    { name: 'Tier Keyword',      value: tier     ? '✅' : '❌', inline: true },
-                    { name: 'Trade Intent',      value: intent   ? '✅' : '❌', inline: true },
-                    { name: 'Service Intent',    value: svcIntent? '✅' : '❌', inline: true },
-                    { name: 'Direct Exchange',   value: exchange ? '✅' : '❌', inline: true },
-                    { name: 'Boss Regex',        value: bossHit  ? '✅' : '❌', inline: true },
-                    { name: 'Fruit+Raid',        value: fruitRaid? '✅' : '❌', inline: true },
-                    { name: 'Account Trading',   value: accTrade ? '🚨 YES' : '✅ CLEAN', inline: true },
-                    { name: 'Begging',           value: begging  ? '🚨 YES' : '✅ CLEAN', inline: true },
-                    { name: '🔴 Flag (Trade)?',  value: tradeFlag? '🚨 YES' : '✅ CLEAN', inline: true },
-                    { name: '🔴 Flag (Service)?',value: svcFlag  ? '🚨 YES' : '✅ CLEAN', inline: true },
-                    { name: '🔴 Flag (Race)?',   value: raceFlag ? '🚨 YES' : '✅ CLEAN', inline: true },
-                    { name: '🔴 Flag (Pain)?',   value: painFlag ? '🚨 YES' : '✅ CLEAN', inline: true },
-                    { name: '🔴 Flag (Lightning)?',value:lightFlag?'🚨 YES':'✅ CLEAN',   inline: true },
+
+                    { name: '📦 Items', value:
+                        `Fruits: ${fruits.join(', ') || 'None'}\n` +
+                        `Bosses: ${bosses.join(', ') || 'None'}\n` +
+                        `Swords: ${swords.join(', ') || 'None'}\n` +
+                        `Enchants: ${enchants.join(', ') || 'None'}`,
+                        inline: false
+                    },
+
+                    { name: '⚔️ Combat', value:
+                        `Haki Colors: ${haki.join(', ') || 'None'}\n` +
+                        `Fighting Styles: ${styles.join(', ') || 'None'}\n` +
+                        `Guns: ${guns.join(', ') || 'None'}\n` +
+                        `Accessories: ${accs.join(', ') || 'None'}`,
+                        inline: false
+                    },
+
+                    { name: '🌊 Progress', value:
+                        `Quests: ${quests.join(', ') || 'None'}\n` +
+                        `Sea Events: ${seaEv.join(', ') || 'None'}\n` +
+                        `Races: ${races.join(', ') || 'None'}`,
+                        inline: false
+                    },
+
+                    { name: '⚡ Upgrades', value:
+                        `Pain Upgrades: ${painUpg.join(', ') || 'None'}\n` +
+                        `Lightning Upgrades: ${lightUpg.join(', ') || 'None'}`,
+                        inline: false
+                    },
+
+                    { name: '🧠 Detection', value:
+                        `Tier Keyword: ${tier ? '✅' : '❌'}\n` +
+                        `Trade Intent: ${intent ? '✅' : '❌'}\n` +
+                        `Service Intent: ${svcIntent ? '✅' : '❌'}\n` +
+                        `Direct Exchange: ${exchange ? '✅' : '❌'}\n` +
+                        `Boss Regex: ${bossHit ? '✅' : '❌'}\n` +
+                        `Fruit+Raid: ${fruitRaid ? '✅' : '❌'}`,
+                        inline: false
+                    },
+
+                    { name: '🚨 Flags', value:
+                        `Account Trading: ${accTrade ? '🚨 YES' : '✅ CLEAN'}\n` +
+                        `Begging: ${begging ? '🚨 YES' : '✅ CLEAN'}\n` +
+                        `Trade Flag: ${tradeFlag ? '🚨 YES' : '✅ CLEAN'}\n` +
+                        `Service Flag: ${svcFlag ? '🚨 YES' : '✅ CLEAN'}\n` +
+                        `Race Flag: ${raceFlag ? '🚨 YES' : '✅ CLEAN'}\n` +
+                        `Pain Flag: ${painFlag ? '🚨 YES' : '✅ CLEAN'}\n` +
+                        `Lightning Flag: ${lightFlag ? '🚨 YES' : '✅ CLEAN'}`
+                    },
+
                 )], ephemeral: true });
             break;
         }
