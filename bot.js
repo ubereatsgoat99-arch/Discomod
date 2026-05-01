@@ -857,6 +857,13 @@ function getGuildSettings(guildId, data) {
             appealsChannelId:  null,
             redirectEmojiId:   DEFAULT_REDIRECT_EMOJI_ID,
             scamEnabled:       true,
+            commandRedirectEnabled: true,
+            serviceRedirectEnabled: true,
+            tradeRedirectEnabled:   true,
+            spamWarnEnabled:        true,
+            begWarnEnabled:         true,
+            scamWarnEnabled:        true,
+            accTradeWarnEnabled:    true,
             violationThreshold: VIOLATION_THRESHOLD,
             exileDurationMins:  EXILE_DURATION_MINS,
 
@@ -923,11 +930,6 @@ function getGuildSettings(guildId, data) {
                 'html','htm','xhtml','svg','xml',
                 'json','yml','yaml','toml','ini','cfg',
             ],
-
-            mentionSpamLimit:  6,
-            mentionSpamWindowSec: 12,
-            mentionSpamUniqueLimit: 5,
-
             linkPolicyEnabled: true,
             linkAllowlistedDomains: [
                 'discord.com','discord.gg','discordapp.com','support.discord.com',
@@ -939,17 +941,35 @@ function getGuildSettings(guildId, data) {
                 'tenor.com','giphy.com',
             ],
             linkDenylistedDomains: [],
-            scanEditsEnabled:  true,
+            scanEditsEnabled: true,
         };
     }
-    return data.guildSettings[guildId];
+    const gs = data.guildSettings[guildId];
+    if (gs.commandRedirectEnabled === undefined) gs.commandRedirectEnabled = true;
+    if (gs.serviceRedirectEnabled === undefined) gs.serviceRedirectEnabled = true;
+    if (gs.tradeRedirectEnabled === undefined) gs.tradeRedirectEnabled = true;
+    if (gs.spamWarnEnabled === undefined) gs.spamWarnEnabled = true;
+    if (gs.begWarnEnabled === undefined) gs.begWarnEnabled = true;
+    if (gs.scamWarnEnabled === undefined) gs.scamWarnEnabled = true; 
+    if (gs.accTradeWarnEnabled === undefined) gs.accTradeWarnEnabled = true;
+    return gs;
 }
+
 function getImmunitySettings(guildId, data) {
+    data.immunity = data.immunity || {};
     if (!data.immunity[guildId]) {
-        data.immunity[guildId] = { enabled: true, whitelistedRoles: [] };
+        data.immunity[guildId] = {
+            enabled: false,
+            whitelistedRoles: [],
+        };
     }
+    data.immunity[guildId].whitelistedRoles = Array.isArray(data.immunity[guildId].whitelistedRoles)
+        ? data.immunity[guildId].whitelistedRoles
+        : [];
+    if (typeof data.immunity[guildId].enabled !== 'boolean') data.immunity[guildId].enabled = false;
     return data.immunity[guildId];
 }
+
 function isMemberImmune(member, guildId, data) {
     const s = getImmunitySettings(guildId, data);
     if (!s.enabled) return false;
@@ -3703,6 +3723,48 @@ const slashCommands = [
         .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(true)),
 
     new SlashCommandBuilder()
+        .setName('commandredirect')
+        .setDescription('Enable/disable command redirect enforcement (Games Hub)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('serviceredirect')
+        .setDescription('Enable/disable services redirect enforcement (wrong channel)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('traderedirect')
+        .setDescription('Enable/disable trade redirect enforcement (wrong channel)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('spamwarn')
+        .setDescription('Enable/disable spam warnings/enforcement')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('begwarn')
+        .setDescription('Enable/disable begging warnings/enforcement')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('scamwarn')
+        .setDescription('Enable/disable scam warnings/enforcement')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('acctradewarn')
+        .setDescription('Enable/disable account trading warnings/enforcement')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
+
+    new SlashCommandBuilder()
         .setName('raidmode')
         .setDescription('Enable/disable raid mode (stricter, auto-lockdown on join spikes)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -4448,6 +4510,97 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
+        case 'commandredirect': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) {
+                await interaction.reply({ content: `🧭 Command redirect is currently **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                break;
+            }
+            gs.commandRedirectEnabled = !!enabled;
+            saveData(data);
+            await interaction.reply({ content: `✅ Command redirect is now **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            break;
+        }
+
+        case 'serviceredirect': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) {
+                await interaction.reply({ content: `⚔️ Service redirect is currently **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                break;
+            }
+            gs.serviceRedirectEnabled = !!enabled;
+            saveData(data);
+            await interaction.reply({ content: `✅ Service redirect is now **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            break;
+        }
+
+        case 'traderedirect': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) {
+                await interaction.reply({ content: `🔄 Trade redirect is currently **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                break;
+            }
+            gs.tradeRedirectEnabled = !!enabled;
+            saveData(data);
+            await interaction.reply({ content: `✅ Trade redirect is now **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            break;
+        }
+
+        case 'spamwarn': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) {
+                await interaction.reply({ content: `⚠️ Spam warnings are currently **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                break;
+            }
+            gs.spamWarnEnabled = !!enabled;
+            saveData(data);
+            await interaction.reply({ content: `✅ Spam warnings are now **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            break;
+        }
+
+        case 'begwarn': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) {
+                await interaction.reply({ content: `🚫 Begging warnings are currently **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                break;
+            }
+            gs.begWarnEnabled = !!enabled;
+            saveData(data);
+            await interaction.reply({ content: `✅ Begging warnings are now **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            break;
+        }
+
+        case 'scamwarn': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) {
+                await interaction.reply({ content: `🚨 Scam warnings are currently **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                break;
+            }
+            gs.scamWarnEnabled = !!enabled;
+            saveData(data);
+            await interaction.reply({ content: `✅ Scam warnings are now **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            break;
+        }
+
+        case 'acctradewarn': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) {
+                await interaction.reply({ content: `🚫 Account trading warnings are currently **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                break;
+            }
+            gs.accTradeWarnEnabled = !!enabled;
+            saveData(data);
+            await interaction.reply({ content: `✅ Account trading warnings are now **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            break;
+        }
+
         case 'raidmode': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const enabled = interaction.options.getBoolean('enabled');
@@ -4899,6 +5052,7 @@ function isMessageCommand(msg) {
     if (!c) return false;
     if (msg.type === 20) return true;
     if (c.startsWith('@') || c.startsWith('<@')) return false;
+    if (/^\s*:[a-zA-Z0-9_]{2,32}:/.test(c)) return false;
     if (/^g\./i.test(c)) return true;
     if (/^[?!]\s*$/.test(c)) return false;
     if (/^[?!]\s+[a-zA-Z]/.test(c)) return false;
@@ -5073,6 +5227,7 @@ function getAttachmentExts(message) {
 function looksLikeCommandButNotCaught(raw, cleaned) {
     const r = (raw || '').trim();
     if (!r) return false;
+    if (/^:[a-zA-Z0-9_]{2,32}:/.test(r)) return false;
     const t = cleaned || fullClean(r);
     const ns = t.replace(/[\s_]/g,'');
 
@@ -5138,7 +5293,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── COMMAND LOCKDOWN ──────────────────────────────────
-    if (isMessageCommand(message)) {
+    if ((gs.commandRedirectEnabled !== false) && isMessageCommand(message)) {
         const staffCommandImmune = isStaff && immCfg.enabled;
         if (!staffCommandImmune && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
             try { await message.delete(); } catch {}
@@ -5157,7 +5312,7 @@ client.on('messageCreate', async message => {
         }
     }
 
-    if (!immune && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
+    if ((gs.commandRedirectEnabled !== false) && !immune && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
         const { contentClean: cmdClean } = prepareText(message.content);
         if (looksLikeCommandButNotCaught(message.content, cmdClean)) {
             const staffCommandImmune = isStaff && immCfg.enabled;
@@ -5418,16 +5573,18 @@ client.on('messageCreate', async message => {
     if (immune) return;
 
     // ── SPAM DETECTION ────────────────────────────────────
-    const spamResult = checkSpam(message.author.id, message.content);
-    if (spamResult.spam) {
-        await handleSpamViolation(message, spamResult.reason, data, gs);
-        return;
+    if (gs.spamWarnEnabled !== false) {
+        const spamResult = checkSpam(message.author.id, message.content);
+        if (spamResult.spam) {
+            await handleSpamViolation(message, spamResult.reason, data, gs);
+            return;
+        }
     }
 
     // ── ACCOUNT TRADING ───────────────────────────────────
     const { contentClean, contentNospace } = prepareText(message.content);
     const scam = gs.scamEnabled ? detectScamOrExploit(contentClean, message.content) : { hit: false };
-    if (scam?.hit) {
+    if ((gs.scamWarnEnabled !== false) && scam?.hit) {
         try { await message.delete(); } catch {}
         incStat(guildId, data, 'scam', 1);
         await issueViolation(message, data, gs, {
@@ -5440,31 +5597,31 @@ client.on('messageCreate', async message => {
         });
         return;
     }
-    if (detectAccountTrading(contentClean)) {
+    if ((gs.accTradeWarnEnabled !== false) && detectAccountTrading(contentClean)) {
         await checkAccountTrading(message, contentClean, data, gs);
         return;
     }
 
     // ── BEGGING ───────────────────────────────────────────
-    if (detectBegging(contentClean)) {
+    if ((gs.begWarnEnabled !== false) && detectBegging(contentClean)) {
         await checkBegging(message, contentClean, data, gs);
         return;
     }
 
     // ── SERVICES / ITEMS ──────────────────────────────────
-    if (message.channel.id !== gs.servicesChannelId) {
+    if ((gs.serviceRedirectEnabled !== false) && message.channel.id !== gs.servicesChannelId) {
         const flagged = await checkServicesViolation(message, contentClean, contentNospace, data, gs);
         if (flagged) return;
     }
 
     // ── TRADE ─────────────────────────────────────────────
-    if (message.channel.id !== gs.tradeChannelId) {
+    if ((gs.tradeRedirectEnabled !== false) && message.channel.id !== gs.tradeChannelId) {
         const flagged = await checkTradeViolation(message, contentClean, contentNospace, data, gs);
         if (flagged) return;
     }
 
     // ── RACE + TIER + INTENT ──────────────────────────────
-    if (message.channel.id !== gs.tradeChannelId) {
+    if ((gs.serviceRedirectEnabled !== false) && message.channel.id !== gs.tradeChannelId) {
         await checkRaceViolation(message, contentClean, contentNospace, data, gs);
     }
 
@@ -5750,6 +5907,13 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
     const exileMins = Math.max(1, Math.min(1440, gs.exileDurationMins || EXILE_DURATION_MINS));
 
+    function parseOnOff(v) {
+        const s = (v || '').toLowerCase();
+        if (['on','true','yes','1','enable','enabled'].includes(s)) return true;
+        if (['off','false','no','0','disable','disabled'].includes(s)) return false;
+        return null;
+    }
+
     async function resolveMember(token) {
         if (!token) return message.mentions.members?.first() || null;
         const mention = token.match(/^<@!?(\d+)>$/);
@@ -5954,6 +6118,69 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         else return message.channel.send('❌ Use: !linkpolicy on/off');
         saveData(data);
         await message.channel.send(`✅ Link policy is now **${gs.linkPolicyEnabled ? 'ON' : 'OFF'}**.`);
+    }
+
+    // !commandredirect [on|off]
+    else if ((cmd === 'commandredirect' || cmd === 'togglecommandredirect') && isAdmin) {
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🧭 Command redirect is currently **${gs.commandRedirectEnabled ? 'ON' : 'OFF'}**. Use: !commandredirect on/off`);
+        gs.commandRedirectEnabled = v;
+        saveData(data);
+        await message.channel.send(`✅ Command redirect is now **${gs.commandRedirectEnabled ? 'ON' : 'OFF'}**.`);
+    }
+
+    // !serviceredirect [on|off]
+    else if ((cmd === 'serviceredirect' || cmd === 'servicesredirect' || cmd === 'toggleserviceredirect') && isAdmin) {
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`⚔️ Service redirect is currently **${gs.serviceRedirectEnabled ? 'ON' : 'OFF'}**. Use: !serviceredirect on/off`);
+        gs.serviceRedirectEnabled = v;
+        saveData(data);
+        await message.channel.send(`✅ Service redirect is now **${gs.serviceRedirectEnabled ? 'ON' : 'OFF'}**.`);
+    }
+
+    // !traderedirect [on|off]
+    else if ((cmd === 'traderedirect' || cmd === 'toggletraderedirect') && isAdmin) {
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🔄 Trade redirect is currently **${gs.tradeRedirectEnabled ? 'ON' : 'OFF'}**. Use: !traderedirect on/off`);
+        gs.tradeRedirectEnabled = v;
+        saveData(data);
+        await message.channel.send(`✅ Trade redirect is now **${gs.tradeRedirectEnabled ? 'ON' : 'OFF'}**.`);
+    }
+
+    // !spamwarn / !spamredirect [on|off]
+    else if ((cmd === 'spamwarn' || cmd === 'spamredirect' || cmd === 'togglespamredirect') && isAdmin) {
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`⚠️ Spam warnings are currently **${gs.spamWarnEnabled ? 'ON' : 'OFF'}**. Use: !spamwarn on/off`);
+        gs.spamWarnEnabled = v;
+        saveData(data);
+        await message.channel.send(`✅ Spam warnings are now **${gs.spamWarnEnabled ? 'ON' : 'OFF'}**.`);
+    }
+
+    // !begwarn [on|off]
+    else if (cmd === 'begwarn' && isAdmin) {
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🚫 Begging warnings are currently **${gs.begWarnEnabled ? 'ON' : 'OFF'}**. Use: !begwarn on/off`);
+        gs.begWarnEnabled = v;
+        saveData(data);
+        await message.channel.send(`✅ Begging warnings are now **${gs.begWarnEnabled ? 'ON' : 'OFF'}**.`);
+    }
+
+    // !scamwarn [on|off]
+    else if (cmd === 'scamwarn' && isAdmin) {
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🚨 Scam warnings are currently **${gs.scamWarnEnabled ? 'ON' : 'OFF'}**. Use: !scamwarn on/off`);
+        gs.scamWarnEnabled = v;
+        saveData(data);
+        await message.channel.send(`✅ Scam warnings are now **${gs.scamWarnEnabled ? 'ON' : 'OFF'}**.`);
+    }
+
+    // !acctradewarn [on|off]
+    else if (cmd === 'acctradewarn' && isAdmin) {
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🚫 Account trading warnings are currently **${gs.accTradeWarnEnabled ? 'ON' : 'OFF'}**. Use: !acctradewarn on/off`);
+        gs.accTradeWarnEnabled = v;
+        saveData(data);
+        await message.channel.send(`✅ Account trading warnings are now **${gs.accTradeWarnEnabled ? 'ON' : 'OFF'}**.`);
     }
 
     // !allowdomain [domain]
