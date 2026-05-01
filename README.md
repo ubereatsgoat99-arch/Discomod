@@ -3,7 +3,7 @@
 A feature-rich Discord bot built with **discord.js v14**, designed for moderation, spam detection, AI-based analysis, and server automation tools.
 
 This bot includes advanced systems such as message monitoring, violation tracking, exile/timeout mechanics, and optional AI-powered detection (Claude API).
-Originally made for MonkeyVerseYT's server, but extended the use for everyone anyways
+Originally made for MonkeyVerseYT's server, but extended the use for everyone anyways.
 
 ---
 
@@ -77,3 +77,4 @@ node start
 ```
 
 Have a lovely moderation bot hosting, dm me at my discord user: 1427299411049840640 for bugs that you found, and with that have a lovely day!
+Send me friend request to my discord: https://www.discord.com/users/1427299411049840640 for discussing, constructive feedback is very much welcomed!
