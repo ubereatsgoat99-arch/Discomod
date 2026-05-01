@@ -1300,7 +1300,7 @@ function normalizeSeparators(t) {
 //  Must run BEFORE leet substitution so '4'→'a' and '3'→'e'
 //  cannot corrupt v4→va or v3→ve.
 // ══════════════════════════════════════════════════════════
-const T_V2 = '\x01TV2\x01', T_V3 = '\x01TV3\x01', T_V4 = '\x01TV4\x01';
+const T_V2 = '\x01TVTWO\x01', T_V3 = '\x01TVTHREE\x01', T_V4 = '\x01TVFOUR\x01';
 function protectTiers(t) {
     t = t.replace(/\bv[\s_]*4\b/gi, T_V4);
     t = t.replace(/\bv[\s_]*3\b/gi, T_V3);
