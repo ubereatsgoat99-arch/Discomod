@@ -62,4 +62,4 @@ Fill in the .env with your own Discord Bot token and Claude API key and then run
 ```bash
 node start
 ```
-`
+Have a lovely rest of your day!
