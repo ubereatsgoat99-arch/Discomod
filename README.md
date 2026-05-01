@@ -68,6 +68,7 @@ cp .env.example .env
 Then fill in your values:
 
 DISCORD_TOKEN=your_token_here
+
 ANTHROPIC_API_KEY=your_key_here
 
 and then run:
