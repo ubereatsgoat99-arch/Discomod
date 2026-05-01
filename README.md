@@ -3,7 +3,7 @@
 A feature-rich Discord bot built with **discord.js v14**, designed for moderation, spam detection, AI-based analysis, and server automation tools.
 
 This bot includes advanced systems such as message monitoring, violation tracking, exile/timeout mechanics, and optional AI-powered detection (Claude API).
-Originally made for AmineGuy's Discord Server (https://discord.gg/HdgpfgrVsn), but extended the use for everyone anyways
+Originally made for MonkeyVerseYT's server, but extended the use for everyone anyways
 
 ---
 
