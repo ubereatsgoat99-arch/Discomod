@@ -57,9 +57,23 @@ Install dependencies:
 ```bash
 npm install 
 ```
-Fill in the .env with your own Discord Bot token and Claude API key and then run
+
+## Setup
+
+After that, copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+Then fill in your values:
+
+DISCORD_TOKEN=your_token_here
+ANTHROPIC_API_KEY=your_key_here
+
+and then run:
 
 ```bash
 node start
 ```
-Have a lovely rest of your day!
+
+Have a lovely moderation bot hosting, dm me at my discord user: 1427299411049840640 for bugs that you found, and with that have a lovely day!
