@@ -5050,10 +5050,15 @@ const CMD_PREFIX_RE = /^[^a-zA-Z0-9\s@]/;
 function isMessageCommand(msg) {
     const c = msg.content;
     if (!c) return false;
+    const t = c.trimStart();
     if (msg.type === 20) return true;
-    if (c.startsWith('@') || c.startsWith('<@')) return false;
-    if (/^\s*:[a-zA-Z0-9_]{2,32}:/.test(c)) return false;
-    if (/^g\./i.test(c)) return true;
+    if (t.startsWith('@') || t.startsWith('<@')) return false;
+    if (/^:[a-zA-Z0-9_]{2,32}:/.test(t)) return false;
+    if (/^<a?:[a-zA-Z0-9_]{2,32}:\d{6,20}>/.test(t)) return false;
+    if (/^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/u.test(t)) return false;
+    if (/^\p{Regional_Indicator}{2}/u.test(t)) return false;
+    if (/^[#*0-9]\uFE0F?\u20E3/u.test(t)) return false;
+    if (/^g\./i.test(t)) return true;
     if (/^[?!]\s*$/.test(c)) return false;
     if (/^[?!]\s+[a-zA-Z]/.test(c)) return false;
     if (CMD_PREFIX_RE.test(c)) return true;
