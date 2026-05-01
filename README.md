@@ -55,11 +55,11 @@ Originally made for AmineGuy's Discord Server (https://discord.gg/HdgpfgrVsn), b
 Install dependencies:
 
 ```bash
-npm install discord.js dotenv
+npm install 
 ```
 Fill in the .env with your own Discord Bot token and Claude API key and then run
 
 ```bash
-node bot.js
+node start
 ```
 `
