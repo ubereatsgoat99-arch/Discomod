@@ -35,6 +35,8 @@ const DEFAULT_GAMES_HUB_ID        = '1416126451589316679';
 const DEFAULT_EXILED_ROLE_ID      = '1423350765711261797';
 const DEFAULT_REDIRECT_EMOJI_ID   = '1125321969932451841';
 
+const BOT_CODED_BY_ID = '1427299411049840640';
+
 const VIOLATION_THRESHOLD  = 3;
 const EXILE_DURATION_MINS  = 45;
 const SPLIT_MESSAGE_TTL    = 90;
@@ -504,7 +506,7 @@ function extractDomains(text) {
         const m = u.match(/^https?:\/\/([^\/\s?#:]+)(?::\d+)?/i);
         if (m && m[1]) domains.push(m[1].toLowerCase());
     }
-    const bare = (text.match(/(?<![a-z0-9])[a-z0-9][a-z0-9\-]{0,60}\.[a-z]{2,}(?![a-z0-9])/gi) || []);
+    const bare = (text.match(/(?:^|[^a-z0-9])([a-z0-9][a-z0-9\-]{0,60}\.[a-z]{2,})(?![a-z0-9])/gi) || []).map(m => m.replace(/^[^a-z0-9]+/i, ''));
     for (const b of bare) domains.push(b.toLowerCase());
     return [...new Set(domains)];
 }
@@ -867,6 +869,25 @@ function getGuildSettings(guildId, data) {
             aiEnabled: false,
             checksEnabled: true,
             noAffiliationEnabled: false,
+            botOwnerId: null,
+            botFooterText: null,
+            botInfoPublic: false,
+
+            linkMode: 'strict',
+            linkAction: 'warn',
+
+            verifyGateEnabled: false,
+            verifyMinAccountAgeDays: 7,
+            verifyRequiredRoleId: null,
+            verifyGateAction: 'warn',
+
+            timeoutEnabled: false,
+            timeoutMinutesSpam: 10,
+            timeoutMinutesScam: 60,
+            timeoutMinutesCommand: 5,
+            timeoutMinutesTrade: 5,
+            timeoutMinutesService: 5,
+
             violationThreshold: VIOLATION_THRESHOLD,
             exileDurationMins:  EXILE_DURATION_MINS,
 
@@ -958,7 +979,130 @@ function getGuildSettings(guildId, data) {
     if (gs.aiEnabled === undefined) gs.aiEnabled = false;
     if (gs.checksEnabled === undefined) gs.checksEnabled = true;
     if (gs.noAffiliationEnabled === undefined) gs.noAffiliationEnabled = false;
+    if (gs.botOwnerId === undefined) gs.botOwnerId = null;
+    if (gs.botFooterText === undefined) gs.botFooterText = null;
+    if (gs.botInfoPublic === undefined) gs.botInfoPublic = false;
+
+    if (gs.linkMode === undefined) gs.linkMode = 'strict';
+    if (gs.linkAction === undefined) gs.linkAction = 'warn';
+
+    if (gs.verifyGateEnabled === undefined) gs.verifyGateEnabled = false;
+    if (gs.verifyMinAccountAgeDays === undefined) gs.verifyMinAccountAgeDays = 7;
+    if (gs.verifyRequiredRoleId === undefined) gs.verifyRequiredRoleId = null;
+    if (gs.verifyGateAction === undefined) gs.verifyGateAction = 'warn';
+
+    if (gs.timeoutEnabled === undefined) gs.timeoutEnabled = false;
+    if (gs.timeoutMinutesSpam === undefined) gs.timeoutMinutesSpam = 10;
+    if (gs.timeoutMinutesScam === undefined) gs.timeoutMinutesScam = 60;
+    if (gs.timeoutMinutesCommand === undefined) gs.timeoutMinutesCommand = 5;
+    if (gs.timeoutMinutesTrade === undefined) gs.timeoutMinutesTrade = 5;
+    if (gs.timeoutMinutesService === undefined) gs.timeoutMinutesService = 5;
     return gs;
+}
+
+function footerText(gs) {
+    return gs?.botFooterText ? String(gs.botFooterText).slice(0, 200) : null;
+}
+
+async function tryTimeout(member, minutes, reason) {
+    try {
+        if (!member || !minutes || minutes <= 0) return false;
+        if (!member.moderatable) return false;
+        await member.timeout(minutes * 60 * 1000, reason);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function applyConfiguredAction(message, data, gs, opts) {
+    const action = String(opts?.action || 'warn').toLowerCase();
+    const reason = String(opts?.reason || '');
+    const title = String(opts?.title || '⚠️ Moderation');
+    const footerLabel = String(opts?.footerLabel || 'Moderation');
+    const ttlMs = opts?.ttlMs || 12000;
+    const timeoutMins = Number(opts?.timeoutMins || 0);
+    const exileMins = Number(opts?.exileMins || (gs.exileDurationMins || EXILE_DURATION_MINS));
+
+    if (action === 'delete') {
+        try { await message.delete(); } catch {}
+        return { action };
+    }
+
+    if (action === 'timeout') {
+        try { await message.delete(); } catch {}
+        if (gs.timeoutEnabled) {
+            await tryTimeout(message.member, timeoutMins, reason);
+        }
+        await issueViolation(message, data, gs, {
+            title,
+            color: opts?.color || 0x5865F2,
+            reason,
+            details: message.content,
+            footerLabel,
+            ttlMs,
+        });
+        return { action };
+    }
+
+    if (action === 'exile') {
+        try { await message.delete(); } catch {}
+        const fd = loadData();
+        await performExile(message.member, message.guild, exileMins, reason || 'Auto exile', fd);
+        saveData(fd);
+        await issueViolation(message, data, gs, {
+            title,
+            color: opts?.color || 0xFF2222,
+            reason,
+            details: message.content,
+            footerLabel,
+            ttlMs,
+        });
+        return { action };
+    }
+
+    // warn (default)
+    try { await message.delete(); } catch {}
+    await issueViolation(message, data, gs, {
+        title,
+        color: opts?.color || 0xFF8800,
+        reason,
+        details: message.content,
+        footerLabel,
+        ttlMs,
+        redirectChannelId: opts?.redirectChannelId || null,
+    });
+    return { action: 'warn' };
+}
+
+function detectScamByMode(gs, contentClean, rawText) {
+    if (gs.linkMode === 'off') return { hit: false };
+    if (gs.linkMode === 'medium') {
+        const raw = rawText || '';
+        const hasUrl = /https?:\/\//i.test(raw);
+        if (!hasUrl) return { hit: false };
+        return detectScamOrExploit(contentClean, rawText);
+    }
+    const base = detectScamOrExploit(contentClean, rawText);
+    if (base?.hit) return base;
+    const obf = detectObfuscatedDomains(rawText);
+    if (obf.length) return { hit: true, reason: `Obfuscated domain(s): ${obf.join(', ')}` };
+    return { hit: false };
+}
+
+function normalizeObfuscatedDomainText(raw) {
+    return String(raw || '')
+        .toLowerCase()
+        .replace(/\(dot\)|\[dot\]|\{dot\}|\sdot\s/g, '.')
+        .replace(/\(\.\)|\[\.\]|\{\.\}/g, '.')
+        .replace(/\(com\)|\[com\]|\{com\}|\scom\b/g, '.com')
+        .replace(/\s+/g, ' ');
+}
+
+function detectObfuscatedDomains(rawText) {
+    const t = normalizeObfuscatedDomainText(rawText);
+    const hit = (t.match(/(?<![a-z0-9])[a-z0-9][a-z0-9\-]{0,60}\s*(?:\.|\s+dot\s+)\s*[a-z]{2,}(?![a-z0-9])/gi) || []);
+    return hit.length ? hit.slice(0, 5) : [];
 }
 
 function getCategoryImmunity(guildId, data, category) {
@@ -3709,6 +3853,73 @@ const slashCommands = [
         .addSubcommand(s => s.setName('disable').setDescription('Disable no-affiliation mode')),
 
     new SlashCommandBuilder()
+        .setName('botinfo')
+        .setDescription('Show information about the bot'),
+
+    new SlashCommandBuilder()
+        .setName('setowner')
+        .setDescription('Set the bot owner shown in /botinfo')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addUserOption(o => o.setName('owner').setDescription('Owner user').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('clearowner')
+        .setDescription('Clear the bot owner (shows open source/community)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+
+    new SlashCommandBuilder()
+        .setName('setfooter')
+        .setDescription('Set a custom footer shown on bot embeds (optional)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o.setName('text').setDescription('Footer text (max 200)').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('clearfooter')
+        .setDescription('Clear the custom embed footer')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+
+    new SlashCommandBuilder()
+        .setName('botinfopublic')
+        .setDescription('Control whether /botinfo is public or ephemeral')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o.setName('mode').setDescription('on|off').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('linkmode')
+        .setDescription('Set link intelligence mode')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o.setName('mode').setDescription('strict|medium|off').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('linkaction')
+        .setDescription('Set what happens when link/scam content is detected')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o.setName('action').setDescription('delete|warn|exile|timeout').setRequired(true))
+        .addIntegerOption(o => o.setName('minutes').setDescription('Timeout minutes (only for timeout)').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('verifygate')
+        .setDescription('Gate posting for new/unverified accounts')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('enable').setDescription('Enable verification gate'))
+        .addSubcommand(s => s.setName('disable').setDescription('Disable verification gate'))
+        .addSubcommand(s => s.setName('config').setDescription('Configure verification gate')
+            .addIntegerOption(o => o.setName('minaccountdays').setDescription('Minimum account age in days').setRequired(false))
+            .addRoleOption(o => o.setName('requiredrole').setDescription('Required role to bypass').setRequired(false))
+            .addStringOption(o => o.setName('action').setDescription('delete|warn|timeout').setRequired(false))
+            .addIntegerOption(o => o.setName('minutes').setDescription('Timeout minutes (only for timeout)').setRequired(false))),
+
+    new SlashCommandBuilder()
+        .setName('timeoutconfig')
+        .setDescription('Configure auto-timeout escalation')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('enable').setDescription('Enable auto-timeouts'))
+        .addSubcommand(s => s.setName('disable').setDescription('Disable auto-timeouts'))
+        .addSubcommand(s => s.setName('set').setDescription('Set timeout minutes per category')
+            .addIntegerOption(o => o.setName('spam').setDescription('Spam minutes').setRequired(false))
+            .addIntegerOption(o => o.setName('scam').setDescription('Scam minutes').setRequired(false))
+            .addIntegerOption(o => o.setName('command').setDescription('Command abuse minutes').setRequired(false))
+            .addIntegerOption(o => o.setName('trade').setDescription('Trade minutes').setRequired(false))
+            .addIntegerOption(o => o.setName('service').setDescription('Service minutes').setRequired(false))),
+
+    new SlashCommandBuilder()
         .setName('commandimmunity')
         .setDescription('Manage immunity for command scanning')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -4717,6 +4928,183 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({ content: `✅ No-affiliation mode is now **${gs.noAffiliationEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '🏷️ No-Affiliation Mode', [
                 `No-affiliation: **${before ? 'ON' : 'OFF'}** -> **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**`,
+            ]);
+            break;
+        }
+
+        case 'botinfo': {
+            const ownerStr = gs.botOwnerId ? `<@${gs.botOwnerId}> (${gs.botOwnerId})` : 'Open Source / Community Run';
+            const coderStr = `<@${BOT_CODED_BY_ID}> (${BOT_CODED_BY_ID})`;
+            const embed = new EmbedBuilder()
+                .setTitle('🤖 Bot Info')
+                .setColor(0x5865F2)
+                .addFields(
+                    { name: 'Owner', value: ownerStr, inline: false },
+                    { name: 'Coded By', value: coderStr, inline: false },
+                )
+                .setTimestamp();
+            const ft = footerText(gs);
+            if (ft) embed.setFooter({ text: ft });
+            await interaction.reply({ embeds: [embed], ephemeral: !gs.botInfoPublic });
+            break;
+        }
+
+        case 'setowner': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const u = interaction.options.getUser('owner');
+            gs.botOwnerId = u?.id || null;
+            saveData(data);
+            await interaction.reply({ content: `✅ Bot owner set to <@${gs.botOwnerId}> (${gs.botOwnerId}).`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Bot Owner Updated', [
+                `Owner: <@${gs.botOwnerId}> (${gs.botOwnerId})`,
+            ]);
+            break;
+        }
+
+        case 'clearowner': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            gs.botOwnerId = null;
+            saveData(data);
+            await interaction.reply({ content: '✅ Bot owner cleared (Open Source / Community Run).', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Bot Owner Cleared', []);
+            break;
+        }
+
+        case 'setfooter': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const t = String(interaction.options.getString('text') || '').trim().slice(0, 200);
+            if (!t) { await interaction.reply({ content: '❌ Provide footer text.', ephemeral: true }); return; }
+            gs.botFooterText = t;
+            saveData(data);
+            await interaction.reply({ content: '✅ Footer updated.', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Footer Updated', [
+                `Footer: ${t}`,
+            ]);
+            break;
+        }
+
+        case 'clearfooter': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            gs.botFooterText = null;
+            saveData(data);
+            await interaction.reply({ content: '✅ Footer cleared.', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Footer Cleared', []);
+            break;
+        }
+
+        case 'botinfopublic': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const m = (interaction.options.getString('mode') || '').toLowerCase();
+            const v = ['on','true','yes','1','enable','enabled'].includes(m) ? true
+                : (['off','false','no','0','disable','disabled'].includes(m) ? false : null);
+            if (v === null) { await interaction.reply({ content: '❌ Use: on/off', ephemeral: true }); return; }
+            const before = gs.botInfoPublic;
+            gs.botInfoPublic = v;
+            saveData(data);
+            await interaction.reply({ content: `✅ /botinfo is now **${gs.botInfoPublic ? 'PUBLIC' : 'EPHEMERAL'}**.`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ BotInfo Visibility', [
+                `botInfoPublic: **${before ? 'ON' : 'OFF'}** -> **${gs.botInfoPublic ? 'ON' : 'OFF'}**`,
+            ]);
+            break;
+        }
+
+        case 'linkmode': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const mode = (interaction.options.getString('mode') || '').toLowerCase();
+            if (!['strict','medium','off'].includes(mode)) { await interaction.reply({ content: '❌ Use: strict|medium|off', ephemeral: true }); return; }
+            const before = gs.linkMode;
+            gs.linkMode = mode;
+            saveData(data);
+            await interaction.reply({ content: `✅ Link mode set to **${mode}**.`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Link Mode Updated', [
+                `linkMode: **${before}** -> **${gs.linkMode}**`,
+            ]);
+            break;
+        }
+
+        case 'linkaction': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const action = (interaction.options.getString('action') || '').toLowerCase();
+            if (!['delete','warn','exile','timeout'].includes(action)) { await interaction.reply({ content: '❌ Use: delete|warn|exile|timeout', ephemeral: true }); return; }
+            const before = gs.linkAction;
+            gs.linkAction = action;
+            const mins = interaction.options.getInteger('minutes');
+            if (action === 'timeout' && mins) gs.timeoutMinutesScam = Math.max(1, Math.min(10080, mins));
+            saveData(data);
+            await interaction.reply({ content: `✅ Link action set to **${action}**.`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Link Action Updated', [
+                `linkAction: **${before}** -> **${gs.linkAction}**`,
+                action === 'timeout' ? `timeoutMinutesScam: ${gs.timeoutMinutesScam}` : null,
+            ]);
+            break;
+        }
+
+        case 'verifygate': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const sub = interaction.options.getSubcommand();
+            if (sub === 'enable' || sub === 'disable') {
+                const before = gs.verifyGateEnabled;
+                gs.verifyGateEnabled = (sub === 'enable');
+                saveData(data);
+                await interaction.reply({ content: `✅ Verify gate is now **${gs.verifyGateEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Verify Gate', [
+                    `verifyGateEnabled: **${before ? 'ON' : 'OFF'}** -> **${gs.verifyGateEnabled ? 'ON' : 'OFF'}**`,
+                ]);
+                return;
+            }
+
+            const beforeDays = gs.verifyMinAccountAgeDays;
+            const beforeRole = gs.verifyRequiredRoleId;
+            const beforeAction = gs.verifyGateAction;
+
+            const days = interaction.options.getInteger('minaccountdays');
+            const role = interaction.options.getRole('requiredrole');
+            const action = (interaction.options.getString('action') || '').toLowerCase();
+            const mins = interaction.options.getInteger('minutes');
+
+            if (days !== null) gs.verifyMinAccountAgeDays = Math.max(0, Math.min(365, days));
+            if (role) gs.verifyRequiredRoleId = role.id;
+            if (action && ['delete','warn','timeout'].includes(action)) gs.verifyGateAction = action;
+            if (gs.verifyGateAction === 'timeout' && mins) gs.timeoutMinutesCommand = Math.max(1, Math.min(10080, mins));
+            saveData(data);
+            await interaction.reply({ content: '✅ Verify gate config updated.', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Verify Gate Config', [
+                `minAccountDays: **${beforeDays}** -> **${gs.verifyMinAccountAgeDays}**`,
+                `requiredRole: **${beforeRole || 'None'}** -> **${gs.verifyRequiredRoleId || 'None'}**`,
+                `action: **${beforeAction}** -> **${gs.verifyGateAction}**`,
+            ]);
+            break;
+        }
+
+        case 'timeoutconfig': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const sub = interaction.options.getSubcommand();
+            if (sub === 'enable' || sub === 'disable') {
+                const before = gs.timeoutEnabled;
+                gs.timeoutEnabled = (sub === 'enable');
+                saveData(data);
+                await interaction.reply({ content: `✅ Auto-timeouts are now **${gs.timeoutEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Auto-Timeouts', [
+                    `timeoutEnabled: **${before ? 'ON' : 'OFF'}** -> **${gs.timeoutEnabled ? 'ON' : 'OFF'}**`,
+                ]);
+                return;
+            }
+
+            const spam = interaction.options.getInteger('spam');
+            const scam = interaction.options.getInteger('scam');
+            const command = interaction.options.getInteger('command');
+            const trade = interaction.options.getInteger('trade');
+            const service = interaction.options.getInteger('service');
+
+            if (spam !== null) gs.timeoutMinutesSpam = Math.max(1, Math.min(10080, spam));
+            if (scam !== null) gs.timeoutMinutesScam = Math.max(1, Math.min(10080, scam));
+            if (command !== null) gs.timeoutMinutesCommand = Math.max(1, Math.min(10080, command));
+            if (trade !== null) gs.timeoutMinutesTrade = Math.max(1, Math.min(10080, trade));
+            if (service !== null) gs.timeoutMinutesService = Math.max(1, Math.min(10080, service));
+            saveData(data);
+            await interaction.reply({ content: '✅ Timeout minutes updated.', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Timeout Config', [
+                `spam=${gs.timeoutMinutesSpam}m scam=${gs.timeoutMinutesScam}m command=${gs.timeoutMinutesCommand}m trade=${gs.timeoutMinutesTrade}m service=${gs.timeoutMinutesService}m`,
             ]);
             break;
         }
@@ -5735,6 +6123,32 @@ client.on('messageCreate', async message => {
 
     if (gs.checksEnabled === false) return;
 
+    if (gs.verifyGateEnabled && !immune && !isCategoryImmune(message.member, guildId, data, 'verify')) {
+        const requiredRoleOk = gs.verifyRequiredRoleId ? message.member?.roles?.cache?.has(gs.verifyRequiredRoleId) : false;
+        const acctAgeDays = message.author?.createdTimestamp ? (Date.now() - message.author.createdTimestamp) / (1000 * 60 * 60 * 24) : 9999;
+        const tooNew = acctAgeDays < (gs.verifyMinAccountAgeDays || 0);
+        if (tooNew && !requiredRoleOk) {
+            const reason = `Verification gate: account age ${acctAgeDays.toFixed(1)}d < ${gs.verifyMinAccountAgeDays}d.`;
+            if (gs.verifyGateAction === 'delete') {
+                try { await message.delete(); } catch {}
+                return;
+            }
+            if (gs.verifyGateAction === 'timeout' && gs.timeoutEnabled) {
+                await tryTimeout(message.member, gs.timeoutMinutesCommand || 5, reason);
+            }
+            try { await message.delete(); } catch {}
+            await issueViolation(message, data, gs, {
+                title: '🛡️ Verification Gate',
+                color: 0x5865F2,
+                reason: `Your account is too new to post here. Please get verified or wait. (${reason})`,
+                details: message.content,
+                footerLabel: 'Verify Gate',
+                ttlMs: 12000,
+            });
+            return;
+        }
+    }
+
     // ── RAID LOCKDOWN (message-time enforcement) ───────────
     if (gs.raidModeEnabled && isRaidLocked(guildId) && !immune && !isCategoryImmune(message.member, guildId, data, 'raid')) {
         if (message.channel && message.channel.isTextBased && message.channel.isTextBased()) {
@@ -6108,23 +6522,27 @@ client.on('messageCreate', async message => {
     if (gs.spamWarnEnabled !== false && !isCategoryImmune(message.member, guildId, data, 'spam')) {
         const spamResult = checkSpam(message.author.id, message.content);
         if (spamResult.spam) {
+            if (gs.timeoutEnabled) {
+                await tryTimeout(message.member, gs.timeoutMinutesSpam || 10, `Spam: ${spamResult.reason}`);
+            }
             await handleSpamViolation(message, spamResult.reason, data, gs);
             return;
         }
     }
 
     // ── ACCOUNT TRADING ───────────────────────────────────
-    const scam = gs.scamEnabled ? detectScamOrExploit(contentClean, message.content) : { hit: false };
+    const scam = gs.scamEnabled ? detectScamByMode(gs, contentClean, message.content) : { hit: false };
     if ((gs.scamWarnEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'scam') && scam?.hit) {
-        try { await message.delete(); } catch {}
         incStat(guildId, data, 'scam', 1);
-        await issueViolation(message, data, gs, {
+        const action = gs.linkAction || 'warn';
+        await applyConfiguredAction(message, data, gs, {
+            action,
             title: '🚨 Scam/Exploit Content Detected',
             color: 0xCC0000,
             reason: scam.reason || 'Suspicious link or exploit/scam content.',
-            details: message.content,
             footerLabel: 'Scam/Exploit',
             ttlMs: 15000,
+            timeoutMins: gs.timeoutMinutesScam || 60,
         });
         return;
     }
@@ -6273,6 +6691,9 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
             });
             return true;
         }
+        if (gs.timeoutEnabled) {
+            await tryTimeout(message.member, gs.timeoutMinutesService || 5, 'Service request in wrong channel');
+        }
         await issueViolation(message, data, gs, {
             title: '⚠️ Service Request — Wrong Channel',
             color: 0xFF6600,
@@ -6368,6 +6789,9 @@ async function handleTradeViolation(message, data, gs) {
             ttlMs: 12000,
         });
         return;
+    }
+    if (gs.timeoutEnabled) {
+        await tryTimeout(message.member, gs.timeoutMinutesTrade || 5, 'Trade in wrong channel');
     }
     await issueViolation(message, data, gs, {
         title: '⚠️ Trade Violation',
@@ -6524,6 +6948,166 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         await performExile(target, message.guild, duration, reason, fd);
         saveData(fd);
         await message.channel.send(`🔨 Exiled ${target} (${target.id}) for **${duration}m**. Reason: ${reason}`);
+    }
+
+    else if (cmd === 'botinfo') {
+        const ownerStr = gs.botOwnerId ? `<@${gs.botOwnerId}> (${gs.botOwnerId})` : 'Open Source / Community Run';
+        const coderStr = `<@${BOT_CODED_BY_ID}> (${BOT_CODED_BY_ID})`;
+        const embed = new EmbedBuilder()
+            .setTitle('🤖 Bot Info')
+            .setColor(0x5865F2)
+            .addFields(
+                { name: 'Owner', value: ownerStr, inline: false },
+                { name: 'Coded By', value: coderStr, inline: false },
+            )
+            .setTimestamp();
+        await message.channel.send({ embeds: [embed] });
+    }
+
+    else if (cmd === 'setowner' && isAdmin) {
+        const target = await resolveMember(args[0]);
+        if (!target) return message.channel.send('❌ Provide a member mention or ID.');
+        gs.botOwnerId = target.id;
+        saveData(data);
+        await message.channel.send(`✅ Bot owner set to ${target} (${target.id}).`);
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Bot Owner Updated', [
+            `Owner: <@${gs.botOwnerId}> (${gs.botOwnerId})`,
+        ]);
+    }
+
+    else if (cmd === 'clearowner' && isAdmin) {
+        gs.botOwnerId = null;
+        saveData(data);
+        await message.channel.send('✅ Bot owner cleared (Open Source / Community Run).');
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Bot Owner Cleared', []);
+    }
+
+    else if (cmd === 'setfooter' && isAdmin) {
+        const t = args.join(' ').trim().slice(0, 200);
+        if (!t) return message.channel.send('❌ Use: !setfooter <text>');
+        gs.botFooterText = t;
+        saveData(data);
+        await message.channel.send('✅ Footer updated.');
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Footer Updated', [
+            `Footer: ${t}`,
+        ]);
+    }
+
+    else if (cmd === 'clearfooter' && isAdmin) {
+        gs.botFooterText = null;
+        saveData(data);
+        await message.channel.send('✅ Footer cleared.');
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Footer Cleared', []);
+    }
+
+    else if (cmd === 'botinfopublic' && isAdmin) {
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`❌ Use: !botinfopublic on/off (currently ${gs.botInfoPublic ? 'ON' : 'OFF'})`);
+        const before = gs.botInfoPublic;
+        gs.botInfoPublic = v;
+        saveData(data);
+        await message.channel.send(`✅ /botinfo visibility is now **${gs.botInfoPublic ? 'PUBLIC' : 'EPHEMERAL'}**.`);
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ BotInfo Visibility', [
+            `botInfoPublic: **${before ? 'ON' : 'OFF'}** -> **${gs.botInfoPublic ? 'ON' : 'OFF'}**`,
+        ]);
+    }
+
+    else if (cmd === 'linkmode' && isAdmin) {
+        const mode = (args[0] || '').toLowerCase();
+        if (!['strict','medium','off'].includes(mode)) return message.channel.send('❌ Use: !linkmode strict|medium|off');
+        const before = gs.linkMode;
+        gs.linkMode = mode;
+        saveData(data);
+        await message.channel.send(`✅ Link mode set to **${mode}**.`);
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Link Mode Updated', [
+            `linkMode: **${before}** -> **${gs.linkMode}**`,
+        ]);
+    }
+
+    else if (cmd === 'linkaction' && isAdmin) {
+        const action = (args[0] || '').toLowerCase();
+        if (!['delete','warn','exile','timeout'].includes(action)) return message.channel.send('❌ Use: !linkaction delete|warn|exile|timeout [minutes]');
+        const before = gs.linkAction;
+        gs.linkAction = action;
+        const mins = parseInt(args[1]) || 0;
+        if (action === 'timeout' && mins) gs.timeoutMinutesScam = Math.max(1, Math.min(10080, mins));
+        saveData(data);
+        await message.channel.send(`✅ Link action set to **${action}**.`);
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Link Action Updated', [
+            `linkAction: **${before}** -> **${gs.linkAction}**`,
+            action === 'timeout' ? `timeoutMinutesScam: ${gs.timeoutMinutesScam}` : null,
+        ]);
+    }
+
+    else if (cmd === 'verifygate' && isAdmin) {
+        const sub = (args[0] || '').toLowerCase();
+        if (['on','off','enable','disable'].includes(sub)) {
+            const before = gs.verifyGateEnabled;
+            gs.verifyGateEnabled = ['on','enable'].includes(sub);
+            saveData(data);
+            await message.channel.send(`✅ Verify gate is now **${gs.verifyGateEnabled ? 'ON' : 'OFF'}**.`);
+            await sendConfigLog(message.guild, data, message.author.id, '⚙️ Verify Gate', [
+                `verifyGateEnabled: **${before ? 'ON' : 'OFF'}** -> **${gs.verifyGateEnabled ? 'ON' : 'OFF'}**`,
+            ]);
+            return;
+        }
+        if (sub !== 'config') return message.channel.send('❌ Use: !verifygate on/off OR !verifygate config days <n> role <@role|id|none> action delete|warn|timeout');
+
+        const beforeDays = gs.verifyMinAccountAgeDays;
+        const beforeRole = gs.verifyRequiredRoleId;
+        const beforeAction = gs.verifyGateAction;
+
+        for (let i = 1; i < args.length; i++) {
+            const k = (args[i] || '').toLowerCase();
+            const v = args[i + 1];
+            if (k === 'days' && v) { gs.verifyMinAccountAgeDays = Math.max(0, Math.min(365, parseInt(v) || gs.verifyMinAccountAgeDays)); i++; continue; }
+            if (k === 'action' && v) { if (['delete','warn','timeout'].includes(String(v).toLowerCase())) gs.verifyGateAction = String(v).toLowerCase(); i++; continue; }
+            if (k === 'role' && v) {
+                if (String(v).toLowerCase() === 'none') { gs.verifyRequiredRoleId = null; i++; continue; }
+                const r = await resolveRole(v);
+                if (r) { gs.verifyRequiredRoleId = r.id; }
+                i++; continue;
+            }
+            if (k === 'minutes' && v) { const m = parseInt(v) || 0; if (m) gs.timeoutMinutesCommand = Math.max(1, Math.min(10080, m)); i++; continue; }
+        }
+        saveData(data);
+        await message.channel.send('✅ Verify gate config updated.');
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Verify Gate Config', [
+            `minAccountDays: **${beforeDays}** -> **${gs.verifyMinAccountAgeDays}**`,
+            `requiredRole: **${beforeRole || 'None'}** -> **${gs.verifyRequiredRoleId || 'None'}**`,
+            `action: **${beforeAction}** -> **${gs.verifyGateAction}**`,
+        ]);
+    }
+
+    else if (cmd === 'timeoutconfig' && isAdmin) {
+        const sub = (args[0] || '').toLowerCase();
+        if (['on','off','enable','disable'].includes(sub)) {
+            const before = gs.timeoutEnabled;
+            gs.timeoutEnabled = ['on','enable'].includes(sub);
+            saveData(data);
+            await message.channel.send(`✅ Auto-timeouts are now **${gs.timeoutEnabled ? 'ON' : 'OFF'}**.`);
+            await sendConfigLog(message.guild, data, message.author.id, '⚙️ Auto-Timeouts', [
+                `timeoutEnabled: **${before ? 'ON' : 'OFF'}** -> **${gs.timeoutEnabled ? 'ON' : 'OFF'}**`,
+            ]);
+            return;
+        }
+
+        if (sub !== 'set') return message.channel.send('❌ Use: !timeoutconfig on/off OR !timeoutconfig set spam <m> scam <m> command <m> trade <m> service <m>');
+        for (let i = 1; i < args.length; i++) {
+            const k = (args[i] || '').toLowerCase();
+            const v = parseInt(args[i + 1]) || 0;
+            if (!v) continue;
+            if (k === 'spam') { gs.timeoutMinutesSpam = Math.max(1, Math.min(10080, v)); i++; continue; }
+            if (k === 'scam') { gs.timeoutMinutesScam = Math.max(1, Math.min(10080, v)); i++; continue; }
+            if (k === 'command') { gs.timeoutMinutesCommand = Math.max(1, Math.min(10080, v)); i++; continue; }
+            if (k === 'trade') { gs.timeoutMinutesTrade = Math.max(1, Math.min(10080, v)); i++; continue; }
+            if (k === 'service') { gs.timeoutMinutesService = Math.max(1, Math.min(10080, v)); i++; continue; }
+        }
+        saveData(data);
+        await message.channel.send('✅ Timeout minutes updated.');
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Timeout Config', [
+            `spam=${gs.timeoutMinutesSpam}m scam=${gs.timeoutMinutesScam}m command=${gs.timeoutMinutesCommand}m trade=${gs.timeoutMinutesTrade}m service=${gs.timeoutMinutesService}m`,
+        ]);
     }
 
     // !violations [mention | id]
