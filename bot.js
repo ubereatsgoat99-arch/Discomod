@@ -4069,7 +4069,7 @@ function detectStretchSpam(text, gs) {
     const s = String(text || '');
     if (!s) return null;
     const maxChar = Math.max(6, Math.min(40, gs.stretchMaxCharRun || 12));
-    const maxPunc = Math.max(6, Math.min(40, gs.stretchMaxPunctRun || 10));
+    const maxPunc = Math.max(6, Math.min(2000, gs.stretchMaxPunctRun || 10));
     const maxWord = Math.max(3, Math.min(20, gs.stretchMaxWordRepeat || 5));
     const charRun = maxCharRun(s);
     if (charRun >= maxChar) return { hit: true, reason: `Repeated character spam (run=${charRun} >= ${maxChar}).` };
@@ -4943,6 +4943,27 @@ client.on('interactionCreate', async interaction => {
     const gs   = getGuildSettings(guildId, data);
     const imm  = getImmunitySettings(guildId, data);
 
+    async function safeDefer(interaction, opts) {
+        try {
+            if (interaction.deferred || interaction.replied) return true;
+            await interaction.deferReply(opts);
+            return true;
+        } catch { return false; }
+    }
+    async function safeReply(interaction, payload) {
+        try {
+            if (interaction.deferred || interaction.replied) {
+                await interaction.followUp(payload);
+                return true;
+            }
+            await interaction.reply(payload);
+            return true;
+        } catch { return false; }
+    }
+    async function safeEdit(interaction, payload) {
+        try { await interaction.editReply(payload); return true; } catch { return false; }
+    }
+
     // ── MODALS ────────────────────────────────────────────
     if (interaction.isModalSubmit()) {
         // Setup modal
@@ -4972,20 +4993,22 @@ client.on('interactionCreate', async interaction => {
 
         // Appeal modal
         if (interaction.customId.startsWith('appeal_modal_')) {
+            await safeDefer(interaction, { ephemeral: true });
             const exiledUserId = interaction.customId.replace('appeal_modal_', '');
             const reason       = interaction.fields.getTextInputValue('appeal_reason');
             const appealId     = `appeal_${Date.now()}_${exiledUserId}`;
+            data.appeals = data.appeals || {};
             data.appeals[appealId] = { userId: exiledUserId, reason, timestamp: Date.now(), status: 'pending', handledBy: null };
             saveData(data);
 
             const appealsChId = gs.appealsChannelId || gs.logChannelId;
             if (!appealsChId) {
-                await interaction.reply({ content: '❌ No appeals channel configured. Contact an admin.', ephemeral: true });
+                await safeEdit(interaction, { content: '❌ No appeals channel configured. Contact an admin.' });
                 return;
             }
             try {
                 const appealsChannel = await interaction.guild.channels.fetch(appealsChId).catch(()=>null);
-                if (!appealsChannel) { await interaction.reply({ content: '❌ Appeals channel not found.', ephemeral: true }); return; }
+                if (!appealsChannel) { await safeEdit(interaction, { content: '❌ Appeals channel not found.' }); return; }
 
                 const appealEmbed = new EmbedBuilder()
                     .setTitle('📩 New Exile Appeal')
@@ -5005,9 +5028,9 @@ client.on('interactionCreate', async interaction => {
                 );
 
                 await appealsChannel.send({ embeds: [appealEmbed], components: [row] });
-                await interaction.reply({ content: '✅ Your appeal has been submitted! Admins will review it shortly.', ephemeral: true });
+                await safeEdit(interaction, { content: '✅ Your appeal has been submitted! Admins will review it shortly.' });
             } catch(e) {
-                await interaction.reply({ content: '❌ Failed to submit appeal.', ephemeral: true });
+                await safeEdit(interaction, { content: '❌ Failed to submit appeal.' });
             }
             return;
         }
@@ -5034,6 +5057,7 @@ client.on('interactionCreate', async interaction => {
 
         if (cid.startsWith('open_appeal_')) {
             const exiledUserId = cid.replace('open_appeal_', '');
+            if (!(await safeDefer(interaction, { ephemeral: true }))) return;
             const modal = new ModalBuilder()
                 .setCustomId(`appeal_modal_${exiledUserId}`)
                 .setTitle('📩 Submit an Appeal');
@@ -5049,7 +5073,11 @@ client.on('interactionCreate', async interaction => {
                         .setPlaceholder('Explain why you should be unexiled. Be honest and respectful.')
                 )
             );
-            await interaction.showModal(modal);
+            try {
+                await interaction.showModal(modal);
+            } catch {
+                await safeEdit(interaction, { content: '❌ Failed to open the appeal form. Try again.' });
+            }
             return;
         }
 
@@ -5369,11 +5397,12 @@ client.on('interactionCreate', async interaction => {
         case 'appeal': {
             const sub = interaction.options.getSubcommand();
             if (sub !== 'submit') { await interaction.reply({ content: '❌ Invalid appeal command.', ephemeral: true }); return; }
+            await interaction.deferReply({ ephemeral: true });
             const text = interaction.options.getString('text') || '';
             const caseId = (interaction.options.getString('case') || '').trim();
-            if (!gs.appealsChannelId) { await interaction.reply({ content: '❌ Appeals channel is not configured.', ephemeral: true }); return; }
+            if (!gs.appealsChannelId) { await interaction.editReply({ content: '❌ Appeals channel is not configured.' }); return; }
             const ch = await interaction.guild.channels.fetch(gs.appealsChannelId).catch(()=>null);
-            if (!ch || !ch.isTextBased || !ch.isTextBased()) { await interaction.reply({ content: '❌ Appeals channel is invalid.', ephemeral: true }); return; }
+            if (!ch || !ch.isTextBased || !ch.isTextBased()) { await interaction.editReply({ content: '❌ Appeals channel is invalid.' }); return; }
             const appealId = `${Date.now()}_${interaction.user.id}`;
             data.appeals = data.appeals || {};
             data.appeals[appealId] = { id: appealId, userId: interaction.user.id, text: text.slice(0, 1800), caseId: caseId || null, status: 'pending', createdAt: Date.now() };
@@ -5393,8 +5422,13 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId(`appeal_accept_${appealId}`).setLabel('Accept').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId(`appeal_reject_${appealId}`).setLabel('Reject').setStyle(ButtonStyle.Danger),
             );
-            await ch.send({ embeds: [embed], components: [row] });
-            await interaction.reply({ content: '✅ Appeal submitted.', ephemeral: true });
+            try {
+                await ch.send({ embeds: [embed], components: [row] });
+            } catch (e) {
+                await interaction.editReply({ content: `❌ Failed to post appeal to the appeals channel. (${String(e?.message || e)})` });
+                return;
+            }
+            await interaction.editReply({ content: '✅ Appeal submitted.' });
             break;
         }
 
@@ -5715,6 +5749,7 @@ client.on('interactionCreate', async interaction => {
         case 'exilechannel': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             if (interaction.options.getSubcommand() === 'create') {
+                await safeDefer(interaction, { ephemeral: true });
                 try {
                     const exRole = interaction.guild.roles.cache.get(gs.exiledRoleId);
                     const permOverwrites = [
@@ -5727,9 +5762,9 @@ client.on('interactionCreate', async interaction => {
                         topic: '⛓️ You have been exiled. Wait here until your exile expires.',
                         permissionOverwrites: permOverwrites,
                     });
-                    await interaction.reply({ content: `✅ Exile channel created: <#${ch.id}>`, ephemeral: true });
+                    await safeEdit(interaction, { content: `✅ Exile channel created: <#${ch.id}>` });
                 } catch(e) {
-                    await interaction.reply({ content: `❌ Failed to create exile channel: ${e.message}`, ephemeral: true });
+                    await safeEdit(interaction, { content: `❌ Failed to create exile channel: ${e.message}` });
                 }
             }
             break;
@@ -5739,6 +5774,7 @@ client.on('interactionCreate', async interaction => {
         case 'exilerole': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             if (interaction.options.getSubcommand() === 'create') {
+                await safeDefer(interaction, { ephemeral: true });
                 try {
                     const role = await interaction.guild.roles.create({
                         name: '⛓️ Exiled',
@@ -5753,9 +5789,9 @@ client.on('interactionCreate', async interaction => {
                     }
                     gs.exiledRoleId = role.id;
                     saveData(data);
-                    await interaction.reply({ content: `✅ Exile role created: <@&${role.id}>\nIt has been denied from all text channels.`, ephemeral: true });
+                    await safeEdit(interaction, { content: `✅ Exile role created: <@&${role.id}>\nIt has been denied from all text channels.` });
                 } catch(e) {
-                    await interaction.reply({ content: `❌ Failed to create exile role: ${e.message}`, ephemeral: true });
+                    await safeEdit(interaction, { content: `❌ Failed to create exile role: ${e.message}` });
                 }
             }
             break;
@@ -6815,10 +6851,11 @@ function isMessageCommand(msg) {
     if (!c) return false;
     const t = c.trimStart();
     if (msg.type === 20) return true;
+    if (/^[^a-zA-Z0-9\s@]+$/.test(t)) return false;
     if (t.startsWith('@') || t.startsWith('<@')) return false;
     if (/^:[a-zA-Z0-9_]{2,32}:/.test(t)) return false;
     if (/^<a?:[a-zA-Z0-9_]{2,32}:\d{6,20}>/.test(t)) return false;
-    if (/^\p{Extended_Pictographic}|\p{Emoji_Presentation}/u.test(t)) return false;
+    if (/^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/u.test(t)) return false;
     if (/^\p{Regional_Indicator}{2}/u.test(t)) return false;
     if (/^[#*0-9]\uFE0F?\u20E3/u.test(t)) return false;
     if (/^[?!]\s*$/.test(c)) return false;
@@ -7013,12 +7050,12 @@ function looksLikeCommandButNotCaught(raw, cleaned) {
 
     for (const n of COMMON_SLASH_COMMAND_NAMES) {
         const nc = n.toLowerCase().replace(/[\s_]/g,'');
-        if (nc.length >= 3 && (ns.includes('/'+nc) || ns.includes('／'+nc))) return true;
+        if (nc.length >= 3 && (ns.startsWith('/'+nc) || ns.startsWith('／'+nc))) return true;
     }
 
     for (const w of COMMON_COMMAND_WORDS) {
         const wc = w.toLowerCase().replace(/[\s_]/g,'');
-        if (wc.length >= 4 && ns.includes(wc) && (r.includes('/') || r.includes('!') || r.includes('.'))) return true;
+        if (wc.length >= 4 && new RegExp(`^\\s*(?:/|!|\\.|\\?)\\s*${escapeRegex(wc)}(?![a-z0-9])`, 'i').test(r)) return true;
     }
 
     if (/\b(?:type|use|run)\b[\s\W_]{0,8}(?:\!|\/|\.)[a-z0-9]{2,20}/i.test(r)) return true;
