@@ -4937,9 +4937,23 @@ client.once('ready', onClientReady);
 //  INTERACTION HANDLER (slash commands + buttons + modals)
 // ══════════════════════════════════════════════════════════
 client.on('interactionCreate', async interaction => {
-    if (!interaction.guildId) return;
+    const customId = interaction?.customId || '';
+    let derivedGuildId = null;
+    if (!interaction.guildId && typeof customId === 'string') {
+        if (customId.startsWith('open_appeal_')) {
+            const parts = customId.split('_');
+            if (parts.length >= 4 && /^\d{15,20}$/.test(parts[2])) derivedGuildId = parts[2];
+        }
+        if (customId.startsWith('appeal_modal_')) {
+            const parts = customId.split('_');
+            if (parts.length >= 4 && /^\d{15,20}$/.test(parts[2])) derivedGuildId = parts[2];
+        }
+    }
+    const guildId = interaction.guildId || derivedGuildId;
+    if (!guildId) return;
+    const guild = interaction.guild || await client.guilds.fetch(guildId).catch(()=>null);
+    if (!guild) return;
     const data = loadData();
-    const guildId = interaction.guildId;
     const gs   = getGuildSettings(guildId, data);
     const imm  = getImmunitySettings(guildId, data);
 
@@ -4994,7 +5008,8 @@ client.on('interactionCreate', async interaction => {
         // Appeal modal
         if (interaction.customId.startsWith('appeal_modal_')) {
             await safeDefer(interaction, { ephemeral: true });
-            const exiledUserId = interaction.customId.replace('appeal_modal_', '');
+            const parts = interaction.customId.split('_');
+            const exiledUserId = parts.length >= 4 ? parts.slice(3).join('_') : interaction.customId.replace('appeal_modal_', '');
             const reason       = interaction.fields.getTextInputValue('appeal_reason');
             const appealId     = `appeal_${Date.now()}_${exiledUserId}`;
             data.appeals = data.appeals || {};
@@ -5007,7 +5022,7 @@ client.on('interactionCreate', async interaction => {
                 return;
             }
             try {
-                const appealsChannel = await interaction.guild.channels.fetch(appealsChId).catch(()=>null);
+                const appealsChannel = await guild.channels.fetch(appealsChId).catch(()=>null);
                 if (!appealsChannel) { await safeEdit(interaction, { content: '❌ Appeals channel not found.' }); return; }
 
                 const appealEmbed = new EmbedBuilder()
@@ -5056,10 +5071,10 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cid.startsWith('open_appeal_')) {
-            const exiledUserId = cid.replace('open_appeal_', '');
-            if (!(await safeDefer(interaction, { ephemeral: true }))) return;
+            const parts = cid.split('_');
+            const exiledUserId = parts.length >= 4 ? parts.slice(3).join('_') : cid.replace('open_appeal_', '');
             const modal = new ModalBuilder()
-                .setCustomId(`appeal_modal_${exiledUserId}`)
+                .setCustomId(`appeal_modal_${guildId}_${exiledUserId}`)
                 .setTitle('📩 Submit an Appeal');
             modal.addComponents(
                 new ActionRowBuilder().addComponents(
@@ -5076,7 +5091,7 @@ client.on('interactionCreate', async interaction => {
             try {
                 await interaction.showModal(modal);
             } catch {
-                await safeEdit(interaction, { content: '❌ Failed to open the appeal form. Try again.' });
+                await safeReply(interaction, { content: '❌ Failed to open the appeal form. Try again.', ephemeral: true });
             }
             return;
         }
@@ -7848,7 +7863,7 @@ async function performExile(userOrMember, guild, minutes, reason, data) {
             .setTimestamp();
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`open_appeal_${member.id}`)
+                .setCustomId(`open_appeal_${guild.id}_${member.id}`)
                 .setLabel('📩 Submit Appeal')
                 .setStyle(ButtonStyle.Primary)
         );
