@@ -1,0 +1,170 @@
+{
+  "violations": {
+    "1427299411049840640": 0,
+    "1474889809439756542": 1,
+    "1321768439702093834": 0
+  },
+  "exiles": {
+    "1427299411049840640": {
+      "old_roles": [
+        "1416151038163025920",
+        "1494345619593232384",
+        "1416377568226967622",
+        "1416102294453223434",
+        "1417435569813848145",
+        "1441483468088283217",
+        "1416120285945401364",
+        "1416381630838476820",
+        "1417434187253940244",
+        "1416121079705112668",
+        "1416375937116667997",
+        "1416150606715814111",
+        "1416121763720593509",
+        "1416851161306108006",
+        "1499053432483610664",
+        "1416375659587965099",
+        "1416120612648386604",
+        "1421907489829556274"
+      ],
+      "expiry": 1777742617.464,
+      "reason": "Automated: Service (Service/boss/raid/item/quest/trials requests go in the services channel.)"
+    }
+  },
+  "immunity": {
+    "1416101458805264527": {
+      "enabled": false,
+      "whitelistedRoles": [
+        "1416120612648386604"
+      ]
+    }
+  },
+  "guildSettings": {
+    "1416101458805264527": {
+      "tradeChannelId": "1417395956357267516",
+      "servicesChannelId": "1417396221362049085",
+      "gamesHubId": "1416126451589316679",
+      "exiledRoleId": "1423350765711261797",
+      "logChannelId": "1416384409824657468",
+      "appealsChannelId": null,
+      "redirectEmojiId": "1125321969932451841",
+      "commandRedirectEnabled": true,
+      "serviceRedirectEnabled": true,
+      "tradeRedirectEnabled": true,
+      "spamWarnEnabled": true,
+      "begWarnEnabled": true,
+      "scamWarnEnabled": true,
+      "accTradeWarnEnabled": true,
+      "aiEnabled": true,
+      "checksEnabled": true,
+      "noAffiliationEnabled": false,
+      "botOwnerId": null,
+      "botFooterText": null,
+      "botInfoPublic": false,
+      "linkMode": "strict",
+      "linkAction": "warn",
+      "verifyGateEnabled": false,
+      "verifyMinAccountAgeDays": 7,
+      "verifyRequiredRoleId": null,
+      "verifyGateAction": "warn",
+      "timeoutEnabled": false,
+      "timeoutMinutesSpam": 10,
+      "timeoutMinutesScam": 60,
+      "timeoutMinutesCommand": 5,
+      "timeoutMinutesTrade": 5,
+      "timeoutMinutesService": 5,
+      "enforcementMode": "enforce",
+      "categoryPolicies": {}
+    }
+  },
+  "appeals": {},
+  "spamTracker": {},
+  "logMessages": [],
+  "guildStats": {
+    "1416101458805264527": {
+      "counters": {
+        "commandUsage": 7,
+        "commandAbuse": 0,
+        "spam": 0,
+        "accountTrading": 0,
+        "begging": 0,
+        "trade": 0,
+        "service": 0,
+        "race": 0,
+        "scam": 0,
+        "linkPolicy": 0,
+        "mentionSpam": 0,
+        "raidLockdown": 0,
+        "aiFlag": 0
+      },
+      "lastUpdated": 1777670713602
+    }
+  },
+  "categoryImmunity": {
+    "1416101458805264527": {
+      "command": {
+        "roles": [],
+        "members": []
+      },
+      "mention": {
+        "roles": [],
+        "members": []
+      },
+      "link": {
+        "roles": [],
+        "members": []
+      },
+      "attachment": {
+        "roles": [],
+        "members": []
+      },
+      "invite": {
+        "roles": [],
+        "members": []
+      },
+      "caps": {
+        "roles": [],
+        "members": []
+      },
+      "emoji": {
+        "roles": [],
+        "members": []
+      },
+      "zalgo": {
+        "roles": [],
+        "members": []
+      },
+      "stretch": {
+        "roles": [],
+        "members": []
+      },
+      "dupe": {
+        "roles": [],
+        "members": []
+      },
+      "spam": {
+        "roles": [],
+        "members": []
+      },
+      "scam": {
+        "roles": [],
+        "members": []
+      },
+      "acctrade": {
+        "roles": [],
+        "members": []
+      },
+      "beg": {
+        "roles": [],
+        "members": []
+      },
+      "service": {
+        "roles": [],
+        "members": []
+      },
+      "trade": {
+        "roles": [],
+        "members": []
+      }
+    }
+  }
+}
