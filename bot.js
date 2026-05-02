@@ -866,6 +866,7 @@ function getGuildSettings(guildId, data) {
             accTradeWarnEnabled:    true,
             aiEnabled: false,
             checksEnabled: true,
+            noAffiliationEnabled: false,
             violationThreshold: VIOLATION_THRESHOLD,
             exileDurationMins:  EXILE_DURATION_MINS,
 
@@ -956,6 +957,7 @@ function getGuildSettings(guildId, data) {
     if (gs.accTradeWarnEnabled === undefined) gs.accTradeWarnEnabled = true;
     if (gs.aiEnabled === undefined) gs.aiEnabled = false;
     if (gs.checksEnabled === undefined) gs.checksEnabled = true;
+    if (gs.noAffiliationEnabled === undefined) gs.noAffiliationEnabled = false;
     return gs;
 }
 
@@ -3694,6 +3696,19 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
 
     new SlashCommandBuilder()
+        .setName('noaffiliation')
+        .setDescription('Replace trade/service redirects with a no-affiliation notice')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('enable').setDescription('Enable no-affiliation mode'))
+        .addSubcommand(s => s.setName('disable').setDescription('Disable no-affiliation mode')),
+    new SlashCommandBuilder()
+        .setName('noaffliation')
+        .setDescription('Replace trade/service redirects with a no-affiliation notice')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('enable').setDescription('Enable no-affiliation mode'))
+        .addSubcommand(s => s.setName('disable').setDescription('Disable no-affiliation mode')),
+
+    new SlashCommandBuilder()
         .setName('commandimmunity')
         .setDescription('Manage immunity for command scanning')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -4688,6 +4703,20 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({ content: '✅ All moderation checks are now **ENABLED** for this server.', ephemeral: true });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Checks Enabled', [
                 `Checks: **ON**`,
+            ]);
+            break;
+        }
+
+        case 'noaffiliation':
+        case 'noaffliation': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const sub = interaction.options.getSubcommand();
+            const before = gs.noAffiliationEnabled;
+            gs.noAffiliationEnabled = (sub === 'enable');
+            saveData(data);
+            await interaction.reply({ content: `✅ No-affiliation mode is now **${gs.noAffiliationEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '🏷️ No-Affiliation Mode', [
+                `No-affiliation: **${before ? 'ON' : 'OFF'}** -> **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**`,
             ]);
             break;
         }
@@ -6232,6 +6261,18 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
 
     if (flagged) {
         try { await message.delete(); } catch { return false; }
+        if (gs.noAffiliationEnabled) {
+            const serverName = message.guild?.name || 'This server';
+            await issueViolation(message, data, gs, {
+                title: '📢 Notice — No Affiliation',
+                color: 0x5865F2,
+                reason: `${serverName} is not Blox Fruits related anymore. Please use the Official Blox Fruits Discord for services/trades related to Blox Fruits.`,
+                details: message.content,
+                footerLabel: 'No Affiliation',
+                ttlMs: 12000,
+            });
+            return true;
+        }
         await issueViolation(message, data, gs, {
             title: '⚠️ Service Request — Wrong Channel',
             color: 0xFF6600,
@@ -6316,6 +6357,18 @@ async function checkTradeViolation(message, contentClean, contentNospace, data, 
 // ══════════════════════════════════════════════════════════
 async function handleTradeViolation(message, data, gs) {
     try { await message.delete(); } catch { return; }
+    if (gs.noAffiliationEnabled) {
+        const serverName = message.guild?.name || 'This server';
+        await issueViolation(message, data, gs, {
+            title: '📢 Notice — No Affiliation',
+            color: 0x5865F2,
+            reason: `${serverName} is not Blox Fruits related anymore. Please use the Official Blox Fruits Discord for services/trades related to Blox Fruits.`,
+            details: message.content,
+            footerLabel: 'No Affiliation',
+            ttlMs: 12000,
+        });
+        return;
+    }
     await issueViolation(message, data, gs, {
         title: '⚠️ Trade Violation',
         color: 0xFFAA00,
@@ -6352,6 +6405,13 @@ async function performExile(userOrMember, guild, minutes, reason, data) {
     if (exRole) {
         try { await member.edit({ roles: [exRole], reason }); } catch {}
     }
+
+    try {
+        const exileCh = guild.channels.cache.find(c => c && c.type === ChannelType.GuildText && c.name === 'exile-zone');
+        if (exileCh) {
+            await exileCh.send(`${member} has been exiled.`);
+        }
+    } catch {}
 
     // DM with appeal button
     try {
@@ -6607,6 +6667,18 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         await message.channel.send('✅ All moderation checks are now **ENABLED** for this server.');
         await sendConfigLog(message.guild, data, message.author.id, '✅ Checks Enabled', [
             `Checks: **ON**`,
+        ]);
+    }
+
+    else if ((cmd === 'noaffiliation' || cmd === 'noaffliation') && isAdmin) {
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🏷️ No-affiliation mode is currently **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**. Use: !noaffiliation on/off`);
+        const before = gs.noAffiliationEnabled;
+        gs.noAffiliationEnabled = v;
+        saveData(data);
+        await message.channel.send(`✅ No-affiliation mode is now **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**.`);
+        await sendConfigLog(message.guild, data, message.author.id, '🏷️ No-Affiliation Mode', [
+            `No-affiliation: **${before ? 'ON' : 'OFF'}** -> **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**`,
         ]);
     }
 
