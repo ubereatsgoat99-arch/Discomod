@@ -3614,15 +3614,28 @@ const slashCommands = [
         .setDescription('Set individual bot configuration values')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addSubcommand(sub => sub.setName('tradechannel').setDescription('Set the trades channel')
-            .addChannelOption(o => o.setName('channel').setDescription('Trade channel').setRequired(true)))
+            .addChannelOption(o => o.setName('channel').setDescription('Trade channel').setRequired(false))
+            .addStringOption(o => o.setName('id').setDescription('Trade channel ID').setRequired(false)))
         .addSubcommand(sub => sub.setName('serviceschannel').setDescription('Set the services/raid channel')
-            .addChannelOption(o => o.setName('channel').setDescription('Services channel').setRequired(true)))
+            .addChannelOption(o => o.setName('channel').setDescription('Services channel').setRequired(false))
+            .addStringOption(o => o.setName('id').setDescription('Services channel ID').setRequired(false)))
+        .addSubcommand(sub => sub.setName('commandchannel').setDescription('Set the commands/games hub channel')
+            .addChannelOption(o => o.setName('channel').setDescription('Commands channel').setRequired(false))
+            .addStringOption(o => o.setName('id').setDescription('Commands channel ID').setRequired(false)))
         .addSubcommand(sub => sub.setName('logchannel').setDescription('Set the log channel')
             .addChannelOption(o => o.setName('channel').setDescription('Log channel').setRequired(true)))
         .addSubcommand(sub => sub.setName('exilerole').setDescription('Set the exile role')
             .addRoleOption(o => o.setName('role').setDescription('Exile role').setRequired(true)))
         .addSubcommand(sub => sub.setName('appealschannel').setDescription('Set the appeals channel')
             .addChannelOption(o => o.setName('channel').setDescription('Appeals channel').setRequired(true))),
+
+    new SlashCommandBuilder()
+        .setName('clear')
+        .setDescription('Clear/unset channel configuration values')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(sub => sub.setName('tradechannel').setDescription('Clear the trades channel override'))
+        .addSubcommand(sub => sub.setName('serviceschannel').setDescription('Clear the services channel override'))
+        .addSubcommand(sub => sub.setName('commandchannel').setDescription('Clear the commands/games hub channel override')),
 
     // Exile channel create
     new SlashCommandBuilder()
@@ -4477,13 +4490,80 @@ client.on('interactionCreate', async interaction => {
         case 'set': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const sub = interaction.options.getSubcommand();
-            if (sub === 'tradechannel')    { gs.tradeChannelId    = interaction.options.getChannel('channel').id; }
-            if (sub === 'serviceschannel') { gs.servicesChannelId = interaction.options.getChannel('channel').id; }
+            const beforeTrade = gs.tradeChannelId;
+            const beforeServices = gs.servicesChannelId;
+            const beforeCommand = gs.gamesHubId;
+            const optCh = interaction.options.getChannel('channel');
+            const optId = (interaction.options.getString('id') || '').trim();
+            let resolvedCh = optCh;
+            if (!resolvedCh && optId && /^\d{15,20}$/.test(optId)) {
+                resolvedCh = await interaction.guild.channels.fetch(optId).catch(()=>null);
+            }
+
+            if ((sub === 'tradechannel' || sub === 'serviceschannel' || sub === 'commandchannel') && !resolvedCh) {
+                await interaction.reply({ content: '❌ Provide a channel or a valid channel ID.', ephemeral: true });
+                return;
+            }
+
+            if (sub === 'tradechannel')    { gs.tradeChannelId    = resolvedCh.id; }
+            if (sub === 'serviceschannel') { gs.servicesChannelId = resolvedCh.id; }
             if (sub === 'logchannel')      { gs.logChannelId      = interaction.options.getChannel('channel').id; }
             if (sub === 'exilerole')       { gs.exiledRoleId      = interaction.options.getRole('role').id; }
             if (sub === 'appealschannel')  { gs.appealsChannelId  = interaction.options.getChannel('channel').id; }
+            if (sub === 'commandchannel')  { gs.gamesHubId        = resolvedCh.id; }
             saveData(data);
             await interaction.reply({ content: `✅ **${sub}** updated successfully.`, ephemeral: true });
+            if (sub === 'tradechannel') {
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Config Updated', [
+                    `Trade channel: <#${beforeTrade}> -> <#${gs.tradeChannelId}>`,
+                    `New ID: ${gs.tradeChannelId}`,
+                ]);
+            }
+            if (sub === 'serviceschannel') {
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Config Updated', [
+                    `Services channel: <#${beforeServices}> -> <#${gs.servicesChannelId}>`,
+                    `New ID: ${gs.servicesChannelId}`,
+                ]);
+            }
+            if (sub === 'commandchannel') {
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Config Updated', [
+                    `Command channel: <#${beforeCommand}> -> <#${gs.gamesHubId}>`,
+                    `New ID: ${gs.gamesHubId}`,
+                ]);
+            }
+            break;
+        }
+
+        // ── /clear subcommands ────────────────────────────
+        case 'clear': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const sub = interaction.options.getSubcommand();
+            const beforeTrade = gs.tradeChannelId;
+            const beforeServices = gs.servicesChannelId;
+            const beforeCommand = gs.gamesHubId;
+            if (sub === 'tradechannel')    gs.tradeChannelId    = DEFAULT_TARGET_CHANNEL_ID;
+            if (sub === 'serviceschannel') gs.servicesChannelId = DEFAULT_SERVICES_CHANNEL_ID;
+            if (sub === 'commandchannel')  gs.gamesHubId        = DEFAULT_GAMES_HUB_ID;
+            saveData(data);
+            await interaction.reply({ content: `✅ **${sub}** cleared (reverted to default).`, ephemeral: true });
+            if (sub === 'tradechannel') {
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🧹 Config Cleared', [
+                    `Trade channel: <#${beforeTrade}> -> <#${gs.tradeChannelId}> (default)`,
+                    `Default ID: ${gs.tradeChannelId}`,
+                ]);
+            }
+            if (sub === 'serviceschannel') {
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🧹 Config Cleared', [
+                    `Services channel: <#${beforeServices}> -> <#${gs.servicesChannelId}> (default)`,
+                    `Default ID: ${gs.servicesChannelId}`,
+                ]);
+            }
+            if (sub === 'commandchannel') {
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🧹 Config Cleared', [
+                    `Command channel: <#${beforeCommand}> -> <#${gs.gamesHubId}> (default)`,
+                    `Default ID: ${gs.gamesHubId}`,
+                ]);
+            }
             break;
         }
 
@@ -5403,10 +5483,9 @@ function isMessageCommand(msg) {
     if (t.startsWith('@') || t.startsWith('<@')) return false;
     if (/^:[a-zA-Z0-9_]{2,32}:/.test(t)) return false;
     if (/^<a?:[a-zA-Z0-9_]{2,32}:\d{6,20}>/.test(t)) return false;
-    if (/^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/u.test(t)) return false;
+    if (/^\p{Extended_Pictographic}|\p{Emoji_Presentation}/u.test(t)) return false;
     if (/^\p{Regional_Indicator}{2}/u.test(t)) return false;
     if (/^[#*0-9]\uFE0F?\u20E3/u.test(t)) return false;
-    if (/^g\./i.test(t)) return true;
     if (/^[?!]\s*$/.test(c)) return false;
     if (/^[?!]\s+[a-zA-Z]/.test(c)) return false;
     if (CMD_PREFIX_RE.test(c)) return true;
@@ -6480,7 +6559,8 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (!ch) return message.channel.send('❌ Provide a channel mention or channel ID.');
         gs.gamesHubId = ch.id;
         saveData(data);
-        await message.channel.send(`✅ Games Hub set to <#${ch.id}>.`);
+        await message.channel.send(`✅ Games Hub set to ${ch}.`);
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Config Updated', [`Command channel: ${ch} (${ch.id})`]);
     }
 
     // !setthreshold [1-10]
