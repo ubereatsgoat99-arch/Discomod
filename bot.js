@@ -26,7 +26,7 @@ const path = require('path');
 // ══════════════════════════════════════════════════════════
 const TOKEN     = process.env.DISCORD_TOKEN || '';
 if (!TOKEN) throw new Error("Missing DISCORD_TOKEN in .env");
-const CLIENT_ID = '1494250614123659294';
+const CLIENT_ID = '1391892478373789786';
 
 // Fallback channel / role IDs (overridden per-guild via /setup)
 const DEFAULT_TARGET_CHANNEL_ID   = '1417395956357267516';
@@ -794,6 +794,9 @@ function detectScamOrExploit(cleanText, rawText) {
 
     const domains = extractDomains(rawText || t);
     for (const d of domains) {
+        // Skip known-safe domains (GIFs, Roblox CDN, Discord CDN, YouTube, etc.)
+        if (domainInList(d, COMMON_ALLOWED_DOMAINS)) continue;
+
         if (LINK_SHORTENERS.has(d)) return { hit: true, reason: `Suspicious link shortener: ${d}` };
         if (LINK_SHORTENERS_EXTRA.has(d)) return { hit: true, reason: `Suspicious link shortener: ${d}` };
         if (SCAM_DOMAIN_BLACKLIST.has(d)) return { hit: true, reason: `Blacklisted scam domain: ${d}` };
@@ -807,7 +810,9 @@ function detectScamOrExploit(cleanText, rawText) {
 
     if ((rawText || '').length) {
         const r = rawText.toLowerCase();
-        if (r.includes('http') && /v+e+r+i+f+y+|c+l+a+i+m+|g+i+v+e+a+w+a+y+/i.test(r)) return { hit: true, reason: 'Verification/giveaway + link pattern' };
+        // Only flag http + verify/claim/giveaway if the domain isn't a known-safe one
+        const hasSafeLink = domains.some(d => domainInList(d, COMMON_ALLOWED_DOMAINS));
+        if (!hasSafeLink && r.includes('http') && /v+e+r+i+f+y+|c+l+a+i+m+|g+i+v+e+a+w+a+y+/i.test(r)) return { hit: true, reason: 'Verification/giveaway + link pattern' };
         if (/r+o+b+l+o+x+\.?c+o+m/i.test(r) && /(free|claim|verify|generator)/i.test(r)) return { hit: true, reason: 'Roblox domain + scam keyword pattern' };
     }
 
@@ -1053,6 +1058,56 @@ function detectTrialsOrTrialsRecruitment(cleanText) {
     if (ns.includes('lookingfor1peoplefortrails') || ns.includes('lookingfor2peoplefortrails') || ns.includes('lookingfor3peoplefortrails')) return true;
     return false;
 }
+
+function getStrictness(gs) {
+    const v = Number(gs?.regexStrictness ?? 5);
+    if (!Number.isFinite(v)) return 5;
+    return Math.max(1, Math.min(10, v));
+}
+
+function strictnessHasBypassMode(gs, min = 9) {
+    return getStrictness(gs) >= min;
+}
+
+function buildFuzzyTokenPattern(token, strictness) {
+    const t = String(token || '').toLowerCase();
+    const base = t.replace(/[\s\-']/g, '');
+    if (!base) return '';
+    if (strictness <= 2) return escapeRegex(base);
+
+    const parts = [];
+    for (const ch of base) {
+        let cls = escapeRegex(ch);
+        if (strictness >= 7) {
+            if (ch === 'a') cls = '(?:a|4)';
+            else if (ch === 'e') cls = '(?:e|3)';
+            else if (ch === 'i') cls = '(?:i|1|!)';
+            else if (ch === 'o') cls = '(?:o|0)';
+            else if (ch === 's') cls = '(?:s|5)';
+            else if (ch === 't') cls = '(?:t|7)';
+            else if (ch === 'g') cls = '(?:g|9)';
+        }
+        const rep = strictness >= 9 ? '{1,4}' : '{1,2}';
+        parts.push(`${cls}${rep}`);
+    }
+    const sep = strictness >= 10 ? '[^a-z0-9]{0,4}' : (strictness >= 8 ? '[^a-z0-9]{0,2}' : '[^a-z0-9]{0,1}');
+    return parts.join(sep);
+}
+
+function makeIntentTargetBypassRegex(gs, intentWords, target) {
+    const strict = getStrictness(gs);
+    if (!target) return null;
+    const tgtRaw = String(target).toLowerCase();
+    const tgt = tgtRaw.replace(/[\s\-']/g, '');
+    if (!tgt || tgt.length < 4) return null;
+    const intents = (intentWords || []).map(w => String(w).toLowerCase()).filter(Boolean);
+    if (!intents.length) return null;
+
+    const intentAlt = intents.map(escapeRegex).join('|');
+    const join = strict >= 10 ? '[\s\W_]{0,20}' : (strict >= 8 ? '[\s\W_]{0,10}' : (strict >= 4 ? '[\s_]{0,4}' : '[\s_]{1,2}'));
+    const targetPat = strict >= 10 ? buildFuzzyTokenPattern(tgtRaw, strict) : (strict >= 8 ? buildFuzzyTokenPattern(tgtRaw, strict) : escapeRegex(tgt));
+    return new RegExp(`(?:^|[^a-z0-9])(?:${intentAlt})${join}${targetPat}(?![a-z0-9])`, 'i');
+}
 function makeDefaultData() {
     return {
         violations: {}, exiles: {}, immunity: {},
@@ -1229,6 +1284,8 @@ function getGuildSettings(guildId, data) {
             botFooterText: null,
             botInfoPublic: false,
 
+            regexStrictness: 5,
+
             linkMode: 'strict',
             linkAction: 'warn',
 
@@ -1316,12 +1373,39 @@ function getGuildSettings(guildId, data) {
             linkPolicyEnabled: true,
             linkAllowlistedDomains: [
                 'discord.com','discord.gg','discordapp.com','support.discord.com',
+                'cdn.discordapp.com','media.discordapp.net','discordcdn.com',
                 'roblox.com','www.roblox.com','auth.roblox.com','web.roblox.com',
-                'youtube.com','www.youtube.com','youtu.be','twitch.tv','www.twitch.tv',
-                'twitter.com','x.com','reddit.com','www.reddit.com',
-                'github.com','raw.githubusercontent.com','gist.github.com',
-                'pastebin.com','rentry.co',
-                'tenor.com','giphy.com',
+                'education.roblox.com','corp.roblox.com','blog.roblox.com',
+                'apis.roblox.com','economy.roblox.com','games.roblox.com',
+                'youtube.com','www.youtube.com','youtu.be','music.youtube.com',
+                'twitch.tv','www.twitch.tv','clips.twitch.tv','static-cdn.jtvnw.net',
+                'twitter.com','x.com','t.co','pbs.twimg.com','abs.twimg.com',
+                'reddit.com','www.reddit.com','i.redd.it','v.redd.it','preview.redd.it',
+                'github.com','raw.githubusercontent.com','gist.github.com','github.io',
+                'pastebin.com','rentry.co','hastebin.com',
+                'tenor.com','media.tenor.com','c.tenor.com','g.tenor.com',
+                'giphy.com','media.giphy.com','media0.giphy.com','media1.giphy.com',
+                'media2.giphy.com','media3.giphy.com','media4.giphy.com',
+                'imgur.com','i.imgur.com','m.imgur.com',
+                'gyazo.com','i.gyazo.com',
+                'prnt.sc','prntscr.com',
+                'streamable.com',
+                'catbox.moe','litter.catbox.moe','files.catbox.moe',
+                'pomf.cat',
+                'uguu.se',
+                'tmpfiles.org',
+                'weebninja.com',
+                'postimg.cc','i.postimg.cc',
+                'wikia.com','fandom.com','blox-fruits.fandom.com',
+                'bloxfruits.fandom.com','roblox.fandom.com',
+                'youtube-nocookie.com',
+                'wikimedia.org','wikipedia.org',
+                'steamcommunity.com','store.steampowered.com',
+                'imgur.io',
+                'gfycat.com','thumbs.gfycat.com','giant.gfycat.com',
+                'medal.tv','cdn.medal.tv','clips.medal.tv',
+                'top.gg',
+                'discord.me',
             ],
             linkDenylistedDomains: [],
             scanEditsEnabled: true,
@@ -1984,27 +2068,116 @@ function fuzzyRatio(a, b) {
 //  MASSIVE COMMON-WORD WHITELIST
 // ══════════════════════════════════════════════════════════
 const COMMON_WORD_WHITELIST = new Set([
-    "it","its","i","im","in","is","if","id","he","his","her","hers","him",
-    "we","us","our","ours","they","them","their","you","your","yours",
-    "a","an","the","to","of","on","at","as","or","so","up","do","go",
-    "be","by","my","and","but","nor","yet","for","not","no","via","per","vs",
-    "am","are","was","were","had","has","have","did","does","will","can",
-    "may","might","shall","get","got","let","put","set","sit","hit","bit",
-    "say","said","see","saw","try","use","run","ran","eat","ate","ask","pay",
-    "ago","add","aim","who","what","when","where","why","how","me","own",
-    "off","out","ive","ud","ull","ill","wont","cant","dont","isnt","arent",
-    "wasnt","werent","hadnt","hasnt","havent","didnt","doesnt","shouldnt",
-    "wouldnt","couldnt","mightnt","mustnt","im","ive","were","youre","theyre",
-    "weve","theyve","youve","shell","hell","well","theyll","youll","that",
-    "this","those","these","than","then","such","each","both","all","few",
-    "more","most","other","some","any","only","same","also","just","into",
-    "over","from","with","about","after","before","between","through","during",
-    "without","against","around","because","since","until","while","although",
-    "though","even","here","there","now","once","soon","again","still",
-    "already","often","always","never","ever","maybe","perhaps","very","quite",
-    "rather","almost","enough","either","neither","many","much","less","least",
-    "little","long","short","large","small","big","old","new","good","bad",
-    "best","worst","right","left","next","last","first","second","third",
+    // ── Pronouns & contractions ──────────────────────────────────
+    "i","im","ive","id","ill","me","my","mine","myself",
+    "we","us","our","ours","ourselves","you","your","yours","yourself","yourselves",
+    "he","him","his","himself","she","her","hers","herself",
+    "it","its","itself","they","them","their","theirs","themselves",
+    "who","whom","whose","which","what","that","this","these","those",
+    "weve","youve","theyve","hes","shes","its","hed","shed","wed","theyd",
+    "im","youre","hes","shes","were","theyre","ive","youve","weve","theyve",
+    "ill","youll","hell","shell","well","theyll","itll",
+    "wont","cant","dont","isnt","arent","wasnt","werent",
+    "hadnt","hasnt","havent","didnt","doesnt","shouldnt","wouldnt","couldnt",
+    "mightnt","mustnt","neednt","darent","shant","oughtn",
+    "ud","ull","ur","u","em","ya","yall",
+    // ── Articles, conjunctions, prepositions ────────────────────
+    "a","an","the","and","but","or","nor","for","so","yet",
+    "to","of","in","on","at","by","up","as","if","is","it",
+    "be","do","go","no","my","am","an","me","he","we","us","vs",
+    "via","per","not","nor","too","off","out","into","onto","upon",
+    "with","from","over","than","then","also","just","even","still",
+    "once","soon","now","here","there","when","where","why","how",
+    "about","above","across","after","against","along","among","around",
+    "before","behind","below","beneath","beside","besides","between","beyond",
+    "despite","down","during","except","following","inside","near","outside",
+    "past","since","through","throughout","till","under","until","unto",
+    "within","without","according","alongside","amid","amidst","concerning",
+    "regarding","underneath","unlike","versus","toward","towards",
+    "although","though","because","since","unless","while","whereas","whereby",
+    "whether","thus","hence","therefore","furthermore","moreover","however",
+    "nevertheless","nonetheless","otherwise","meanwhile","instead","indeed",
+    // ── Common verbs ─────────────────────────────────────────────
+    "am","are","is","was","were","be","been","being",
+    "have","has","had","having","do","does","did","doing",
+    "will","would","shall","should","may","might","must","can","could",
+    "get","got","gotten","let","lets","put","set","sit","hit","bit",
+    "say","said","see","saw","seen","try","tried","use","run","ran",
+    "eat","ate","ask","pay","add","aim","go","goes","went","gone",
+    "come","came","know","knew","known","think","thought",
+    "take","took","taken","give","gave","given","find","found",
+    "tell","told","feel","felt","leave","left","call","keep","kept",
+    "bring","brought","begin","began","begun","show","showed","shown",
+    "hold","held","start","stand","hear","heard","let","mean","meet","met",
+    "read","lead","led","grow","grew","grown","spend","spent",
+    "send","sent","lose","lost","break","broke","broken",
+    "win","won","fall","fell","fallen","build","built","sell","sold",
+    "pay","paid","catch","caught","learn","learned","change","happen",
+    "follow","stop","move","live","believe","allow","play","turn",
+    "seem","remain","open","close","write","wrote","written",
+    "walk","require","include","continue","become","became","consider",
+    "appear","create","speak","spoke","spoken","help","decide",
+    "pull","reach","kill","suggest","raise","pass","require","report",
+    "enter","exist","provide","cover","offer","expect","serve","work",
+    "stay","choose","chose","chosen","drive","drove","carry","carried",
+    "return","produce","receive","increase","understand","understood",
+    "watch","care","join","develop","cause","manage","result","prevent",
+    "compare","affect","apply","identify","control","check","focus",
+    "improve","agree","complete","protect","involve","relate","operate",
+    "reduce","represent","present","prepare","describe","explain",
+    // ── Common adjectives ─────────────────────────────────────────
+    "good","bad","big","small","large","little","old","new","first","last",
+    "long","short","great","high","low","right","left","next","early","late",
+    "young","important","real","other","different","hard","free","open",
+    "clear","full","simple","easy","strong","true","false","able","ready",
+    "same","sure","whole","best","worst","main","few","much","many",
+    "most","more","less","least","only","both","all","any","each","every",
+    "some","such","no","not","even","back","still","well","very","quite",
+    "rather","almost","enough","either","neither","also","just",
+    "far","near","quick","slow","fast","hot","cold","warm","cool",
+    "dark","light","heavy","loud","quiet","thick","thin","wide","narrow",
+    "deep","shallow","round","flat","sharp","soft","rough","smooth",
+    "clean","dirty","safe","happy","sad","angry","afraid","sorry",
+    "nice","pretty","bright","rich","poor","busy","lazy","smart",
+    "crazy","normal","strange","special","common","rare","basic",
+    "advanced","extra","final","total","exact","certain","complete",
+    "correct","wrong","possible","impossible","available","necessary",
+    "perfect","natural","social","local","national","personal","physical",
+    "major","minor","previous","current","future","recent","original",
+    "similar","specific","general","particular","interesting","ahead",
+    "alone","apart","aside","forward","backward","upward","downward",
+    "inside","outside","above","below","before","behind","beside",
+    // ── Common nouns ─────────────────────────────────────────────
+    "time","year","day","week","month","hour","minute","second","moment",
+    "place","area","land","home","house","room","door","window","floor",
+    "wall","table","chair","bed","hand","head","face","eye","ear","nose",
+    "mouth","arm","leg","foot","body","back","side","top","end","part",
+    "point","line","name","fact","question","problem","work","thing",
+    "people","man","men","woman","women","child","children","boy","girl",
+    "life","world","country","city","town","road","street","school",
+    "group","company","team","family","friend","human","person",
+    "number","money","food","water","fire","air","earth","sky","sea",
+    "tree","plant","animal","fish","bird","dog","cat","game","way",
+    "type","kind","form","level","age","size","color","colour","sound",
+    "power","force","energy","matter","space","information","message",
+    "news","word","book","story","list","idea","plan","system","result",
+    "effect","reason","cause","goal","task","job","role","rule","law",
+    "right","need","chance","action","event","step","field","account",
+    "value","difference","example","experience","knowledge","nature",
+    "position","health","ability","agreement","attention","business",
+    "decision","direction","distance","education","environment","language",
+    "movement","organization","performance","population","relationship",
+    "situation","structure","technology","understanding","community",
+    "development","management","opportunity","possibility","requirement",
+    "responsibility","communication","person","object","subject",
+    "answer","choice","condition","detail","feature","history","letter",
+    "level","method","model","month","movement","network","number",
+    "object","opinion","pattern","period","process","product","program",
+    "quality","question","reason","record","resource","result","section",
+    "series","service","society","source","standard","status","subject",
+    "support","surface","system","term","theory","thought","treatment",
+    "truth","understanding","university","version","weight",
+    // ── Short words (3-letter) that aren't game items ────────────
     "ice","age","ace","act","aid","air","all","any","apt","arc","arm","art",
     "ash","awe","bad","bag","ban","bar","bat","bay","bed","big","bit","bot",
     "bow","box","boy","bud","bug","bus","cab","cap","car","cat","cop","cup",
@@ -2023,119 +2196,339 @@ const COMMON_WORD_WHITELIST = new Set([
     "tap","tar","tax","tea","ten","tip","toe","ton","too","top","tow","toy",
     "tub","tug","two","urn","van","vat","vow","wag","war","wax","web","wed",
     "wet","win","wit","woe","wok","won","woo","yak","yam","yap","yaw","yes",
-    "yew","zip","zoo","able","also","area","back","ball","band","bank","base",
-    "bath","been","best","beta","bill","bird","blow","blue","body","book",
-    "boot","born","both","call","calm","came","card","care","case","cash",
-    "cast","chat","chip","city","clam","clap","clay","clip","club","coal",
-    "coat","code","coin","cold","come","cook","cool","cope","copy","cord",
-    "core","corn","cost","cozy","crew","crop","cure","data","date","dawn",
-    "dead","deal","dean","dear","debt","deck","deed","deep","deer","demo",
-    "deny","desk","dial","dice","diet","dirt","disk","dive","door","dose",
-    "dove","down","draw","drip","drop","drum","duck","dude","duel","dumb",
-    "dump","dusk","dust","duty","earn","ease","east","edge","emit","epic",
-    "even","ever","evil","exam","face","fact","fail","fair","fake","fall",
-    "fame","fast","fate","feel","feet","fell","felt","fern","file","fill",
-    "film","find","fine","fire","firm","fish","fist","flag","flat","flew",
-    "flip","flow","foam","fold","folk","fond","food","fool","foot","ford",
-    "fore","fork","form","fort","foul","four","free","frog","fuel","full",
-    "fume","fund","fuse","fuss","gain","game","gave","gear","gift","girl",
-    "give","glad","glow","glue","goal","gold","golf","good","gown","grab",
-    "grid","grin","grip","grow","gulf","gust","guys","hack","half","hall",
-    "hand","hang","hard","harm","hate","have","head","heal","heap","hear",
-    "heat","held","hell","help","hide","high","hill","hire","hold","hole",
-    "home","hood","hook","hope","horn","host","hour","huge","hull","hung",
-    "hunt","hurt","idea","idle","into","iron","isle","item","join","joke",
-    "jump","just","keen","keep","kick","kill","kind","king","knew","know",
-    "lack","laid","lake","land","lane","last","late","lead","leaf","leak",
-    "lean","leap","left","lend","less","lick","life","lift","like","lime",
-    "line","link","lion","list","live","load","loan","lock","loft","lone",
-    "look","loom","loop","lord","lore","lose","loss","lost","loud","lout",
-    "lure","lush","made","mail","main","make","male","mall","mane","many",
-    "mark","mars","mash","mass","mast","mate","math","maze","mean","meet",
-    "melt","memo","menu","mere","mess","mind","mine","mint","miss","mode",
-    "mold","mole","moon","move","much","muse","must","mute","myth","nail",
-    "name","navy","near","neat","neck","news","next","nice","nine","node",
-    "none","noon","norm","nose","note","noun","nude","null","oath","obey",
-    "once","only","open","oral","orca","over","pace","pack","page","paid",
-    "pair","pale","pane","park","part","pass","past","path","peak","peel",
-    "peer","pick","pile","pink","pipe","plan","play","plot","plow","plug",
-    "plus","pole","poll","pond","pool","pore","port","pose","post","pour",
-    "pray","prey","prop","pull","pump","pure","push","quiz","race","rack",
-    "rage","rain","rank","rare","rate","read","real","reap","rear","rely",
-    "rent","rest","rich","ride","rife","ring","riot","rise","risk","road",
-    "roam","roar","robe","rock","rode","role","roll","roof","room","root",
-    "rope","rose","rout","rule","rush","rust","safe","sage","sail","sake",
-    "sale","sang","sank","save","scan","scar","seal","seat","seed","seek",
-    "seem","seen","self","sell","send","sent","shed","ship","shoe","shop",
-    "shot","show","shut","sick","side","sigh","silk","sill","sing","sink",
-    "site","size","skip","slab","slam","slap","sled","slew","slim","slip",
-    "slot","slow","slug","slum","snap","snow","soak","sock","soft","soil",
-    "sole","some","song","soon","sore","soul","soup","sour","span","spec",
-    "spit","spot","spur","stab","star","stay","step","stem","stew","stop",
-    "stub","such","suit","sung","sunk","sure","swan","swam","swim","sync",
-    "tail","tale","talk","tall","tame","task","taut","team","tear","tell",
-    "tend","tent","term","test","text","than","that","then","this","thou",
-    "thus","tide","tied","tile","till","time","tire","told","toll","tomb",
-    "tone","tore","torn","toss","tour","town","trap","tray","tree","trek",
-    "trim","trip","true","tube","tune","turf","turn","twin","type","ugly",
-    "undo","unit","upon","used","user","vain","vale","vary","vast","veil",
-    "vein","verb","very","vest","view","vine","visa","void","volt","vote",
-    "wade","wait","wake","walk","wall","want","ward","warm","warn","wary",
-    "wave","weak","weld","went","west","whim","wide","wife","wiki","wild",
-    "wind","wine","wing","wire","wise","wish","with","wolf","wood","wool",
-    "word","wore","work","worm","worn","wrap","writ","yard","yarn","year",
-    "yell","zero","zone","swap","loot","lore","hero","gear","slot","buff",
-    "nerf","stat","dmg","dps","aoe","rng","exp","xp","lvl","gg","gl","hf",
-    "wp","ez","nt","brb","afk","op","pve","pvp","grind","farm","carry",
-    "boost","loot","drop","spawn","cooldown","cd","hp","mp","sp","lol",
-    "lmao","omg","wtf","smh","tbh","ngl","imo","fr","nah","yea","yeah",
-    "yep","yup","nope","ok","okay","bro","bruh","fam","dude","man",
-    "robux","roblox","blox","sea","island","ship","boat","reset","rebirth",
-    "mastery","bounty","honor","first","second","third","noob","newbie",
-    "pro","main","discord","server","chat","link","invite","world","map",
-    "location","area","zone","region","teleport","tp","warp","beli","chest",
-    "player","member","staff","owner","ping","lag","fps","ms","latency",
-    "kick","ban","mute","warn","timeout","role","perm","sorry","mb","oops",
-    "please","pls","plz","thanks","thx","ty","np","yw","welcome","sure",
-    "now","soon","later","today","tomorrow","morning","evening","night",
-    "north","south","east","west","forward","backward","front","bottom",
-    "sec","min","hr","hour","day","week","month","year","seconds","minutes",
-    "v1","v2","v3","v4","v5","p1","p2","p3","1x","2x","3x","5x","10x",
+    "yew","zip","zoo",
+    // ── 4-letter common words ────────────────────────────────────
+    "able","also","area","back","ball","band","bank","base","bath","been",
+    "best","beta","bill","bird","blow","blue","body","book","boot","born",
+    "both","call","calm","came","card","care","case","cash","cast","chat",
+    "chip","city","clam","clap","clay","clip","club","coal","coat","code",
+    "coin","cold","come","cook","cool","cope","copy","cord","core","corn",
+    "cost","cozy","crew","crop","cure","data","date","dawn","dead","deal",
+    "dean","dear","debt","deck","deed","deep","deer","demo","deny","desk",
+    "dial","dice","diet","dirt","disk","dive","door","dose","dove","down",
+    "draw","drip","drop","drum","duck","dude","duel","dumb","dump","dusk",
+    "dust","duty","earn","ease","east","edge","emit","epic","even","ever",
+    "evil","exam","face","fact","fail","fair","fake","fall","fame","fast",
+    "fate","feel","feet","fell","felt","fern","file","fill","film","find",
+    "fine","fire","firm","fish","fist","flag","flat","flew","flip","flow",
+    "foam","fold","folk","fond","food","fool","foot","ford","fore","fork",
+    "form","fort","foul","four","free","frog","fuel","full","fume","fund",
+    "fuse","fuss","gain","game","gave","gear","gift","girl","give","glad",
+    "glow","glue","goal","gold","golf","good","gown","grab","grid","grin",
+    "grip","grow","gulf","gust","guys","hack","half","hall","hand","hang",
+    "hard","harm","hate","have","head","heal","heap","hear","heat","held",
+    "hell","help","hide","high","hill","hire","hold","hole","home","hood",
+    "hook","hope","horn","host","hour","huge","hull","hung","hunt","hurt",
+    "idea","idle","into","iron","isle","item","join","joke","jump","just",
+    "keen","keep","kick","kill","kind","king","knew","know","lack","laid",
+    "lake","land","lane","last","late","lead","leaf","leak","lean","leap",
+    "left","lend","less","lick","life","lift","like","lime","line","link",
+    "lion","list","live","load","loan","lock","loft","lone","look","loom",
+    "loop","lord","lore","lose","loss","lost","loud","lout","lure","lush",
+    "made","mail","main","make","male","mall","mane","many","mark","mars",
+    "mash","mass","mast","mate","math","maze","mean","meet","melt","memo",
+    "menu","mere","mess","mind","mine","mint","miss","mode","mold","mole",
+    "moon","move","much","muse","must","mute","myth","nail","name","navy",
+    "near","neat","neck","news","next","nice","nine","node","none","noon",
+    "norm","nose","note","noun","nude","null","oath","obey","once","only",
+    "open","oral","orca","over","pace","pack","page","paid","pair","pale",
+    "pane","park","part","pass","past","path","peak","peel","peer","pick",
+    "pile","pink","pipe","plan","play","plot","plow","plug","plus","pole",
+    "poll","pond","pool","pore","port","pose","post","pour","pray","prey",
+    "prop","pull","pump","pure","push","quiz","race","rack","rage","rain",
+    "rank","rare","rate","read","real","reap","rear","rely","rent","rest",
+    "rich","ride","rife","ring","riot","rise","risk","road","roam","roar",
+    "robe","rock","rode","role","roll","roof","room","root","rope","rose",
+    "rout","rule","rush","rust","safe","sage","sail","sake","sale","sang",
+    "sank","save","scan","scar","seal","seat","seed","seek","seem","seen",
+    "self","sell","send","sent","shed","ship","shoe","shop","shot","show",
+    "shut","sick","side","sigh","silk","sill","sing","sink","site","size",
+    "skip","slab","slam","slap","sled","slew","slim","slip","slot","slow",
+    "slug","slum","snap","snow","soak","sock","soft","soil","sole","some",
+    "song","soon","sore","soul","soup","sour","span","spec","spit","spot",
+    "spur","stab","star","stay","step","stem","stew","stop","stub","such",
+    "suit","sung","sunk","sure","swan","swam","swim","sync","tail","tale",
+    "talk","tall","tame","task","taut","team","tear","tell","tend","tent",
+    "term","test","text","than","that","then","this","thou","thus","tide",
+    "tied","tile","till","time","tire","told","toll","tomb","tone","tore",
+    "torn","toss","tour","town","trap","tray","tree","trek","trim","trip",
+    "true","tube","tune","turf","turn","twin","type","ugly","undo","unit",
+    "upon","used","user","vain","vale","vary","vast","veil","vein","verb",
+    "very","vest","view","vine","visa","void","volt","vote","wade","wait",
+    "wake","walk","wall","want","ward","warm","warn","wary","wave","weak",
+    "weld","went","west","whim","wide","wife","wiki","wild","wind","wine",
+    "wing","wire","wise","wish","with","wolf","wood","wool","word","wore",
+    "work","worm","worn","wrap","writ","yard","yarn","year","yell","zero",
+    "zone","loot","lore","hero","buff","nerf","stat",
+    // ── 5-letter common words ────────────────────────────────────
+    "about","above","after","again","ahead","alone","along","among","apart",
+    "apply","argue","aside","asked","avoid","aware","badly","began","being",
+    "below","blood","boats","bonus","bound","break","bring","broke","build",
+    "built","burns","bytes","calls","cause","chain","claim","class","clean",
+    "clear","close","coins","color","comes","count","cover","crash","crazy",
+    "cross","cycle","daily","dance","death","delta","depth","doors","drive",
+    "early","enjoy","enter","equal","error","event","every","exact","exist",
+    "extra","falls","feels","field","final","finds","fixed","floor","focus",
+    "found","frame","fresh","front","fully","gains","games","given","glass",
+    "going","grand","grant","great","green","greet","group","guess","guide",
+    "hands","happy","heard","hence","holds","holes","honor","hours","house",
+    "human","inbox","inner","issue","items","keeps","kills","known","large",
+    "later","leads","learn","least","leave","light","liked","limit","links",
+    "lives","local","lobby","lower","lucky","lunch","magic","match","means",
+    "media","meets","merge","metal","might","minor","modes","money","month",
+    "moved","named","needs","never","night","nodes","noise","noted","occur",
+    "often","order","ought","pages","party","place","plain","plans","plays",
+    "point","pools","power","press","price","print","prior","proof","queue",
+    "quite","races","range","rates","reads","reach","ready","realm","refer",
+    "reset","right","rings","roles","rooms","round","route","saves","scene",
+    "score","seems","sends","sense","serve","setup","share","shift","ships",
+    "shown","sides","since","sizes","skill","sleep","small","smart","solve",
+    "sorts","sound","space","speak","specs","speed","split","stand","start",
+    "state","stays","still","stone","stops","store","story","stuck","style",
+    "suits","super","table","takes","tasks","teams","tests","thick","thing",
+    "think","those","three","throw","tiles","times","title","token","tools",
+    "total","touch","towns","trace","track","train","trees","tried","truck",
+    "trust","truth","twice","typed","types","under","union","units","until",
+    "usage","using","usual","valid","value","video","voice","walks","walls",
+    "wants","watch","water","waves","where","while","whole","whose","words",
+    "works","worse","worth","would","write","wrote","years","young","yours",
+    "zones","prior","their","there","about",
+    // ── Discord slang / shorthand ─────────────────────────────────
+    "gg","gl","hf","wp","ez","nt","gg","lol","lmao","omg","wtf","smh",
+    "tbh","ngl","imo","imho","fr","nah","yea","yeah","yep","yup","nope",
+    "ok","okay","oki","okie","kk","brb","afk","gtg","bbl","ttyl","ttys",
+    "omw","irl","irl","ofc","obv","ikr","ikr","ik","idk","idc","imo",
+    "bc","cuz","cos","cause","tho","tbs","tba","tbd","tbf","tbt","tbt",
+    "bro","bruh","fam","dude","man","mate","dawg","homie","buddy","pal",
+    "sir","maam","lad","lass","chief","boss","king","queen","slay",
+    "haha","hehe","lmao","rofl","lmfao","xd","xdd","uwu","owo","fff",
+    "rip","ripp","oof","gg","ez","noice","nice","cool","lit","fire",
+    "goat","chad","based","cringe","ratio","real","cap","nocap","npc",
+    "facts","big","small","mid","lowkey","highkey","slay","vibe","mood",
+    "bet","aight","alright","alr","ayt","sup","wassup","whatsup","wsg",
+    "hru","howru","wyd","wya","wdym","imo","tbh","fr","rn","atm","asap",
+    "eta","fyi","btw","aka","iirc","afaik","afaict","tldr","tl","dr",
+    "dw","nvm","nm","np","yw","ty","thx","tyvm","tysm","ggs","gj","gf",
+    "wp","l","w","wl","wfl","pog","poggers","pogchamp","kekw","omegalul",
+    "monkas","peepo","sadge","pepehands","copium","hopium","pepelaugh",
+    "real","cap","nocap","deadass","literally","literally","actually",
+    "basically","honestly","genuinely","totally","definitely","absolutely",
+    "probably","possibly","maybe","perhaps","seemingly","apparently",
+    "obviously","clearly","simply","easily","quickly","slowly","lightly",
+    "heavily","strongly","highly","deeply","fully","completely","partly",
+    "mostly","nearly","almost","exactly","perfectly","roughly","barely",
+    "hardly","slightly","fairly","pretty","rather","quite","truly","really",
+    "very","too","also","even","just","still","yet","now","then","here",
+    "there","where","when","how","why","what","who","which","that","this",
+    // ── Common reactions / responses Discord users type ───────────
+    "yes","no","sure","fine","okay","ofc","course","indeed","exactly",
+    "correct","right","wrong","true","false","maybe","perhaps","probably",
+    "definitely","absolutely","certainly","honestly","literally","actually",
+    "seriously","really","obviously","clearly","apparently","supposedly",
+    "admittedly","fortunately","unfortunately","typically","generally",
+    "usually","normally","regularly","commonly","frequently","rarely",
+    "never","always","sometimes","often","occasionally","eventually",
+    "finally","recently","currently","previously","originally","initially",
+    "suddenly","immediately","quickly","slowly","carefully","easily",
+    "hardly","barely","nearly","almost","already","still","yet","again",
+    "soon","now","then","today","tomorrow","yesterday","later","earlier",
+    "morning","afternoon","evening","night","midnight","noon","dawn","dusk",
+    "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
+    "january","february","march","april","june","july","august",
+    "september","october","november","december",
+    // ── Numbers & ordinals ────────────────────────────────────────
+    "one","two","three","four","five","six","seven","eight","nine","ten",
+    "eleven","twelve","thirteen","fourteen","fifteen","sixteen",
+    "seventeen","eighteen","nineteen","twenty","thirty","forty","fifty",
+    "sixty","seventy","eighty","ninety","hundred","thousand","million",
+    "first","second","third","fourth","fifth","sixth","seventh","eighth",
+    "ninth","tenth","eleventh","twelfth",
     "1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th",
-    "about","above","after","again","along","among","another","anyone",
-    "anything","around","away","before","behind","below","beside","between",
-    "beyond","cause","change","check","choose","clear","close","could","cross",
-    "cycle","daily","delay","does","done","early","else","empty","enter",
-    "equal","every","exist","extra","feels","field","fixed","focus","found",
-    "fresh","front","fully","given","going","great","green","group","guess",
-    "guide","hands","happy","heard","hence","hours","house","human","inbox",
-    "inside","issue","items","keeps","known","large","later","leads","learn",
-    "leave","light","liked","limit","links","lives","local","lower","lucky",
-    "lunch","might","money","month","moved","named","needs","never","night",
-    "noted","often","order","ought","pages","party","place","plain","plans",
-    "plays","point","power","price","prior","quite","reach","ready","refer",
-    "seems","sends","shown","since","sleep","small","solve","speak","spend",
-    "split","stand","start","state","stays","still","stops","story","stuff",
-    "style","super","takes","tasks","tests","thing","think","those","three",
-    "throw","times","total","touch","track","tried","truck","trust","truth",
-    "twice","under","unity","until","using","usual","valid","value","video",
-    "voice","walks","watch","where","while","whole","whose","words","works",
-    "worse","worth","would","write","wrote","years","young","yours","ahead",
-    "alone","apart","apply","argue","aside","being","below","blood","boats",
-    "bonus","bound","break","bring","broke","build","built","burns","bytes",
-    "calls","chain","claim","class","clean","coins","color","comes","count",
-    "cover","crash","crazy","dance","death","delta","depth","drive","enjoy",
-    "error","event","exact","final","finds","frame","gains","games","gives",
-    "glass","grand","grant","greet","guard","helps","holds","holes","honor",
-    "keeps","kills","leads","least","lobby","magic","match","means","media",
-    "meets","merge","metal","minor","modes","named","nodes","noise","notes",
-    "occur","pools","press","print","proof","queue","races","range","rates",
-    "reads","realm","reset","rings","roles","rooms","round","route","saves",
-    "score","scene","sense","serve","setup","share","shift","ships","sides",
-    "sizes","skill","smart","solve","sorts","sound","space","specs","speed",
-    "stone","store","stuck","suits","table","teams","texts","thick","tiles",
-    "title","token","tools","towns","trace","train","trees","typed","types",
-    "union","units","usage","walls","wants","water","waves","zones",
+    "11th","12th","13th","14th","15th","20th","25th","30th","50th",
+    "v1","v2","v3","v4","v5","p1","p2","p3",
+    "1x","2x","3x","4x","5x","10x","20x","100x",
+    // ── Tech / Discord platform words ─────────────────────────────
+    "discord","server","channel","message","messages","dm","dms","pm","pms",
+    "mention","mentions","ping","pings","notification","notifications",
+    "role","roles","admin","admins","mod","mods","moderator","moderators",
+    "staff","owner","member","members","user","users","bot","bots",
+    "voice","vc","text","emoji","emote","emotes","sticker","gif","image",
+    "embed","link","links","invite","invites","thread","threads","forum",
+    "category","server","guild","announcement","announcements","rules",
+    "ticket","tickets","support","help","faq","info","information",
+    "settings","permissions","perms","ban","kick","mute","timeout","warn",
+    "warning","warnings","strike","strikes","case","cases","report",
+    "appeal","appeals","log","logs","audit","nitro","boost","booster",
+    "level","levels","xp","points","rank","ranks","leaderboard","top",
+    "profile","avatar","status","activity","presence","online","offline",
+    "idle","dnd","streaming","custom","bio","badge","badges","verified",
+    "partner","hypesquad","developer","early","supporter","system",
+    // ── Roblox / Blox Fruits game terms ──────────────────────────
+    "robux","roblox","blox","bloxfruits","experience","exp","xp","level",
+    "lvl","mastery","bounty","honor","beli","fragment","fragments","stat",
+    "stats","reset","rebirth","race","races","island","islands","sea",
+    "seas","ship","boats","boat","teleport","tp","warp","location","area",
+    "zone","map","world","server","private","public","vip","game","games",
+    "update","patch","nerf","buff","meta","build","builds","loadout",
+    "spawn","respawn","revive","die","died","death","kill","kills","kd",
+    "pvp","pve","boss","bosses","raid","raids","dungeon","dungeons","chest",
+    "chests","drop","drops","loot","grind","grinding","farm","farming",
+    "noob","newbie","pro","main","alt","account","acc","player","players",
+    "teammate","teammates","squad","team","party","group","guild",
+    "quest","quests","mission","missions","npc","mob","mobs","enemy",
+    "enemies","fruit","fruits","sword","swords","ability","abilities",
+    "skill","skills","move","moves","combo","combos","awakening","awaken",
+    "unawakened","maxed","maxing","grinding","farming","leveling","levelling",
+    "trading","trade","swap","sell","buy","offer","deal","market",
+    "checkpoint","save","load","rejoin","server hop","serverhop","private server",
+    "ps","vip","full moon","fullmoon","mirage","mirror","fractal","gear",
+    "gears","item","items","gamepass","gp","perm","perms","permanent",
+    "notifier","notification","dark","blade","yoru","fast","boats","mastery",
+    "money","bossdrops","boss drops","2x",
+    // ── Common gaming / Discord chat phrases (standalone words) ──
+    "omg","wow","wtf","bruh","lmao","haha","lol","xd","nice","good",
+    "bad","great","awesome","amazing","cool","lit","fire","goat","noice",
+    "sad","mad","angry","happy","excited","bored","tired","sleepy",
+    "hungry","ok","fine","alright","sure","true","false","correct",
+    "wrong","yes","no","nope","yep","maybe","idk","idc","whatever",
+    "same","mood","relatable","facts","real","cap","nocap","lowkey",
+    "highkey","literally","actually","basically","honestly","genuinely",
+    "apparently","obviously","clearly","definitely","absolutely","probably",
+    "possibly","certainly","truly","really","totally","completely",
+    // ── Extra Discord-common words to prevent false positives ─────
+    "here","there","where","when","how","why","who","what","which",
+    "anyone","someone","everyone","nobody","nothing","something","anything",
+    "everything","everywhere","somewhere","anywhere","nowhere","somehow",
+    "sometime","anytime","sometimes","meanwhile","however","therefore",
+    "moreover","furthermore","additionally","consequently","accordingly",
+    "nevertheless","nonetheless","otherwise","instead","although","whereas",
+    "unless","until","whether","through","throughout","despite","except",
+    "within","without","beyond","along","among","amid","beside","besides",
+    "between","underneath","underneath","alongside","regarding","concerning",
+    "including","excluding","following","preceding","considering","given",
+    "assuming","provided","unless","in","on","at","by","to","for","of",
+    "with","from","about","against","around","before","after","during",
+    // ── Discord reaction/emotion words ────────────────────────────
+    "congrats","congratulations","welcome","goodbye","bye","hello","hi",
+    "hey","howdy","greetings","salutations","cheers","thanks","thank",
+    "please","sorry","apologize","apology","excuse","pardon","forgive",
+    "love","hate","like","dislike","enjoy","prefer","want","need","miss",
+    "hope","wish","believe","think","feel","know","understand","remember",
+    "forget","notice","realize","discover","learn","teach","help","assist",
+    "support","encourage","motivate","inspire","appreciate","respect",
+    "agree","disagree","accept","reject","approve","disapprove","allow",
+    "deny","permit","prohibit","suggest","recommend","advise","warn",
+    "remind","inform","notify","announce","confirm","verify","prove",
+    "explain","describe","show","demonstrate","illustrate","clarify",
+    // ── Time & dates ──────────────────────────────────────────────
+    "today","tomorrow","yesterday","now","then","soon","later","early",
+    "late","morning","afternoon","evening","night","midnight","noon",
+    "daily","weekly","monthly","yearly","annually","hourly","secondly",
+    "ago","past","present","future","recent","current","previous","next",
+    "last","first","before","after","during","throughout","meanwhile",
+    "sec","secs","min","mins","hr","hrs","hour","hours","day","days",
+    "week","weeks","month","months","year","years","decade","century",
+    // ── Filler words commonly typed in Discord ────────────────────
+    "lmk","hmu","dm","pm","msg","message","text","chat","say","mention",
+    // ── Casual expletives and slang (prevent false positives) ─────
+    "damn","dammit","damned","dang","darn","heck","hell","crap","shoot",
+    "shi","shit","shite","shyt","shitt","sheit","sheesh","sheeesh",
+    "ass","arse","bum","butt","wtf","wth","omfg","omfl","ffs","fml",
+    "frick","freak","freaking","freakin","frickin","fricking","freaking",
+    "sucks","suck","succ","sucked","sucky","blows","blowed","blowing",
+    "pissed","piss","ticked","mad","angry","annoyed","frustrated","upset",
+    "ugh","argh","urgh","ugh","gah","gosh","geez","jeez","jeeez","jeezus",
+    "bruh","bruv","bro","brooo","broseph","brosis","sis","sisss","fam",
+    "mate","m8","m9","chap","lad","bloke","geezer","dude","dudette","girl",
+    "ngl","tbh","tbf","imo","imho","afaik","iirc","fwiw","tbt",
+    "lowkey","highkey","deadass","periodt","period","no cap","nocap","cap",
+    "slay","ate","left no crumbs","understood","bet","valid","sheesh",
+    "nah","nope","yep","yup","yeah","yea","yass","yasss","yaaaas",
+    "wdym","wdyt","wdyd","wtd","wtv","wtvr","watever","whatever","wb",
+    "ight","aight","aiight","alr","aightt","iight","bet","fbet",
+    "fr fr","frfr","forreal","forreal","deadass","fa real","fareal",
+    "no way","noway","nosir","nope","nah","nah bro","bruh nah",
+    "wait","hold on","hold up","waitwait","waitt","hmm","hm","hmm","hmmm",
+    "hmmmm","uh","uhh","um","umm","uhmm","ugh","ohh","ohhhh","ooh",
+    "oh","ah","aha","ahhh","ehh","eh","mhm","mhmm","yeah","yea","ye",
+    "lmaooo","lmaoooo","lmfao","lmfaooo","lolll","lollll","hahaha",
+    "hahahaha","hehehe","heheheh","kekeke","xdxd","xddd","xdddd",
+    "oof","ooof","oooof","oops","oopss","opps","oppss","rip","riipp",
+    "pog","poggg","pogg","pogchamp","peepo","kekw","lulw","omegalul",
+    "based","unbased","cringe","cringeee","cringey","chungus","sugma",
+    "ligma","bofa","deez","deezz","sugondese","updog","heliocentric",
+    "ohio","rizz","rizzing","rizzed","rizzler","mewing","looksmaxxing",
+    "sigma","alpha","beta","omega","gigachad","chad","chadder","virgin",
+    "touch grass","copium","hopium","delusion","glazing","glaze",
+    "l bozo","w rizz","ratio","ratioed","fell off","stay mad",
+    "go off","big forehead","imagine","skill issue","cope","seethe",
+    "rent free","main character","npc","npcs","chronically online",
+    "ate and left no crumbs","understood the assignment","snatched",
+    // ── Common casual phrases used in chat (not BF specific) ─────
+    "real","unreal","crazy","insane","wild","nuts","mental","bonkers",
+    "sick","dope","fire","lit","mid","trash","garbage","awful","terrible",
+    "goated","cracked","cracked out","bussin","bussin bussin","slapping",
+    "slaps","hard","goes hard","goes crazy","different","different breed",
+    "built different","nah this","nah bro this","bro this","ayo this",
+    "ayo","ayoo","ayyyy","ayyy","ayye","that","for that","tho","doe",
+    "man","mann","mannn","bro","brooo","fr","frr","frrr","ong","ongg",
+    "swear","swear to","swear down","swear bro","facts","fact","factual",
+    "nah","nahhh","ngl","tbh","lowkey","honestly","genuinely","actually",
+    "literally","essentially","basically","fundamentally","ultimately",
+    "overall","generally","typically","normally","usually","apparently",
+    "supposedly","allegedly","reportedly","presumably","theoretically",
+    "practically","technically","effectively","relatively","comparatively",
+    // ── Internet/meme words that aren't BF items ─────────────────
+    "spam","spammer","troll","trolling","baiting","bait","baited","ratio",
+    "touch","grass","outside","outside world","go outside","grass touching",
+    "social life","no life","unemployed","loser","winner","sore loser",
+    "cry","crying","tears","sobbing","laughing","laughed","laughs",
+    "smh","shaking my head","headshake","facepalm","palm","forehead",
+    "eye roll","eyeroll","rolling my eyes","rolling eyes","sigh","sighs",
+    "breathing","breathe","inhale","exhale","cope","cope harder","coping",
+    "malding","tilted","raging","rage","rager","tilting","tilt","toxic",
+    "toxicity","positivity","wholesome","poggers","based","cringe",
+    "reddit moment","twitter moment","discord moment","skill issue",
+    "tag","ping","alert","notify","reach","contact","respond","reply",
+    "answer","ask","request","question","wonder","curious","interested",
+    "want","need","looking","searching","seeking","finding","getting",
+    "having","using","making","doing","going","coming","taking","giving",
+    "saying","telling","showing","sending","receiving","reading","writing",
+    "watching","listening","playing","working","trying","starting","stopping",
+    "continuing","finishing","completing","checking","testing","fixing",
+    "changing","updating","adding","removing","deleting","moving","copying",
+    "saving","loading","opening","closing","joining","leaving","entering",
+    // ── More common gaming words (safe) ───────────────────────────
+    "hp","mp","sp","mana","health","shield","armor","defence","defense",
+    "attack","damage","dmg","dps","aoe","dot","hot","cc","crowd","control",
+    "stun","knockback","knockup","slow","freeze","burn","bleed","poison",
+    "buff","debuff","nerf","rework","passive","active","ultimate","ult",
+    "cooldown","cd","cast","channel","interrupt","cancel","dodge","dash",
+    "jump","teleport","blink","recall","respawn","spawn","wave","lane",
+    "jungle","mid","top","bot","carry","support","tank","assassin","mage",
+    "marksman","bruiser","fighter","healer","ranger","rogue","warrior",
+    "mage","archer","knight","paladin","druid","monk","bard","cleric",
+    "patch","meta","tier","ranked","casual","competitive","tournament",
+    "matchmaking","queue","lobby","pregame","ingame","postgame","replay",
+    "highlight","clip","screenshot","record","stream","twitch","youtube",
+    "content","creator","youtuber","streamer","viewer","subscriber","follower",
+    "like","comment","share","subscribe","notification","bell","channel",
+    "video","short","reel","post","story","feed","timeline","profile",
+    "handle","username","tag","hashtag","trending","viral","meme","gif",
+    "reaction","respond","thread","reply","quote","retweet","like","share",
+    // ── Blox Fruits specific safe words ───────────────────────────
+    "third","sea","second","first","beginner","intermediate","advanced",
+    "maxed","maxing","maxlevel","maxlvl","fullbuild","endgame","lategame",
+    "midgame","earlygame","newplayer","veteran","experienced","skilled",
+    "strong","weak","op","overpowered","underpowered","balanced","broken",
+    "bugged","glitched","lag","lagging","latency","connection","disconnect",
+    "reconnect","rejoin","crash","freeze","loading","buffering",
+    "update","hotfix","patch","maintenance","downtime","reboot","restart",
+    "wipe","reset","rollback","rollout","deploy","release","version",
+    "patch notes","patchnotes","changelogs","changelog","news","announcement",
+    "dev","developer","developers","admin","admins","mod","mods","staff",
+    "support","help","faq","guide","tutorial","tips","tricks","strategy",
+    "walkthrough","howto","explain","taught","showing","demonstrating",
 ]);
 
 // ══════════════════════════════════════════════════════════
@@ -3800,8 +4193,33 @@ function makeNospacePattern(kw, target) {
     return new RegExp(`(?<![a-z])${kp}[\\s\\W_]{0,3}${fp}(?![a-z])`, 'i');
 }
 const NOSPACE_PATTERNS = [];
-for (const ki of ["lf","wtt","wtb","wts","lookingfor","lfr","lf4"])
+// All intent keywords that can be smashed directly against a fruit/item name
+const NOSPACE_INTENTS = [
+    "lf","wtt","wtb","wts","lookingfor","lfr","lf4","lf4r","lfor",
+    "searchingfor","seekingfor","wantto","needto","wanna","wana",
+    "ihave","igot","ihavefor","igotfor","trading","selling","buying",
+    "offering","swapping","exchanging","havingfor","gottingfor",
+];
+for (const ki of NOSPACE_INTENTS) {
     for (const fr of FRUITS) NOSPACE_PATTERNS.push(makeNospacePattern(ki, fr));
+    for (const sw of SWORDS) NOSPACE_PATTERNS.push(makeNospacePattern(ki, sw));
+}
+// Also cover common 2-letter / short aliases for swords directly (dk=dark blade, ttk, cdk, etc.)
+const SHORT_SWORD_ALIASES = Object.entries(SWORD_ALIASES)
+    .filter(([alias]) => alias.length >= 2 && alias.length <= 6);
+for (const ki of ["lf","wtt","wtb","wts","lookingfor","lfr","lf4","trading","selling","buying"]) {
+    for (const [alias] of SHORT_SWORD_ALIASES) {
+        NOSPACE_PATTERNS.push(makeNospacePattern(ki, alias));
+    }
+}
+// Also cover common fruit aliases directly
+const SHORT_FRUIT_ALIASES = Object.entries(FRUIT_ALIASES)
+    .filter(([alias]) => alias.length >= 2 && alias.length <= 8);
+for (const ki of ["lf","wtt","wtb","wts","lookingfor","lfr","lf4","trading","selling","buying"]) {
+    for (const [alias] of SHORT_FRUIT_ALIASES) {
+        NOSPACE_PATTERNS.push(makeNospacePattern(ki, alias));
+    }
+}
 
 // ══════════════════════════════════════════════════════════
 //  VIOLATION SYSTEM (UNIFIED WARNING COUNTER)
@@ -3983,6 +4401,61 @@ function domainInList(domain, list) {
     }
     return false;
 }
+
+const COMMON_ALLOWED_DOMAINS = [
+    // ── Tenor (GIF platform) ──────────────────────────────
+    'tenor.com','media.tenor.com','c.tenor.com','g.tenor.com',
+    'media1.tenor.com','media2.tenor.com','media3.tenor.com',
+    // ── Giphy (GIF platform) ─────────────────────────────
+    'giphy.com','media.giphy.com','media0.giphy.com','media1.giphy.com',
+    'media2.giphy.com','media3.giphy.com','media4.giphy.com','i.giphy.com',
+    // ── Imgur ─────────────────────────────────────────────
+    'imgur.com','i.imgur.com','m.imgur.com',
+    // ── Gyazo ────────────────────────────────────────────
+    'gyazo.com','i.gyazo.com',
+    // ── Gfycat ───────────────────────────────────────────
+    'gfycat.com','thumbs.gfycat.com','giant.gfycat.com',
+    // ── Medal.tv ─────────────────────────────────────────
+    'medal.tv','cdn.medal.tv','clips.medal.tv',
+    // ── Streamable ───────────────────────────────────────
+    'streamable.com',
+    // ── Catbox ───────────────────────────────────────────
+    'catbox.moe','litter.catbox.moe','files.catbox.moe',
+    // ── Postimg ──────────────────────────────────────────
+    'postimg.cc','i.postimg.cc',
+    // ── Prnt.sc / Lightshot ──────────────────────────────
+    'prnt.sc','prntscr.com',
+    // ── Roblox (all subdomains) ───────────────────────────
+    'roblox.com','www.roblox.com','auth.roblox.com','web.roblox.com',
+    'apis.roblox.com','economy.roblox.com','games.roblox.com',
+    'corp.roblox.com','blog.roblox.com','education.roblox.com',
+    'rbxcdn.com','t1.rbxcdn.com','t2.rbxcdn.com','t3.rbxcdn.com',
+    'rbx.com','setup.rbxcdn.com','images.rbxcdn.com',
+    'assetgame.roblox.com','thumbnails.roblox.com','ephemeralcounters.roblox.com',
+    // ── Discord CDN ───────────────────────────────────────
+    'discord.com','discordapp.com','discordapp.net','discord.gg',
+    'cdn.discordapp.com','media.discordapp.net',
+    'images-ext-1.discordapp.net','images-ext-2.discordapp.net',
+    // ── YouTube ───────────────────────────────────────────
+    'youtube.com','www.youtube.com','youtu.be','music.youtube.com',
+    'img.youtube.com','i.ytimg.com',
+    // ── Twitter/X ────────────────────────────────────────
+    'twitter.com','x.com','t.co','pbs.twimg.com','abs.twimg.com',
+    // ── Reddit ───────────────────────────────────────────
+    'reddit.com','www.reddit.com','i.redd.it','v.redd.it','preview.redd.it',
+    // ── GitHub ───────────────────────────────────────────
+    'github.com','raw.githubusercontent.com','gist.github.com',
+    'user-images.githubusercontent.com','camo.githubusercontent.com',
+    // ── Blox Fruits wikis ────────────────────────────────
+    'fandom.com','wikia.com','blox-fruits.fandom.com','roblox.fandom.com',
+    'static.wikia.nocookie.net',
+    // ── Common social / media ─────────────────────────────
+    'twitch.tv','clips.twitch.tv','static-cdn.jtvnw.net',
+    'pastebin.com','rentry.co','hastebin.com',
+    'top.gg','discord.me',
+    // ── Pomf / temporary file hosts ──────────────────────
+    'pomf.cat','uguu.se','tmpfiles.org',
+];
 function classifyLinkDomains(domains, gs) {
     const allow = (gs?.linkAllowlistedDomains || []).map(normalizeDomain);
     const deny  = (gs?.linkDenylistedDomains || []).map(normalizeDomain);
@@ -3996,6 +4469,7 @@ function classifyLinkDomains(domains, gs) {
         const parts = d.split('.').filter(Boolean);
         const tld = parts.length ? parts[parts.length-1] : '';
         if (tld && SUSPICIOUS_TLDS.has(tld)) { out.suspicious.push(d); continue; }
+        if (domainInList(d, COMMON_ALLOWED_DOMAINS)) { out.allowed.push(d); continue; }
         if (allow.length && domainInList(d, allow)) { out.allowed.push(d); continue; }
         if (allow.length) { out.blocked.push(d); continue; }
         out.allowed.push(d);
@@ -4323,6 +4797,12 @@ const slashCommands = [
         .setDescription('Apply a policy preset strict|balanced|soft|monitor')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addStringOption(o => o.setName('preset').setDescription('strict|balanced|soft|monitor').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('strictness')
+        .setDescription('Set detection strictness level (1=least, 10=most)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addIntegerOption(o => o.setName('level').setDescription('1-10').setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('case')
@@ -5341,13 +5821,26 @@ client.on('interactionCreate', async interaction => {
 
         case 'policypreset': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            const preset = (interaction.options.getString('preset') || '').toLowerCase();
-            if (!applyPolicyPreset(gs, preset)) { await interaction.reply({ content: '❌ Invalid preset. Use strict|balanced|soft|monitor', ephemeral: true }); return; }
+            const preset = interaction.options.getString('preset') || '';
+            if (!applyPolicyPreset(gs, preset)) {
+                await interaction.reply({ content: '❌ Invalid preset. Use strict|balanced|soft|monitor', ephemeral: true });
+                return;
+            }
             saveData(data);
-            await interaction.reply({ content: `✅ Policy preset applied: **${preset}**`, ephemeral: true });
-            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Policy Preset Applied', [
-                `preset: **${preset}**`,
-                `enforcementMode: **${gs.enforcementMode}**`,
+            await interaction.reply({ content: `✅ Policy preset applied: **${gs.policyPreset}**`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Policy Preset Applied', [String(gs.policyPreset)]);
+            break;
+        }
+
+        case 'strictness': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const lvl = interaction.options.getInteger('level');
+            const before = Number(gs.regexStrictness || 5);
+            gs.regexStrictness = Math.max(1, Math.min(10, Number(lvl || 5)));
+            saveData(data);
+            await interaction.reply({ content: `✅ Strictness updated: **${before}** -> **${gs.regexStrictness}**`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Strictness Updated', [
+                `regexStrictness: **${before}** -> **${gs.regexStrictness}**`,
             ]);
             break;
         }
@@ -6866,16 +7359,36 @@ function isMessageCommand(msg) {
     if (!c) return false;
     const t = c.trimStart();
     if (msg.type === 20) return true;
-    if (/^[^a-zA-Z0-9\s@]+$/.test(t)) return false;
+
+    // Pure punctuation / symbol-only messages are never commands
+    if (/^[\p{P}\p{S}\s]+$/u.test(t)) return false;
     if (t.startsWith('@') || t.startsWith('<@')) return false;
+
+    if (/^\-#\s*/.test(t)) return false;
+    if (/^\|\|/.test(t)) return false;
+    if (/^#{1,6}\s+/.test(t)) return false;
+    if (/^>\s+/.test(t)) return false;
+    if (/^```/.test(t)) return false;
+    if (/^`[^`]/.test(t)) return false;
+    if (/^(?:[-*]|\d+\.)\s+/.test(t)) return false;
+
     if (/^:[a-zA-Z0-9_]{2,32}:/.test(t)) return false;
     if (/^<a?:[a-zA-Z0-9_]{2,32}:\d{6,20}>/.test(t)) return false;
     if (/^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/u.test(t)) return false;
     if (/^\p{Regional_Indicator}{2}/u.test(t)) return false;
     if (/^[#*0-9]\uFE0F?\u20E3/u.test(t)) return false;
-    if (/^[?!]\s*$/.test(c)) return false;
+    // Pure punctuation at start with no following word letters
+    if (/^[.!?]+\s*$/.test(t)) return false;
+    if (/^[.!?]+\s*[.!?]/.test(t) && !/^[.!?]\s*[a-zA-Z]/.test(t)) return false;
     if (/^[?!]\s+[a-zA-Z]/.test(c)) return false;
-    if (CMD_PREFIX_RE.test(c)) return true;
+
+    // KEY FIX: only flag CMD_PREFIX_RE if after the prefix char there is a word character
+    // e.g. ".invite" → yes; "..." → no; ".?" → no
+    if (CMD_PREFIX_RE.test(t)) {
+        // After the prefix char, must have a letter to be a command
+        const afterPrefix = t.slice(1).trimStart();
+        if (afterPrefix.length > 0 && /^[a-zA-Z]/.test(afterPrefix)) return true;
+    }
     return false;
 }
 
@@ -7046,21 +7559,34 @@ function getAttachmentExts(message) {
 function looksLikeCommandButNotCaught(raw, cleaned) {
     const r = (raw || '').trim();
     if (!r) return false;
+    // Never flag pure punctuation/symbol-only messages
+    if (/^[\p{P}\p{S}\s]+$/u.test(r)) return false;
     if (/^:[a-zA-Z0-9_]{2,32}:/.test(r)) return false;
     const t = cleaned || fullClean(r);
     const ns = t.replace(/[\s_]/g,'');
 
+    // CRITICAL: only flag if the command prefix is at the START followed by a WORD (letters), not just more punctuation
+    // "i am going to do .say" should NOT flag; ".say" at start SHOULD flag
+    if (/^\s*g\.[a-z0-9_]{2,32}\b/i.test(r)) return true;
+
     for (const p of COMMAND_LIKE_PREFIXES) {
-        if (r.toLowerCase().startsWith(p)) return true;
+        const rl = r.toLowerCase();
+        if (rl.startsWith(p)) {
+            // After the prefix there must be a letter (a command word), not more punctuation
+            const afterPrefix = rl.slice(p.length).trimStart();
+            if (afterPrefix.length > 0 && /^[a-z]/i.test(afterPrefix)) return true;
+        }
     }
 
+    // START-anchored slash/bang/dot followed by a word
     if (/^\s*\/[a-z0-9]{2,32}/i.test(r)) return true;
-    if (/^\s*[!.?]\s*[a-z]{2,32}/i.test(r)) return true;
+    if (/^\s*[!.]\s*[a-z]{2,32}/i.test(r)) return true;  // removed ? to avoid "? word" false positives
     if (/^\s*<@!?\d+>\s*[!.?/]/i.test(r)) return true;
 
+    // Evasion patterns: only match if they appear at the START (startsWith, not includes)
     for (const ev of COMMAND_EVASION_PATTERNS) {
         const ec = ev.replace(/[\s_]/g,'').toLowerCase();
-        if (ec.length >= 6 && ns.includes(ec)) return true;
+        if (ec.length >= 6 && ns.startsWith(ec)) return true;
     }
 
     for (const n of COMMON_SLASH_COMMAND_NAMES) {
@@ -7070,18 +7596,21 @@ function looksLikeCommandButNotCaught(raw, cleaned) {
 
     for (const w of COMMON_COMMAND_WORDS) {
         const wc = w.toLowerCase().replace(/[\s_]/g,'');
-        if (wc.length >= 4 && new RegExp(`^\\s*(?:/|!|\\.|\\?)\\s*${escapeRegex(wc)}(?![a-z0-9])`, 'i').test(r)) return true;
+        // Only flag if at start of message
+        if (wc.length >= 4 && new RegExp(`^\\s*(?:/|!|\\.)\\s*${escapeRegex(wc)}(?![a-z0-9])`, 'i').test(r)) return true;
     }
 
-    if (/\b(?:type|use|run)\b[\s\W_]{0,8}(?:\!|\/|\.)[a-z0-9]{2,20}/i.test(r)) return true;
-    if (/\b(?:prefix|cmd|command|commands)\b/i.test(r) && (r.includes('!') || r.includes('/'))) return true;
-    if (/\b(?:bot|autobot|moderation|mod bot)\b/i.test(r) && /\b(?:cmd|command|commands|prefix)\b/i.test(r)) return true;
+    // Only flag "type/use/run [command]" if the command pattern is at the very start of the sentence
+    if (/^(?:type|use|run)\s+(?:\!|\/|\.)[a-z0-9]{2,20}/i.test(r)) return true;
+    // "prefix" or "cmd" combined with a bot prefix char — only flag if prefix char is at start of a word token
+    if (/\b(?:prefix|cmd|command|commands)\b/i.test(r) && /(?:^|\s)(?:!|\/)[a-z]/i.test(r)) return true;
 
     return false;
 }
 
 client.on('messageCreate', async message => {
     if (message.author.bot || !message.guild) return;
+    if (message.stickers && message.stickers.size && (!message.content || !String(message.content).trim())) return;
     const data  = loadData();
     const guildId = message.guild.id;
     const gs    = getGuildSettings(guildId, data);
@@ -7421,6 +7950,19 @@ client.on('messageCreate', async message => {
 
     const { contentClean, contentNospace } = prepareText(message.content);
 
+    // ── TRIVIAL MESSAGE GUARD ─────────────────────────────────────
+    // Skip scanning for messages that are purely punctuation, dots, reaction
+    // characters, or have fewer than 4 meaningful alphanumeric chars.
+    // e.g. ".", "..", "....", ".?", "!", "?!", "okay.", "lol.", "^^", "xd."
+    // A real trade/service post always has at least one actual word.
+    {
+        const alphanumCount = (message.content.match(/[a-zA-Z0-9]/g) || []).length;
+        if (alphanumCount < 4) return;
+        // Also skip if the cleaned content is exclusively punctuation / whitespace
+        const meaningfulChars = contentNospace.replace(/[^a-z0-9]/g, '');
+        if (meaningfulChars.length < 3) return;
+    }
+
     // ── AI DETECTION (always-classify) ────────────────────
     if (AI_ENABLED && gs.aiEnabled) {
         const aiResult = await aiDetectViolation(message, [], gs);
@@ -7673,13 +8215,23 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
 
     let hasFruitAndRaid = fruitsFound.length && /r+[\s\W_]*a+[\s\W_]*i+[\s\W_]*d+s*/i.test(contentClean);
 
-    let flagged = false;
-    if (hasSvcForRaid)                                            flagged = true;
-    else if (bossesFound.length && svcIntent)                     flagged = true;
-    else if ((hasBossRegex||bossesFound.length) && svcIntent)    flagged = true;
-    else if (hasFruitRaid || hasFruitAndRaid)                     flagged = true;
-    else if (hasAnyItem && svcIntent)                             flagged = true;
-    else if (detectTrialsOrTrialsRecruitment(contentClean))        flagged = true;
+    let bypassHit = false;
+    if (strictnessHasBypassMode(gs, 8)) {
+        for (const b of bossesFound) {
+            const re = makeIntentTargetBypassRegex(gs, ['help','need','lookingfor','looking','lf','lfg','carry','hosting','host','run','running','boost'], b);
+            if (re && re.test(contentClean)) { bypassHit = true; break; }
+        }
+        if (!bypassHit) {
+            for (const b of BOSSES) {
+                const re = makeIntentTargetBypassRegex(gs, ['help','need','lookingfor','looking','lf','lfg','carry','hosting','host','run','running','boost'], b);
+                if (re && re.test(contentClean)) { bypassHit = true; break; }
+            }
+        }
+    }
+
+    const trialsHit = detectTrialsOrTrialsRecruitment(contentClean);
+    const hasTarget = hasSvcForRaid || hasBossRegex || bossesFound.length || hasFruitRaid || hasFruitAndRaid || hasAnyItem;
+    const flagged = trialsHit || bypassHit || (svcIntent && hasTarget);
 
     if (flagged) {
         if (gs.noAffiliationEnabled) {
@@ -7760,6 +8312,13 @@ async function checkTradeViolation(message, contentClean, contentNospace, data, 
     const fruitEmojis = rawEmojis.filter(e => FRUITS.some(f => e.includes(f.replace(/\s/g,''))));
     const totalItems  = fruitsFound.length + fruitEmojis.length;
     const hasEmojiId  = message.content.toLowerCase().includes(gs.redirectEmojiId || DEFAULT_REDIRECT_EMOJI_ID);
+
+    if (!hasIntent && totalItems === 0 && strictnessHasBypassMode(gs, 8)) {
+        for (const f of FRUITS) {
+            const re = makeIntentTargetBypassRegex(gs, ['lookingfor','looking','lf','lfg','need','want','wtt','wtb','wts'], f);
+            if (re && re.test(contentClean)) { hasIntent = true; break; }
+        }
+    }
 
     const uid = message.author.id, cid = message.channel.id;
     const existing = getPartial(uid, cid);
