@@ -63,6 +63,9 @@ if (AI_ENABLED && !ANTHROPIC_KEY) {
 
 const BOT_START_TS = Date.now();
 
+const AI_MAX_REQ_PER_MIN = 18;
+const AI_QUEUE_CONCURRENCY = 1;
+
 function formatDuration(ms) {
     ms = Math.max(0, Number(ms) || 0);
     const s = Math.floor(ms / 1000);
@@ -76,6 +79,39 @@ function formatDuration(ms) {
     parts.push(`${mins}m`);
     parts.push(`${secs}s`);
     return parts.join(' ');
+}
+
+const _aiQueues = new Map();
+function getAiQueue(guildId) {
+    const k = String(guildId || 'global');
+    const e = _aiQueues.get(k) || { chain: Promise.resolve(), inFlight: 0, times: [] };
+    _aiQueues.set(k, e);
+    return e;
+}
+function aiRateLimitOk(guildId) {
+    const e = getAiQueue(guildId);
+    const now = Date.now();
+    e.times = e.times.filter(t => now - t < 60000);
+    _aiQueues.set(String(guildId || 'global'), e);
+    return e.times.length < AI_MAX_REQ_PER_MIN;
+}
+async function withAiQueue(guildId, fn) {
+    const e = getAiQueue(guildId);
+    const run = async () => {
+        while (e.inFlight >= AI_QUEUE_CONCURRENCY) {
+            await new Promise(r => setTimeout(r, 120));
+        }
+        e.inFlight++;
+        try {
+            e.times.push(Date.now());
+            return await fn();
+        } finally {
+            e.inFlight--;
+        }
+    };
+    e.chain = e.chain.then(run, run);
+    _aiQueues.set(String(guildId || 'global'), e);
+    return e.chain;
 }
 
 function chunkArray(arr, size) {
@@ -108,6 +144,10 @@ const MESSAGE_COMMANDS_LIST = [
     { name: '!slashcommandslist', desc: 'List all slash commands.' },
     { name: '!diagnose', desc: 'Run a diagnostic check of bot permissions/config (admin).'},
     { name: '!config', desc: 'Config export/import/backup/restore (admin).'},
+    { name: '!case', desc: 'Case system: view/list/note/void (mods/admin).'},
+    { name: '!policypreset', desc: 'Apply a policy preset strict|balanced|soft|monitor (admin).'},
+    { name: '!dashboard', desc: 'Open the admin dashboard (admin).'},
+    { name: '!appeal', desc: 'Appeal system: submit (users), review via buttons (mods/admin).'},
     { name: '!policymode', desc: 'Set policy mode enforce/monitor (admin).'},
     { name: '!policyset', desc: 'Set per-category policy action (admin).'},
     { name: '!policystatus', desc: 'Show policy configuration (admin).'},
@@ -130,6 +170,10 @@ const SLASH_COMMANDS_LIST = [
     { name: '/slashcommandslist', desc: 'List all slash commands.' },
     { name: '/diagnose', desc: 'Run a diagnostic check of bot permissions/config (admin).'},
     { name: '/config', desc: 'Config export/import/backup/restore (admin).'},
+    { name: '/case', desc: 'Case system: view/list/note/void (mods/admin).'},
+    { name: '/policypreset', desc: 'Apply a policy preset strict|balanced|soft|monitor (admin).'},
+    { name: '/dashboard', desc: 'Open the admin dashboard (admin).'},
+    { name: '/appeal', desc: 'Submit an appeal (users) or review (mods/admin).'},
     { name: '/policymode', desc: 'Set policy mode enforce/monitor (admin).'},
     { name: '/policyset', desc: 'Set per-category policy action (admin).'},
     { name: '/policystatus', desc: 'Show policy configuration (admin).'},
@@ -1015,7 +1059,80 @@ function makeDefaultData() {
         guildSettings: {}, appeals: {}, spamTracker: {},
         logMessages: [],
         guildStats: {},
+        cases: {},
+        caseCounter: 0,
     };
+}
+
+function getGuildCases(guildId, data) {
+    data.cases = data.cases || {};
+    if (!data.cases[guildId]) data.cases[guildId] = {};
+    return data.cases[guildId];
+}
+
+function nextCaseId(data) {
+    data.caseCounter = Number(data.caseCounter || 0) + 1;
+    return String(data.caseCounter);
+}
+
+function createCaseFromMessage(message, data, gs, opts) {
+    try {
+        const guildId = message.guild?.id;
+        if (!guildId) return null;
+        const cases = getGuildCases(guildId, data);
+        const id = nextCaseId(data);
+        const now = Date.now();
+        const payload = {
+            id,
+            guildId,
+            userId: message.author?.id || null,
+            channelId: message.channel?.id || null,
+            messageId: message.id || null,
+            messageUrl: message.url || null,
+            createdAt: now,
+            category: String(opts?.footerLabel || 'Violation').toLowerCase(),
+            title: String(opts?.title || 'Violation'),
+            action: String(opts?.action || 'warn'),
+            reason: String(opts?.reason || ''),
+            content: String(opts?.details || message.content || '').slice(0, 2000),
+            notes: [],
+            voided: false,
+            voidReason: null,
+            voidedAt: null,
+        };
+        cases[id] = payload;
+        data.cases[guildId] = cases;
+        saveData(data);
+        return payload;
+    } catch {
+        return null;
+    }
+}
+
+function addCaseNote(guildId, data, caseId, actorId, text) {
+    const cases = getGuildCases(guildId, data);
+    const c = cases?.[caseId];
+    if (!c) return null;
+    c.notes = Array.isArray(c.notes) ? c.notes : [];
+    c.notes.push({ at: Date.now(), by: String(actorId || ''), text: String(text || '').slice(0, 500) });
+    cases[caseId] = c;
+    data.cases[guildId] = cases;
+    saveData(data);
+    return c;
+}
+
+function voidCase(guildId, data, caseId, actorId, reason) {
+    const cases = getGuildCases(guildId, data);
+    const c = cases?.[caseId];
+    if (!c) return null;
+    c.voided = true;
+    c.voidReason = String(reason || '').slice(0, 500);
+    c.voidedAt = Date.now();
+    addCaseNote(guildId, data, caseId, actorId, `VOIDED: ${c.voidReason}`);
+    cases[caseId] = c;
+    data.cases[guildId] = cases;
+    saveData(data);
+    return c;
 }
 
 function getGuildStats(guildId, data) {
@@ -1208,6 +1325,7 @@ function getGuildSettings(guildId, data) {
             ],
             linkDenylistedDomains: [],
             scanEditsEnabled: true,
+            policyPreset: null,
         };
     }
     const gs = data.guildSettings[guildId];
@@ -1241,7 +1359,85 @@ function getGuildSettings(guildId, data) {
     if (gs.timeoutMinutesService === undefined) gs.timeoutMinutesService = 5;
     if (gs.enforcementMode === undefined) gs.enforcementMode = 'enforce';
     if (!gs.categoryPolicies || typeof gs.categoryPolicies !== 'object') gs.categoryPolicies = {};
+    if (gs.policyPreset === undefined) gs.policyPreset = null;
     return gs;
+}
+
+function applyPolicyPreset(gs, name) {
+    const preset = String(name || '').toLowerCase();
+    if (!['strict','balanced','soft','monitor'].includes(preset)) return false;
+
+    if (preset === 'monitor') {
+        gs.enforcementMode = 'monitor';
+        gs.policyPreset = 'monitor';
+        return true;
+    }
+
+    gs.enforcementMode = 'enforce';
+    gs.policyPreset = preset;
+    gs.categoryPolicies = gs.categoryPolicies && typeof gs.categoryPolicies === 'object' ? gs.categoryPolicies : {};
+
+    if (preset === 'strict') {
+        gs.categoryPolicies.spam = { action: 'timeout', minutes: 10 };
+        gs.categoryPolicies.scam = { action: 'exile', minutes: 60 };
+        gs.categoryPolicies.command = { action: 'delete', minutes: 0 };
+        gs.categoryPolicies.trade = { action: 'delete', minutes: 0 };
+        gs.categoryPolicies.service = { action: 'delete', minutes: 0 };
+        gs.categoryPolicies.beg = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.acctrade = { action: 'exile', minutes: 60 };
+    }
+
+    if (preset === 'balanced') {
+        gs.categoryPolicies.spam = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.scam = { action: 'timeout', minutes: 60 };
+        gs.categoryPolicies.command = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.trade = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.service = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.beg = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.acctrade = { action: 'timeout', minutes: 120 };
+    }
+
+    if (preset === 'soft') {
+        gs.categoryPolicies.spam = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.scam = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.command = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.trade = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.service = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.beg = { action: 'warn', minutes: 0 };
+        gs.categoryPolicies.acctrade = { action: 'warn', minutes: 0 };
+    }
+    return true;
+}
+
+function buildDashboardEmbed(gs) {
+    const embed = new EmbedBuilder()
+        .setTitle('🧩 Admin Dashboard')
+        .setColor(0x5865F2)
+        .addFields(
+            { name: 'Checks', value: gs.checksEnabled ? '✅ ON' : '❌ OFF', inline: true },
+            { name: 'AI', value: gs.aiEnabled ? '✅ ON' : '❌ OFF', inline: true },
+            { name: 'Enforcement', value: String(gs.enforcementMode || 'enforce'), inline: true },
+            { name: 'Preset', value: gs.policyPreset ? String(gs.policyPreset) : 'None', inline: true },
+        )
+        .setTimestamp();
+    const ft = footerText(gs);
+    if (ft) embed.setFooter({ text: ft });
+    return embed;
+}
+
+function buildDashboardComponents() {
+    const r1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('dash_toggle_checks').setLabel('Toggle Checks').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('dash_toggle_ai').setLabel('Toggle AI').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('dash_toggle_mode').setLabel('Toggle Mode').setStyle(ButtonStyle.Secondary),
+    );
+    const r2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('dash_preset_strict').setLabel('Strict').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('dash_preset_balanced').setLabel('Balanced').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('dash_preset_soft').setLabel('Soft').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('dash_preset_monitor').setLabel('Monitor').setStyle(ButtonStyle.Secondary),
+    );
+    return [r1, r2];
 }
 
 function footerText(gs) {
@@ -1269,6 +1465,13 @@ async function applyConfiguredAction(message, data, gs, opts) {
     const exileMins = Number(opts?.exileMins || (gs.exileDurationMins || EXILE_DURATION_MINS));
 
     if (action === 'delete') {
+        createCaseFromMessage(message, data, gs, {
+            title,
+            reason,
+            details: message.content,
+            footerLabel,
+            action: 'delete',
+        });
         try { await message.delete(); } catch {}
         return { action };
     }
@@ -3618,6 +3821,15 @@ async function issueViolation(message, data, gs, opts) {
     const redirectChannelId = opts?.redirectChannelId || null;
     const footerLabel = opts?.footerLabel || 'Violation';
 
+    const caseObj = createCaseFromMessage(message, data, gs, {
+        title,
+        reason,
+        details,
+        footerLabel,
+        action: 'warn',
+    });
+    const caseId = caseObj?.id || null;
+
     await sendLog(message.guild, data, new EmbedBuilder()
         .setTitle(title)
         .setColor(color)
@@ -3625,6 +3837,7 @@ async function issueViolation(message, data, gs, opts) {
             { name: 'User', value: `<@${uid}> (${uid})`, inline: true },
             { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
             { name: 'Violations', value: `${count}/${threshold}`, inline: true },
+            ...(caseId ? [{ name: 'Case', value: `#${caseId}`, inline: true }] : []),
             { name: 'Reason', value: String(reason).slice(0, 1024), inline: false },
             { name: 'Content', value: String(details).slice(0, 1024), inline: false },
         ).setTimestamp());
@@ -3643,7 +3856,7 @@ async function issueViolation(message, data, gs, opts) {
     const embed = new EmbedBuilder()
         .setDescription(userMsg)
         .setColor(color)
-        .setFooter({ text: `${footerLabel} ${count}/${threshold}` });
+        .setFooter({ text: `${footerLabel} ${count}/${threshold}${caseId ? ` • Case #${caseId}` : ''}` });
     const sent = await message.channel.send({ embeds: [embed] });
     setTimeout(() => sent.delete().catch(()=>{}), opts?.ttlMs || 10000);
     return { exiled: false, count };
@@ -3921,6 +4134,8 @@ async function aiDetectViolation(message, categories, gs) {
     if (!gs?.aiEnabled) return null;
     if (!message?.content || message.content.length < 2) return null;
     try {
+        const guildId = message.guild?.id;
+        if (!aiRateLimitOk(guildId)) return null;
         const systemPrompt = `You are a moderation AI for a Blox Fruits Discord server.
 Analyze the user's message and determine if it violates any of these rules:
 1. Trading in wrong channel (should be in #trades)
@@ -3934,22 +4149,24 @@ Analyze the user's message and determine if it violates any of these rules:
 
 Respond ONLY with valid JSON: {"violation": true/false, "category": "trade|beg|account|acctrade|service|spam|command|scam|none", "confidence": 0.0-1.0, "reason": "short reason"}
 Only flag if confidence > 0.85. Be conservative — do NOT flag normal conversation.`;
-        const res = await fetch(AI_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': ANTHROPIC_KEY,
-                'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-                model: AI_MODEL,
-                max_tokens: 150,
-                system: systemPrompt,
-                messages: [{ role: 'user', content: `Message: "${message.content}"` }],
-            }),
+        const resJson = await withAiQueue(message.guild?.id, async () => {
+            const res = await fetch(AI_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': ANTHROPIC_KEY,
+                    'anthropic-version': '2023-06-01',
+                },
+                body: JSON.stringify({
+                    model: AI_MODEL,
+                    max_tokens: 150,
+                    system: systemPrompt,
+                    messages: [{ role: 'user', content: `Message: "${message.content}"` }],
+                }),
+            });
+            return await res.json();
         });
-        const data = await res.json();
-        const text = data.content?.[0]?.text || '{}';
+        const text = resJson.content?.[0]?.text || '{}';
         const clean = text.replace(/```json|```/g,'').trim();
         return JSON.parse(clean);
     } catch { return null; }
@@ -4095,6 +4312,39 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addSubcommand(s => s.setName('enable').setDescription('Enable no-affiliation mode'))
         .addSubcommand(s => s.setName('disable').setDescription('Disable no-affiliation mode')),
+
+    new SlashCommandBuilder()
+        .setName('dashboard')
+        .setDescription('Open the admin dashboard')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+
+    new SlashCommandBuilder()
+        .setName('policypreset')
+        .setDescription('Apply a policy preset strict|balanced|soft|monitor')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o.setName('preset').setDescription('strict|balanced|soft|monitor').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('case')
+        .setDescription('Case management')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
+        .addSubcommand(s => s.setName('view').setDescription('View a case by ID')
+            .addStringOption(o => o.setName('id').setDescription('Case ID').setRequired(true)))
+        .addSubcommand(s => s.setName('list').setDescription('List recent cases (optionally for a user)')
+            .addUserOption(o => o.setName('user').setDescription('User').setRequired(false)))
+        .addSubcommand(s => s.setName('note').setDescription('Add a note to a case')
+            .addStringOption(o => o.setName('id').setDescription('Case ID').setRequired(true))
+            .addStringOption(o => o.setName('text').setDescription('Note text').setRequired(true)))
+        .addSubcommand(s => s.setName('void').setDescription('Void a case')
+            .addStringOption(o => o.setName('id').setDescription('Case ID').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Why it was voided').setRequired(true))),
+
+    new SlashCommandBuilder()
+        .setName('appeal')
+        .setDescription('Appeals system')
+        .addSubcommand(s => s.setName('submit').setDescription('Submit an appeal')
+            .addStringOption(o => o.setName('text').setDescription('Appeal text').setRequired(true))
+            .addStringOption(o => o.setName('case').setDescription('Optional case ID').setRequired(false))),
 
     new SlashCommandBuilder()
         .setName('botinfo')
@@ -4763,11 +5013,25 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // ── BUTTONS ────────────────────────────────────────────
+    // ── BUTTONS ───────────────────────────────────────────
     if (interaction.isButton()) {
         const cid = interaction.customId;
 
-        // Appeal button (opens modal)
+        if (cid === 'dash_toggle_checks' || cid === 'dash_toggle_ai' || cid === 'dash_toggle_mode' || cid.startsWith('dash_preset_')) {
+            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (cid === 'dash_toggle_checks') gs.checksEnabled = !gs.checksEnabled;
+            if (cid === 'dash_toggle_ai') gs.aiEnabled = !gs.aiEnabled;
+            if (cid === 'dash_toggle_mode') gs.enforcementMode = (gs.enforcementMode === 'monitor') ? 'enforce' : 'monitor';
+            if (cid.startsWith('dash_preset_')) {
+                const preset = cid.replace('dash_preset_', '');
+                applyPolicyPreset(gs, preset);
+            }
+            saveData(data);
+            await interaction.update({ embeds: [buildDashboardEmbed(gs)], components: buildDashboardComponents() });
+            return;
+        }
+
         if (cid.startsWith('open_appeal_')) {
             const exiledUserId = cid.replace('open_appeal_', '');
             const modal = new ModalBuilder()
@@ -4789,8 +5053,10 @@ client.on('interactionCreate', async interaction => {
             return;
         }
 
-        // Accept appeal
         if (cid.startsWith('appeal_accept_')) {
+            const isMod = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
+            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const appealId = cid.replace('appeal_accept_', '');
             const appeal   = data.appeals[appealId];
             if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
@@ -5021,6 +5287,114 @@ client.on('interactionCreate', async interaction => {
                 ),
             );
             await interaction.showModal(modal);
+            break;
+        }
+
+        case 'dashboard': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            await interaction.reply({ embeds: [buildDashboardEmbed(gs)], components: buildDashboardComponents(), ephemeral: true });
+            break;
+        }
+
+        case 'policypreset': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const preset = (interaction.options.getString('preset') || '').toLowerCase();
+            if (!applyPolicyPreset(gs, preset)) { await interaction.reply({ content: '❌ Invalid preset. Use strict|balanced|soft|monitor', ephemeral: true }); return; }
+            saveData(data);
+            await interaction.reply({ content: `✅ Policy preset applied: **${preset}**`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Policy Preset Applied', [
+                `preset: **${preset}**`,
+                `enforcementMode: **${gs.enforcementMode}**`,
+            ]);
+            break;
+        }
+
+        case 'case': {
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            const sub = interaction.options.getSubcommand();
+            const cases = getGuildCases(guildId, data);
+            if (sub === 'view') {
+                const id = (interaction.options.getString('id') || '').trim();
+                const c = cases?.[id];
+                if (!c) { await interaction.reply({ content: '❌ Case not found.', ephemeral: true }); return; }
+                const embed = new EmbedBuilder()
+                    .setTitle(`📁 Case #${c.id}`)
+                    .setColor(c.voided ? 0x777777 : 0x5865F2)
+                    .addFields(
+                        { name: 'User', value: c.userId ? `<@${c.userId}> (${c.userId})` : 'Unknown', inline: false },
+                        { name: 'Action', value: String(c.action || 'warn'), inline: true },
+                        { name: 'Category', value: String(c.category || 'unknown'), inline: true },
+                        { name: 'Created', value: c.createdAt ? `<t:${Math.floor(c.createdAt/1000)}:F>` : 'Unknown', inline: true },
+                        { name: 'Reason', value: String(c.reason || '').slice(0, 1024) || 'None', inline: false },
+                        { name: 'Content', value: String(c.content || '').slice(0, 1024) || '(none)', inline: false },
+                    )
+                    .setTimestamp();
+                if (c.messageUrl) embed.addFields({ name: 'Message', value: c.messageUrl, inline: false });
+                if (Array.isArray(c.notes) && c.notes.length) {
+                    const nl = c.notes.slice(-5).map(n => `• <t:${Math.floor((n.at||Date.now())/1000)}:R> <@${n.by}>: ${String(n.text||'')}`);
+                    embed.addFields({ name: 'Notes (latest 5)', value: nl.join('\n').slice(0, 1024), inline: false });
+                }
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+                return;
+            }
+            if (sub === 'list') {
+                const user = interaction.options.getUser('user');
+                const all = Object.values(cases || {}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+                const filtered = user ? all.filter(x => x.userId === user.id) : all;
+                const lines = filtered.slice(0, 20).map(c => `#${c.id} — ${c.voided ? 'VOID ' : ''}${String(c.action||'warn')} — <@${c.userId}> — ${String(c.category||'')}`);
+                await interaction.reply({ content: lines.length ? lines.join('\n') : 'No cases found.', ephemeral: true });
+                return;
+            }
+            if (sub === 'note') {
+                const id = (interaction.options.getString('id') || '').trim();
+                const text = interaction.options.getString('text') || '';
+                const c = addCaseNote(guildId, data, id, interaction.user.id, text);
+                if (!c) { await interaction.reply({ content: '❌ Case not found.', ephemeral: true }); return; }
+                await interaction.reply({ content: `✅ Note added to case #${id}.`, ephemeral: true });
+                return;
+            }
+            if (sub === 'void') {
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                const id = (interaction.options.getString('id') || '').trim();
+                const reason = interaction.options.getString('reason') || '';
+                const c = voidCase(guildId, data, id, interaction.user.id, reason);
+                if (!c) { await interaction.reply({ content: '❌ Case not found.', ephemeral: true }); return; }
+                await interaction.reply({ content: `✅ Case #${id} voided.`, ephemeral: true });
+                return;
+            }
+            await interaction.reply({ content: '❌ Invalid case command.', ephemeral: true });
+            break;
+        }
+
+        case 'appeal': {
+            const sub = interaction.options.getSubcommand();
+            if (sub !== 'submit') { await interaction.reply({ content: '❌ Invalid appeal command.', ephemeral: true }); return; }
+            const text = interaction.options.getString('text') || '';
+            const caseId = (interaction.options.getString('case') || '').trim();
+            if (!gs.appealsChannelId) { await interaction.reply({ content: '❌ Appeals channel is not configured.', ephemeral: true }); return; }
+            const ch = await interaction.guild.channels.fetch(gs.appealsChannelId).catch(()=>null);
+            if (!ch || !ch.isTextBased || !ch.isTextBased()) { await interaction.reply({ content: '❌ Appeals channel is invalid.', ephemeral: true }); return; }
+            const appealId = `${Date.now()}_${interaction.user.id}`;
+            data.appeals = data.appeals || {};
+            data.appeals[appealId] = { id: appealId, userId: interaction.user.id, text: text.slice(0, 1800), caseId: caseId || null, status: 'pending', createdAt: Date.now() };
+            saveData(data);
+
+            const embed = new EmbedBuilder()
+                .setTitle('📩 Appeal — PENDING')
+                .setColor(0xFFAA00)
+                .addFields(
+                    { name: 'User', value: `<@${interaction.user.id}> (${interaction.user.id})`, inline: false },
+                    { name: 'Case', value: caseId ? `#${caseId}` : 'None', inline: true },
+                    { name: 'Text', value: text.slice(0, 1024) || 'None', inline: false },
+                )
+                .setTimestamp();
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`appeal_accept_${appealId}`).setLabel('Accept').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`appeal_reject_${appealId}`).setLabel('Reject').setStyle(ButtonStyle.Danger),
+            );
+            await ch.send({ embeds: [embed], components: [row] });
+            await interaction.reply({ content: '✅ Appeal submitted.', ephemeral: true });
             break;
         }
 
@@ -7583,6 +7957,100 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         for (const e of embeds) {
             await message.channel.send({ embeds: [e] });
         }
+    }
+
+    else if (cmd === 'dashboard' && isAdmin) {
+        await message.channel.send({ embeds: [buildDashboardEmbed(gs)], components: buildDashboardComponents() });
+    }
+
+    else if (cmd === 'policypreset' && isAdmin) {
+        const preset = (args[0] || '').toLowerCase();
+        if (!applyPolicyPreset(gs, preset)) return message.channel.send('❌ Use: !policypreset strict|balanced|soft|monitor');
+        saveData(data);
+        await message.channel.send(`✅ Policy preset applied: **${preset}**`);
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Policy Preset Applied', [
+            `preset: **${preset}**`,
+            `enforcementMode: **${gs.enforcementMode}**`,
+        ]);
+    }
+
+    else if (cmd === 'case' && (isAdmin || isMod)) {
+        const sub = (args[0] || '').toLowerCase();
+        const cases = getGuildCases(message.guildId, data);
+        if (sub === 'view') {
+            const id = (args[1] || '').trim();
+            const c = cases?.[id];
+            if (!c) return message.channel.send('❌ Case not found.');
+            const embed = new EmbedBuilder()
+                .setTitle(`📁 Case #${c.id}`)
+                .setColor(c.voided ? 0x777777 : 0x5865F2)
+                .addFields(
+                    { name: 'User', value: c.userId ? `<@${c.userId}> (${c.userId})` : 'Unknown', inline: false },
+                    { name: 'Action', value: String(c.action || 'warn'), inline: true },
+                    { name: 'Category', value: String(c.category || 'unknown'), inline: true },
+                    { name: 'Created', value: c.createdAt ? `<t:${Math.floor(c.createdAt/1000)}:F>` : 'Unknown', inline: true },
+                    { name: 'Reason', value: String(c.reason || '').slice(0, 1024) || 'None', inline: false },
+                    { name: 'Content', value: String(c.content || '').slice(0, 1024) || '(none)', inline: false },
+                )
+                .setTimestamp();
+            if (c.messageUrl) embed.addFields({ name: 'Message', value: c.messageUrl, inline: false });
+            await message.channel.send({ embeds: [embed] });
+            return;
+        }
+        if (sub === 'list') {
+            const all = Object.values(cases || {}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+            const lines = all.slice(0, 20).map(c => `#${c.id} — ${c.voided ? 'VOID ' : ''}${String(c.action||'warn')} — <@${c.userId}> — ${String(c.category||'')}`);
+            await message.channel.send(lines.length ? lines.join('\n') : 'No cases found.');
+            return;
+        }
+        if (sub === 'note') {
+            const id = (args[1] || '').trim();
+            const text = args.slice(2).join(' ');
+            if (!id || !text) return message.channel.send('❌ Use: !case note <id> <text>');
+            const c = addCaseNote(message.guildId, data, id, message.author.id, text);
+            if (!c) return message.channel.send('❌ Case not found.');
+            await message.channel.send(`✅ Note added to case #${id}.`);
+            return;
+        }
+        if (sub === 'void') {
+            if (!isAdmin) return message.channel.send('❌ Admins only.');
+            const id = (args[1] || '').trim();
+            const reason = args.slice(2).join(' ');
+            if (!id || !reason) return message.channel.send('❌ Use: !case void <id> <reason>');
+            const c = voidCase(message.guildId, data, id, message.author.id, reason);
+            if (!c) return message.channel.send('❌ Case not found.');
+            await message.channel.send(`✅ Case #${id} voided.`);
+            return;
+        }
+        return message.channel.send('❌ Use: !case view <id> | !case list | !case note <id> <text> | !case void <id> <reason>');
+    }
+
+    else if (cmd === 'appeal') {
+        const sub = (args[0] || '').toLowerCase();
+        if (sub !== 'submit') return message.channel.send('❌ Use: !appeal submit <text> [caseId]');
+        const text = args.slice(1).join(' ').trim();
+        if (!text) return message.channel.send('❌ Provide appeal text.');
+        if (!gs.appealsChannelId) return message.channel.send('❌ Appeals channel is not configured.');
+        const ch = await message.guild.channels.fetch(gs.appealsChannelId).catch(()=>null);
+        if (!ch || !ch.isTextBased || !ch.isTextBased()) return message.channel.send('❌ Appeals channel is invalid.');
+        const appealId = `${Date.now()}_${message.author.id}`;
+        data.appeals = data.appeals || {};
+        data.appeals[appealId] = { id: appealId, userId: message.author.id, text: text.slice(0, 1800), caseId: null, status: 'pending', createdAt: Date.now() };
+        saveData(data);
+        const embed = new EmbedBuilder()
+            .setTitle('📩 Appeal — PENDING')
+            .setColor(0xFFAA00)
+            .addFields(
+                { name: 'User', value: `<@${message.author.id}> (${message.author.id})`, inline: false },
+                { name: 'Text', value: text.slice(0, 1024) || 'None', inline: false },
+            )
+            .setTimestamp();
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`appeal_accept_${appealId}`).setLabel('Accept').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`appeal_reject_${appealId}`).setLabel('Reject').setStyle(ButtonStyle.Danger),
+        );
+        await ch.send({ embeds: [embed], components: [row] });
+        await message.channel.send('✅ Appeal submitted.');
     }
 
     else if (cmd === 'diagnose' && isAdmin) {
