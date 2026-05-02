@@ -106,6 +106,8 @@ const MESSAGE_COMMANDS_LIST = [
     { name: '!uptime', desc: 'Show bot uptime information.' },
     { name: '!messagecommandslist', desc: 'List all message commands.' },
     { name: '!slashcommandslist', desc: 'List all slash commands.' },
+    { name: '!diagnose', desc: 'Run a diagnostic check of bot permissions/config (admin).'},
+    { name: '!config', desc: 'Config export/import/backup/restore (admin).'},
     { name: '!policymode', desc: 'Set policy mode enforce/monitor (admin).'},
     { name: '!policyset', desc: 'Set per-category policy action (admin).'},
     { name: '!policystatus', desc: 'Show policy configuration (admin).'},
@@ -126,6 +128,8 @@ const SLASH_COMMANDS_LIST = [
     { name: '/uptime', desc: 'Show bot uptime information.' },
     { name: '/messagecommandslist', desc: 'List all message commands.' },
     { name: '/slashcommandslist', desc: 'List all slash commands.' },
+    { name: '/diagnose', desc: 'Run a diagnostic check of bot permissions/config (admin).'},
+    { name: '/config', desc: 'Config export/import/backup/restore (admin).'},
     { name: '/policymode', desc: 'Set policy mode enforce/monitor (admin).'},
     { name: '/policyset', desc: 'Set per-category policy action (admin).'},
     { name: '/policystatus', desc: 'Show policy configuration (admin).'},
@@ -220,13 +224,70 @@ const GAMES_HUB_CHANNELS = new Set([
 // ══════════════════════════════════════════════════════════
 const BASE_DIR  = path.dirname(path.resolve(process.argv[1]));
 const DATA_FILE = path.join(BASE_DIR, 'skynet_data.json');
+const BACKUP_DIR = path.join(BASE_DIR, 'skynet_backups');
+
+function ensureBackupDir() {
+    try { if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true }); } catch {}
+}
+
+function listBackupFiles() {
+    ensureBackupDir();
+    try {
+        const files = fs.readdirSync(BACKUP_DIR)
+            .filter(f => /^skynet_data\.(\d{8}_\d{6})\.json$/.test(f))
+            .sort()
+            .reverse();
+        return files;
+    } catch { return []; }
+}
+
+function makeBackupName(ts = Date.now()) {
+    const d = new Date(ts);
+    const pad = (n) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    return `skynet_data.${stamp}.json`;
+}
+
+function createBackupFile(sourcePath = DATA_FILE) {
+    ensureBackupDir();
+    try {
+        if (!fs.existsSync(sourcePath)) return null;
+        const dest = path.join(BACKUP_DIR, makeBackupName());
+        fs.copyFileSync(sourcePath, dest);
+        return dest;
+    } catch { return null; }
+}
+
+function rotateBackups(maxKeep = 25) {
+    const files = listBackupFiles();
+    if (files.length <= maxKeep) return;
+    for (const f of files.slice(maxKeep)) {
+        try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {}
+    }
+}
+
+function safeWriteJsonAtomic(filePath, obj) {
+    const tmp = `${filePath}.tmp`;
+    const json = JSON.stringify(obj, null, 2);
+    fs.writeFileSync(tmp, json, 'utf8');
+    fs.renameSync(tmp, filePath);
+}
 
 function loadData() {
     if (!fs.existsSync(DATA_FILE)) return makeDefaultData();
     try {
         const d = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
         return Object.assign(makeDefaultData(), d);
-    } catch { return makeDefaultData(); }
+    } catch {
+        const backups = listBackupFiles();
+        for (const b of backups) {
+            try {
+                const d = JSON.parse(fs.readFileSync(path.join(BACKUP_DIR, b), 'utf8'));
+                return Object.assign(makeDefaultData(), d);
+            } catch {}
+        }
+        return makeDefaultData();
+    }
 }
 
 const LINK_SHORTENERS = new Set([
@@ -990,9 +1051,39 @@ function incStat(guildId, data, key, amt = 1) {
     return gs.counters[key];
 }
 function saveData(data) {
-    try { fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2)); } catch(e) {
+    try {
+        createBackupFile(DATA_FILE);
+        rotateBackups(25);
+        safeWriteJsonAtomic(DATA_FILE, data);
+    } catch(e) {
         console.error('saveData error:', e);
+        try {
+            fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+        } catch {}
     }
+}
+
+function exportGuildConfig(guildId, data) {
+    const gs = getGuildSettings(guildId, data);
+    const out = {
+        guildId,
+        guildSettings: gs,
+        immunity: data.immunity?.[guildId] || {},
+        categoryImmunity: data.categoryImmunity?.[guildId] || {},
+    };
+    return out;
+}
+
+function importGuildConfig(guildId, data, payload) {
+    if (!payload || typeof payload !== 'object') throw new Error('Invalid config payload');
+    if (!payload.guildSettings || typeof payload.guildSettings !== 'object') throw new Error('Missing guildSettings');
+    data.guildSettings = data.guildSettings || {};
+    data.immunity = data.immunity || {};
+    data.categoryImmunity = data.categoryImmunity || {};
+    data.guildSettings[guildId] = Object.assign(getGuildSettings(guildId, data), payload.guildSettings);
+    if (payload.immunity && typeof payload.immunity === 'object') data.immunity[guildId] = payload.immunity;
+    if (payload.categoryImmunity && typeof payload.categoryImmunity === 'object') data.categoryImmunity[guildId] = payload.categoryImmunity;
+    return data.guildSettings[guildId];
 }
 
 // Per-guild settings helpers
@@ -4042,6 +4133,23 @@ const slashCommands = [
         .setDescription('Show bot uptime and process info'),
 
     new SlashCommandBuilder()
+        .setName('diagnose')
+        .setDescription('Diagnose bot permissions and configuration for this server')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+
+    new SlashCommandBuilder()
+        .setName('config')
+        .setDescription('Export/import/backup/restore server config')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('export').setDescription('Export this server configuration as JSON'))
+        .addSubcommand(s => s.setName('import').setDescription('Import this server configuration from JSON')
+            .addStringOption(o => o.setName('json').setDescription('JSON payload').setRequired(true)))
+        .addSubcommand(s => s.setName('backup').setDescription('Create a backup snapshot of the data file now'))
+        .addSubcommand(s => s.setName('list').setDescription('List available backups'))
+        .addSubcommand(s => s.setName('restore').setDescription('Restore from a backup filename')
+            .addStringOption(o => o.setName('file').setDescription('Backup filename from /config list').setRequired(true))),
+
+    new SlashCommandBuilder()
         .setName('setowner')
         .setDescription('Set the bot owner shown in /botinfo')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -4516,11 +4624,27 @@ const slashCommands = [
 // ══════════════════════════════════════════════════════════
 //  READY
 // ══════════════════════════════════════════════════════════
-client.once('ready', async () => {
+let _didReady = false;
+async function onClientReady() {
+    if (_didReady) return;
+    _didReady = true;
     console.log(`🚨 SKYNET V7 ONLINE: ${client.user.tag}`);
     try {
         const rest = new REST({ version: '10' }).setToken(TOKEN);
-        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: slashCommands });
+        const seen = new Set();
+        const dups = new Set();
+        const unique = [];
+        for (const c of (slashCommands || [])) {
+            const n = String(c?.name || '').toLowerCase();
+            if (!n) continue;
+            if (seen.has(n)) { dups.add(n); continue; }
+            seen.add(n);
+            unique.push(c);
+        }
+        if (dups.size) {
+            console.warn(`⚠️ Duplicate slash command names removed before registration: ${Array.from(dups).join(', ')}`);
+        }
+        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: unique });
         console.log('✅ Slash commands registered');
     } catch(e) { console.error('❌ Slash command registration failed:', e); }
 
@@ -4554,7 +4678,10 @@ client.once('ready', async () => {
             saveData(fd);
         }
     }, 30000);
-});
+}
+
+client.once('clientReady', onClientReady);
+client.once('ready', onClientReady);
 
 // ══════════════════════════════════════════════════════════
 //  INTERACTION HANDLER (slash commands + buttons + modals)
@@ -4894,6 +5021,119 @@ client.on('interactionCreate', async interaction => {
                 ),
             );
             await interaction.showModal(modal);
+            break;
+        }
+
+        case 'diagnose': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const me = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(()=>null);
+            const perms = me?.permissions;
+            const mm = perms?.has(PermissionFlagsBits.ManageMessages) ? '✅' : '❌';
+            const mod = perms?.has(PermissionFlagsBits.ModerateMembers) ? '✅' : '❌';
+            const vr = perms?.has(PermissionFlagsBits.ViewAuditLog) ? '✅' : '❌';
+            const embed = new EmbedBuilder()
+                .setTitle('🩺 Diagnose')
+                .setColor(0x5865F2)
+                .addFields(
+                    { name: 'Bot Permissions', value: `ManageMessages: ${mm}\nModerateMembers: ${mod}\nViewAuditLog: ${vr}`, inline: false },
+                    { name: 'AI Key', value: (AI_ENABLED ? (ANTHROPIC_KEY ? '✅ Present' : '❌ Missing') : '❌ AI_DISABLED'), inline: true },
+                    { name: 'Mode', value: `checks=${gs.checksEnabled ? 'ON' : 'OFF'} enforcement=${gs.enforcementMode}`, inline: true },
+                )
+                .setTimestamp();
+
+            const ids = [
+                ['Trade Channel', gs.tradeChannelId],
+                ['Services Channel', gs.servicesChannelId],
+                ['Commands Channel', gs.gamesHubId || DEFAULT_GAMES_HUB_ID],
+                ['Log Channel', gs.logChannelId],
+                ['Exile Channel', gs.exileChannelId],
+                ['Appeals Channel', gs.appealsChannelId],
+            ];
+            const chLines = [];
+            for (const [label, id] of ids) {
+                if (!id) { chLines.push(`${label}: None`); continue; }
+                const exists = await interaction.guild.channels.fetch(id).catch(()=>null);
+                chLines.push(`${label}: ${exists ? `<#${id}>` : `Missing (${id})`}`);
+            }
+            embed.addFields({ name: 'Channels', value: chLines.join('\n'), inline: false });
+
+            let dataOK = '✅';
+            try {
+                ensureBackupDir();
+                fs.accessSync(BASE_DIR, fs.constants.W_OK);
+            } catch { dataOK = '❌'; }
+            embed.addFields({ name: 'Storage', value: `Data file: ${DATA_FILE}\nBackups: ${BACKUP_DIR}\nWritable: ${dataOK}`, inline: false });
+
+            const ft = footerText(gs);
+            if (ft) embed.setFooter({ text: ft });
+            await interaction.reply({ embeds: [embed], ephemeral: true });
+            break;
+        }
+
+        case 'config': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const sub = interaction.options.getSubcommand();
+
+            if (sub === 'export') {
+                const payload = exportGuildConfig(interaction.guildId, data);
+                const json = JSON.stringify(payload, null, 2);
+                const safe = json.length > 1800 ? json.slice(0, 1800) + "\n... (truncated)" : json;
+                await interaction.reply({ content: `\`\`\`json\n${safe}\n\`\`\``, ephemeral: true });
+                break;
+            }
+
+            if (sub === 'import') {
+                const raw = interaction.options.getString('json') || '';
+                let payload;
+                try {
+                    payload = JSON.parse(raw);
+                } catch {
+                    await interaction.reply({ content: '❌ Invalid JSON.', ephemeral: true });
+                    break;
+                }
+                try {
+                    importGuildConfig(interaction.guildId, data, payload);
+                    saveData(data);
+                } catch (e) {
+                    await interaction.reply({ content: `❌ Import failed: ${String(e?.message || e)}`, ephemeral: true });
+                    break;
+                }
+                await interaction.reply({ content: '✅ Config imported for this server.', ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Config Imported', []);
+                break;
+            }
+
+            if (sub === 'backup') {
+                const p = createBackupFile(DATA_FILE);
+                rotateBackups(25);
+                await interaction.reply({ content: `✅ Backup created: ${p ? path.basename(p) : 'Failed'}`, ephemeral: true });
+                break;
+            }
+
+            if (sub === 'list') {
+                const files = listBackupFiles().slice(0, 20);
+                await interaction.reply({ content: `✅ Backups (${files.length} shown):\n${files.join('\n') || 'None'}`, ephemeral: true });
+                break;
+            }
+
+            if (sub === 'restore') {
+                const file = (interaction.options.getString('file') || '').trim();
+                if (!/^skynet_data\.(\d{8}_\d{6})\.json$/.test(file)) { await interaction.reply({ content: '❌ Invalid backup filename.', ephemeral: true }); break; }
+                const full = path.join(BACKUP_DIR, file);
+                if (!fs.existsSync(full)) { await interaction.reply({ content: '❌ Backup not found.', ephemeral: true }); break; }
+                try {
+                    const d = JSON.parse(fs.readFileSync(full, 'utf8'));
+                    createBackupFile(DATA_FILE);
+                    safeWriteJsonAtomic(DATA_FILE, Object.assign(makeDefaultData(), d));
+                } catch (e) {
+                    await interaction.reply({ content: `❌ Restore failed: ${String(e?.message || e)}`, ephemeral: true });
+                    break;
+                }
+                await interaction.reply({ content: `✅ Restored from ${file}.`, ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Config Restored', [file]);
+                break;
+            }
+            await interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
             break;
         }
 
@@ -7342,6 +7582,111 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const embeds = buildCommandListEmbeds('✨ Slash Commands', SLASH_COMMANDS_LIST, gs);
         for (const e of embeds) {
             await message.channel.send({ embeds: [e] });
+        }
+    }
+
+    else if (cmd === 'diagnose' && isAdmin) {
+        const me = message.guild.members.me || await message.guild.members.fetchMe().catch(()=>null);
+        const perms = me?.permissions;
+        const mm = perms?.has(PermissionFlagsBits.ManageMessages) ? '✅' : '❌';
+        const mod = perms?.has(PermissionFlagsBits.ModerateMembers) ? '✅' : '❌';
+        const vr = perms?.has(PermissionFlagsBits.ViewAuditLog) ? '✅' : '❌';
+        const embed = new EmbedBuilder()
+            .setTitle('🩺 Diagnose')
+            .setColor(0x5865F2)
+            .addFields(
+                { name: 'Bot Permissions', value: `ManageMessages: ${mm}\nModerateMembers: ${mod}\nViewAuditLog: ${vr}`, inline: false },
+                { name: 'AI Key', value: (AI_ENABLED ? (ANTHROPIC_KEY ? '✅ Present' : '❌ Missing') : '❌ AI_DISABLED'), inline: true },
+                { name: 'Mode', value: `checks=${gs.checksEnabled ? 'ON' : 'OFF'} enforcement=${gs.enforcementMode}`, inline: true },
+            )
+            .setTimestamp();
+
+        const ids = [
+            ['Trade Channel', gs.tradeChannelId],
+            ['Services Channel', gs.servicesChannelId],
+            ['Commands Channel', gs.gamesHubId || DEFAULT_GAMES_HUB_ID],
+            ['Log Channel', gs.logChannelId],
+            ['Exile Channel', gs.exileChannelId],
+            ['Appeals Channel', gs.appealsChannelId],
+        ];
+        const chLines = [];
+        for (const [label, id] of ids) {
+            if (!id) { chLines.push(`${label}: None`); continue; }
+            const exists = await message.guild.channels.fetch(id).catch(()=>null);
+            chLines.push(`${label}: ${exists ? `<#${id}>` : `Missing (${id})`}`);
+        }
+        embed.addFields({ name: 'Channels', value: chLines.join('\n'), inline: false });
+
+        let dataOK = '✅';
+        try {
+            ensureBackupDir();
+            fs.accessSync(BASE_DIR, fs.constants.W_OK);
+        } catch { dataOK = '❌'; }
+        embed.addFields({ name: 'Storage', value: `Data file: ${DATA_FILE}\nBackups: ${BACKUP_DIR}\nWritable: ${dataOK}`, inline: false });
+
+        const ft = footerText(gs);
+        if (ft) embed.setFooter({ text: ft });
+        await message.channel.send({ embeds: [embed] });
+    }
+
+    else if (cmd === 'config' && isAdmin) {
+        const sub = (args[0] || '').toLowerCase();
+        if (!sub || !['export','import','backup','list','restore'].includes(sub)) {
+            return message.channel.send('❌ Use: !config export|import|backup|list|restore ...');
+        }
+
+        if (sub === 'export') {
+            const payload = exportGuildConfig(message.guildId, data);
+            const json = JSON.stringify(payload, null, 2);
+            const safe = json.length > 1800 ? json.slice(0, 1800) + "\n... (truncated)" : json;
+            await message.channel.send(`\`\`\`json\n${safe}\n\`\`\``);
+            return;
+        }
+
+        if (sub === 'import') {
+            const raw = args.slice(1).join(' ').trim();
+            if (!raw) return message.channel.send('❌ Use: !config import <json>');
+            let payload;
+            try { payload = JSON.parse(raw); } catch { return message.channel.send('❌ Invalid JSON.'); }
+            try {
+                importGuildConfig(message.guildId, data, payload);
+                saveData(data);
+            } catch (e) {
+                return message.channel.send(`❌ Import failed: ${String(e?.message || e)}`);
+            }
+            await message.channel.send('✅ Config imported for this server.');
+            await sendConfigLog(message.guild, data, message.author.id, '⚙️ Config Imported', []);
+            return;
+        }
+
+        if (sub === 'backup') {
+            const p = createBackupFile(DATA_FILE);
+            rotateBackups(25);
+            await message.channel.send(`✅ Backup created: ${p ? path.basename(p) : 'Failed'}`);
+            return;
+        }
+
+        if (sub === 'list') {
+            const files = listBackupFiles().slice(0, 20);
+            await message.channel.send(`✅ Backups (${files.length} shown):\n${files.join('\n') || 'None'}`);
+            return;
+        }
+
+        if (sub === 'restore') {
+            const file = (args[1] || '').trim();
+            if (!/^skynet_data\.(\d{8}_\d{6})\.json$/.test(file)) return message.channel.send('❌ Invalid backup filename.');
+            const full = path.join(BACKUP_DIR, file);
+            if (!fs.existsSync(full)) return message.channel.send('❌ Backup not found.');
+            try {
+                const d = JSON.parse(fs.readFileSync(full, 'utf8'));
+                createBackupFile(DATA_FILE);
+                safeWriteJsonAtomic(DATA_FILE, Object.assign(makeDefaultData(), d));
+            } catch (e) {
+                return message.channel.send(`❌ Restore failed: ${String(e?.message || e)}`);
+            }
+            await message.channel.send(`✅ Restored from ${file}.`);
+            await sendConfigLog(message.guild, data, message.author.id, '⚙️ Config Restored', [file]);
+            return;
         }
     }
 
