@@ -864,6 +864,8 @@ function getGuildSettings(guildId, data) {
             begWarnEnabled:         true,
             scamWarnEnabled:        true,
             accTradeWarnEnabled:    true,
+            aiEnabled: false,
+            checksEnabled: true,
             violationThreshold: VIOLATION_THRESHOLD,
             exileDurationMins:  EXILE_DURATION_MINS,
 
@@ -952,7 +954,31 @@ function getGuildSettings(guildId, data) {
     if (gs.begWarnEnabled === undefined) gs.begWarnEnabled = true;
     if (gs.scamWarnEnabled === undefined) gs.scamWarnEnabled = true; 
     if (gs.accTradeWarnEnabled === undefined) gs.accTradeWarnEnabled = true;
+    if (gs.aiEnabled === undefined) gs.aiEnabled = false;
+    if (gs.checksEnabled === undefined) gs.checksEnabled = true;
     return gs;
+}
+
+function getCategoryImmunity(guildId, data, category) {
+    data.categoryImmunity = data.categoryImmunity || {};
+    if (!data.categoryImmunity[guildId]) data.categoryImmunity[guildId] = {};
+    if (!data.categoryImmunity[guildId][category]) {
+        data.categoryImmunity[guildId][category] = { roles: [], members: [] };
+    }
+    const c = data.categoryImmunity[guildId][category];
+    c.roles = Array.isArray(c.roles) ? c.roles : [];
+    c.members = Array.isArray(c.members) ? c.members : [];
+    return c;
+}
+
+function isCategoryImmune(member, guildId, data, category) {
+    if (!member) return false;
+    const c = getCategoryImmunity(guildId, data, category);
+    if (c.members.includes(member.id)) return true;
+    for (const rid of c.roles) {
+        if (member.roles?.cache?.has(rid)) return true;
+    }
+    return false;
 }
 
 function getImmunitySettings(guildId, data) {
@@ -992,6 +1018,17 @@ async function sendLog(guild, data, embed) {
     try {
         const ch = await guild.channels.fetch(gs.logChannelId).catch(() => null);
         if (ch) await ch.send({ embeds: [embed] });
+    } catch {}
+}
+
+async function sendConfigLog(guild, data, actorId, title, lines) {
+    try {
+        await sendLog(guild, data, new EmbedBuilder()
+            .setTitle(title)
+            .setColor(0x5865F2)
+            .setDescription((lines || []).filter(Boolean).join('\n').slice(0, 4096) || 'No details')
+            .addFields({ name: 'By', value: `<@${actorId}> (${actorId})`, inline: false })
+            .setTimestamp());
     } catch {}
 }
 
@@ -3489,9 +3526,10 @@ async function unlockGuildTextChannels(guild, gs) {
 // ══════════════════════════════════════════════════════════
 //  AI DETECTION (Claude API)
 // ══════════════════════════════════════════════════════════
-async function aiDetectViolation(message, categories) {
+async function aiDetectViolation(message, categories, gs) {
     if (!AI_ENABLED || !ANTHROPIC_KEY) return null;
-    if (message.content.length < 15) return null;
+    if (!gs?.aiEnabled) return null;
+    if (!message?.content || message.content.length < 2) return null;
     try {
         const systemPrompt = `You are a moderation AI for a Blox Fruits Discord server.
 Analyze the user's message and determine if it violates any of these rules:
@@ -3501,7 +3539,10 @@ Analyze the user's message and determine if it violates any of these rules:
 4. Service/boss/raid requests (should be in #services)
 5. Spam/inappropriate content
 
-Respond ONLY with valid JSON: {"violation": true/false, "category": "trade|beg|account|service|spam|none", "confidence": 0.0-1.0, "reason": "short reason"}
+6. Using bot commands in the wrong channels (command usage / command-like)
+7. Scam/exploit links or scammy content
+
+Respond ONLY with valid JSON: {"violation": true/false, "category": "trade|beg|account|acctrade|service|spam|command|scam|none", "confidence": 0.0-1.0, "reason": "short reason"}
 Only flag if confidence > 0.85. Be conservative — do NOT flag normal conversation.`;
         const res = await fetch(AI_API_URL, {
             method: 'POST',
@@ -3620,6 +3661,137 @@ const slashCommands = [
         .setName('immunestatus')
         .setDescription('Show current immunity settings')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+
+    new SlashCommandBuilder()
+        .setName('aienable')
+        .setDescription('Enable AI (Claude) detection for this server')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder()
+        .setName('aidisable')
+        .setDescription('Disable AI (Claude) detection for this server')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+
+    new SlashCommandBuilder()
+        .setName('disablecheck')
+        .setDescription('Disable ALL moderation checks for this server')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder()
+        .setName('enablecheck')
+        .setDescription('Enable ALL moderation checks for this server')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+
+    new SlashCommandBuilder()
+        .setName('commandimmunity')
+        .setDescription('Manage immunity for command scanning')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
+        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
+    new SlashCommandBuilder()
+        .setName('serviceimmunity')
+        .setDescription('Manage immunity for service scanning')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
+        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
+    new SlashCommandBuilder()
+        .setName('tradeimmunity')
+        .setDescription('Manage immunity for trade scanning')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
+        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
+    new SlashCommandBuilder()
+        .setName('spamimmunity')
+        .setDescription('Manage immunity for spam scanning')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
+        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
+    new SlashCommandBuilder()
+        .setName('begimmunity')
+        .setDescription('Manage immunity for begging scanning')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
+        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
+    new SlashCommandBuilder()
+        .setName('scamimmunity')
+        .setDescription('Manage immunity for scam scanning')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
+        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
+    new SlashCommandBuilder()
+        .setName('acctradeimmunity')
+        .setDescription('Manage immunity for account trading scanning')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
+                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
+        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
+            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
+                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
 
     // Exile / unexile slash
     new SlashCommandBuilder()
@@ -4138,6 +4310,129 @@ client.on('interactionCreate', async interaction => {
     const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
     const isMod   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
 
+    async function handleCategoryImmunity(category) {
+        if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        const c = getCategoryImmunity(guildId, data, category);
+
+        const group = interaction.options.getSubcommandGroup(false);
+        if (group) {
+            const sub = interaction.options.getSubcommand();
+
+            if (group === 'role') {
+                if (sub === 'list') {
+                    const list = c.roles.map(rid => interaction.guild.roles.cache.get(rid) ? `<@&${rid}>` : `Unknown (${rid})`).slice(0, 60);
+                    await interaction.reply({ content: `✅ **${category}** role immunity list (${c.roles.length}):\n${list.join('\n') || 'None'}`, ephemeral: true });
+                    return;
+                }
+                const role = interaction.options.getRole('role');
+                if (!role) { await interaction.reply({ content: '❌ Provide a role.', ephemeral: true }); return; }
+                if (sub === 'add') {
+                    if (!c.roles.includes(role.id)) c.roles.push(role.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Added role immunity for **${category}**: ${role}`, ephemeral: true });
+                    await sendConfigLog(interaction.guild, data, interaction.user.id, '🛡️ Immunity Updated', [
+                        `Category: **${category}**`,
+                        `Role add: ${role} (${role.id})`,
+                    ]);
+                    return;
+                }
+                if (sub === 'remove') {
+                    c.roles = c.roles.filter(x => x !== role.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Removed role immunity for **${category}**: ${role}`, ephemeral: true });
+                    await sendConfigLog(interaction.guild, data, interaction.user.id, '🛡️ Immunity Updated', [
+                        `Category: **${category}**`,
+                        `Role remove: ${role} (${role.id})`,
+                    ]);
+                    return;
+                }
+                await interaction.reply({ content: '❌ Invalid subcommand.', ephemeral: true });
+                return;
+            }
+
+            if (group === 'member') {
+                if (sub === 'list') {
+                    const list = c.members.map(uid => `<@${uid}> (${uid})`).slice(0, 60);
+                    await interaction.reply({ content: `✅ **${category}** member immunity list (${c.members.length}):\n${list.join('\n') || 'None'}`, ephemeral: true });
+                    return;
+                }
+                const member = interaction.options.getUser('member');
+                if (!member) { await interaction.reply({ content: '❌ Provide a member.', ephemeral: true }); return; }
+                if (sub === 'add') {
+                    if (!c.members.includes(member.id)) c.members.push(member.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Added member immunity for **${category}**: <@${member.id}>`, ephemeral: true });
+                    await sendConfigLog(interaction.guild, data, interaction.user.id, '🛡️ Immunity Updated', [
+                        `Category: **${category}**`,
+                        `Member add: <@${member.id}> (${member.id})`,
+                    ]);
+                    return;
+                }
+                if (sub === 'remove') {
+                    c.members = c.members.filter(x => x !== member.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Removed member immunity for **${category}**: <@${member.id}>`, ephemeral: true });
+                    await sendConfigLog(interaction.guild, data, interaction.user.id, '🛡️ Immunity Updated', [
+                        `Category: **${category}**`,
+                        `Member remove: <@${member.id}> (${member.id})`,
+                    ]);
+                    return;
+                }
+                await interaction.reply({ content: '❌ Invalid subcommand.', ephemeral: true });
+                return;
+            }
+        }
+
+        const legacySub = interaction.options.getSubcommand(false);
+        const legacyMode = (interaction.options.getString('mode') || '').toLowerCase();
+        if (legacySub && legacyMode) {
+            if (legacySub === 'role') {
+                const role = interaction.options.getRole('role');
+                if (legacyMode === 'list') {
+                    const list = c.roles.map(rid => interaction.guild.roles.cache.get(rid) ? `<@&${rid}>` : `Unknown (${rid})`).slice(0, 60);
+                    await interaction.reply({ content: `✅ **${category}** role immunity list (${c.roles.length}):\n${list.join('\n') || 'None'}`, ephemeral: true });
+                    return;
+                }
+                if (!role) { await interaction.reply({ content: '❌ Provide a role.', ephemeral: true }); return; }
+                if (legacyMode === 'add') {
+                    if (!c.roles.includes(role.id)) c.roles.push(role.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Added role immunity for **${category}**: ${role}`, ephemeral: true });
+                    return;
+                }
+                if (legacyMode === 'remove') {
+                    c.roles = c.roles.filter(x => x !== role.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Removed role immunity for **${category}**: ${role}`, ephemeral: true });
+                    return;
+                }
+            }
+            if (legacySub === 'member') {
+                const member = interaction.options.getUser('member');
+                if (legacyMode === 'list') {
+                    const list = c.members.map(uid => `<@${uid}> (${uid})`).slice(0, 60);
+                    await interaction.reply({ content: `✅ **${category}** member immunity list (${c.members.length}):\n${list.join('\n') || 'None'}`, ephemeral: true });
+                    return;
+                }
+                if (!member) { await interaction.reply({ content: '❌ Provide a member.', ephemeral: true }); return; }
+                if (legacyMode === 'add') {
+                    if (!c.members.includes(member.id)) c.members.push(member.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Added member immunity for **${category}**: <@${member.id}>`, ephemeral: true });
+                    return;
+                }
+                if (legacyMode === 'remove') {
+                    c.members = c.members.filter(x => x !== member.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Removed member immunity for **${category}**: <@${member.id}>`, ephemeral: true });
+                    return;
+                }
+            }
+        }
+
+        await interaction.reply({ content: '❌ Invalid immunity command usage.', ephemeral: true });
+    }
+
     switch (interaction.commandName) {
 
         // ── /setup & /changesetup ─────────────────────────
@@ -4273,6 +4568,58 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
+        case 'aienable': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            gs.aiEnabled = true;
+            saveData(data);
+            await interaction.reply({ content: '✅ AI detection is now **ENABLED** for this server.', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Enabled', [
+                `AI detection: **ON**`,
+            ]);
+            break;
+        }
+
+        case 'aidisable': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            gs.aiEnabled = false;
+            saveData(data);
+            await interaction.reply({ content: '⚠️ AI detection is now **DISABLED** for this server.', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Disabled', [
+                `AI detection: **OFF**`,
+            ]);
+            break;
+        }
+
+        case 'disablecheck': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            gs.checksEnabled = false;
+            saveData(data);
+            await interaction.reply({ content: '🛑 All moderation checks are now **DISABLED** for this server.', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '🛑 Checks Disabled', [
+                `Checks: **OFF**`,
+            ]);
+            break;
+        }
+
+        case 'enablecheck': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            gs.checksEnabled = true;
+            saveData(data);
+            await interaction.reply({ content: '✅ All moderation checks are now **ENABLED** for this server.', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Checks Enabled', [
+                `Checks: **ON**`,
+            ]);
+            break;
+        }
+
+        case 'commandimmunity':  { await handleCategoryImmunity('command'); break; }
+        case 'serviceimmunity':  { await handleCategoryImmunity('service'); break; }
+        case 'tradeimmunity':    { await handleCategoryImmunity('trade'); break; }
+        case 'spamimmunity':     { await handleCategoryImmunity('spam'); break; }
+        case 'begimmunity':      { await handleCategoryImmunity('beg'); break; }
+        case 'scamimmunity':     { await handleCategoryImmunity('scam'); break; }
+        case 'acctradeimmunity': { await handleCategoryImmunity('acctrade'); break; }
+
         // ── /exile ────────────────────────────────────────
         case 'exile': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
@@ -4367,6 +4714,7 @@ client.on('interactionCreate', async interaction => {
                 .setTitle('🤖 SKYNET V7 — Status')
                 .setColor(0x5865F2)
                 .addFields(
+                    { name: '🧠 Checks',          value: gs.checksEnabled ? '✅ ON' : '🛑 OFF',       inline: true },
                     { name: '📡 Trade Channel',    value: `<#${gs.tradeChannelId}>`,              inline: true },
                     { name: '⚔️ Services Channel', value: `<#${gs.servicesChannelId}>`,           inline: true },
                     { name: '📋 Log Channel',      value: gs.logChannelId ? `<#${gs.logChannelId}>` : 'Not set', inline: true },
@@ -5277,8 +5625,10 @@ client.on('messageCreate', async message => {
     const immune  = message.member ? isMemberImmune(message.member, guildId, data) : false;
     const immCfg  = getImmunitySettings(guildId, data);
 
+    if (gs.checksEnabled === false) return;
+
     // ── RAID LOCKDOWN (message-time enforcement) ───────────
-    if (gs.raidModeEnabled && isRaidLocked(guildId) && !immune) {
+    if (gs.raidModeEnabled && isRaidLocked(guildId) && !immune && !isCategoryImmune(message.member, guildId, data, 'raid')) {
         if (message.channel && message.channel.isTextBased && message.channel.isTextBased()) {
             const allow = GAMES_HUB_CHANNELS.has(message.channel.id) || message.channel.id === (gs.logChannelId || '') || message.channel.id === (gs.appealsChannelId || '');
             if (!allow) {
@@ -5298,7 +5648,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── COMMAND LOCKDOWN ──────────────────────────────────
-    if ((gs.commandRedirectEnabled !== false) && isMessageCommand(message)) {
+    if ((gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message)) {
         const staffCommandImmune = isStaff && immCfg.enabled;
         if (!staffCommandImmune && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
             try { await message.delete(); } catch {}
@@ -5317,7 +5667,7 @@ client.on('messageCreate', async message => {
         }
     }
 
-    if ((gs.commandRedirectEnabled !== false) && !immune && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
+    if ((gs.commandRedirectEnabled !== false) && !immune && !isCategoryImmune(message.member, guildId, data, 'command') && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
         const { contentClean: cmdClean } = prepareText(message.content);
         if (looksLikeCommandButNotCaught(message.content, cmdClean)) {
             const staffCommandImmune = isStaff && immCfg.enabled;
@@ -5341,7 +5691,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── MENTION SPAM ───────────────────────────────────────
-    if (!immune) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, 'mention')) {
         const mentionIds = [...new Set([
             ...(message.mentions?.users ? [...message.mentions.users.keys()] : []),
             ...(message.mentions?.roles ? [...message.mentions.roles.keys()] : []),
@@ -5368,7 +5718,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── LINK POLICY (allowlist/denylist) ───────────────────
-    if (!immune && gs.linkPolicyEnabled) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, 'link') && gs.linkPolicyEnabled) {
         const domains = extractDomains(message.content);
         if (domains.length) {
             if (gs.raidModeEnabled && isRaidLocked(guildId) && gs.raidLinkBlockAll) {
@@ -5425,7 +5775,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── ATTACHMENT POLICY ─────────────────────────────────
-    if (!immune && gs.attachmentPolicyEnabled && message.attachments && message.attachments.size) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, 'attachment') && gs.attachmentPolicyEnabled && message.attachments && message.attachments.size) {
         const exts = getAttachmentExts(message);
         const block = (gs.attachmentBlockExts || []).map(x => String(x||'').toLowerCase());
         const hit = exts.find(e => block.includes(String(e||'').toLowerCase()));
@@ -5448,7 +5798,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── INVITE POLICY ─────────────────────────────────────
-    if (!immune && gs.invitePolicyEnabled && hasDiscordInvite(message.content)) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, 'invite') && gs.invitePolicyEnabled && hasDiscordInvite(message.content)) {
         const allowedCh = (gs.inviteAllowedChannelIds || []).includes(message.channel.id);
         if (!allowedCh) {
             const invDomains = parseInviteDomains(message.content);
@@ -5477,7 +5827,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── CAPS SPAM ─────────────────────────────────────────
-    if (!immune && gs.capsSpamEnabled) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, 'caps') && gs.capsSpamEnabled) {
         const m = countUppercaseMetrics(message.content);
         const minLetters = Math.max(8, Math.min(80, gs.capsMinLetters || 16));
         const maxPct = Math.max(30, Math.min(100, gs.capsMaxPercent || 70));
@@ -5497,7 +5847,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── EMOJI SPAM ────────────────────────────────────────
-    if (!immune && gs.emojiSpamEnabled) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, 'emoji') && gs.emojiSpamEnabled) {
         const emojiCount = countEmojiLike(message.content);
         if (emojiCount) {
             recordEmojiSpam(message.author.id, guildId, emojiCount);
@@ -5519,7 +5869,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── ZALGO / COMBINING MARK SPAM ───────────────────────
-    if (!immune && gs.zalgoEnabled) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, 'zalgo') && gs.zalgoEnabled) {
         const marks = countCombiningMarks(message.content);
         const max = Math.max(4, Math.min(80, gs.zalgoMaxCombining || 12));
         if (marks >= max) {
@@ -5537,7 +5887,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── STRETCH / REPEAT SPAM ─────────────────────────────
-    if (!immune && gs.stretchSpamEnabled) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, 'stretch') && gs.stretchSpamEnabled) {
         const res = detectStretchSpam(message.content, gs);
         if (res?.hit) {
             try { await message.delete(); } catch {}
@@ -5554,7 +5904,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── DUPLICATE MESSAGE SPAM ────────────────────────────
-    if (!immune && gs.dupeSpamEnabled) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, 'dupe') && gs.dupeSpamEnabled) {
         const res = detectDupeSpam(message.author.id, guildId, message.content, gs);
         if (res?.hit) {
             try { await message.delete(); } catch {}
@@ -5577,8 +5927,77 @@ client.on('messageCreate', async message => {
     // ── IMMUNE SKIP ───────────────────────────────────────
     if (immune) return;
 
+    const { contentClean, contentNospace } = prepareText(message.content);
+
+    // ── AI DETECTION (always-classify) ────────────────────
+    if (AI_ENABLED && gs.aiEnabled) {
+        const aiResult = await aiDetectViolation(message, [], gs);
+        if (aiResult?.violation && aiResult.confidence > 0.85 && aiResult.category && aiResult.category !== 'none') {
+            const cat = String(aiResult.category || '').toLowerCase();
+            if (!isCategoryImmune(message.member, guildId, data, cat)) {
+                incStat(guildId, data, 'aiFlag', 1);
+
+                if (cat === 'spam' && gs.spamWarnEnabled !== false) {
+                    await handleSpamViolation(message, `AI: ${aiResult.reason || 'Spam/inappropriate content'}`, data, gs);
+                    return;
+                }
+
+                if (cat === 'scam' && gs.scamWarnEnabled !== false) {
+                    try { await message.delete(); } catch {}
+                    incStat(guildId, data, 'scam', 1);
+                    await issueViolation(message, data, gs, {
+                        title: '🚨 Scam/Exploit Content Detected',
+                        color: 0xCC0000,
+                        reason: `AI: ${aiResult.reason || 'Suspicious link or scam content.'}`,
+                        details: message.content,
+                        footerLabel: 'Scam/Exploit',
+                        ttlMs: 15000,
+                    });
+                    return;
+                }
+
+                if ((cat === 'acctrade' || cat === 'account') && gs.accTradeWarnEnabled !== false) {
+                    await checkAccountTrading(message, contentClean, data, gs);
+                    return;
+                }
+
+                if (cat === 'beg' && gs.begWarnEnabled !== false) {
+                    await checkBegging(message, contentClean, data, gs);
+                    return;
+                }
+
+                if (cat === 'service' && gs.serviceRedirectEnabled !== false && message.channel.id !== gs.servicesChannelId) {
+                    const flagged = await checkServicesViolation(message, contentClean, contentNospace, data, gs);
+                    if (flagged) return;
+                }
+
+                if (cat === 'trade' && gs.tradeRedirectEnabled !== false && message.channel.id !== gs.tradeChannelId) {
+                    const flagged = await checkTradeViolation(message, contentClean, contentNospace, data, gs);
+                    if (flagged) return;
+                }
+
+                if (cat === 'command' && gs.commandRedirectEnabled !== false) {
+                    const hub = gs.gamesHubId || DEFAULT_GAMES_HUB_ID;
+                    if (hub && message.channel.id !== hub && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
+                        try { await message.delete(); } catch {}
+                        await issueViolation(message, data, gs, {
+                            title: '⚠️ Command Usage Violation',
+                            color: 0xFF3344,
+                            reason: `AI: ${aiResult.reason || 'Use commands only in Games Hub.'}`,
+                            details: message.content,
+                            redirectChannelId: hub,
+                            footerLabel: 'Command Usage',
+                            ttlMs: 10000,
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     // ── SPAM DETECTION ────────────────────────────────────
-    if (gs.spamWarnEnabled !== false) {
+    if (gs.spamWarnEnabled !== false && !isCategoryImmune(message.member, guildId, data, 'spam')) {
         const spamResult = checkSpam(message.author.id, message.content);
         if (spamResult.spam) {
             await handleSpamViolation(message, spamResult.reason, data, gs);
@@ -5587,9 +6006,8 @@ client.on('messageCreate', async message => {
     }
 
     // ── ACCOUNT TRADING ───────────────────────────────────
-    const { contentClean, contentNospace } = prepareText(message.content);
     const scam = gs.scamEnabled ? detectScamOrExploit(contentClean, message.content) : { hit: false };
-    if ((gs.scamWarnEnabled !== false) && scam?.hit) {
+    if ((gs.scamWarnEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'scam') && scam?.hit) {
         try { await message.delete(); } catch {}
         incStat(guildId, data, 'scam', 1);
         await issueViolation(message, data, gs, {
@@ -5602,38 +6020,38 @@ client.on('messageCreate', async message => {
         });
         return;
     }
-    if ((gs.accTradeWarnEnabled !== false) && detectAccountTrading(contentClean)) {
+    if ((gs.accTradeWarnEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'acctrade') && detectAccountTrading(contentClean)) {
         await checkAccountTrading(message, contentClean, data, gs);
         return;
     }
 
     // ── BEGGING ───────────────────────────────────────────
-    if ((gs.begWarnEnabled !== false) && detectBegging(contentClean)) {
+    if ((gs.begWarnEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'beg') && detectBegging(contentClean)) {
         await checkBegging(message, contentClean, data, gs);
         return;
     }
 
     // ── SERVICES / ITEMS ──────────────────────────────────
-    if ((gs.serviceRedirectEnabled !== false) && message.channel.id !== gs.servicesChannelId) {
+    if ((gs.serviceRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'service') && message.channel.id !== gs.servicesChannelId) {
         const flagged = await checkServicesViolation(message, contentClean, contentNospace, data, gs);
         if (flagged) return;
     }
 
     // ── TRADE ─────────────────────────────────────────────
-    if ((gs.tradeRedirectEnabled !== false) && message.channel.id !== gs.tradeChannelId) {
+    if ((gs.tradeRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'trade') && message.channel.id !== gs.tradeChannelId) {
         const flagged = await checkTradeViolation(message, contentClean, contentNospace, data, gs);
         if (flagged) return;
     }
 
     // ── RACE + TIER + INTENT ──────────────────────────────
-    if ((gs.serviceRedirectEnabled !== false) && message.channel.id !== gs.tradeChannelId) {
+    if ((gs.serviceRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'service') && message.channel.id !== gs.tradeChannelId) {
         await checkRaceViolation(message, contentClean, contentNospace, data, gs);
     }
 
     // ── AI DETECTION (async, low priority) ───────────────
-    if (AI_ENABLED) {
+    if (AI_ENABLED && gs.aiEnabled) {
         setImmediate(async () => {
-            const aiResult = await aiDetectViolation(message, []);
+            const aiResult = await aiDetectViolation(message, [], gs);
             if (aiResult?.violation && aiResult.confidence > 0.9) {
                 await sendLog(message.guild, data, new EmbedBuilder()
                     .setTitle('🤖 AI Detection Alert')
@@ -6092,6 +6510,115 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         else return message.channel.send('❌ Use: !raidmode on/off');
         saveData(data);
         await message.channel.send(`✅ Raid mode is now **${gs.raidModeEnabled ? 'ON' : 'OFF'}**.`);
+    }
+
+    else if (cmd === 'disablecheck' && isAdmin) {
+        gs.checksEnabled = false;
+        saveData(data);
+        await message.channel.send('🛑 All moderation checks are now **DISABLED** for this server.');
+        await sendConfigLog(message.guild, data, message.author.id, '🛑 Checks Disabled', [
+            `Checks: **OFF**`,
+        ]);
+    }
+
+    else if (cmd === 'enablecheck' && isAdmin) {
+        gs.checksEnabled = true;
+        saveData(data);
+        await message.channel.send('✅ All moderation checks are now **ENABLED** for this server.');
+        await sendConfigLog(message.guild, data, message.author.id, '✅ Checks Enabled', [
+            `Checks: **ON**`,
+        ]);
+    }
+
+    // !aienable / !aidisable
+    else if (cmd === 'aienable' && isAdmin) {
+        gs.aiEnabled = true;
+        saveData(data);
+        await message.channel.send('✅ AI detection is now **ENABLED** for this server.');
+        await sendConfigLog(message.guild, data, message.author.id, '🤖 AI Enabled', [
+            `AI detection: **ON**`,
+        ]);
+    }
+    else if (cmd === 'aidisable' && isAdmin) {
+        gs.aiEnabled = false;
+        saveData(data);
+        await message.channel.send('⚠️ AI detection is now **DISABLED** for this server.');
+        await sendConfigLog(message.guild, data, message.author.id, '🤖 AI Disabled', [
+            `AI detection: **OFF**`,
+        ]);
+    }
+
+    else if (cmd.endsWith('immunity') && isAdmin) {
+        const category = cmd.replace(/immunity$/i, '');
+        const kind = (args[0] || '').toLowerCase();
+        const action = (args[1] || '').toLowerCase();
+        const c = getCategoryImmunity(message.guildId, data, category);
+
+        if (kind === 'role') {
+            if (action === 'list') {
+                const list = c.roles.map(rid => message.guild.roles.cache.get(rid) ? `<@&${rid}>` : `Unknown (${rid})`).slice(0, 60);
+                await message.channel.send(`✅ **${category}** role immunity list (${c.roles.length}):\n${list.join('\n') || 'None'}`);
+                return;
+            }
+            const role = await resolveRole(args[2]);
+            if (!role) { await message.channel.send('❌ Provide a role mention or role ID.'); return; }
+            if (action === 'add') {
+                if (!c.roles.includes(role.id)) c.roles.push(role.id);
+                saveData(data);
+                await message.channel.send(`✅ Added role immunity for **${category}**: ${role}`);
+                await sendConfigLog(message.guild, data, message.author.id, '🛡️ Immunity Updated', [
+                    `Category: **${category}**`,
+                    `Role add: ${role} (${role.id})`,
+                ]);
+                return;
+            }
+            if (action === 'remove') {
+                c.roles = c.roles.filter(x => x !== role.id);
+                saveData(data);
+                await message.channel.send(`✅ Removed role immunity for **${category}**: ${role}`);
+                await sendConfigLog(message.guild, data, message.author.id, '🛡️ Immunity Updated', [
+                    `Category: **${category}**`,
+                    `Role remove: ${role} (${role.id})`,
+                ]);
+                return;
+            }
+            await message.channel.send('❌ Use: !<category>immunity role add/remove/list [@role]');
+            return;
+        }
+
+        if (kind === 'member') {
+            if (action === 'list') {
+                const list = c.members.map(uid => `<@${uid}> (${uid})`).slice(0, 60);
+                await message.channel.send(`✅ **${category}** member immunity list (${c.members.length}):\n${list.join('\n') || 'None'}`);
+                return;
+            }
+            const member = await resolveMember(args[2]);
+            if (!member) { await message.channel.send('❌ Provide a member mention or Discord ID.'); return; }
+            if (action === 'add') {
+                if (!c.members.includes(member.id)) c.members.push(member.id);
+                saveData(data);
+                await message.channel.send(`✅ Added member immunity for **${category}**: ${member}`);
+                await sendConfigLog(message.guild, data, message.author.id, '🛡️ Immunity Updated', [
+                    `Category: **${category}**`,
+                    `Member add: <@${member.id}> (${member.id})`,
+                ]);
+                return;
+            }
+            if (action === 'remove') {
+                c.members = c.members.filter(x => x !== member.id);
+                saveData(data);
+                await message.channel.send(`✅ Removed member immunity for **${category}**: ${member}`);
+                await sendConfigLog(message.guild, data, message.author.id, '🛡️ Immunity Updated', [
+                    `Category: **${category}**`,
+                    `Member remove: <@${member.id}> (${member.id})`,
+                ]);
+                return;
+            }
+            await message.channel.send('❌ Use: !<category>immunity member add/remove/list [@member|id]');
+            return;
+        }
+
+        await message.channel.send('❌ Use: !<category>immunity role|member add/remove/list ...');
     }
 
     // !raidstatus
