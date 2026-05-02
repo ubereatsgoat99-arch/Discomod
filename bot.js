@@ -3857,6 +3857,11 @@ const slashCommands = [
         .setDescription('Show information about the bot'),
 
     new SlashCommandBuilder()
+        .setName('botstatus')
+        .setDescription('Show current moderation configuration for this server')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+
+    new SlashCommandBuilder()
         .setName('setowner')
         .setDescription('Set the bot owner shown in /botinfo')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -4709,6 +4714,38 @@ client.on('interactionCreate', async interaction => {
                 ),
             );
             await interaction.showModal(modal);
+            break;
+        }
+
+        case 'botstatus': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const embed = new EmbedBuilder()
+                .setTitle('📊 Bot Status / Configuration')
+                .setColor(0x5865F2)
+                .addFields(
+                    { name: 'Checks', value: gs.checksEnabled ? '✅ ON' : '❌ OFF', inline: true },
+                    { name: 'AI', value: gs.aiEnabled ? '✅ ON' : '❌ OFF', inline: true },
+                    { name: 'No-Affiliation', value: gs.noAffiliationEnabled ? '✅ ON' : '❌ OFF', inline: true },
+
+                    { name: 'Link Mode', value: String(gs.linkMode || 'strict'), inline: true },
+                    { name: 'Link Action', value: String(gs.linkAction || 'warn'), inline: true },
+                    { name: 'Auto-Timeouts', value: gs.timeoutEnabled ? '✅ ON' : '❌ OFF', inline: true },
+
+                    { name: 'Verify Gate', value: gs.verifyGateEnabled ? `✅ ON (minDays=${gs.verifyMinAccountAgeDays}, role=${gs.verifyRequiredRoleId || 'None'}, action=${gs.verifyGateAction})` : '❌ OFF', inline: false },
+                    { name: 'Timeout Minutes', value: `spam=${gs.timeoutMinutesSpam} scam=${gs.timeoutMinutesScam} command=${gs.timeoutMinutesCommand} trade=${gs.timeoutMinutesTrade} service=${gs.timeoutMinutesService}`, inline: false },
+                    { name: 'Channels', value:
+                        `trade=${gs.tradeChannelId ? `<#${gs.tradeChannelId}>` : 'None'}\n` +
+                        `services=${gs.servicesChannelId ? `<#${gs.servicesChannelId}>` : 'None'}\n` +
+                        `commands=${(gs.gamesHubId || DEFAULT_GAMES_HUB_ID) ? `<#${gs.gamesHubId || DEFAULT_GAMES_HUB_ID}>` : 'None'}\n` +
+                        `log=${gs.logChannelId ? `<#${gs.logChannelId}>` : 'None'}\n` +
+                        `exile=${gs.exileChannelId ? `<#${gs.exileChannelId}>` : 'None'}`,
+                        inline: false
+                    },
+                )
+                .setTimestamp();
+            const ft = footerText(gs);
+            if (ft) embed.setFooter({ text: ft });
+            await interaction.reply({ embeds: [embed], ephemeral: true });
             break;
         }
 
@@ -6465,15 +6502,16 @@ client.on('messageCreate', async message => {
                 }
 
                 if (cat === 'scam' && gs.scamWarnEnabled !== false) {
-                    try { await message.delete(); } catch {}
                     incStat(guildId, data, 'scam', 1);
-                    await issueViolation(message, data, gs, {
+                    const action = gs.linkAction || 'warn';
+                    await applyConfiguredAction(message, data, gs, {
+                        action,
                         title: '🚨 Scam/Exploit Content Detected',
                         color: 0xCC0000,
                         reason: `AI: ${aiResult.reason || 'Suspicious link or scam content.'}`,
-                        details: message.content,
                         footerLabel: 'Scam/Exploit',
                         ttlMs: 15000,
+                        timeoutMins: gs.timeoutMinutesScam || 60,
                     });
                     return;
                 }
@@ -6502,6 +6540,9 @@ client.on('messageCreate', async message => {
                     const hub = gs.gamesHubId || DEFAULT_GAMES_HUB_ID;
                     if (hub && message.channel.id !== hub && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
                         try { await message.delete(); } catch {}
+                        if (gs.timeoutEnabled) {
+                            await tryTimeout(message.member, gs.timeoutMinutesCommand || 5, `Command usage violation (AI): ${aiResult.reason || ''}`);
+                        }
                         await issueViolation(message, data, gs, {
                             title: '⚠️ Command Usage Violation',
                             color: 0xFF3344,
@@ -6615,6 +6656,9 @@ async function handleSpamViolation(message, reason, data, gs) {
 // ══════════════════════════════════════════════════════════
 async function checkAccountTrading(message, contentClean, data, gs) {
     try { await message.delete(); } catch { return; }
+    if (gs.timeoutEnabled) {
+        await tryTimeout(message.member, gs.timeoutMinutesScam || 60, 'Account trading detected');
+    }
     await issueViolation(message, data, gs, {
         title: '🚫 Account Trading Detected',
         color: 0xFF0000,
@@ -6630,6 +6674,9 @@ async function checkAccountTrading(message, contentClean, data, gs) {
 // ══════════════════════════════════════════════════════════
 async function checkBegging(message, contentClean, data, gs) {
     try { await message.delete(); } catch { return; }
+    if (gs.timeoutEnabled) {
+        await tryTimeout(message.member, gs.timeoutMinutesTrade || 5, 'Begging detected');
+    }
     await issueViolation(message, data, gs, {
         title: '🚫 Begging Detected',
         color: 0xFF4500,
@@ -6961,6 +7008,34 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                 { name: 'Coded By', value: coderStr, inline: false },
             )
             .setTimestamp();
+        await message.channel.send({ embeds: [embed] });
+    }
+
+    else if (cmd === 'botstatus' && isAdmin) {
+        const embed = new EmbedBuilder()
+            .setTitle('📊 Bot Status / Configuration')
+            .setColor(0x5865F2)
+            .addFields(
+                { name: 'Checks', value: gs.checksEnabled ? '✅ ON' : '❌ OFF', inline: true },
+                { name: 'AI', value: gs.aiEnabled ? '✅ ON' : '❌ OFF', inline: true },
+                { name: 'No-Affiliation', value: gs.noAffiliationEnabled ? '✅ ON' : '❌ OFF', inline: true },
+                { name: 'Link Mode', value: String(gs.linkMode || 'strict'), inline: true },
+                { name: 'Link Action', value: String(gs.linkAction || 'warn'), inline: true },
+                { name: 'Auto-Timeouts', value: gs.timeoutEnabled ? '✅ ON' : '❌ OFF', inline: true },
+                { name: 'Verify Gate', value: gs.verifyGateEnabled ? `✅ ON (minDays=${gs.verifyMinAccountAgeDays}, role=${gs.verifyRequiredRoleId || 'None'}, action=${gs.verifyGateAction})` : '❌ OFF', inline: false },
+                { name: 'Timeout Minutes', value: `spam=${gs.timeoutMinutesSpam} scam=${gs.timeoutMinutesScam} command=${gs.timeoutMinutesCommand} trade=${gs.timeoutMinutesTrade} service=${gs.timeoutMinutesService}`, inline: false },
+                { name: 'Channels', value:
+                    `trade=${gs.tradeChannelId ? `<#${gs.tradeChannelId}>` : 'None'}\n` +
+                    `services=${gs.servicesChannelId ? `<#${gs.servicesChannelId}>` : 'None'}\n` +
+                    `commands=${(gs.gamesHubId || DEFAULT_GAMES_HUB_ID) ? `<#${gs.gamesHubId || DEFAULT_GAMES_HUB_ID}>` : 'None'}\n` +
+                    `log=${gs.logChannelId ? `<#${gs.logChannelId}>` : 'None'}\n` +
+                    `exile=${gs.exileChannelId ? `<#${gs.exileChannelId}>` : 'None'}`,
+                    inline: false
+                },
+            )
+            .setTimestamp();
+        const ft = footerText(gs);
+        if (ft) embed.setFooter({ text: ft });
         await message.channel.send({ embeds: [embed] });
     }
 
