@@ -60,6 +60,154 @@ const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 if (AI_ENABLED && !ANTHROPIC_KEY) {
     throw new Error("AI is enabled but ANTHROPIC_API_KEY is missing");
 }
+
+const BOT_START_TS = Date.now();
+
+function formatDuration(ms) {
+    ms = Math.max(0, Number(ms) || 0);
+    const s = Math.floor(ms / 1000);
+    const days = Math.floor(s / 86400);
+    const hrs = Math.floor((s % 86400) / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const secs = s % 60;
+    const parts = [];
+    if (days) parts.push(`${days}d`);
+    parts.push(`${hrs}h`);
+    parts.push(`${mins}m`);
+    parts.push(`${secs}s`);
+    return parts.join(' ');
+}
+
+function chunkArray(arr, size) {
+    const out = [];
+    for (let i = 0; i < (arr || []).length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
+
+function buildCommandListEmbeds(title, items, gs) {
+    const lines = (items || []).map(x => `• **${x.name}** — ${x.desc}`);
+    const chunks = chunkArray(lines, 20);
+    const embeds = chunks.map((c, idx) => {
+        const e = new EmbedBuilder()
+            .setTitle(chunks.length > 1 ? `${title} (${idx + 1}/${chunks.length})` : title)
+            .setColor(0x5865F2)
+            .setDescription(c.join('\n') || 'None')
+            .setTimestamp();
+        const ft = footerText(gs);
+        if (ft) e.setFooter({ text: ft });
+        return e;
+    });
+    return embeds.length ? embeds : [new EmbedBuilder().setTitle(title).setColor(0x5865F2).setDescription('None').setTimestamp()];
+}
+
+const MESSAGE_COMMANDS_LIST = [
+    { name: '!botinfo', desc: 'Show bot ownership / credits.' },
+    { name: '!botstatus', desc: 'Show current server configuration (admin).'},
+    { name: '!uptime', desc: 'Show bot uptime information.' },
+    { name: '!messagecommandslist', desc: 'List all message commands.' },
+    { name: '!slashcommandslist', desc: 'List all slash commands.' },
+    { name: '!policymode', desc: 'Set policy mode enforce/monitor (admin).'},
+    { name: '!policyset', desc: 'Set per-category policy action (admin).'},
+    { name: '!policystatus', desc: 'Show policy configuration (admin).'},
+    { name: '!setowner', desc: 'Set bot owner shown in botinfo (admin).'},
+    { name: '!clearowner', desc: 'Clear bot owner shown in botinfo (admin).'},
+    { name: '!setfooter', desc: 'Set embed footer text (admin).'},
+    { name: '!clearfooter', desc: 'Clear embed footer text (admin).'},
+    { name: '!botinfopublic', desc: 'Set whether /botinfo is public or ephemeral (admin).'},
+    { name: '!linkmode', desc: 'Set link intelligence mode strict/medium/off (admin).'},
+    { name: '!linkaction', desc: 'Set action for scam/link detections (admin).'},
+    { name: '!verifygate', desc: 'Enable/disable & config verify gate (admin).'},
+    { name: '!timeoutconfig', desc: 'Enable/disable & set timeout minutes (admin).'},
+];
+
+const SLASH_COMMANDS_LIST = [
+    { name: '/botinfo', desc: 'Show bot ownership / credits.' },
+    { name: '/botstatus', desc: 'Show current server configuration (admin).'},
+    { name: '/uptime', desc: 'Show bot uptime information.' },
+    { name: '/messagecommandslist', desc: 'List all message commands.' },
+    { name: '/slashcommandslist', desc: 'List all slash commands.' },
+    { name: '/policymode', desc: 'Set policy mode enforce/monitor (admin).'},
+    { name: '/policyset', desc: 'Set per-category policy action (admin).'},
+    { name: '/policystatus', desc: 'Show policy configuration (admin).'},
+    { name: '/setowner', desc: 'Set bot owner shown in botinfo (admin).'},
+    { name: '/clearowner', desc: 'Clear bot owner shown in botinfo (admin).'},
+    { name: '/setfooter', desc: 'Set embed footer text (admin).'},
+    { name: '/clearfooter', desc: 'Clear embed footer text (admin).'},
+    { name: '/botinfopublic', desc: 'Set whether /botinfo is public or ephemeral (admin).'},
+    { name: '/linkmode', desc: 'Set link intelligence mode strict/medium/off (admin).'},
+    { name: '/linkaction', desc: 'Set action for scam/link detections (admin).'},
+    { name: '/verifygate', desc: 'Enable/disable & config verify gate (admin).'},
+    { name: '/timeoutconfig', desc: 'Enable/disable & set timeout minutes (admin).'},
+];
+
+function getCategoryPolicy(gs, category) {
+    const cat = String(category || '').toLowerCase();
+    const raw = gs?.categoryPolicies?.[cat];
+    const policy = (raw && typeof raw === 'object') ? raw : {};
+    let action = String(policy.action || '').toLowerCase();
+    if (!action) {
+        if (cat === 'scam') action = String(gs.linkAction || 'warn').toLowerCase();
+        else action = 'warn';
+    }
+    if (!['warn','delete','timeout','exile','log'].includes(action)) action = 'warn';
+
+    let minutes = Number(policy.minutes || 0);
+    if (!minutes || minutes < 0) minutes = 0;
+    if (cat === 'scam' && !minutes) minutes = gs.timeoutMinutesScam || 60;
+    if (cat === 'spam' && !minutes) minutes = gs.timeoutMinutesSpam || 10;
+    if (cat === 'command' && !minutes) minutes = gs.timeoutMinutesCommand || 5;
+    if (cat === 'trade' && !minutes) minutes = gs.timeoutMinutesTrade || 5;
+    if (cat === 'service' && !minutes) minutes = gs.timeoutMinutesService || 5;
+    if (cat === 'beg' && !minutes) minutes = gs.timeoutMinutesTrade || 5;
+    if (cat === 'acctrade' && !minutes) minutes = gs.timeoutMinutesScam || 60;
+
+    return { action, minutes: Math.min(10080, minutes) };
+}
+
+async function handlePolicyViolation(message, data, gs, category, details) {
+    const cat = String(category || '').toLowerCase();
+    const { action, minutes } = getCategoryPolicy(gs, cat);
+
+    if (gs.enforcementMode === 'monitor' || action === 'log') {
+        const embed = new EmbedBuilder()
+            .setTitle('🧪 Monitor Mode — Policy Hit')
+            .setColor(0x00B3FF)
+            .addFields(
+                { name: 'Category', value: cat, inline: true },
+                { name: 'Policy Action', value: action, inline: true },
+                { name: 'User', value: `<@${message.author.id}> (${message.author.id})`, inline: false },
+                { name: 'Channel', value: `<#${message.channel.id}> (${message.channel.id})`, inline: false },
+                { name: 'Reason', value: String(details?.reason || 'Policy trigger'), inline: false },
+                { name: 'Message', value: String(message.content || '').slice(0, 800) || '(no text)', inline: false },
+            )
+            .setTimestamp();
+        await sendLog(message.guild, data, embed);
+        return { mode: 'monitor', action };
+    }
+
+    if (action === 'timeout') {
+        return await applyConfiguredAction(message, data, gs, {
+            action: 'timeout',
+            title: details?.title,
+            color: details?.color,
+            reason: details?.reason,
+            footerLabel: details?.footerLabel,
+            ttlMs: details?.ttlMs,
+            timeoutMins: minutes,
+            redirectChannelId: details?.redirectChannelId,
+        });
+    }
+
+    return await applyConfiguredAction(message, data, gs, {
+        action,
+        title: details?.title,
+        color: details?.color,
+        reason: details?.reason,
+        footerLabel: details?.footerLabel,
+        ttlMs: details?.ttlMs,
+        redirectChannelId: details?.redirectChannelId,
+    });
+}
 const GAMES_HUB_CHANNELS = new Set([
     '1416126451589316679','1416378429795991653','1416448183080583228',
     '1416834855810895973','1416835306874867713','1416860441073811477',
@@ -888,6 +1036,9 @@ function getGuildSettings(guildId, data) {
             timeoutMinutesTrade: 5,
             timeoutMinutesService: 5,
 
+            enforcementMode: 'enforce',
+            categoryPolicies: {},
+
             violationThreshold: VIOLATION_THRESHOLD,
             exileDurationMins:  EXILE_DURATION_MINS,
 
@@ -997,6 +1148,8 @@ function getGuildSettings(guildId, data) {
     if (gs.timeoutMinutesCommand === undefined) gs.timeoutMinutesCommand = 5;
     if (gs.timeoutMinutesTrade === undefined) gs.timeoutMinutesTrade = 5;
     if (gs.timeoutMinutesService === undefined) gs.timeoutMinutesService = 5;
+    if (gs.enforcementMode === undefined) gs.enforcementMode = 'enforce';
+    if (!gs.categoryPolicies || typeof gs.categoryPolicies !== 'object') gs.categoryPolicies = {};
     return gs;
 }
 
@@ -3862,6 +4015,33 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
 
     new SlashCommandBuilder()
+        .setName('policymode')
+        .setDescription('Set enforcement mode (enforce vs monitor/log-only)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o.setName('mode').setDescription('enforce|monitor').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('policyset')
+        .setDescription('Set per-category policy action')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o.setName('category').setDescription('spam|scam|command|trade|service|beg|acctrade').setRequired(true))
+        .addStringOption(o => o.setName('action').setDescription('warn|delete|timeout|exile|log').setRequired(true))
+        .addIntegerOption(o => o.setName('minutes').setDescription('Timeout minutes (only used for timeout)').setRequired(false)),
+    new SlashCommandBuilder()
+        .setName('policystatus')
+        .setDescription('Show current per-category policy configuration')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+
+    new SlashCommandBuilder()
+        .setName('messagecommandslist')
+        .setDescription('List all message commands with a short description'),
+    new SlashCommandBuilder()
+        .setName('slashcommandslist')
+        .setDescription('List all slash commands with a short description'),
+    new SlashCommandBuilder()
+        .setName('uptime')
+        .setDescription('Show bot uptime and process info'),
+
+    new SlashCommandBuilder()
         .setName('setowner')
         .setDescription('Set the bot owner shown in /botinfo')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -4714,6 +4894,93 @@ client.on('interactionCreate', async interaction => {
                 ),
             );
             await interaction.showModal(modal);
+            break;
+        }
+
+        case 'messagecommandslist': {
+            const embeds = buildCommandListEmbeds('💬 Message Commands', MESSAGE_COMMANDS_LIST, gs);
+            await interaction.reply({ embeds: [embeds[0]], ephemeral: true });
+            for (let i = 1; i < embeds.length; i++) {
+                await interaction.followUp({ embeds: [embeds[i]], ephemeral: true });
+            }
+            break;
+        }
+
+        case 'slashcommandslist': {
+            const embeds = buildCommandListEmbeds('✨ Slash Commands', SLASH_COMMANDS_LIST, gs);
+            await interaction.reply({ embeds: [embeds[0]], ephemeral: true });
+            for (let i = 1; i < embeds.length; i++) {
+                await interaction.followUp({ embeds: [embeds[i]], ephemeral: true });
+            }
+            break;
+        }
+
+        case 'uptime': {
+            const upMs = Date.now() - BOT_START_TS;
+            const embed = new EmbedBuilder()
+                .setTitle('⏱️ Uptime')
+                .setColor(0x5865F2)
+                .addFields(
+                    { name: 'Uptime', value: formatDuration(upMs), inline: true },
+                    { name: 'Started', value: `<t:${Math.floor(BOT_START_TS / 1000)}:F>`, inline: true },
+                    { name: 'Node', value: process.version, inline: true },
+                    { name: 'Memory', value: `${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB RSS`, inline: true },
+                )
+                .setTimestamp();
+            const ft = footerText(gs);
+            if (ft) embed.setFooter({ text: ft });
+            await interaction.reply({ embeds: [embed], ephemeral: true });
+            break;
+        }
+
+        case 'policymode': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const mode = (interaction.options.getString('mode') || '').toLowerCase();
+            if (!['enforce','monitor'].includes(mode)) { await interaction.reply({ content: '❌ Use: enforce|monitor', ephemeral: true }); return; }
+            const before = gs.enforcementMode;
+            gs.enforcementMode = mode;
+            saveData(data);
+            await interaction.reply({ content: `✅ Enforcement mode: **${before}** -> **${gs.enforcementMode}**`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Enforcement Mode Updated', [
+                `enforcementMode: **${before}** -> **${gs.enforcementMode}**`,
+            ]);
+            break;
+        }
+
+        case 'policyset': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const cat = (interaction.options.getString('category') || '').toLowerCase();
+            const action = (interaction.options.getString('action') || '').toLowerCase();
+            const mins = interaction.options.getInteger('minutes');
+            if (!['spam','scam','command','trade','service','beg','acctrade'].includes(cat)) { await interaction.reply({ content: '❌ Invalid category.', ephemeral: true }); return; }
+            if (!['warn','delete','timeout','exile','log'].includes(action)) { await interaction.reply({ content: '❌ Invalid action.', ephemeral: true }); return; }
+            gs.categoryPolicies = gs.categoryPolicies && typeof gs.categoryPolicies === 'object' ? gs.categoryPolicies : {};
+            const before = gs.categoryPolicies[cat] || null;
+            gs.categoryPolicies[cat] = { action, minutes: action === 'timeout' && mins ? Math.max(1, Math.min(10080, mins)) : (before?.minutes || 0) };
+            saveData(data);
+            await interaction.reply({ content: `✅ Policy updated for **${cat}**: action=${action}${action === 'timeout' ? ` minutes=${gs.categoryPolicies[cat].minutes}` : ''}`, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Policy Updated', [
+                `category: **${cat}**`,
+                `action: **${before?.action || 'default'}** -> **${action}**`,
+                action === 'timeout' ? `minutes: **${before?.minutes || 0}** -> **${gs.categoryPolicies[cat].minutes}**` : null,
+            ]);
+            break;
+        }
+
+        case 'policystatus': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const cats = ['spam','scam','command','trade','service','beg','acctrade'];
+            const lines = cats.map(c => {
+                const p = getCategoryPolicy(gs, c);
+                return `**${c}**: action=${p.action}${p.action === 'timeout' ? ` minutes=${p.minutes}` : ''}`;
+            });
+            const embed = new EmbedBuilder()
+                .setTitle('📜 Policy Status')
+                .setColor(0x5865F2)
+                .setDescription(lines.join('\n'))
+                .addFields({ name: 'Mode', value: `**${gs.enforcementMode}**`, inline: true })
+                .setTimestamp();
+            await interaction.reply({ embeds: [embed], ephemeral: true });
             break;
         }
 
@@ -6497,7 +6764,13 @@ client.on('messageCreate', async message => {
                 incStat(guildId, data, 'aiFlag', 1);
 
                 if (cat === 'spam' && gs.spamWarnEnabled !== false) {
-                    await handleSpamViolation(message, `AI: ${aiResult.reason || 'Spam/inappropriate content'}`, data, gs);
+                    await handlePolicyViolation(message, data, gs, 'spam', {
+                        title: '⚠️ Spam Detected',
+                        color: 0xFF8800,
+                        reason: `AI: ${aiResult.reason || 'Spam/inappropriate content'}`,
+                        footerLabel: 'Spam',
+                        ttlMs: 10000,
+                    });
                     return;
                 }
 
@@ -6517,12 +6790,25 @@ client.on('messageCreate', async message => {
                 }
 
                 if ((cat === 'acctrade' || cat === 'account') && gs.accTradeWarnEnabled !== false) {
-                    await checkAccountTrading(message, contentClean, data, gs);
+                    await handlePolicyViolation(message, data, gs, 'acctrade', {
+                        title: '🚫 Account Trading Detected',
+                        color: 0xFF0000,
+                        reason: `AI: ${aiResult.reason || 'Account trading/selling/buying is prohibited.'}`,
+                        footerLabel: 'Account Trading',
+                        ttlMs: 15000,
+                    });
                     return;
                 }
 
                 if (cat === 'beg' && gs.begWarnEnabled !== false) {
-                    await checkBegging(message, contentClean, data, gs);
+                    await handlePolicyViolation(message, data, gs, 'beg', {
+                        title: '🚫 Begging Detected',
+                        color: 0xFF4500,
+                        reason: `AI: ${aiResult.reason || 'No begging.'}`,
+                        footerLabel: 'Begging',
+                        ttlMs: 12000,
+                        redirectChannelId: gs.tradeChannelId,
+                    });
                     return;
                 }
 
@@ -6539,18 +6825,13 @@ client.on('messageCreate', async message => {
                 if (cat === 'command' && gs.commandRedirectEnabled !== false) {
                     const hub = gs.gamesHubId || DEFAULT_GAMES_HUB_ID;
                     if (hub && message.channel.id !== hub && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
-                        try { await message.delete(); } catch {}
-                        if (gs.timeoutEnabled) {
-                            await tryTimeout(message.member, gs.timeoutMinutesCommand || 5, `Command usage violation (AI): ${aiResult.reason || ''}`);
-                        }
-                        await issueViolation(message, data, gs, {
+                        await handlePolicyViolation(message, data, gs, 'command', {
                             title: '⚠️ Command Usage Violation',
                             color: 0xFF3344,
                             reason: `AI: ${aiResult.reason || 'Use commands only in Games Hub.'}`,
-                            details: message.content,
-                            redirectChannelId: hub,
                             footerLabel: 'Command Usage',
                             ttlMs: 10000,
+                            redirectChannelId: hub,
                         });
                         return;
                     }
@@ -6563,10 +6844,13 @@ client.on('messageCreate', async message => {
     if (gs.spamWarnEnabled !== false && !isCategoryImmune(message.member, guildId, data, 'spam')) {
         const spamResult = checkSpam(message.author.id, message.content);
         if (spamResult.spam) {
-            if (gs.timeoutEnabled) {
-                await tryTimeout(message.member, gs.timeoutMinutesSpam || 10, `Spam: ${spamResult.reason}`);
-            }
-            await handleSpamViolation(message, spamResult.reason, data, gs);
+            await handlePolicyViolation(message, data, gs, 'spam', {
+                title: '⚠️ Spam Detected',
+                color: 0xFF8800,
+                reason: `No spam allowed. (${spamResult.reason})`,
+                footerLabel: 'Spam',
+                ttlMs: 10000,
+            });
             return;
         }
     }
@@ -6594,7 +6878,14 @@ client.on('messageCreate', async message => {
 
     // ── BEGGING ───────────────────────────────────────────
     if ((gs.begWarnEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'beg') && detectBegging(contentClean)) {
-        await checkBegging(message, contentClean, data, gs);
+        await handlePolicyViolation(message, data, gs, 'beg', {
+            title: '🚫 Begging Detected',
+            color: 0xFF4500,
+            reason: 'No begging. Make proper offers in the trades channel.',
+            footerLabel: 'Begging',
+            ttlMs: 12000,
+            redirectChannelId: gs.tradeChannelId,
+        });
         return;
     }
 
@@ -6725,9 +7016,19 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
     else if (detectTrialsOrTrialsRecruitment(contentClean))        flagged = true;
 
     if (flagged) {
-        try { await message.delete(); } catch { return false; }
         if (gs.noAffiliationEnabled) {
             const serverName = message.guild?.name || 'This server';
+            if (gs.enforcementMode === 'monitor') {
+                await handlePolicyViolation(message, data, gs, 'service', {
+                    title: '📢 Notice — No Affiliation',
+                    color: 0x5865F2,
+                    reason: `${serverName} is not Blox Fruits related anymore. (No-affiliation mode)` ,
+                    footerLabel: 'No Affiliation',
+                    ttlMs: 12000,
+                });
+                return true;
+            }
+            try { await message.delete(); } catch { return false; }
             await issueViolation(message, data, gs, {
                 title: '📢 Notice — No Affiliation',
                 color: 0x5865F2,
@@ -6738,17 +7039,14 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
             });
             return true;
         }
-        if (gs.timeoutEnabled) {
-            await tryTimeout(message.member, gs.timeoutMinutesService || 5, 'Service request in wrong channel');
-        }
-        await issueViolation(message, data, gs, {
+
+        await handlePolicyViolation(message, data, gs, 'service', {
             title: '⚠️ Service Request — Wrong Channel',
             color: 0xFF6600,
             reason: 'Service/boss/raid/item/quest/trials requests go in the services channel.',
-            details: message.content,
-            redirectChannelId: gs.servicesChannelId,
             footerLabel: 'Service',
             ttlMs: 10000,
+            redirectChannelId: gs.servicesChannelId,
         });
         return true;
     }
@@ -6766,15 +7064,13 @@ async function checkRaceViolation(message, contentClean, contentNospace, data, g
     const racesFound = scanForRaces(contentClean);
     for (const r of RACES) { const rc=r.replace(/[\s\-]/g,''); if(rc.length>=4&&contentNospace.includes(rc)&&!racesFound.includes(r)) racesFound.push(r); }
     if (!racesFound.length) return;
-    try { await message.delete(); } catch { return; }
-    await issueViolation(message, data, gs, {
+    await handlePolicyViolation(message, data, gs, 'service', {
         title: '⚠️ Race Service — Wrong Channel',
         color: 0x9B59B6,
         reason: 'Race reroll/trials/services go in the services channel.',
-        details: message.content,
-        redirectChannelId: gs.servicesChannelId,
         footerLabel: 'Race Service',
         ttlMs: 10000,
+        redirectChannelId: gs.servicesChannelId,
     });
 }
 
@@ -6824,9 +7120,19 @@ async function checkTradeViolation(message, contentClean, contentNospace, data, 
 //  TRADE VIOLATION PUNISHMENT
 // ══════════════════════════════════════════════════════════
 async function handleTradeViolation(message, data, gs) {
-    try { await message.delete(); } catch { return; }
     if (gs.noAffiliationEnabled) {
         const serverName = message.guild?.name || 'This server';
+        if (gs.enforcementMode === 'monitor') {
+            await handlePolicyViolation(message, data, gs, 'trade', {
+                title: '📢 Notice — No Affiliation',
+                color: 0x5865F2,
+                reason: `${serverName} is not Blox Fruits related anymore. (No-affiliation mode)`,
+                footerLabel: 'No Affiliation',
+                ttlMs: 12000,
+            });
+            return;
+        }
+        try { await message.delete(); } catch { return; }
         await issueViolation(message, data, gs, {
             title: '📢 Notice — No Affiliation',
             color: 0x5865F2,
@@ -6837,17 +7143,14 @@ async function handleTradeViolation(message, data, gs) {
         });
         return;
     }
-    if (gs.timeoutEnabled) {
-        await tryTimeout(message.member, gs.timeoutMinutesTrade || 5, 'Trade in wrong channel');
-    }
-    await issueViolation(message, data, gs, {
+
+    await handlePolicyViolation(message, data, gs, 'trade', {
         title: '⚠️ Trade Violation',
         color: 0xFFAA00,
         reason: 'Keep trades in the trades channel.',
-        details: message.content,
-        redirectChannelId: gs.tradeChannelId,
         footerLabel: 'Trade',
         ttlMs: 10000,
+        redirectChannelId: gs.tradeChannelId,
     });
 }
 
@@ -7011,6 +7314,37 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         await message.channel.send({ embeds: [embed] });
     }
 
+    else if (cmd === 'uptime') {
+        const upMs = Date.now() - BOT_START_TS;
+        const embed = new EmbedBuilder()
+            .setTitle('⏱️ Uptime')
+            .setColor(0x5865F2)
+            .addFields(
+                { name: 'Uptime', value: formatDuration(upMs), inline: true },
+                { name: 'Started', value: `<t:${Math.floor(BOT_START_TS / 1000)}:F>`, inline: true },
+                { name: 'Node', value: process.version, inline: true },
+                { name: 'Memory', value: `${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB RSS`, inline: true },
+            )
+            .setTimestamp();
+        const ft = footerText(gs);
+        if (ft) embed.setFooter({ text: ft });
+        await message.channel.send({ embeds: [embed] });
+    }
+
+    else if (cmd === 'messagecommandslist') {
+        const embeds = buildCommandListEmbeds('💬 Message Commands', MESSAGE_COMMANDS_LIST, gs);
+        for (const e of embeds) {
+            await message.channel.send({ embeds: [e] });
+        }
+    }
+
+    else if (cmd === 'slashcommandslist') {
+        const embeds = buildCommandListEmbeds('✨ Slash Commands', SLASH_COMMANDS_LIST, gs);
+        for (const e of embeds) {
+            await message.channel.send({ embeds: [e] });
+        }
+    }
+
     else if (cmd === 'botstatus' && isAdmin) {
         const embed = new EmbedBuilder()
             .setTitle('📊 Bot Status / Configuration')
@@ -7036,6 +7370,51 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             .setTimestamp();
         const ft = footerText(gs);
         if (ft) embed.setFooter({ text: ft });
+        await message.channel.send({ embeds: [embed] });
+    }
+
+    else if (cmd === 'policymode' && isAdmin) {
+        const mode = (args[0] || '').toLowerCase();
+        if (!['enforce','monitor'].includes(mode)) return message.channel.send('❌ Use: !policymode enforce|monitor');
+        const before = gs.enforcementMode;
+        gs.enforcementMode = mode;
+        saveData(data);
+        await message.channel.send(`✅ Enforcement mode: **${before}** -> **${gs.enforcementMode}**`);
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Enforcement Mode Updated', [
+            `enforcementMode: **${before}** -> **${gs.enforcementMode}**`,
+        ]);
+    }
+
+    else if (cmd === 'policyset' && isAdmin) {
+        const cat = (args[0] || '').toLowerCase();
+        const action = (args[1] || '').toLowerCase();
+        const mins = parseInt(args[2]) || 0;
+        if (!['spam','scam','command','trade','service','beg','acctrade'].includes(cat)) return message.channel.send('❌ category must be: spam|scam|command|trade|service|beg|acctrade');
+        if (!['warn','delete','timeout','exile','log'].includes(action)) return message.channel.send('❌ action must be: warn|delete|timeout|exile|log');
+        gs.categoryPolicies = gs.categoryPolicies && typeof gs.categoryPolicies === 'object' ? gs.categoryPolicies : {};
+        const before = gs.categoryPolicies[cat] || null;
+        gs.categoryPolicies[cat] = { action, minutes: action === 'timeout' ? Math.max(1, Math.min(10080, mins || before?.minutes || 5)) : (before?.minutes || 0) };
+        saveData(data);
+        await message.channel.send(`✅ Policy updated for **${cat}**: action=${action}${action === 'timeout' ? ` minutes=${gs.categoryPolicies[cat].minutes}` : ''}`);
+        await sendConfigLog(message.guild, data, message.author.id, '⚙️ Policy Updated', [
+            `category: **${cat}**`,
+            `action: **${before?.action || 'default'}** -> **${action}**`,
+            action === 'timeout' ? `minutes: **${before?.minutes || 0}** -> **${gs.categoryPolicies[cat].minutes}**` : null,
+        ]);
+    }
+
+    else if (cmd === 'policystatus' && isAdmin) {
+        const cats = ['spam','scam','command','trade','service','beg','acctrade'];
+        const lines = cats.map(c => {
+            const p = getCategoryPolicy(gs, c);
+            return `• ${c}: action=${p.action}${p.action === 'timeout' ? ` minutes=${p.minutes}` : ''}`;
+        });
+        const embed = new EmbedBuilder()
+            .setTitle('📜 Policy Status')
+            .setColor(0x5865F2)
+            .setDescription(lines.join('\n'))
+            .addFields({ name: 'Mode', value: `**${gs.enforcementMode}**`, inline: true })
+            .setTimestamp();
         await message.channel.send({ embeds: [embed] });
     }
 
