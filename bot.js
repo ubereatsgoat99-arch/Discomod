@@ -4070,11 +4070,29 @@ const scanForRaces          = t => genericScan(t, RACES,            RACE_ALIASES
 const scanForPainUpgrades   = t => genericScan(t, PAIN_UPGRADES,    PAIN_UPGRADE_ALIASES);
 const scanForLightningUpgrades = t => genericScan(t, LIGHTNING_UPGRADES, LIGHTNING_UPGRADE_ALIASES);
 
-function scanForServiceIntent(cleanText) {
+function scanForServiceIntent(cleanText, strictness = 5) {
     const ns = cleanText.replace(/\s/g, '');
+
+    // ── Curated strict phrases — active at ALL levels ──────
     for (const phrase of SERVICE_INTENT_PHRASE) {
         if (ns.includes(phrase.replace(/\s/g,'')) || cleanText.includes(phrase)) return true;
     }
+
+    // ── At level 1-2: curated phrases + exact SERVICE_INTENT_EXACT only (no fuzzy, no EXTRA) ──
+    if (strictness <= 2) {
+        const { single } = tokenize(cleanText);
+        for (const tok of single) {
+            if (tok.length < 2) continue;
+            if (COMMON_WORD_WHITELIST.has(tok)) continue;
+            for (const kw of SERVICE_INTENT_EXACT) {
+                const kwc = kw.replace(/\s/g,'');
+                if (tok === kwc) return true; // exact only, no fuzzy
+            }
+        }
+        return false;
+    }
+
+    // ── At level 3+: EXTRA lists (both already require p.length >= 6) ──
     for (const phrase of SERVICE_INTENT_PHRASE_EXTRA) {
         const p = phrase.replace(/\s/g,'');
         if (p.length >= 6 && (ns.includes(p) || cleanText.includes(phrase))) return true;
@@ -4084,34 +4102,67 @@ function scanForServiceIntent(cleanText) {
         const p = phrase.replace(/\s/g,'');
         if (p.length >= 6 && (ns.includes(p) || cleanText.includes(phrase))) return true;
     }
+
+    // ── Token fuzzy matching — stricter threshold at lower levels ──
+    const fuzzyThreshold = strictness <= 4 ? 0.92 : 0.82;
     const { single } = tokenize(cleanText);
     for (const tok of single) {
         if (tok.length < 2) continue;
-        if (COMMON_WORD_WHITELIST.has(tok)) continue; // skip everyday words — "need", "help", "want", etc.
+        if (COMMON_WORD_WHITELIST.has(tok)) continue;
         for (const kw of SERVICE_INTENT_EXACT) {
             const kwc = kw.replace(/\s/g,'');
             if (kwc.length <= 4) { if (tok === kwc) return true; continue; }
             if (tok === kwc) return true;
             if (Math.abs(tok.length - kwc.length) > Math.max(2,Math.floor(kwc.length/3))) continue;
-            if (fuzzyRatio(tok, kwc) >= 0.82) return true;
+            if (fuzzyRatio(tok, kwc) >= fuzzyThreshold) return true;
         }
     }
     return false;
 }
-function scanForIntent(cleanText) {
+function scanForIntent(cleanText, strictness = 5) {
     const ns = cleanText.replace(/\s/g,'');
+
+    // ── Curated strict phrases — active at ALL levels ──────
     for (const phrase of INTENT_PHRASE) {
         if (ns.includes(phrase.replace(/\s/g,'')) || cleanText.includes(phrase)) return true;
     }
+
+    // ── At level 1-2: only curated phrases + exact INTENT_EXACT (no fuzzy, no EXTRA lists) ──
+    if (strictness <= 2) {
+        const { single } = tokenize(cleanText);
+        for (const tok of single) {
+            if (tok.length < 2) continue;
+            for (const kw of INTENT_EXACT) {
+                const kwc = kw.replace(/\s/g,'');
+                if (tok === kwc) return true; // exact only, no fuzzy
+            }
+        }
+        return false;
+    }
+
+    // ── At level 3+: EXTRA lists, with minimum phrase length scaling up at low levels ──
+    // Minimum p.length:  lvl 3-4 → 5 chars (skips bare "for", "lf", "want", "need")
+    //                    lvl 5+  → 2 chars (current behaviour)
+    const extraMinLen = strictness <= 4 ? 5 : 2;
     for (const phrase of INTENT_PHRASE_EXTRA) {
         const p = phrase.replace(/\s/g,'');
-        if (p.length >= 2 && (ns.includes(p) || cleanText.includes(phrase.trim()))) return true;
+        if (p.length >= extraMinLen) {
+            // For short phrases use word-boundary regex to avoid substring hits in other words
+            if (p.length < 5) {
+                if (new RegExp(`(?<![a-z0-9])${escapeRegex(p)}(?![a-z0-9])`, 'i').test(cleanText)) return true;
+            } else {
+                if (ns.includes(p) || cleanText.includes(phrase.trim())) return true;
+            }
+        }
     }
 
     for (const phrase of INTENT_PHRASE_EXTRA2) {
         const p = phrase.replace(/\s/g,'');
         if (p.length >= 5 && (ns.includes(p) || cleanText.includes(phrase.trim()))) return true;
     }
+
+    // ── Token fuzzy matching — stricter threshold at lower levels ──
+    const fuzzyThreshold = strictness <= 4 ? 0.92 : 0.82;
     const { single } = tokenize(cleanText);
     for (const tok of single) {
         if (tok.length < 2) continue;
@@ -4120,7 +4171,7 @@ function scanForIntent(cleanText) {
             if (kwc.length <= 4) { if (tok === kwc) return true; continue; }
             if (tok === kwc) return true;
             if (Math.abs(tok.length - kwc.length) > Math.max(2,Math.floor(kwc.length/3))) continue;
-            if (fuzzyRatio(tok, kwc) >= 0.82) return true;
+            if (fuzzyRatio(tok, kwc) >= fuzzyThreshold) return true;
         }
     }
     return false;
@@ -8055,7 +8106,8 @@ client.on('messageCreate', async message => {
     }
 
     // ── AI DETECTION (always-classify) ────────────────────
-    if (AI_ENABLED && gs.aiEnabled) {
+    // Only run AI at strictness 4+ — below that, simple regex only.
+    if (AI_ENABLED && gs.aiEnabled && getStrictness(gs) >= 4) {
         const aiResult = await aiDetectViolation(message, [], gs);
         if (aiResult?.violation && aiResult.confidence > 0.85 && aiResult.category && aiResult.category !== 'none') {
             const cat = String(aiResult.category || '').toLowerCase();
@@ -8287,7 +8339,7 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
     const hasSvcForRaid  = svcForRaidRegex.test(contentClean);
     const bossesFound    = scanForBosses(contentClean);
     for (const b of BOSSES) { const bc=b.replace(/[\s\-']/g,''); if(bc.length>=4&&contentNospace.includes(bc)&&!bossesFound.includes(b)) bossesFound.push(b); }
-    const svcIntent      = scanForServiceIntent(contentClean);
+    const svcIntent      = scanForServiceIntent(contentClean, getStrictness(gs));
     const fruitsFound    = scanForFruits(contentClean);
     const swordsFound    = scanForSwords(contentClean);
     const enchantsFound  = scanForEnchants(contentClean);
@@ -8366,7 +8418,7 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
 //  RACE VIOLATION CHECKER
 // ══════════════════════════════════════════════════════════
 async function checkRaceViolation(message, contentClean, contentNospace, data, gs) {
-    if (!scanForServiceIntent(contentClean)) return;
+    if (!scanForServiceIntent(contentClean, getStrictness(gs))) return;
     if (!hasTierKeyword(contentClean)) return;
     const regexHit = raceTierRegex.test(contentClean) || raceTierRegex.test(contentNospace);
     if (!regexHit) return;
@@ -8389,7 +8441,8 @@ async function checkRaceViolation(message, contentClean, contentNospace, data, g
 async function checkTradeViolation(message, contentClean, contentNospace, data, gs) {
     const fruitsFound = scanForFruits(contentClean);
     for (const f of FRUITS) { const fc=f.replace(/[\s\-]/g,''); if(contentNospace.includes(fc)&&!fruitsFound.includes(f)) fruitsFound.push(f); }
-    let hasIntent = scanForIntent(contentClean);
+    const _strictness = getStrictness(gs);
+    let hasIntent = scanForIntent(contentClean, _strictness);
     if (!hasIntent) {
         for (const kw of INTENT_PHRASE) {
             const kns = kw.replace(/\s/g,'').replace(/-/g,'');
