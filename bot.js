@@ -4909,10 +4909,6 @@ function checkSpam(userId, content) {
     if (dupes >= SPAM_DUPE_LIMIT) return { spam: true, reason: 'duplicate messages' };
     const emojiCount = (content.match(/(<a?:[a-zA-Z0-9_]+:\d+>|[\u{1F300}-\u{1FFFF}])/gu) || []).length;
     if (emojiCount >= SPAM_EMOJI_LIMIT) return { spam: true, reason: 'emoji spam' };
-    const capsRatio = content.replace(/\s/g,'').length > 5
-        ? (content.replace(/[^A-Z]/g,'').length / content.replace(/[^a-zA-Z]/g,'').length)
-        : 0;
-    if (capsRatio > 0.85 && content.length > 20) return { spam: true, reason: 'all caps spam' };
     const linkCount = (content.match(/https?:\/\/\S+/g) || []).length;
     if (linkCount >= 4) return { spam: true, reason: 'link spam' };
     return { spam: false };
