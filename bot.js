@@ -3588,6 +3588,275 @@ const SERVICE_INTENT_PHRASE_EXTRA = [
     "carry some raid",
     "carry a raid",
     "carry few raids",
+    "Hosting raids fast, join now!",
+
+"Full raid carry, you just chill!",
+
+"Cheap raid services, fast and safe!",
+
+"Need fragments? I got you covered!",
+
+"Auto raid hosting, fast clears!",
+
+"Join for quick and easy raid wins!",
+
+"Carrying all raids, no effort needed!",
+
+"Fast raids, high success rate!",
+
+"Grinding fragments? Join my raids!",
+
+"Raid services open, limited slots!",
+
+"Solo carry raids, guaranteed win!",
+
+"Professional raid service, trusted!",
+
+"Quick flame raids, join up!",
+
+"Hosting Buddha raids, easy wins!",
+
+"Fully AFK raid carry available!",
+
+"Max level helping with raids!",
+
+"Cheap and fast raid hosting!",
+
+"Need awakening? I got raids!",
+
+"Instant raid start, no waiting!",
+
+"Carrying dough raids, join fast!",
+
+"Join for smooth raid clears!",
+
+"Fastest raid service in server!",
+
+"Helping newbies with raids!",
+
+"Raid farm going on, hop in!",
+
+"Carrying light raids, easy frags!",
+
+"Raid grinding nonstop!",
+
+"Full team raids, join quickly!",
+
+"Legendary raid service open!",
+
+"Easy fragments farm here!",
+
+"Raid boss melts instantly!",
+
+"Hosting raids all day!",
+
+"Top tier raid carrier here!",
+
+"Quick raids, fast rewards!",
+
+"Safe and reliable raid service!",
+
+"Join my raid squad now!",
+
+"Raid help for all players!",
+
+"Fast awakenings guaranteed!",
+
+"Grinding raids nonstop!",
+
+"Join for instant raid clears!",
+
+"Carrying phoenix raids!",
+
+"Easy wins, no stress raids!",
+
+"Raid service active, join now!",
+
+"Helping grind fragments fast!",
+
+"Best raid host in server!",
+
+"Carrying magma raids!",
+
+"Raid grind = fast progress!",
+
+"Need help? Join my raids!",
+
+"Full carry, zero effort!",
+
+"Quick join, raid starting!",
+
+"Raid services open 24/7!",
+
+"Pro raid host, fast clears!",
+
+"Join for guaranteed wins!",
+
+"All raids available here!",
+
+"Raid carry with max stats!",
+
+"Grinding awakenings fast!",
+
+"Carrying ice raids!",
+
+"Fast raids, no fail!",
+
+"Top speed raid hosting!",
+
+"Join now before it's full!",
+
+"Instant raid entry available!",
+
+"Carrying dark raids!",
+
+"Raid farm squad ready!",
+
+"Easy fragment farming!",
+
+"Raid carry for everyone!",
+
+"Nonstop raids, join anytime!",
+
+"High level raid support!",
+
+"Need awakening? Join raids!",
+
+"Fast raid completion guaranteed!",
+
+"Reliable raid host here!",
+
+"Join for easy raid wins!",
+
+"Carrying quake raids!",
+
+"Raid help for beginners!",
+
+"Grinding fragments quickly!",
+
+"Raid hosting, fast entry!",
+
+"Full squad raid carry!",
+
+"Instant wins, join raids!",
+
+"Carrying spider raids!",
+
+"Best raid grinding method!",
+
+"Fastest way to get frags!",
+
+"Join raid team now!",
+
+"Pro level raid service!",
+
+"Raid boss deleted instantly!",
+
+"Carrying sand raids!",
+
+"Join for smooth gameplay!",
+
+"Quick and easy raids!",
+
+"Raid squad forming now!",
+
+"High efficiency raid runs!",
+
+"Carrying rumble raids!",
+
+"Grinding made easy with raids!",
+
+"Join fast before start!",
+
+"Raid services trusted!",
+
+"Fastest clears guaranteed!",
+
+"Carrying love raids!",
+
+"Easy awakenings here!",
+
+"Join my raid lobby!",
+
+"Helping all players grow!",
+
+"Raid farming nonstop!",
+
+"Carrying gravity raids!",
+
+"Best value raid service!",
+
+"Quick clears, big rewards!",
+
+"Raid now, win fast!",
+
+"Carrying blizzard raids!",
+
+"Fast grind, no hassle!",
+
+"Join for pro raid help!",
+
+"Raid carry active!",
+
+"Grinding fragments daily!",
+
+"Carrying portal raids!",
+
+"Instant success raids!",
+
+"Join and get carried!",
+
+"Raid help anytime!",
+
+"Carrying venom raids!",
+
+"Fast progression via raids!",
+
+"Join raid crew now!",
+
+"Top raid performance!",
+
+"Carrying control raids!",
+
+"Easy wins every time!",
+
+"Join for best raid experience!",
+
+"Raid hosting right now!",
+
+"Carrying dragon raids!",
+
+"Fastest way to awaken!",
+
+"Join before it fills!",
+
+"Raid pros ready!",
+
+"Carrying leopard raids!",
+
+"Grinding with pros!",
+
+"Join and dominate raids!",
+
+"Raid farm experts here!",
+
+"Carrying kitsune raids!",
+
+"Fast and smooth runs!",
+
+"Join for instant action!",
+
+"Raid kings hosting now!",
+
+"Carrying all fruit raids!",
+
+"Ultimate raid service!",
+
+"Join and get rich in frags!",
+
+"Raid success guaranteed!",
+
+"Top tier grinding squad!",
     "raids for frags",
     "raid for frags",
     "raids for fragments",
