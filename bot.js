@@ -752,15 +752,40 @@ const SCAM_OR_EXPLOIT_PHRASES_EXTRA2 = [
     'bloxfruits site','bloxfruits website','bloxfruits giveaway site',
 ];
 
+// Extensions that are media file types, not TLDs — never treat these as domain extensions
+const MEDIA_FILE_EXTENSIONS = new Set([
+    'gif','png','jpg','jpeg','webp','mp4','mov','avi','mkv','webm','mp3',
+    'wav','ogg','flac','aac','m4a','pdf','zip','rar','7z','tar','gz',
+    'txt','json','xml','csv','html','htm','css','js','ts','py','java',
+    'rb','go','rs','cpp','c','h','cs','php','sh','bat','md','log',
+]);
+
 function extractDomains(text) {
     const domains = [];
-    const raw = (text.match(/https?:\/\/[^\s)\]]+/gi) || []);
+    // First pass: extract full domains from https?:// URLs — these are authoritative
+    const raw = (text.match(/https?:\/\/[^\s)\]"']+/gi) || []);
+    const urlDomains = new Set();
     for (const u of raw) {
         const m = u.match(/^https?:\/\/([^\/\s?#:]+)(?::\d+)?/i);
-        if (m && m[1]) domains.push(m[1].toLowerCase());
+        if (m && m[1]) {
+            const d = m[1].toLowerCase().replace(/^www\./, '');
+            domains.push(d);
+            urlDomains.add(d);
+        }
     }
-    const bare = (text.match(/(?:^|[^a-z0-9])([a-z0-9][a-z0-9\-]{0,60}\.[a-z]{2,})(?![a-z0-9])/gi) || []).map(m => m.replace(/^[^a-z0-9]+/i, ''));
-    for (const b of bare) domains.push(b.toLowerCase());
+    // Second pass: bare domains (e.g. "discord.gg/abc" without https)
+    const bare = (text.match(/(?:^|[^a-z0-9\/])([a-z0-9][a-z0-9\-]{0,60}\.[a-z]{2,})(?![a-z0-9])/gi) || [])
+        .map(m => m.replace(/^[^a-z0-9]+/i, '').toLowerCase());
+    for (const b of bare) {
+        // Skip if TLD is a media/file extension — it's a filename, not a domain
+        const tld = b.split('.').pop();
+        if (MEDIA_FILE_EXTENSIONS.has(tld)) continue;
+        // Skip if this bare match is just a partial sub-string of a URL domain already captured
+        // e.g. "cdn.discordapp" is already covered by "cdn.discordapp.com"
+        const isPartialOfUrlDomain = [...urlDomains].some(ud => ud === b || ud.endsWith('.' + b) || ud.startsWith(b + '.'));
+        if (isPartialOfUrlDomain) continue;
+        domains.push(b);
+    }
     return [...new Set(domains)];
 }
 
@@ -794,9 +819,8 @@ function detectScamOrExploit(cleanText, rawText) {
 
     const domains = extractDomains(rawText || t);
     for (const d of domains) {
-        // Skip known-safe domains (GIFs, Roblox CDN, Discord CDN, YouTube, etc.)
+        // Always skip known-safe domains (Discord CDN, Tenor, Giphy, Roblox CDN, etc.)
         if (domainInList(d, COMMON_ALLOWED_DOMAINS)) continue;
-
         if (LINK_SHORTENERS.has(d)) return { hit: true, reason: `Suspicious link shortener: ${d}` };
         if (LINK_SHORTENERS_EXTRA.has(d)) return { hit: true, reason: `Suspicious link shortener: ${d}` };
         if (SCAM_DOMAIN_BLACKLIST.has(d)) return { hit: true, reason: `Blacklisted scam domain: ${d}` };
@@ -810,9 +834,7 @@ function detectScamOrExploit(cleanText, rawText) {
 
     if ((rawText || '').length) {
         const r = rawText.toLowerCase();
-        // Only flag http + verify/claim/giveaway if the domain isn't a known-safe one
-        const hasSafeLink = domains.some(d => domainInList(d, COMMON_ALLOWED_DOMAINS));
-        if (!hasSafeLink && r.includes('http') && /v+e+r+i+f+y+|c+l+a+i+m+|g+i+v+e+a+w+a+y+/i.test(r)) return { hit: true, reason: 'Verification/giveaway + link pattern' };
+        if (r.includes('http') && /v+e+r+i+f+y+|c+l+a+i+m+|g+i+v+e+a+w+a+y+/i.test(r)) return { hit: true, reason: 'Verification/giveaway + link pattern' };
         if (/r+o+b+l+o+x+\.?c+o+m/i.test(r) && /(free|claim|verify|generator)/i.test(r)) return { hit: true, reason: 'Roblox domain + scam keyword pattern' };
     }
 
@@ -1372,40 +1394,39 @@ function getGuildSettings(guildId, data) {
             ],
             linkPolicyEnabled: true,
             linkAllowlistedDomains: [
-                'discord.com','discord.gg','discordapp.com','support.discord.com',
-                'cdn.discordapp.com','media.discordapp.net','discordcdn.com',
-                'roblox.com','www.roblox.com','auth.roblox.com','web.roblox.com',
-                'education.roblox.com','corp.roblox.com','blog.roblox.com',
-                'apis.roblox.com','economy.roblox.com','games.roblox.com',
-                'youtube.com','www.youtube.com','youtu.be','music.youtube.com',
-                'twitch.tv','www.twitch.tv','clips.twitch.tv','static-cdn.jtvnw.net',
-                'twitter.com','x.com','t.co','pbs.twimg.com','abs.twimg.com',
-                'reddit.com','www.reddit.com','i.redd.it','v.redd.it','preview.redd.it',
-                'github.com','raw.githubusercontent.com','gist.github.com','github.io',
-                'pastebin.com','rentry.co','hastebin.com',
+                // ── Discord (every CDN/attachment/media variant) ──────────────
+                'discord.com','discord.gg','discordapp.com','discordapp.net',
+                'discordcdn.com','discord.media',
+                'cdn.discordapp.com','media.discordapp.net',
+                'images-ext-1.discordapp.net','images-ext-2.discordapp.net',
+                'images-ext-3.discordapp.net','images-ext-4.discordapp.net',
+                'attachments.discordapp.com',
+                'support.discord.com',
+                // ── Roblox ───────────────────────────────────────────────────
+                'roblox.com','rbxcdn.com','rbx.com',
+                // ── Tenor (GIFs) ─────────────────────────────────────────────
                 'tenor.com','media.tenor.com','c.tenor.com','g.tenor.com',
-                'giphy.com','media.giphy.com','media0.giphy.com','media1.giphy.com',
-                'media2.giphy.com','media3.giphy.com','media4.giphy.com',
-                'imgur.com','i.imgur.com','m.imgur.com',
-                'gyazo.com','i.gyazo.com',
-                'prnt.sc','prntscr.com',
-                'streamable.com',
-                'catbox.moe','litter.catbox.moe','files.catbox.moe',
-                'pomf.cat',
-                'uguu.se',
-                'tmpfiles.org',
-                'weebninja.com',
-                'postimg.cc','i.postimg.cc',
-                'wikia.com','fandom.com','blox-fruits.fandom.com',
-                'bloxfruits.fandom.com','roblox.fandom.com',
-                'youtube-nocookie.com',
-                'wikimedia.org','wikipedia.org',
-                'steamcommunity.com','store.steampowered.com',
-                'imgur.io',
-                'gfycat.com','thumbs.gfycat.com','giant.gfycat.com',
-                'medal.tv','cdn.medal.tv','clips.medal.tv',
-                'top.gg',
-                'discord.me',
+                // ── Giphy (GIFs) ─────────────────────────────────────────────
+                'giphy.com','media.giphy.com','i.giphy.com',
+                // ── Imgur ─────────────────────────────────────────────────────
+                'imgur.com','i.imgur.com',
+                // ── YouTube ───────────────────────────────────────────────────
+                'youtube.com','youtu.be','i.ytimg.com',
+                // ── Twitch ────────────────────────────────────────────────────
+                'twitch.tv','jtvnw.net',
+                // ── Twitter/X ─────────────────────────────────────────────────
+                'twitter.com','x.com','t.co','pbs.twimg.com',
+                // ── Reddit ────────────────────────────────────────────────────
+                'reddit.com','redd.it','i.redd.it','v.redd.it',
+                // ── GitHub ────────────────────────────────────────────────────
+                'github.com','githubusercontent.com','github.io',
+                // ── Paste / media hosts ───────────────────────────────────────
+                'pastebin.com','rentry.co','hastebin.com',
+                'postimg.cc','i.postimg.cc','gyazo.com','i.gyazo.com',
+                'streamable.com','medal.tv',
+                'catbox.moe','litter.catbox.moe',
+                // ── Blox Fruits wiki ─────────────────────────────────────────
+                'fandom.com','wikia.com',
             ],
             linkDenylistedDomains: [],
             scanEditsEnabled: true,
@@ -2430,65 +2451,6 @@ const COMMON_WORD_WHITELIST = new Set([
     "week","weeks","month","months","year","years","decade","century",
     // ── Filler words commonly typed in Discord ────────────────────
     "lmk","hmu","dm","pm","msg","message","text","chat","say","mention",
-    // ── Casual expletives and slang (prevent false positives) ─────
-    "damn","dammit","damned","dang","darn","heck","hell","crap","shoot",
-    "shi","shit","shite","shyt","shitt","sheit","sheesh","sheeesh",
-    "ass","arse","bum","butt","wtf","wth","omfg","omfl","ffs","fml",
-    "frick","freak","freaking","freakin","frickin","fricking","freaking",
-    "sucks","suck","succ","sucked","sucky","blows","blowed","blowing",
-    "pissed","piss","ticked","mad","angry","annoyed","frustrated","upset",
-    "ugh","argh","urgh","ugh","gah","gosh","geez","jeez","jeeez","jeezus",
-    "bruh","bruv","bro","brooo","broseph","brosis","sis","sisss","fam",
-    "mate","m8","m9","chap","lad","bloke","geezer","dude","dudette","girl",
-    "ngl","tbh","tbf","imo","imho","afaik","iirc","fwiw","tbt",
-    "lowkey","highkey","deadass","periodt","period","no cap","nocap","cap",
-    "slay","ate","left no crumbs","understood","bet","valid","sheesh",
-    "nah","nope","yep","yup","yeah","yea","yass","yasss","yaaaas",
-    "wdym","wdyt","wdyd","wtd","wtv","wtvr","watever","whatever","wb",
-    "ight","aight","aiight","alr","aightt","iight","bet","fbet",
-    "fr fr","frfr","forreal","forreal","deadass","fa real","fareal",
-    "no way","noway","nosir","nope","nah","nah bro","bruh nah",
-    "wait","hold on","hold up","waitwait","waitt","hmm","hm","hmm","hmmm",
-    "hmmmm","uh","uhh","um","umm","uhmm","ugh","ohh","ohhhh","ooh",
-    "oh","ah","aha","ahhh","ehh","eh","mhm","mhmm","yeah","yea","ye",
-    "lmaooo","lmaoooo","lmfao","lmfaooo","lolll","lollll","hahaha",
-    "hahahaha","hehehe","heheheh","kekeke","xdxd","xddd","xdddd",
-    "oof","ooof","oooof","oops","oopss","opps","oppss","rip","riipp",
-    "pog","poggg","pogg","pogchamp","peepo","kekw","lulw","omegalul",
-    "based","unbased","cringe","cringeee","cringey","chungus","sugma",
-    "ligma","bofa","deez","deezz","sugondese","updog","heliocentric",
-    "ohio","rizz","rizzing","rizzed","rizzler","mewing","looksmaxxing",
-    "sigma","alpha","beta","omega","gigachad","chad","chadder","virgin",
-    "touch grass","copium","hopium","delusion","glazing","glaze",
-    "l bozo","w rizz","ratio","ratioed","fell off","stay mad",
-    "go off","big forehead","imagine","skill issue","cope","seethe",
-    "rent free","main character","npc","npcs","chronically online",
-    "ate and left no crumbs","understood the assignment","snatched",
-    // ── Common casual phrases used in chat (not BF specific) ─────
-    "real","unreal","crazy","insane","wild","nuts","mental","bonkers",
-    "sick","dope","fire","lit","mid","trash","garbage","awful","terrible",
-    "goated","cracked","cracked out","bussin","bussin bussin","slapping",
-    "slaps","hard","goes hard","goes crazy","different","different breed",
-    "built different","nah this","nah bro this","bro this","ayo this",
-    "ayo","ayoo","ayyyy","ayyy","ayye","that","for that","tho","doe",
-    "man","mann","mannn","bro","brooo","fr","frr","frrr","ong","ongg",
-    "swear","swear to","swear down","swear bro","facts","fact","factual",
-    "nah","nahhh","ngl","tbh","lowkey","honestly","genuinely","actually",
-    "literally","essentially","basically","fundamentally","ultimately",
-    "overall","generally","typically","normally","usually","apparently",
-    "supposedly","allegedly","reportedly","presumably","theoretically",
-    "practically","technically","effectively","relatively","comparatively",
-    // ── Internet/meme words that aren't BF items ─────────────────
-    "spam","spammer","troll","trolling","baiting","bait","baited","ratio",
-    "touch","grass","outside","outside world","go outside","grass touching",
-    "social life","no life","unemployed","loser","winner","sore loser",
-    "cry","crying","tears","sobbing","laughing","laughed","laughs",
-    "smh","shaking my head","headshake","facepalm","palm","forehead",
-    "eye roll","eyeroll","rolling my eyes","rolling eyes","sigh","sighs",
-    "breathing","breathe","inhale","exhale","cope","cope harder","coping",
-    "malding","tilted","raging","rage","rager","tilting","tilt","toxic",
-    "toxicity","positivity","wholesome","poggers","based","cringe",
-    "reddit moment","twitter moment","discord moment","skill issue",
     "tag","ping","alert","notify","reach","contact","respond","reply",
     "answer","ask","request","question","wonder","curious","interested",
     "want","need","looking","searching","seeking","finding","getting",
@@ -4403,58 +4365,108 @@ function domainInList(domain, list) {
 }
 
 const COMMON_ALLOWED_DOMAINS = [
-    // ── Tenor (GIF platform) ──────────────────────────────
-    'tenor.com','media.tenor.com','c.tenor.com','g.tenor.com',
-    'media1.tenor.com','media2.tenor.com','media3.tenor.com',
-    // ── Giphy (GIF platform) ─────────────────────────────
-    'giphy.com','media.giphy.com','media0.giphy.com','media1.giphy.com',
-    'media2.giphy.com','media3.giphy.com','media4.giphy.com','i.giphy.com',
-    // ── Imgur ─────────────────────────────────────────────
-    'imgur.com','i.imgur.com','m.imgur.com',
-    // ── Gyazo ────────────────────────────────────────────
-    'gyazo.com','i.gyazo.com',
-    // ── Gfycat ───────────────────────────────────────────
-    'gfycat.com','thumbs.gfycat.com','giant.gfycat.com',
-    // ── Medal.tv ─────────────────────────────────────────
-    'medal.tv','cdn.medal.tv','clips.medal.tv',
-    // ── Streamable ───────────────────────────────────────
+    // ── Discord (every CDN / attachment / media subdomain) ─────────────────────
+    // Adding both the exact subdomain AND the parent so domainInList(suffix match) covers anything new
+    'discord.com',
+    'discordapp.com',       // covers cdn.discordapp.com, attachments.discordapp.com, etc.
+    'discordapp.net',       // covers media.discordapp.net, images-ext-*.discordapp.net, etc.
+    'discord.gg',
+    'discord.co',
+    'discord.media',
+    'discordcdn.com',
+    // Explicit subdomains (belt + suspenders)
+    'cdn.discordapp.com',
+    'media.discordapp.net',
+    'images-ext-1.discordapp.net',
+    'images-ext-2.discordapp.net',
+    'images-ext-3.discordapp.net',
+    'images-ext-4.discordapp.net',
+    'attachments.discordapp.com',
+    'cdn1.discordapp.com',
+    'cdn2.discordapp.com',
+    'cdn3.discordapp.com',
+    'cdn4.discordapp.com',
+    // ── Tenor (GIF platform) ───────────────────────────────────────────────────
+    'tenor.com',            // covers media.tenor.com, c.tenor.com, g.tenor.com, etc.
+    'media.tenor.com',
+    'c.tenor.com',
+    'g.tenor.com',
+    // ── Giphy ─────────────────────────────────────────────────────────────────
+    'giphy.com',            // covers media.giphy.com, media0-4.giphy.com, i.giphy.com
+    'media.giphy.com',
+    'media0.giphy.com',
+    'media1.giphy.com',
+    'media2.giphy.com',
+    'media3.giphy.com',
+    'media4.giphy.com',
+    'i.giphy.com',
+    // ── Imgur ─────────────────────────────────────────────────────────────────
+    'imgur.com',            // covers i.imgur.com, m.imgur.com
+    'i.imgur.com',
+    'm.imgur.com',
+    // ── Gyazo ────────────────────────────────────────────────────────────────
+    'gyazo.com',
+    'i.gyazo.com',
+    // ── Gfycat ───────────────────────────────────────────────────────────────
+    'gfycat.com',
+    'thumbs.gfycat.com',
+    'giant.gfycat.com',
+    // ── Roblox (every CDN) ────────────────────────────────────────────────────
+    'roblox.com',           // covers all *.roblox.com subdomains
+    'rbxcdn.com',           // covers t1-t3.rbxcdn.com, setup.rbxcdn.com, etc.
+    'rbx.com',
+    // Explicit Roblox CDN subdomains
+    'cdn.roblox.com',
+    'assetgame.roblox.com',
+    'thumbnails.roblox.com',
+    'images.rbxcdn.com',
+    't1.rbxcdn.com',
+    't2.rbxcdn.com',
+    't3.rbxcdn.com',
+    // ── YouTube ───────────────────────────────────────────────────────────────
+    'youtube.com',
+    'youtu.be',
+    'i.ytimg.com',
+    'img.youtube.com',
+    // ── Twitter/X ────────────────────────────────────────────────────────────
+    'twitter.com',
+    'x.com',
+    't.co',
+    'pbs.twimg.com',
+    'abs.twimg.com',
+    // ── Reddit ───────────────────────────────────────────────────────────────
+    'reddit.com',
+    'redd.it',
+    'i.redd.it',
+    'v.redd.it',
+    'preview.redd.it',
+    // ── GitHub ───────────────────────────────────────────────────────────────
+    'github.com',
+    'githubusercontent.com', // covers raw.githubusercontent.com, user-images, camo, etc.
+    'github.io',
+    // ── Streamable / Medal / other clip hosts ────────────────────────────────
     'streamable.com',
-    // ── Catbox ───────────────────────────────────────────
-    'catbox.moe','litter.catbox.moe','files.catbox.moe',
-    // ── Postimg ──────────────────────────────────────────
-    'postimg.cc','i.postimg.cc',
-    // ── Prnt.sc / Lightshot ──────────────────────────────
-    'prnt.sc','prntscr.com',
-    // ── Roblox (all subdomains) ───────────────────────────
-    'roblox.com','www.roblox.com','auth.roblox.com','web.roblox.com',
-    'apis.roblox.com','economy.roblox.com','games.roblox.com',
-    'corp.roblox.com','blog.roblox.com','education.roblox.com',
-    'rbxcdn.com','t1.rbxcdn.com','t2.rbxcdn.com','t3.rbxcdn.com',
-    'rbx.com','setup.rbxcdn.com','images.rbxcdn.com',
-    'assetgame.roblox.com','thumbnails.roblox.com','ephemeralcounters.roblox.com',
-    // ── Discord CDN ───────────────────────────────────────
-    'discord.com','discordapp.com','discordapp.net','discord.gg',
-    'cdn.discordapp.com','media.discordapp.net',
-    'images-ext-1.discordapp.net','images-ext-2.discordapp.net',
-    // ── YouTube ───────────────────────────────────────────
-    'youtube.com','www.youtube.com','youtu.be','music.youtube.com',
-    'img.youtube.com','i.ytimg.com',
-    // ── Twitter/X ────────────────────────────────────────
-    'twitter.com','x.com','t.co','pbs.twimg.com','abs.twimg.com',
-    // ── Reddit ───────────────────────────────────────────
-    'reddit.com','www.reddit.com','i.redd.it','v.redd.it','preview.redd.it',
-    // ── GitHub ───────────────────────────────────────────
-    'github.com','raw.githubusercontent.com','gist.github.com',
-    'user-images.githubusercontent.com','camo.githubusercontent.com',
-    // ── Blox Fruits wikis ────────────────────────────────
-    'fandom.com','wikia.com','blox-fruits.fandom.com','roblox.fandom.com',
+    'medal.tv',
+    'cdn.medal.tv',
+    // ── Misc safe media / paste hosts ────────────────────────────────────────
+    'postimg.cc',
+    'i.postimg.cc',
+    'prnt.sc',
+    'catbox.moe',
+    'litter.catbox.moe',
+    'files.catbox.moe',
+    'pastebin.com',
+    'rentry.co',
+    'hastebin.com',
+    // ── Blox Fruits / Roblox wikis ───────────────────────────────────────────
+    'fandom.com',           // covers blox-fruits.fandom.com, roblox.fandom.com, etc.
+    'wikia.com',
+    'wikia.nocookie.net',
     'static.wikia.nocookie.net',
-    // ── Common social / media ─────────────────────────────
-    'twitch.tv','clips.twitch.tv','static-cdn.jtvnw.net',
-    'pastebin.com','rentry.co','hastebin.com',
-    'top.gg','discord.me',
-    // ── Pomf / temporary file hosts ──────────────────────
-    'pomf.cat','uguu.se','tmpfiles.org',
+    // ── Twitch ───────────────────────────────────────────────────────────────
+    'twitch.tv',
+    'jtvnw.net',
+    'twitchsvc.net',
 ];
 function classifyLinkDomains(domains, gs) {
     const allow = (gs?.linkAllowlistedDomains || []).map(normalizeDomain);
@@ -7360,7 +7372,6 @@ function isMessageCommand(msg) {
     const t = c.trimStart();
     if (msg.type === 20) return true;
 
-    // Pure punctuation / symbol-only messages are never commands
     if (/^[\p{P}\p{S}\s]+$/u.test(t)) return false;
     if (t.startsWith('@') || t.startsWith('<@')) return false;
 
@@ -7377,18 +7388,11 @@ function isMessageCommand(msg) {
     if (/^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/u.test(t)) return false;
     if (/^\p{Regional_Indicator}{2}/u.test(t)) return false;
     if (/^[#*0-9]\uFE0F?\u20E3/u.test(t)) return false;
-    // Pure punctuation at start with no following word letters
     if (/^[.!?]+\s*$/.test(t)) return false;
-    if (/^[.!?]+\s*[.!?]/.test(t) && !/^[.!?]\s*[a-zA-Z]/.test(t)) return false;
-    if (/^[?!]\s+[a-zA-Z]/.test(c)) return false;
-
-    // KEY FIX: only flag CMD_PREFIX_RE if after the prefix char there is a word character
-    // e.g. ".invite" → yes; "..." → no; ".?" → no
-    if (CMD_PREFIX_RE.test(t)) {
-        // After the prefix char, must have a letter to be a command
-        const afterPrefix = t.slice(1).trimStart();
-        if (afterPrefix.length > 0 && /^[a-zA-Z]/.test(afterPrefix)) return true;
-    }
+    // "char space word" must NOT flag — only "charword" (no space) counts as a command
+    if (/^[.!?/;:~`#$%^&*+=|\\]\s+[a-zA-Z]/.test(t)) return false;
+    // Must have a non-alphanum prefix char IMMEDIATELY followed by a letter (zero spaces)
+    if (CMD_PREFIX_RE.test(t) && /^[^a-zA-Z0-9\s@][a-zA-Z]/.test(t)) return true;
     return false;
 }
 
@@ -7559,34 +7563,39 @@ function getAttachmentExts(message) {
 function looksLikeCommandButNotCaught(raw, cleaned) {
     const r = (raw || '').trim();
     if (!r) return false;
-    // Never flag pure punctuation/symbol-only messages
-    if (/^[\p{P}\p{S}\s]+$/u.test(r)) return false;
     if (/^:[a-zA-Z0-9_]{2,32}:/.test(r)) return false;
+
+    // KEY RULE: "char SPACE word" is NOT a command. Only "charword" (zero spaces) counts.
+    // e.g. ".invite" → command; ". invite" → NOT a command; "i am going to .say" → NOT a command
+    // A command prefix must be at the START of the message, immediately followed by letters.
+    if (/^[^a-zA-Z0-9\s@]\s+/.test(r)) return false; // char then any space → not a command
+
     const t = cleaned || fullClean(r);
     const ns = t.replace(/[\s_]/g,'');
 
-    // CRITICAL: only flag if the command prefix is at the START followed by a WORD (letters), not just more punctuation
-    // "i am going to do .say" should NOT flag; ".say" at start SHOULD flag
+    // g.command style (no space needed here since it's always "g.word")
     if (/^\s*g\.[a-z0-9_]{2,32}\b/i.test(r)) return true;
 
+    // Check known prefixes - must be followed IMMEDIATELY by a letter (no space)
     for (const p of COMMAND_LIKE_PREFIXES) {
         const rl = r.toLowerCase();
         if (rl.startsWith(p)) {
-            // After the prefix there must be a letter (a command word), not more punctuation
-            const afterPrefix = rl.slice(p.length).trimStart();
+            const afterPrefix = rl.slice(p.length);
+            // Immediately followed by a letter = command. Space after prefix = not a command.
             if (afterPrefix.length > 0 && /^[a-z]/i.test(afterPrefix)) return true;
         }
     }
 
-    // START-anchored slash/bang/dot followed by a word
-    if (/^\s*\/[a-z0-9]{2,32}/i.test(r)) return true;
-    if (/^\s*[!.]\s*[a-z]{2,32}/i.test(r)) return true;  // removed ? to avoid "? word" false positives
-    if (/^\s*<@!?\d+>\s*[!.?/]/i.test(r)) return true;
+    // Slash commands at start: /commandname (no space allowed between / and name)
+    if (/^\/[a-z0-9]{2,32}/i.test(r)) return true;
+    // Bang or dot IMMEDIATELY followed by letters (no \s* allowed)
+    if (/^[!.][a-z]{2,32}/i.test(r)) return true;
+    // Bot mention + command prefix
+    if (/^<@!?\d+>\s*[!./][a-z]/i.test(r)) return true;
 
-    // Evasion patterns: only match if they appear at the START (startsWith, not includes)
     for (const ev of COMMAND_EVASION_PATTERNS) {
         const ec = ev.replace(/[\s_]/g,'').toLowerCase();
-        if (ec.length >= 6 && ns.startsWith(ec)) return true;
+        if (ec.length >= 6 && ns.includes(ec)) return true;
     }
 
     for (const n of COMMON_SLASH_COMMAND_NAMES) {
@@ -7594,16 +7603,15 @@ function looksLikeCommandButNotCaught(raw, cleaned) {
         if (nc.length >= 3 && (ns.startsWith('/'+nc) || ns.startsWith('／'+nc))) return true;
     }
 
+    // Known command words: only flag when prefix is IMMEDIATELY before the word (no space)
     for (const w of COMMON_COMMAND_WORDS) {
         const wc = w.toLowerCase().replace(/[\s_]/g,'');
-        // Only flag if at start of message
-        if (wc.length >= 4 && new RegExp(`^\\s*(?:/|!|\\.)\\s*${escapeRegex(wc)}(?![a-z0-9])`, 'i').test(r)) return true;
+        if (wc.length >= 4 && new RegExp(`^(?:/|!|\\.)${escapeRegex(wc)}(?![a-z0-9])`, 'i').test(r)) return true;
     }
 
-    // Only flag "type/use/run [command]" if the command pattern is at the very start of the sentence
-    if (/^(?:type|use|run)\s+(?:\!|\/|\.)[a-z0-9]{2,20}/i.test(r)) return true;
-    // "prefix" or "cmd" combined with a bot prefix char — only flag if prefix char is at start of a word token
-    if (/\b(?:prefix|cmd|command|commands)\b/i.test(r) && /(?:^|\s)(?:!|\/)[a-z]/i.test(r)) return true;
+    if (/\b(?:type|use|run)\b[\s\W_]{0,8}(?:\!|\/|\.)[a-z0-9]{2,20}/i.test(r)) return true;
+    if (/\b(?:prefix|cmd|command|commands)\b/i.test(r) && (r.includes('!') || r.includes('/'))) return true;
+    if (/\b(?:bot|autobot|moderation|mod bot)\b/i.test(r) && /\b(?:cmd|command|commands|prefix)\b/i.test(r)) return true;
 
     return false;
 }
