@@ -2340,7 +2340,7 @@ const COMMON_WORD_WHITELIST = new Set([
     "mostly","nearly","almost","exactly","perfectly","roughly","barely",
     "hardly","slightly","fairly","pretty","rather","quite","truly","really",
     "very","too","also","even","just","still","yet","now","then","here",
-    "there","where","when","how","why","what","who","which","that","this",
+    "there","where","when","how","why","what","who","which","that","this","fuck","crap","damn","ass","shit","shi","fck",
     // ── Common reactions / responses Discord users type ───────────
     "yes","no","sure","fine","okay","ofc","course","indeed","exactly",
     "correct","right","wrong","true","false","maybe","perhaps","probably",
@@ -2478,8 +2478,76 @@ const COMMON_WORD_WHITELIST = new Set([
     "video","short","reel","post","story","feed","timeline","profile",
     "handle","username","tag","hashtag","trending","viral","meme","gif",
     "reaction","respond","thread","reply","quote","retweet","like","share",
-    // ── Blox Fruits specific safe words ───────────────────────────
-    "third","sea","second","first","beginner","intermediate","advanced",
+    // ── Swear words & mild expletives (very common in Discord, should NOT trigger trade/service detection) ──
+    "damn","damned","damning","damnit","dammit","dang","darn","darned",
+    "shit","shite","shits","shitty","shitting","shithead","bullshit","bs","horseshit",
+    "fuck","fucker","fucked","fucking","fuckin","fucks","fuk","fucc","frick","fricking","fricked",
+    "fudge","fudging","ffs","stfu","gtfo","omfg","wtaf",
+    "ass","asses","asshole","assholes","dumbass","jackass","smartass","badass","hardass","fatass",
+    "bitch","bitches","bitching","bitchy","son of a bitch",
+    "bastard","bastards",
+    "crap","craps","crappy","crapping","crapped",
+    "piss","pissed","pissing","pisses","pisser",
+    "hell","hells","bloody","damn hell","what the hell","the hell",
+    "cunt","cunts",
+    "dick","dicks","dickhead","dicked",
+    "cock","cocks","cockhead",
+    "pussy","pussies",
+    "whore","whores","slut","sluts",
+    "idiot","idiots","idiotic","moron","morons","moronic","retard","retards","imbecile",
+    "stupid","stupider","stupidest","stupidity","dumb","dumber","dumbest","dumbass",
+    "jerk","jerks","jerkoff","jackass","jackasses",
+    "loser","losers","nerd","nerds","geek","geeks","freak","freaks","weirdo","weirdos",
+    // ── Common Discord / internet slang ───────────────────────────────────────────
+    "bro","bruh","bruv","brah","bra","homie","homies","dude","duude","dudee","dudes",
+    "fam","gang","gg","ez","gl","wp","gj","bg","rip","grz","gz","grats","gratz",
+    "lmao","lmfao","rofl","roflmao","xd","xdd","lol","lolol","lolll","haha","hahaha","hahahaha",
+    "hehe","hihi","kek","kekw","kekl","lmaooo","lmaoo","lmaoooo","loool","looool",
+    "pog","poggers","pogchamp","copium","hopium","sadge","pepega","pepe","pepehands",
+    "ngl","tbh","imo","imho","tbf","istg","iirc","afaik","fwiw","tldr","eta","irl",
+    "ofc","obv","atp","rn","fr","ig","jk","nvm","lmk","hmu","ty","tysm","yw","np",
+    "afk","brb","bbl","gtg","ggwp","ggez","ff","nt","bd","bg","gg","gl hf","glhf",
+    "smh","smfh","smdh","foh","gtfoh","stfu","npc","yolo","swag","based","cringe",
+    "ratio","w","l","yikes","oof","rip","mid","sus","cap","nocap","on god","ong",
+    "bet","slay","vibe","vibing","bussin","bussin bussin","no cap","facts","real",
+    "lowkey","highkey","literally","deadass","periodt","period","sheesh","sksksk",
+    "ight","aight","alr","aite","fr fr","no fr","bro fr","bruh fr",
+    "goated","goat","sigma","alpha","based af","cringe af","mid af","fire af",
+    "mega","ultra","super","hyper","cracked","insane","insanely","crazy","hella",
+    "mad","wicked","sick","heat","heat check","cold","raw","wavy","drip","sauce",
+    "nah bro","nah man","nah dude","ok bro","ok man","bro what","bro why","bro how",
+    "man why","man what","man bro","dude why","dude what","dude bro",
+    "why bro","why man","why tho","why though","why tf","why the",
+    "what bro","what man","what tf","what the",
+    "bruh moment","bruh what","bruh why","bruh how","bruh tf",
+    "no way","no wayy","no wayyy","bro no way","yooo","yoo","yo","yooooo",
+    "bro stop","stop bro","bro wait","wait bro","bro seriously","seriously bro",
+    "imagine","bro imagine","actually","literally","honestly",
+    "true","facts bro","real bro","facts fr","real fr","on god bro",
+    "kinda","sorta","gonna","wanna","gotta","hafta","tryna","finna","ima","imma",
+    "prolly","prob","probs","defo","def","deffo","totes","totally","obvy","obvs",
+    "idk","idek","idc","idgaf","idf","ik","ikr","ikk","ikf","ikyfl",
+    "same bro","same lol","same honestly","same ngl","same fr",
+    "mood bro","mood honestly","mood fr","big mood","same mood",
+    "rn bro","atm","rn fr","at the moment",
+    "ugh","uggh","ugghh","argh","aaah","ahhh","ughhh","eww","ewww","ew bro",
+    "omg","omgg","omggg","omg bro","oh my","oh wow","oh shit","oh damn",
+    "bro oh my","yo bro","yo man","yo dude","yo wtf","yo omg",
+    "nope","yep","yup","yuppp","yupp","nope nope","yeah nah","nah yeah",
+    "ayy","ayo","ayoo","broo","broooo","dude bro","man bro",
+    "lmaooo bro","lmao bro","bruh lmao","bro lmao","dude lmao",
+    "haha bro","bro haha","lol bro","bro lol","kek bro",
+    "cry","crying","dies","dying","dead","im dead","im dying","literally dead",
+    "pff","pfft","pffft","lmfaooo","meh","nah meh","meh bro",
+    "eh","ehh","ehhh","idk man","idk bro","idk dude","idk fr",
+    "cope","coping","copium","touch grass","skill issue","skill diff","diff",
+    "ratio","ratioed","ratio bro","hard ratio","massive ratio",
+    "rizz","rizzed","rizzing","no rizz","got rizz","rizz up",
+    "cooked","absolutely cooked","cooked bro","cooked fr","he cooked","she cooked",
+    "glazing","glazed","glaze","stop glazing","stop the glaze",
+    "aint","ain't","aint even","ain't even","aint no way","ain't no way",
+    "bruh bruh","bro bro","man man","dude dude",
+    "smh bro","smh fr","smh honestly","smh ngl","smh lol",
     "maxed","maxing","maxlevel","maxlvl","fullbuild","endgame","lategame",
     "midgame","earlygame","newplayer","veteran","experienced","skilled",
     "strong","weak","op","overpowered","underpowered","balanced","broken",
@@ -4017,6 +4085,7 @@ function scanForServiceIntent(cleanText) {
     const { single } = tokenize(cleanText);
     for (const tok of single) {
         if (tok.length < 2) continue;
+        if (COMMON_WORD_WHITELIST.has(tok)) continue; // skip everyday words — "need", "help", "want", etc.
         for (const kw of SERVICE_INTENT_EXACT) {
             const kwc = kw.replace(/\s/g,'');
             if (kwc.length <= 4) { if (tok === kwc) return true; continue; }
@@ -4039,7 +4108,7 @@ function scanForIntent(cleanText) {
 
     for (const phrase of INTENT_PHRASE_EXTRA2) {
         const p = phrase.replace(/\s/g,'');
-        if (p.length >= 3 && (ns.includes(p) || cleanText.includes(phrase.trim()))) return true;
+        if (p.length >= 5 && (ns.includes(p) || cleanText.includes(phrase.trim()))) return true;
     }
     const { single } = tokenize(cleanText);
     for (const tok of single) {
@@ -7389,10 +7458,13 @@ function isMessageCommand(msg) {
     if (/^\p{Regional_Indicator}{2}/u.test(t)) return false;
     if (/^[#*0-9]\uFE0F?\u20E3/u.test(t)) return false;
     if (/^[.!?]+\s*$/.test(t)) return false;
+    // Don't flag quoted speech like "hey" or 'sup' or (lol) as commands
+    if (/^["'()\[\]{}]/.test(t)) return false;
     // "char space word" must NOT flag — only "charword" (no space) counts as a command
     if (/^[.!?/;:~`#$%^&*+=|\\]\s+[a-zA-Z]/.test(t)) return false;
     // Must have a non-alphanum prefix char IMMEDIATELY followed by a letter (zero spaces)
-    if (CMD_PREFIX_RE.test(t) && /^[^a-zA-Z0-9\s@][a-zA-Z]/.test(t)) return true;
+    // Also restrict to actual bot command prefix characters — exclude quotes, parens, brackets
+    if (CMD_PREFIX_RE.test(t) && /^[!\/\.\?;:~`#\$%\^&\*\+=\|\\][a-zA-Z]/.test(t)) return true;
     return false;
 }
 
@@ -7564,6 +7636,8 @@ function looksLikeCommandButNotCaught(raw, cleaned) {
     const r = (raw || '').trim();
     if (!r) return false;
     if (/^:[a-zA-Z0-9_]{2,32}:/.test(r)) return false;
+    // Don't flag quoted speech like "hey" or (lol) as command evasion
+    if (/^["'()\[\]{}]/.test(r)) return false;
 
     // KEY RULE: "char SPACE word" is NOT a command. Only "charword" (zero spaces) counts.
     // e.g. ".invite" → command; ". invite" → NOT a command; "i am going to .say" → NOT a command
