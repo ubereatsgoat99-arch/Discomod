@@ -53,6 +53,7 @@ Originally made for MonkeyVerseYT's server, but extended the use for everyone an
 ## 🛠️ Installation
 
 Install dependencies:
+(Optional, already installed inside the repo)
 
 ```bash
 npm install 
@@ -67,10 +68,10 @@ cp .env.example .env
 ```
 Then fill in your values:
 
+```bash
 DISCORD_TOKEN=your_token_here
-
 ANTHROPIC_API_KEY=your_key_here
-
+```
 and then run:
 
 ```bash
