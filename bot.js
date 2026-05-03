@@ -1045,25 +1045,25 @@ function detectTrialsOrTrialsRecruitment(cleanText) {
         if (c.length >= 4 && ns.includes(c)) {
             for (const v of TRIALS_HELP_VERBS) {
                 const vc = v.toLowerCase().replace(/[\s_]/g,'');
-                if (vc.length >= 2 && ns.includes(vc) && Math.abs(ns.index(c) - ns.index(vc)) <= 120) return true;
+                if (vc.length >= 2 && ns.includes(vc) && Math.abs(ns.indexOf(c) - ns.indexOf(vc)) <= 120) return true;
             }
             for (const h of TRIALS_RECRUITMENT_HEADS) {
                 const hc = h.toLowerCase().replace(/[\s_]/g,'');
-                if (hc.length >= 4 && ns.includes(hc) && Math.abs(ns.index(c) - ns.index(hc)) <= 160) return true;
+                if (hc.length >= 4 && ns.includes(hc) && Math.abs(ns.indexOf(c) - ns.indexOf(hc)) <= 160) return true;
             }
             for (const n of TRIALS_NUMBER_WORDS) {
                 const nc = n.toLowerCase().replace(/[\s_]/g,'');
-                if (nc.length >= 1 && ns.includes(nc) && Math.abs(ns.index(c) - ns.index(nc)) <= 160) {
+                if (nc.length >= 1 && ns.includes(nc) && Math.abs(ns.indexOf(c) - ns.indexOf(nc)) <= 160) {
                     for (const pw of TRIALS_PEOPLE_WORDS) {
                         const pc = pw.toLowerCase().replace(/[\s_]/g,'');
-                        if (pc.length >= 2 && ns.includes(pc) && Math.abs(ns.index(pc) - ns.index(nc)) <= 60) return true;
+                        if (pc.length >= 2 && ns.includes(pc) && Math.abs(ns.indexOf(pc) - ns.indexOf(nc)) <= 60) return true;
                     }
                     return true;
                 }
             }
             for (const ctx of TRIALS_CONTEXT_WORDS) {
                 const xc = ctx.toLowerCase().replace(/[\s_]/g,'');
-                if (xc.length >= 2 && ns.includes(xc) && Math.abs(ns.index(c) - ns.index(xc)) <= 120) return true;
+                if (xc.length >= 2 && ns.includes(xc) && Math.abs(ns.indexOf(c) - ns.indexOf(xc)) <= 120) return true;
             }
         }
     }
@@ -1126,7 +1126,7 @@ function makeIntentTargetBypassRegex(gs, intentWords, target) {
     if (!intents.length) return null;
 
     const intentAlt = intents.map(escapeRegex).join('|');
-    const join = strict >= 10 ? '[\s\W_]{0,20}' : (strict >= 8 ? '[\s\W_]{0,10}' : (strict >= 4 ? '[\s_]{0,4}' : '[\s_]{1,2}'));
+    const join = strict >= 10 ? '[\\s\\W_]{0,20}' : (strict >= 8 ? '[\\s\\W_]{0,10}' : (strict >= 4 ? '[\\s_]{0,4}' : '[\\s_]{1,2}'));
     const targetPat = strict >= 10 ? buildFuzzyTokenPattern(tgtRaw, strict) : (strict >= 8 ? buildFuzzyTokenPattern(tgtRaw, strict) : escapeRegex(tgt));
     return new RegExp(`(?:^|[^a-z0-9])(?:${intentAlt})${join}${targetPat}(?![a-z0-9])`, 'i');
 }
@@ -2281,6 +2281,8 @@ const COMMON_WORD_WHITELIST = new Set([
     "wing","wire","wise","wish","with","wolf","wood","wool","word","wore",
     "work","worm","worn","wrap","writ","yard","yarn","year","yell","zero",
     "zone","loot","lore","hero","buff","nerf","stat",
+    // ── Common words that fuzzy-match boss/race names (prevents false positives) ──
+    "cyber","diamond","warden","stone","swan","yeti","bobby","jeremy","indra","angel","draco","mink","ghoul","shark",
     // ── 5-letter common words ────────────────────────────────────
     "about","above","after","again","ahead","alone","along","among","apart",
     "apply","argue","aside","asked","avoid","aware","badly","began","being",
