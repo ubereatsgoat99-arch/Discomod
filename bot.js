@@ -7790,6 +7790,8 @@ function isMessageCommand(msg) {
     if (/^[.!?]+\s*$/.test(t)) return false;
     // Don't flag quoted speech like "hey" or 'sup' or (lol) as commands
     if (/^["'()\[\]{}]/.test(t)) return false;
+    // ?afk is allowed anywhere — never treat it as a command violation
+    if (/^\?afk(\s|$)/i.test(t)) return false;
     // "char space word" must NOT flag — only "charword" (no space) counts as a command
     if (/^[.!?/;:~`#$%^&*+=|\\]\s+[a-zA-Z]/.test(t)) return false;
     // Must have a non-alphanum prefix char IMMEDIATELY followed by a letter (zero spaces)
@@ -7968,6 +7970,8 @@ function looksLikeCommandButNotCaught(raw, cleaned) {
     if (/^:[a-zA-Z0-9_]{2,32}:/.test(r)) return false;
     // Don't flag quoted speech like "hey" or (lol) as command evasion
     if (/^["'()\[\]{}]/.test(r)) return false;
+    // ?afk is allowed anywhere
+    if (/^\?afk(\s|$)/i.test(r)) return false;
 
     // KEY RULE: "char SPACE word" is NOT a command. Only "charword" (zero spaces) counts.
     // e.g. ".invite" → command; ". invite" → NOT a command; "i am going to .say" → NOT a command
@@ -8090,7 +8094,8 @@ client.on('messageCreate', async message => {
     // ── COMMAND LOCKDOWN ──────────────────────────────────
     if ((gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message)) {
         const staffCommandImmune = isStaff && immCfg.enabled;
-        if (!staffCommandImmune && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
+        const _cmdChId = gs.gamesHubId || DEFAULT_GAMES_HUB_ID;
+        if (!staffCommandImmune && !GAMES_HUB_CHANNELS.has(message.channel.id) && message.channel.id !== _cmdChId) {
             try { await message.delete(); } catch {}
             recordCommandAbuse(message.author.id);
             incStat(guildId, data, 'commandUsage', 1);
@@ -8107,7 +8112,7 @@ client.on('messageCreate', async message => {
         }
     }
 
-    if ((gs.commandRedirectEnabled !== false) && !immune && !isCategoryImmune(message.member, guildId, data, 'command') && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
+    if ((gs.commandRedirectEnabled !== false) && !immune && !isCategoryImmune(message.member, guildId, data, 'command') && !GAMES_HUB_CHANNELS.has(message.channel.id) && message.channel.id !== (gs.gamesHubId || DEFAULT_GAMES_HUB_ID)) {
         const { contentClean: cmdClean } = prepareText(message.content);
         if (looksLikeCommandButNotCaught(message.content, cmdClean)) {
             const staffCommandImmune = isStaff && immCfg.enabled;
