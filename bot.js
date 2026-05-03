@@ -4363,6 +4363,233 @@ const scanForRaces          = t => genericScan(t, RACES,            RACE_ALIASES
 const scanForPainUpgrades   = t => genericScan(t, PAIN_UPGRADES,    PAIN_UPGRADE_ALIASES);
 const scanForLightningUpgrades = t => genericScan(t, LIGHTNING_UPGRADES, LIGHTNING_UPGRADE_ALIASES);
 
+// ══════════════════════════════════════════════════════════
+//  RAID SERVICE DETECTION
+//  Flags messages where someone is OFFERING or SEEKING
+//  a raid hosting/carry service (should go to #services).
+//  Modelled after detectTrialsOrTrialsRecruitment.
+// ══════════════════════════════════════════════════════════
+
+// Core raid word variants (post-fullClean, leet already collapsed)
+const RAID_CORE_WORDS = [
+    'raid','raids','raiding','riad','riads','raied','raidd','r4id','r4ids',
+];
+
+// Verbs / roles that pair with raid words to signal a service post
+const RAID_SERVICE_VERBS = [
+    // offering
+    'host','hosting','hosted','hoster','hosts',
+    'carry','carrying','carried','carrier','carries',
+    'run','running','runs','runner',
+    'do','doing','done',
+    'clear','clearing','clears',
+    'boost','boosting','boosts',
+    'help','helping','helps',
+    'offer','offering','offers',
+    'provide','providing','provides',
+    'open','opening',
+    'start','starting','starts',
+    'afk',
+    // seeking
+    'need','needing','needed',
+    'lf','lfg','lfs','lf4',
+    'want','wanting','wanna','wana',
+    'looking','searching','seeking',
+    'join','joining',
+    'pay','paying','payment',
+];
+
+// Blox Fruits named raids (post-fullClean, lowercase, no spaces)
+const BF_NAMED_RAIDS_NS = [
+    'flowerraid','flowerraids',
+    'darkbeardraid','darkbeardraids','darkbeardsraid',
+    'factoryraid','factoryraids',
+    'iceadmiralraid','iceadmiralraids',
+    'phoenixraid','phoenixraids',
+    'doughraid','doughraids',
+    'buddharaid','buddharaids',
+    'shadowraid','shadowraids',
+    'flameraid','flameraids',
+    'iceraid','iceraids',
+    'sandraid','sandraids',
+    'lightraid','lightraids',
+    'magmaraid','magmaraids',
+    'quakeraid','quakeraids',
+    'rubberraid','rubberraids',
+    'rumbleraid','rumbleraids','lightningraid','lightningraids',
+    'spiderraid','spiderraids',
+    'loveraid','loveraids',
+    'gravityraid','gravityraids',
+    'spiritraid','spiraids',
+    'venomraid','venomraids',
+    'soundraid','soundraids',
+    'controlraid','controlraids',
+    'leopardraid','leopardraids',
+    'dragonraid','dragonraids',
+    'kitsuneraid','kitsuneraids',
+    'blizzardraid','blizzardraids',
+    'mammothraid','mammothraids',
+    'portalraid','portalraids',
+    'darkraid','darkraids',
+];
+
+// Strict phrase list — dead giveaway combos (all lowercase, matched nospace)
+const RAID_STRICT_PHRASES = [
+    // ── Hosting / offering ────────────────────────────────
+    'hosting raids','hosting raid','hosting a raid','hosting some raids',
+    'hosting full raids','hosting 5 raids','hosting 10 raids',
+    'host raids','host raid','host a raid','host some raids',
+    'host full raids','host 5 raids','host 10 raids',
+    'ill host raids','ill host raid','ill host the raid','ill host the raids',
+    'i host raids','i host raid','i host the raid',
+    'i will host raids','i will host raid','i will host a raid',
+    'im hosting raids','im hosting raid','im hosting a raid',
+    'carry raids','carry raid','carry a raid','carry some raids',
+    'carry full raids','carry 5 raids','carry 10 raids',
+    'carrying raids','carrying raid','carrying a raid','carrying some raids',
+    'carrying full raids','raid carry','raid carries',
+    'afk carry raids','afk carry raid','afk raid carry',
+    'doing raids','doing a raid','doing some raids',
+    'running raids','running a raid','running some raids',
+    'open raids','open raid','raids open','raid open',
+    'starting raid','starting raids','raid starting','raids starting',
+    'raid now','raids now',
+    'raid slots','raid slot','slots for raid','slots for raids',
+    'joining raid','joining raids',
+    // ── Service branding ─────────────────────────────────
+    'raid service','raid services',
+    'raid carry service','raid carry services',
+    'carry service raid','carry services raid',
+    'boost service raid','boost services raid',
+    'cheap raid carry','cheap raid service','cheap raid host',
+    'trusted raid host','trusted raid carry','trusted raid service',
+    'pro raid host','pro raid carry','pro raid service',
+    'fast raid carry','fast raid host','fast raid service',
+    'paid raid carry','paid raid service','paid raid hosting',
+    'free raid carry','free carry raid',
+    'professional raid service','professional raid host',
+    // ── Payment combos ───────────────────────────────────
+    'raids for frags','raid for frags',
+    'raids for fragments','raid for fragments',
+    'raids for payment','raid for payment',
+    'raids for pay','raid for pay',
+    'raids for beli','raid for beli',
+    'raids for robux','raid for robux',
+    'raids for perm','raid for perm',
+    'raids for gp','raid for gp',
+    'raids for gamepass','raid for gamepass',
+    'paying for raids','paying for raid',
+    'pay for raids','pay for raid',
+    'i pay for raids','i pay for raid',
+    'beli for raids','beli for raid',
+    'fruit for raids','fruit for raid',
+    'perm for raids','perm for raid',
+    'gp for raids','gamepass for raids',
+    // ── Seeking ──────────────────────────────────────────
+    'need raid carry','need raids carry',
+    'need carry for raid','need carry for raids',
+    'need raid host','need raids host',
+    'need host for raid','need host for raids',
+    'lf raid carry','lf raid host','lf raid service',
+    'lfg raid carry','lfg raid host','lfg raid service',
+    'need help with raids','need help with raid',
+    'looking for raid carry','looking for raid host','looking for raid service',
+    'looking for someone to host raids','looking for someone to carry raids',
+    'looking for someone to host raid','looking for someone to carry raid',
+    'need someone to host raids','need someone to carry raids',
+    'need someone to host raid','need someone to carry raid',
+    'anyone hosting raids','anyone hosting raid',
+    'anyone carry raids','anyone carry raid',
+    'anyone carrying raids','anyone carrying raid',
+    'who hosting raids','who hosting raid',
+    'who carry raids','who carry raid',
+    'anyone running raids','anyone running raid',
+    'who running raids','who running raid',
+    'anyone doing raids','anyone doing raid',
+    'who doing raids','who doing raid',
+    'who can host raids','who can carry raids',
+    'who can host raid','who can carry raid',
+    'can anyone host raids','can anyone carry raids',
+    'can anyone host raid','can anyone carry raid',
+    'help with raids','help with raid',
+    'carry for raid','carry for raids',
+    'join my raid','join my raids',
+    'join for raid','join for raids',
+    'join raid','join raids',
+    'dm me for raids','dm me for raid',
+    'pm me for raids','pm me for raid',
+    'dm for raids','dm for raid',
+    'message me for raids','message me for raid',
+    // ── Team / recruitment ───────────────────────────────
+    'raid farm','raid farming','raid grind','raid grinding',
+    'raid lobby','raid squad','raid team','raid crew',
+    'raid boss carry','raid boss host',
+    'need 1 for raid','need 2 for raid','need 3 for raid',
+    'need one for raid','need two for raid','need three for raid',
+    'lf 1 for raid','lf 2 for raid','lf 3 for raid',
+    'need more for raid','need more for raids',
+    'need ppl for raids','need people for raids',
+    'need ppl for raid','need people for raid',
+    'lf 1 more for raid','lf 2 more for raid','lf 3 more for raid',
+    'lfg for raids','lfg for raid','lfg raids','lfg raid',
+];
+
+/**
+ * Returns true if the message appears to be offering or seeking a
+ * Blox Fruits raid carry / hosting service that belongs in #services.
+ *
+ * @param {string} cleanText - output of fullClean()
+ */
+function detectRaidService(cleanText) {
+    const t  = cleanText;
+    const ns = t.replace(/[\s_]/g, '');
+
+    // 1 ── Strict phrase list (nospace match — survives fullClean)
+    for (const phrase of RAID_STRICT_PHRASES) {
+        const p = phrase.toLowerCase().replace(/[\s_]/g, '');
+        if (p.length >= 6 && ns.includes(p)) return true;
+    }
+
+    // 2 ── Named Blox Fruits raids (nospace match)
+    for (const named of BF_NAMED_RAIDS_NS) {
+        if (ns.includes(named)) return true;
+    }
+
+    // 3 ── Fast bail-out: if "raid"/"raids" isn't in the message at all, stop.
+    if (!/(?<![a-z])r+a+i+d+s*(?![a-z])/i.test(t)) return false;
+
+    // 4 ── Regex combos: service / offer verbs near a raid word ─────────────
+
+    // "hosting/carrying/running/doing/open/start raid(s)"
+    if (/\b(?:host(?:ing|s|ed)?|carr(?:y(?:ing)?|ied|ies)|run(?:ning|s)?|doing?|clear(?:ing|s)?|boost(?:ing|s)?|help(?:ing|s)?|offer(?:ing|s)?|open(?:ing|s)?|start(?:ing|s)?|afk(?:\s*carry)?)\b[\s\W]{0,40}\braids?\b/i.test(t)) return true;
+
+    // "raid(s) carry / host / service / run / doing / open / starting"
+    if (/\braids?\b[\s\W]{0,40}\b(?:carry|carr(?:y(?:ing)?|ied|ies)|host(?:ing|s|ed)?|service|run(?:ning|s)?|doing?|clear(?:ing|s)?|boost(?:ing|s)?|offer(?:ing|s)?|open(?:ing|s)?|start(?:ing|s)?|service|help(?:ing)?|asap|now|fast|quick|available|open)\b/i.test(t)) return true;
+
+    // "need/lf/want/looking for/anyone … raid(s)"
+    if (/\b(?:need|lf|lfg|lfs|want|wanna|wana|looking\s+for|searching\s+for|seeking|anyone|any1|someone|some1|who\s+can|dm\s+me|pm\s+me)\b[\s\W]{0,35}\braids?\b/i.test(t)) return true;
+
+    // payment + raid(s)
+    if (/\braids?\b[\s\W]{0,30}(?:for\s+)?(?:frags?|fragments?|pay(?:ment|ing)?|beli|robux|perm|perms|gp|gamepass)\b/i.test(t)) return true;
+    if (/\b(?:pay(?:ment|ing)?|beli|robux|perm|perms|gp|gamepass)\b[\s\W]{0,30}for[\s\W]{0,10}\braids?\b/i.test(t)) return true;
+
+    // join + raid (offering spots)
+    if (/\b(?:join|hop\s+in|come\s+in)\b[\s\W]{0,20}(?:for\s+|my\s+|the\s+)?\braids?\b/i.test(t)) return true;
+
+    // 5 ── Verb proximity check (nospace): raid word within 80 chars of a service verb
+    const nsRaidIdx = ns.search(/r+a+i+d+s*/);
+    if (nsRaidIdx !== -1) {
+        for (const verb of RAID_SERVICE_VERBS) {
+            const vc = verb.replace(/\s/g, '');
+            if (vc.length < 2) continue;
+            const vi = ns.indexOf(vc);
+            if (vi !== -1 && Math.abs(nsRaidIdx - vi) <= 80) return true;
+        }
+    }
+
+    return false;
+}
+
 function scanForServiceIntent(cleanText, strictness = 5) {
     const ns = cleanText.replace(/\s/g, '');
 
@@ -4371,13 +4598,8 @@ function scanForServiceIntent(cleanText, strictness = 5) {
         if (ns.includes(phrase.replace(/\s/g,'')) || cleanText.includes(phrase)) return true;
     }
 
-    // ── carry + raids combo (words allowed between them) ──────────────────
-    // catches: "carry some raids for frags", "carry a few raids", "raids carry", etc.
-    if (/\bcarry\b.{0,35}\braids?\b/i.test(cleanText) || /\braids?\b.{0,35}\bcarry\b/i.test(cleanText)) return true;
-    // payment keywords paired with raids — "raids for frags / fragments / beli / robux / perm / gp"
-    if (/\braids?\s+for\s+(?:frags?|fragments?|pay(?:ment)?|beli|robux|perm|gp)\b/i.test(cleanText)) return true;
-    // "ill host" / "i'll host" / "i host" with raids anywhere in message — hosting + raids = service request
-    if (/\braids?\b/i.test(cleanText) && /\b(?:i(?:'?ll)?|i will)\s+host\b/i.test(cleanText)) return true;
+    // ── Dedicated raid-service detector (comprehensive) ──────────────────
+    if (detectRaidService(cleanText)) return true;
 
     // ── At level 1-2: curated phrases + exact SERVICE_INTENT_EXACT only (no fuzzy, no EXTRA) ──
     if (strictness <= 2) {
@@ -10149,6 +10371,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const lightUpg= scanForLightningUpgrades(cleaned);
         const intent  = scanForIntent(cleaned);
         const svcInt  = scanForServiceIntent(cleaned);
+        const raidSvc = detectRaidService(cleaned);
         const tier    = hasTierKeyword(cleaned);
         const accTrd  = detectAccountTrading(cleaned);
         const beg     = detectBegging(cleaned);
@@ -10167,6 +10390,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                 { name: 'Lightning Upgr.', value: lightUpg.join(', ')  || 'None', inline: false },
                 { name: 'Trade Intent',    value: intent   ? '✅' : '❌', inline: true },
                 { name: 'Service Intent',  value: svcInt   ? '✅' : '❌', inline: true },
+                { name: 'Raid Service',    value: raidSvc  ? '🚨 YES' : '✅ CLEAN', inline: true },
                 { name: 'Tier Keyword',    value: tier     ? '✅' : '❌', inline: true },
                 { name: 'Direct Exchange', value: exchange ? '✅' : '❌', inline: true },
                 { name: 'Account Trading', value: accTrd   ? '🚨 YES' : '✅ CLEAN', inline: true },
