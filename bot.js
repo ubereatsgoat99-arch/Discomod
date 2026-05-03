@@ -1366,12 +1366,10 @@ function getGuildSettings(guildId, data) {
                 'discord.com','discord.gg','discordapp.com',
             ],
             inviteDenylistDomains: [
-                'discord.gg','discord.com','discordapp.com',
                 'discord.me','discord.io','discord.li','discord.id',
                 'disboard.org','top.gg',
                 'invite.gg','inv.gg','discord.link','dsc.gg',
                 'dis.gd','discord.gift',
-                'discordcdn.com','cdn.discordapp.com',
             ],
             inviteAllowedChannelIds: [],
 
@@ -2004,6 +2002,12 @@ const HOMOGLYPHS_EXTRA = {
     '：':':','；':';','，':',','、':',','！':'!','？':'?','％':'%','＃':'#','＆':'&','＠':'@','＊':'*','＋':'+','＝':'=','／':'/','＼':'\\','｜':'|',
     '\u2060':'','\u180e':'','\u200e':'','\u200f':'','\u202a':'','\u202b':'','\u202c':'','\u202d':'','\u202e':'',
     '\u2061':'','\u2062':'','\u2063':'','\u2064':'','\u034f':'',
+    // ── Regional indicator emoji letters (🇦–🇿) — people space them out to spell words ──
+    '\u{1F1E6}':'a','\u{1F1E7}':'b','\u{1F1E8}':'c','\u{1F1E9}':'d','\u{1F1EA}':'e',
+    '\u{1F1EB}':'f','\u{1F1EC}':'g','\u{1F1ED}':'h','\u{1F1EE}':'i','\u{1F1EF}':'j',
+    '\u{1F1F0}':'k','\u{1F1F1}':'l','\u{1F1F2}':'m','\u{1F1F3}':'n','\u{1F1F4}':'o',
+    '\u{1F1F5}':'p','\u{1F1F6}':'q','\u{1F1F7}':'r','\u{1F1F8}':'s','\u{1F1F9}':'t',
+    '\u{1F1FA}':'u','\u{1F1FB}':'v','\u{1F1FC}':'w','\u{1F1FD}':'x','\u{1F1FE}':'y','\u{1F1FF}':'z',
 };
 const LEET_MAP = {
     '4':'a','3':'e','1':'i','0':'o','@':'a','!':'',
@@ -3574,8 +3578,28 @@ const SERVICE_INTENT_PHRASE_EXTRA = [
     "who can carry raid",
     "help with raid",
     "help with raids",
-    "carry raid",
+    "carry raid", 
+    "carrying some raids",
+    "carrying raids",
+    "hosting raids who join",
+    "dm me for raids",
     "carry raids",
+    "carry some raids",
+    "carry some raid",
+    "carry a raid",
+    "carry few raids",
+    "raids for frags",
+    "raid for frags",
+    "raids for fragments",
+    "raid for fragments",
+    "raids for payment",
+    "raids for pay",
+    "ill host raids",
+    "ill host raid",
+    "i host raids",
+    "i host raid",
+    "ill host the raid",
+    "ill host the raids",
     "raid service",
     "raid services",
     "service for raid",
@@ -4077,6 +4101,14 @@ function scanForServiceIntent(cleanText, strictness = 5) {
     for (const phrase of SERVICE_INTENT_PHRASE) {
         if (ns.includes(phrase.replace(/\s/g,'')) || cleanText.includes(phrase)) return true;
     }
+
+    // ── carry + raids combo (words allowed between them) ──────────────────
+    // catches: "carry some raids for frags", "carry a few raids", "raids carry", etc.
+    if (/\bcarry\b.{0,35}\braids?\b/i.test(cleanText) || /\braids?\b.{0,35}\bcarry\b/i.test(cleanText)) return true;
+    // payment keywords paired with raids — "raids for frags / fragments / beli / robux / perm / gp"
+    if (/\braids?\s+for\s+(?:frags?|fragments?|pay(?:ment)?|beli|robux|perm|gp)\b/i.test(cleanText)) return true;
+    // "ill host" / "i'll host" / "i host" with raids anywhere in message — hosting + raids = service request
+    if (/\braids?\b/i.test(cleanText) && /\b(?:i(?:'?ll)?|i will)\s+host\b/i.test(cleanText)) return true;
 
     // ── At level 1-2: curated phrases + exact SERVICE_INTENT_EXACT only (no fuzzy, no EXTRA) ──
     if (strictness <= 2) {
@@ -4914,13 +4946,6 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addSubcommand(s => s.setName('enable').setDescription('Enable no-affiliation mode'))
         .addSubcommand(s => s.setName('disable').setDescription('Disable no-affiliation mode')),
-    new SlashCommandBuilder()
-        .setName('noaffliation')
-        .setDescription('Replace trade/service redirects with a no-affiliation notice')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(s => s.setName('enable').setDescription('Enable no-affiliation mode'))
-        .addSubcommand(s => s.setName('disable').setDescription('Disable no-affiliation mode')),
-
     new SlashCommandBuilder()
         .setName('dashboard')
         .setDescription('Open the admin dashboard')
@@ -6275,7 +6300,9 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'botstatus': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            const totalExiled     = Object.keys(data.exiles).length;
+            const totalViolations = Object.values(data.violations).reduce((a,b)=>a+b,0);
             const embed = new EmbedBuilder()
                 .setTitle('📊 Bot Status / Configuration')
                 .setColor(0x5865F2)
@@ -6287,6 +6314,14 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Link Mode', value: String(gs.linkMode || 'strict'), inline: true },
                     { name: 'Link Action', value: String(gs.linkAction || 'warn'), inline: true },
                     { name: 'Auto-Timeouts', value: gs.timeoutEnabled ? '✅ ON' : '❌ OFF', inline: true },
+
+                    { name: 'Scam Detection', value: gs.scamEnabled ? '✅ ON' : '❌ OFF', inline: true },
+                    { name: '🛡️ Immunity', value: imm.enabled ? '✅ ON' : '❌ OFF', inline: true },
+                    { name: '⚙️ Threshold', value: String(gs.violationThreshold || VIOLATION_THRESHOLD), inline: true },
+
+                    { name: '👥 Currently Exiled', value: String(totalExiled), inline: true },
+                    { name: '⚠️ Total Violations', value: String(totalViolations), inline: true },
+                    { name: '⏱️ Exile Duration', value: `${gs.exileDurationMins || EXILE_DURATION_MINS}m`, inline: true },
 
                     { name: 'Verify Gate', value: gs.verifyGateEnabled ? `✅ ON (minDays=${gs.verifyMinAccountAgeDays}, role=${gs.verifyRequiredRoleId || 'None'}, action=${gs.verifyGateAction})` : '❌ OFF', inline: false },
                     { name: 'Timeout Minutes', value: `spam=${gs.timeoutMinutesSpam} scam=${gs.timeoutMinutesScam} command=${gs.timeoutMinutesCommand} trade=${gs.timeoutMinutesTrade} service=${gs.timeoutMinutesService}`, inline: false },
@@ -6795,33 +6830,6 @@ client.on('interactionCreate', async interaction => {
                 .setTitle('📋 Currently Exiled')
                 .setColor(0xFF4400)
                 .setDescription(lines.length ? lines.join('\n') : 'Nobody is currently exiled.')], ephemeral: true });
-            break;
-        }
-
-        // ── /botstatus ────────────────────────────────────
-        case 'botstatus': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
-            const totalExiled     = Object.keys(data.exiles).length;
-            const totalViolations = Object.values(data.violations).reduce((a,b)=>a+b,0);
-            await interaction.reply({ embeds: [new EmbedBuilder()
-                .setTitle('🤖 SKYNET V7 — Status')
-                .setColor(0x5865F2)
-                .addFields(
-                    { name: '🧠 Checks',          value: gs.checksEnabled ? '✅ ON' : '🛑 OFF',       inline: true },
-                    { name: '📡 Trade Channel',    value: `<#${gs.tradeChannelId}>`,              inline: true },
-                    { name: '⚔️ Services Channel', value: `<#${gs.servicesChannelId}>`,           inline: true },
-                    { name: '📋 Log Channel',      value: gs.logChannelId ? `<#${gs.logChannelId}>` : 'Not set', inline: true },
-                    { name: '📩 Appeals Channel',  value: gs.appealsChannelId ? `<#${gs.appealsChannelId}>` : 'Not set', inline: true },
-                    { name: '⛓️ Exile Role',       value: `<@&${gs.exiledRoleId}>`,               inline: true },
-                    { name: '🛡️ Immunity',         value: imm.enabled ? '✅ ON' : '❌ OFF',        inline: true },
-                    { name: '🚨 Scam Detection',   value: gs.scamEnabled ? '✅ ON' : '❌ OFF',      inline: true },
-                    { name: '⚙️ Threshold',        value: String(gs.violationThreshold || VIOLATION_THRESHOLD), inline: true },
-                    { name: '⏱️ Exile Duration',   value: `${gs.exileDurationMins || EXILE_DURATION_MINS}m`, inline: true },
-                    { name: '👥 Currently Exiled', value: String(totalExiled),                    inline: true },
-                    { name: '⚠️ Total Violations', value: String(totalViolations),                inline: true },
-                    { name: '🤖 AI Detection',     value: AI_ENABLED ? '✅ ON' : '❌ OFF',         inline: true },
-                )
-                .setTimestamp()], ephemeral: true });
             break;
         }
 
@@ -7971,8 +7979,10 @@ client.on('messageCreate', async message => {
             if (!deny.length && !allow.length) blocked = true;
             for (const d of invDomains.map(normalizeDomain)) {
                 if (!d) continue;
-                if (deny.length && domainInList(d, deny)) { blocked = true; break; }
+                // Allow list and COMMON_ALLOWED_DOMAINS always win — check them first
                 if (allow.length && domainInList(d, allow)) { blocked = false; break; }
+                if (domainInList(d, COMMON_ALLOWED_DOMAINS)) { blocked = false; break; }
+                if (deny.length && domainInList(d, deny)) { blocked = true; break; }
             }
             if (blocked) {
                 try { await message.delete(); } catch {}
@@ -8091,6 +8101,47 @@ client.on('messageCreate', async message => {
     if (immune) return;
 
     const { contentClean, contentNospace } = prepareText(message.content);
+
+    // ── NO-AFFILIATION EARLY EXIT ──────────────────────────
+    // When noAffiliationEnabled is on, ANY single detection signal is sufficient
+    // to fire the notice — no need to combine signals.
+    if (gs.noAffiliationEnabled &&
+        !isCategoryImmune(message.member, guildId, data, 'service') &&
+        !isCategoryImmune(message.member, guildId, data, 'trade')) {
+
+        const _tier       = hasTierKeyword(contentClean);
+        const _intent     = scanForIntent(contentClean, getStrictness(gs));
+        const _svcIntent  = scanForServiceIntent(contentClean, getStrictness(gs));
+        const _bossHit    = bossRegex.test(contentClean);
+        const _fruitRaid  = fruitRaidRegex.test(contentClean);
+        let   _exchange   = tradeRegex.test(contentClean);
+        if (!_exchange) for (const p of NOSPACE_PATTERNS) if (p.test(contentNospace)) { _exchange = true; break; }
+
+        const _noAffHit = _tier || _intent || _svcIntent || _bossHit || _fruitRaid || _exchange;
+        if (_noAffHit) {
+            const serverName = message.guild?.name || 'This server';
+            if (gs.enforcementMode === 'monitor') {
+                await handlePolicyViolation(message, data, gs, 'service', {
+                    title: '📢 Notice — No Affiliation',
+                    color: 0x5865F2,
+                    reason: `${serverName} is not Blox Fruits related anymore. (No-affiliation mode)`,
+                    footerLabel: 'No Affiliation',
+                    ttlMs: 12000,
+                });
+                return;
+            }
+            try { await message.delete(); } catch {}
+            await issueViolation(message, data, gs, {
+                title: '📢 Notice — No Affiliation',
+                color: 0x5865F2,
+                reason: `${serverName} is not Blox Fruits related anymore. Please use the Official Blox Fruits Discord for services/trades related to Blox Fruits.`,
+                details: message.content,
+                footerLabel: 'No Affiliation',
+                ttlMs: 12000,
+            });
+            return;
+        }
+    }
 
     // ── TRIVIAL MESSAGE GUARD ─────────────────────────────────────
     // Skip scanning for messages that are purely punctuation, dots, reaction
@@ -8425,6 +8476,31 @@ async function checkRaceViolation(message, contentClean, contentNospace, data, g
     const racesFound = scanForRaces(contentClean);
     for (const r of RACES) { const rc=r.replace(/[\s\-]/g,''); if(rc.length>=4&&contentNospace.includes(rc)&&!racesFound.includes(r)) racesFound.push(r); }
     if (!racesFound.length) return;
+
+    if (gs.noAffiliationEnabled) {
+        const serverName = message.guild?.name || 'This server';
+        if (gs.enforcementMode === 'monitor') {
+            await handlePolicyViolation(message, data, gs, 'service', {
+                title: '📢 Notice — No Affiliation',
+                color: 0x5865F2,
+                reason: `${serverName} is not Blox Fruits related anymore. (No-affiliation mode)`,
+                footerLabel: 'No Affiliation',
+                ttlMs: 12000,
+            });
+            return;
+        }
+        try { await message.delete(); } catch {}
+        await issueViolation(message, data, gs, {
+            title: '📢 Notice — No Affiliation',
+            color: 0x5865F2,
+            reason: `${serverName} is not Blox Fruits related anymore. Please use the Official Blox Fruits Discord for services/trades related to Blox Fruits.`,
+            details: message.content,
+            footerLabel: 'No Affiliation',
+            ttlMs: 12000,
+        });
+        return;
+    }
+
     await handlePolicyViolation(message, data, gs, 'service', {
         title: '⚠️ Race Service — Wrong Channel',
         color: 0x9B59B6,
