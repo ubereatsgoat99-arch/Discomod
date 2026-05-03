@@ -7668,8 +7668,15 @@ function looksLikeCommandButNotCaught(raw, cleaned) {
     if (/^<@!?\d+>\s*[!./][a-z]/i.test(r)) return true;
 
     for (const ev of COMMAND_EVASION_PATTERNS) {
-        const ec = ev.replace(/[\s_]/g,'').toLowerCase();
-        if (ec.length >= 6 && ns.includes(ec)) return true;
+        const evLower = ev.toLowerCase();
+        const ec = evLower.replace(/[\s_]/g,'');
+        if (ec.length >= 6) {
+            // Check spaced-out evasion in the cleaned text (e.g. "d i s a b l e")
+            if (t.includes(evLower)) return true;
+            // Check compact form with word boundaries — prevents subword matches like
+            // "disable" firing on "disabled", "enable" on "enabled", "unlock" on "unlocked", etc.
+            if (new RegExp(`(?<![a-z0-9])${escapeRegex(ec)}(?![a-z0-9])`, 'i').test(ns)) return true;
+        }
     }
 
     for (const n of COMMON_SLASH_COMMAND_NAMES) {
