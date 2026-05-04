@@ -9000,6 +9000,26 @@ client.on('messageCreate', async message => {
 
     const { contentClean, contentNospace } = prepareText(message.content);
 
+    // ── SPAM DETECTION ────────────────────────────────────
+    // NOTE: this MUST run before the trivial message guard below.
+    // Short messages like "e", "w", "wd" are classic spam floods — they have
+    // fewer than 4 alphanumeric chars so the guard would return early and the
+    // spam tracker would never record them, making the threshold unreachable.
+    if (gs.spamWarnEnabled !== false && !isCategoryImmune(message.member, guildId, data, 'spam')) {
+        const spamResult = checkSpam(message.author.id, message.content, gs);
+        if (spamResult.spam) {
+            clearSpamHistory(message.author.id);
+            await handlePolicyViolation(message, data, gs, 'spam', {
+                title: '⚠️ Spam Detected',
+                color: 0xFF8800,
+                reason: `No spam allowed. (${spamResult.reason})`,
+                footerLabel: 'Spam',
+                ttlMs: 10000,
+            });
+            return;
+        }
+    }
+
     // ── TRIVIAL MESSAGE GUARD ─────────────────────────────────────
     // Skip scanning for messages that are purely punctuation, dots, reaction
     // characters, or have fewer than 4 meaningful alphanumeric chars.
@@ -9096,21 +9116,6 @@ client.on('messageCreate', async message => {
                     }
                 }
             }
-        }
-    }
-
-    // ── SPAM DETECTION ────────────────────────────────────
-    if (gs.spamWarnEnabled !== false && !isCategoryImmune(message.member, guildId, data, 'spam')) {
-        const spamResult = checkSpam(message.author.id, message.content, gs);
-        if (spamResult.spam) {
-            await handlePolicyViolation(message, data, gs, 'spam', {
-                title: '⚠️ Spam Detected',
-                color: 0xFF8800,
-                reason: `No spam allowed. (${spamResult.reason})`,
-                footerLabel: 'Spam',
-                ttlMs: 10000,
-            });
-            return;
         }
     }
 
