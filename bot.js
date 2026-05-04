@@ -948,276 +948,6 @@ const TRIALS_STRICT_PHRASES = [
     'who running trials',
     'who running v4 trials',
     'who doing trials',
-    "Hosting raids fast, join now!",
-
-"Full raid carry, you just chill!",
-
-"Cheap raid services, fast and safe!",
-
-"Need fragments? I got you covered!",
-
-"Auto raid hosting, fast clears!",
-
-"Join for quick and easy raid wins!",
-
-"Carrying all raids, no effort needed!",
-
-"Fast raids, high success rate!",
-
-"Grinding fragments? Join my raids!",
-
-"Raid services open, limited slots!",
-
-"Solo carry raids, guaranteed win!",
-
-"Professional raid service, trusted!",
-
-"Quick flame raids, join up!",
-
-"Hosting Buddha raids, easy wins!",
-
-"Fully AFK raid carry available!",
-
-"Max level helping with raids!",
-
-"Cheap and fast raid hosting!",
-
-"Need awakening? I got raids!",
-
-"Instant raid start, no waiting!",
-
-"Carrying dough raids, join fast!",
-
-"Join for smooth raid clears!",
-
-"Fastest raid service in server!",
-
-"Helping newbies with raids!",
-
-"Raid farm going on, hop in!",
-
-"Carrying light raids, easy frags!",
-
-"Raid grinding nonstop!",
-
-"Full team raids, join quickly!",
-
-"Legendary raid service open!",
-
-"Easy fragments farm here!",
-
-"Raid boss melts instantly!",
-
-"Hosting raids all day!",
-
-"Top tier raid carrier here!",
-
-"Quick raids, fast rewards!",
-
-"Safe and reliable raid service!",
-
-"Join my raid squad now!",
-
-"Raid help for all players!",
-
-"Fast awakenings guaranteed!",
-
-"Grinding raids nonstop!",
-
-"Join for instant raid clears!",
-
-"Carrying phoenix raids!",
-
-"Easy wins, no stress raids!",
-
-"Raid service active, join now!",
-
-"Helping grind fragments fast!",
-
-"Best raid host in server!",
-
-"Carrying magma raids!",
-
-"Raid grind = fast progress!",
-
-"Need help? Join my raids!",
-
-"Full carry, zero effort!",
-
-"Quick join, raid starting!",
-
-"Raid services open 24/7!",
-
-"Pro raid host, fast clears!",
-
-"Join for guaranteed wins!",
-
-"All raids available here!",
-
-"Raid carry with max stats!",
-
-"Grinding awakenings fast!",
-
-"Carrying ice raids!",
-
-"Fast raids, no fail!",
-
-"Top speed raid hosting!",
-
-"Join now before it's full!",
-
-"Instant raid entry available!",
-
-"Carrying dark raids!",
-
-"Raid farm squad ready!",
-
-"Easy fragment farming!",
-
-"Raid carry for everyone!",
-
-"Nonstop raids, join anytime!",
-
-"High level raid support!",
-
-"Need awakening? Join raids!",
-
-"Fast raid completion guaranteed!",
-
-"Reliable raid host here!",
-
-"Join for easy raid wins!",
-
-"Carrying quake raids!",
-
-"Raid help for beginners!",
-
-"Grinding fragments quickly!",
-
-"Raid hosting, fast entry!",
-
-"Full squad raid carry!",
-
-"Instant wins, join raids!",
-
-"Carrying spider raids!",
-
-"Best raid grinding method!",
-
-"Fastest way to get frags!",
-
-"Join raid team now!",
-
-"Pro level raid service!",
-
-"Raid boss deleted instantly!",
-
-"Carrying sand raids!",
-
-"Join for smooth gameplay!",
-
-"Quick and easy raids!",
-
-"Raid squad forming now!",
-
-"High efficiency raid runs!",
-
-"Carrying rumble raids!",
-
-"Grinding made easy with raids!",
-
-"Join fast before start!",
-
-"Raid services trusted!",
-
-"Fastest clears guaranteed!",
-
-"Carrying love raids!",
-
-"Easy awakenings here!",
-
-"Join my raid lobby!",
-
-"Helping all players grow!",
-
-"Raid farming nonstop!",
-
-"Carrying gravity raids!",
-
-"Best value raid service!",
-
-"Quick clears, big rewards!",
-
-"Raid now, win fast!",
-
-"Carrying blizzard raids!",
-
-"Fast grind, no hassle!",
-
-"Join for pro raid help!",
-
-"Raid carry active!",
-
-"Grinding fragments daily!",
-
-"Carrying portal raids!",
-
-"Instant success raids!",
-
-"Join and get carried!",
-
-"Raid help anytime!",
-
-"Carrying venom raids!",
-
-"Fast progression via raids!",
-
-"Join raid crew now!",
-
-"Top raid performance!",
-
-"Carrying control raids!",
-
-"Easy wins every time!",
-
-"Join for best raid experience!",
-
-"Raid hosting right now!",
-
-"Carrying dragon raids!",
-
-"Fastest way to awaken!",
-
-"Join before it fills!",
-
-"Raid pros ready!",
-
-"Carrying leopard raids!",
-
-"Grinding with pros!",
-
-"Join and dominate raids!",
-
-"Raid farm experts here!",
-
-"Carrying kitsune raids!",
-
-"Fast and smooth runs!",
-
-"Join for instant action!",
-
-"Raid kings hosting now!",
-
-"Carrying all fruit raids!",
-
-"Ultimate raid service!",
-
-"Join and get rich in frags!",
-
-"Raid success guaranteed!",
-
-"Top tier grinding squad!",
-
     'who doing v4 trials',
     'need people for v4 trials',
     'need ppl for v4 trials',
@@ -2596,7 +2326,7 @@ const COMMON_WORD_WHITELIST = new Set([
     "weld","went","west","whim","wide","wife","wiki","wild","wind","wine",
     "wing","wire","wise","wish","with","wolf","wood","wool","word","wore",
     "work","worm","worn","wrap","writ","yard","yarn","year","yell","zero",
-    "zone","loot","lore","hero","buff","nerf","stat",
+    "zone","loot","lore","hero","buff","nerf","stat","nice",
     // ── Common words that fuzzy-match boss/race names (prevents false positives) ──
     "cyber","diamond","warden","stone","swan","yeti","bobby","jeremy","indra","angel","draco","mink","ghoul","shark",
     // ── 5-letter common words ────────────────────────────────────
@@ -2816,6 +2546,130 @@ const COMMON_WORD_WHITELIST = new Set([
     "stupid","stupider","stupidest","stupidity","dumb","dumber","dumbest","dumbass",
     "jerk","jerks","jerkoff","jackass","jackasses",
     "loser","losers","nerd","nerds","geek","geeks","freak","freaks","weirdo","weirdos",
+    // ── Extra ones (extended Discord slang / swears / fillers) ─────────────────
+"wtff","wtfff","wtffff","wtf bro","wtf man","wtf dude",
+"omfg","omfgg","omfggg","omfg bro","omfg dude",
+"tf","tf bro","tf man","tf is this","tf was that",
+"af","asf","af bro","asf bro","asf man",
+"frfr","fr fr","fr bro","fr man","fr dude",
+"nahhh","nahhhh","nahhhhh","nah broo","nah dude",
+"yeaaa","yeaaaa","yeaaaaa","yeahhh","yeahhhh",
+"brooo","brooooo","broooooo","bruhhh","bruhhhh","bruhhhhh",
+"dudeee","dudeeee","dudeeeeee","mannn","mannnn","maneee",
+"ayo bro","ayo what","ayo wtf","ayo nah","ayo chill",
+"yo broo","yo dudee","yo mannn","yo wtf bro",
+"sheeesh","sheeeshh","sheeeshhh","sheeshhh",
+"gahdamn","goddamn","goddamnn","goddamnnn",
+"damnnn","damnnnn","damnnnnn","damn bro","damn dude",
+"shittt","shitttt","shittttt","shit bro","shit dude",
+"bullshitt","bullshitt","bullshitt bro","bullshitttt",
+"fuuuuck","fuuuck","fuuuuuck","fuuuuuckk","fuckkkk","fuckkkkk",
+"fkin","fckin","fk","fk bro","fk man","fk dude",
+"mf","mfer","mfers","mf bro","mf dude",
+"bitchhh","bitchhhh","bitchhhhh","bitch bro","bitch dude",
+"asss","assss","asssss","ass bro","ass dude",
+"hell nah","hell nahh","hell nahhh","hell nooo",
+"nah hell","nah hell bro","nah hell nah",
+"tf brooo","tf dudeee","tf mannn",
+"nah wtf","nah wtf bro","nah wtf dude",
+"yo wtf bro","yo wtf man","yo wtf dude",
+"bro wtf is that","bro wtf was that",
+"bro whattt","bro whatttt","bro whattttt",
+"bro whyyy","bro whyyyy","bro whyyyyy",
+"bro howww","bro howwww","bro howwwww",
+"dude whattt","dude whyyy","dude howww",
+"man whattt","man whyyy","man howww",
+"wtf happened","wtf is going on","wtf just happened",
+"bro stoppp","bro stopp","bro stahp",
+"stopppp","stoppppp","stop brooo",
+"waittt","waitttt","waittttt","wait brooo",
+"hold up","holdup","hold uppp","hold upppp",
+"nah chill","nah chilll","nah chill bro",
+"chillll","chilllll","chillllll",
+"calm downnn","calm downnnn","calm bro",
+"relaxxx","relaxxxx","relax bro",
+"no shot","no shottt","no shot bro",
+"no way broo","no wayyy bro","no wayyy dude",
+"aint no shot","aint no wayyy","aint no way bro",
+"bro i cant","bro i canttt","bro i cantttt",
+"i cant bro","i canttt","i cantttt",
+"im done","im done bro","im doneee",
+"im dead bro","im deaddd","im deadddd",
+"dying bro","dyinggg","dyingggg",
+"crying bro","cryinggg","cryingggg",
+"nah im out","im out bro","im outtt",
+"im gone","im gone bro","im goneee",
+"this crazy","this crazyy","this crazyyy",
+"thats crazy","thats crazyy","thats crazyyy",
+"wild bro","wilddd","wildddd",
+"insane bro","insaneee","insaneeee",
+"crazy bro","crazyyy","crazyyyy",
+"nah bro stop","nah bro stopp","nah bro stoppp",
+"bro actually","bro literally","bro honestly",
+"literally bro","actually bro","honestly bro",
+"deadass bro","deadasss","deadassss",
+"on god bro","on goddd","on godddd",
+"no cap bro","no capp","no cappp",
+"cappp","capppp","cappppp",
+"middd","midddd","middddd",
+"trashhh","trashhhh","trashhhhh",
+"garbageee","garbageeee","garbageeeee",
+"so bad bro","so badddd","so badddd",
+"get good","get gud","git gud",
+"skill issue bro","skill issueee","skill issueeee",
+"massive skill issue","huge skill issue",
+"hard diff","big diff","massive diff",
+"diffed","diffed bro","diffed hard",
+"ezzz","ezzz","ezzzz","ez bro",
+"too ez","too easyyy","too easyyyy",
+"freeee","freeeee","freeeeee",
+"free win","free win bro",
+"owned","owned bro","you got owned",
+"rekt","rekt bro","rekt hard",
+"clapped","clapped bro","you got clapped",
+"rolled","rolled bro","you got rolled",
+"smoked","smoked bro","you got smoked",
+"folded","folded bro","you folded",
+"nah u suck","u suck bro","u suckkk",
+"you trash","you trashhh","you trashhhh",
+"you bad","you baddd","you badddd",
+"bot","bottt","botttt","npc bro","npc behavior",
+"npc ass","npc energy","npc vibes",
+"weird bro","weirdd","weirddd",
+"cringe bro","cringee","cringeee",
+"so cringe","so cringeee","so cringeeee",
+"embarrassing","embarrassing bro",
+"nah thats sad","thats saddd","thats sadddd",
+"yikes bro","yikess","yikesss",
+"oofff","ooffff","oofffff",
+"big oof","huge oof",
+"nah bro pls","bro pls","pls brooo",
+"please bro","pleaseeee","pleaseeeee",
+"nah bro fr","bro fr fr","fr bro fr",
+"dead game","dead gameee","dead gameeee",
+"game dead","game deaddd","game deadddd",
+"laggy","laggyy","laggyyy",
+"so laggy","so laggyyy",
+"buggy","buggyy","buggyyy",
+"glitched","glitchedd","glitcheddd",
+"broken bro","brokennn","brokennnn",
+"op bro","oppp","opppp",
+"too op","too oppp","too opppp",
+"nerf this","nerf this bro",
+"buff this","buff this bro",
+"fix this","fix this bro",
+"devs pls","dev pls","devs fix",
+"admins pls","mods pls","staff pls",
+"report this","report bro",
+"ban this guy","ban him bro",
+"kick him","kick him bro",
+"mute him","mute him bro",
+"nah ban","nah ban bro",
+"what is this","what is this bro",
+"what even","what even bro",
+"why is this","why is this bro",
+"how is this","how is this bro", 
+
     // ── Common Discord / internet slang ───────────────────────────────────────────
     "bro","bruh","bruv","brah","bra","homie","homies","dude","duude","dudee","dudes",
     "fam","gang","gg","ez","gl","wp","gj","bg","rip","grz","gz","grats","gratz",
@@ -3754,6 +3608,275 @@ const SERVICE_INTENT_PHRASE_EXTRA = [
     "help with v2 trials",
     "help with trials",
     "help with trial",
+    "Hosting raids fast, join now!",
+
+"Full raid carry, you just chill!",
+
+"Cheap raid services, fast and safe!",
+
+"Need fragments? I got you covered!",
+
+"Auto raid hosting, fast clears!",
+
+"Join for quick and easy raid wins!",
+
+"Carrying all raids, no effort needed!",
+
+"Fast raids, high success rate!",
+
+"Grinding fragments? Join my raids!",
+
+"Raid services open, limited slots!",
+
+"Solo carry raids, guaranteed win!",
+
+"Professional raid service, trusted!",
+
+"Quick flame raids, join up!",
+
+"Hosting Buddha raids, easy wins!",
+
+"Fully AFK raid carry available!",
+
+"Max level helping with raids!",
+
+"Cheap and fast raid hosting!",
+
+"Need awakening? I got raids!",
+
+"Instant raid start, no waiting!",
+
+"Carrying dough raids, join fast!",
+
+"Join for smooth raid clears!",
+
+"Fastest raid service in server!",
+
+"Helping newbies with raids!",
+
+"Raid farm going on, hop in!",
+
+"Carrying light raids, easy frags!",
+
+"Raid grinding nonstop!",
+
+"Full team raids, join quickly!",
+
+"Legendary raid service open!",
+
+"Easy fragments farm here!",
+
+"Raid boss melts instantly!",
+
+"Hosting raids all day!",
+
+"Top tier raid carrier here!",
+
+"Quick raids, fast rewards!",
+
+"Safe and reliable raid service!",
+
+"Join my raid squad now!",
+
+"Raid help for all players!",
+
+"Fast awakenings guaranteed!",
+
+"Grinding raids nonstop!",
+
+"Join for instant raid clears!",
+
+"Carrying phoenix raids!",
+
+"Easy wins, no stress raids!",
+
+"Raid service active, join now!",
+
+"Helping grind fragments fast!",
+
+"Best raid host in server!",
+
+"Carrying magma raids!",
+
+"Raid grind = fast progress!",
+
+"Need help? Join my raids!",
+
+"Full carry, zero effort!",
+
+"Quick join, raid starting!",
+
+"Raid services open 24/7!",
+
+"Pro raid host, fast clears!",
+
+"Join for guaranteed wins!",
+
+"All raids available here!",
+
+"Raid carry with max stats!",
+
+"Grinding awakenings fast!",
+
+"Carrying ice raids!",
+
+"Fast raids, no fail!",
+
+"Top speed raid hosting!",
+
+"Join now before it's full!",
+
+"Instant raid entry available!",
+
+"Carrying dark raids!",
+
+"Raid farm squad ready!",
+
+"Easy fragment farming!",
+
+"Raid carry for everyone!",
+
+"Nonstop raids, join anytime!",
+
+"High level raid support!",
+
+"Need awakening? Join raids!",
+
+"Fast raid completion guaranteed!",
+
+"Reliable raid host here!",
+
+"Join for easy raid wins!",
+
+"Carrying quake raids!",
+
+"Raid help for beginners!",
+
+"Grinding fragments quickly!",
+
+"Raid hosting, fast entry!",
+
+"Full squad raid carry!",
+
+"Instant wins, join raids!",
+
+"Carrying spider raids!",
+
+"Best raid grinding method!",
+
+"Fastest way to get frags!",
+
+"Join raid team now!",
+
+"Pro level raid service!",
+
+"Raid boss deleted instantly!",
+
+"Carrying sand raids!",
+
+"Join for smooth gameplay!",
+
+"Quick and easy raids!",
+
+"Raid squad forming now!",
+
+"High efficiency raid runs!",
+
+"Carrying rumble raids!",
+
+"Grinding made easy with raids!",
+
+"Join fast before start!",
+
+"Raid services trusted!",
+
+"Fastest clears guaranteed!",
+
+"Carrying love raids!",
+
+"Easy awakenings here!",
+
+"Join my raid lobby!",
+
+"Helping all players grow!",
+
+"Raid farming nonstop!",
+
+"Carrying gravity raids!",
+
+"Best value raid service!",
+
+"Quick clears, big rewards!",
+
+"Raid now, win fast!",
+
+"Carrying blizzard raids!",
+
+"Fast grind, no hassle!",
+
+"Join for pro raid help!",
+
+"Raid carry active!",
+
+"Grinding fragments daily!",
+
+"Carrying portal raids!",
+
+"Instant success raids!",
+
+"Join and get carried!",
+
+"Raid help anytime!",
+
+"Carrying venom raids!",
+
+"Fast progression via raids!",
+
+"Join raid crew now!",
+
+"Top raid performance!",
+
+"Carrying control raids!",
+
+"Easy wins every time!",
+
+"Join for best raid experience!",
+
+"Raid hosting right now!",
+
+"Carrying dragon raids!",
+
+"Fastest way to awaken!",
+
+"Join before it fills!",
+
+"Raid pros ready!",
+
+"Carrying leopard raids!",
+
+"Grinding with pros!",
+
+"Join and dominate raids!",
+
+"Raid farm experts here!",
+
+"Carrying kitsune raids!",
+
+"Fast and smooth runs!",
+
+"Join for instant action!",
+
+"Raid kings hosting now!",
+
+"Carrying all fruit raids!",
+
+"Ultimate raid service!",
+
+"Join and get rich in frags!",
+
+"Raid success guaranteed!",
+
+"Top tier grinding squad!", 
     "help me with v4 trials",
     "help me with v3 trials",
     "help me with v2 trials",
@@ -3894,6 +4017,149 @@ const SERVICE_INTENT_PHRASE_EXTRA = [
     "carry raids",
     "raid service",
     "raid services",
+    "raid service lf ppl fast",
+"lf 3 for raid need carry",
+"hosting raids dm me",
+"raid carry cheap dm",
+"lf ppl for dough raid asap",
+"doing raids who wanna join",
+"raid service open dm quick",
+"need 2 more for raid",
+"lf buddha for raid carry",
+"hosting flame raid rn",
+"raid spam join fast",
+"doing 5x raids back to back",
+"raid service legit dm",
+"lf ppl grind frags",
+"need help with raid pls",
+"who got raid service",
+"buying raid carry",
+"selling raid service cheap",
+"raid carry for payment",
+"lf pro for raid carry",
+"raid help needed asap",
+"doing raids all night",
+"raid service trusted",
+"join up raid starting",
+"lf team for raids",
+"raid grind who in",
+"hosting buddha raid",
+"doing dough raids dm",
+"raid spam fast runs",
+"need fragments join raid",
+"raid carry guaranteed win",
+"lf max lvl for raid",
+"doing raids quick clears",
+"raid farm join now",
+"hosting raid need ppl",
+"lf carry for phoenix raid",
+"raid service no scam",
+"doing raids fast dm",
+"join raid free carry",
+"raid help for noobs",
+"lf ppl raid spam",
+"doing 10 raids join",
+"raid carry dm offers",
+"hosting raid full team",
+"lf ppl for fast raids",
+"raid service cheap price",
+"need raid carry urgent",
+"doing raids nonstop join",
+"raid grind dm me",
+"hosting raid quick join",
+"lf help in raid pls",
+"raid carry full awaken",
+"doing flame raids spam",
+"raid service open slots",
+"lf raid squad asap",
+"join raid easy wins",
+"raid carry high lvl",
+"doing raids for frags",
+"hosting raids need 3",
+"lf ppl dough raid",
+"raid help dm me",
+"doing raid spam fast",
+"raid service legit vouches",
+"lf carry buddha raid",
+"join fast raid starting",
+"raid grind all day",
+"doing raids back2back",
+"raid carry no fail",
+"hosting raids rn dm",
+"lf ppl for fast clear",
+"raid service cheap fast",
+"doing raids easy frags",
+"raid help quick join",
+"lf raid carry pls",
+"hosting raids all day dm",
+"raid spam who in",
+"doing raids join quick",
+"raid carry pro only",
+"lf ppl raid rn",
+"hosting raid need team",
+"raid service dm offers",
+"doing raids full carry",
+"raid grind join up",
+"lf ppl for buddha raid",
+"raid carry fast runs",
+"hosting raid join asap",
+"doing raids no stop",
+"raid help free carry",
+"lf raid team fast",
+"raid service trusted dm",
+"doing raids quick frags",
+"hosting raids dm fast",
+"raid carry slots open",
+"lf ppl raid farm",
+"doing raids join now",
+"raid spam fast join",
+"hosting raid all fruits",
+"raid carry dm quick",
+"lf help raid asap",
+"doing raids pro carry",
+"raid grind fast progress",
+"hosting raids who join",
+"lf ppl for raid spam",
+"raid carry best service",
+"doing raids instant clear",
+"raid help needed now",
+"hosting raid quick runs",
+"lf raid carry cheap",
+"doing raids easy wins",
+"raid service fast response",
+"hosting raid dm me now",
+"lf ppl for raid grind",
+"raid carry high success",
+"doing raids join asap",
+"raid spam nonstop",
+"hosting raid squad full",
+"lf raid help quick",
+"doing raids pro team",
+"raid carry safe legit",
+"hosting raid runs fast",
+"lf ppl for raid asap",
+"raid grind easy mode",
+"doing raids all fruits",
+"raid carry fast clear",
+"hosting raid join fast",
+"lf team for raid grind",
+"raid service dm now",
+"doing raids quick wins",
+"raid spam best farm",
+"hosting raid open now",
+"lf ppl raid quick",
+"raid carry guaranteed",
+"doing raids fast farm",
+"hosting raid dm asap",
+"lf ppl for raid team",
+"raid grind who join",
+"doing raids max lvl",
+"raid carry dm fast",
+"hosting raid spam now",
+"lf help raid now",
+"raid service quick join",
+"doing raids full team",
+"raid carry instant win",
     "service for raid",
     "services for raid",
     "service for raids",
@@ -4024,6 +4290,319 @@ const SERVICE_INTENT_PHRASE_EXTRA = [
     "carry mastery",
     "need help with money",
     "need money help",
+    "raid svc lf ppl",
+
+"lf raid asap need 2",
+
+"doing raid rn join fast",
+
+"raid carry dm asap",
+
+"hosting raid lf team",
+
+"raid spam lf ppl quick",
+
+"need raid help rn",
+
+"doing raid farm join",
+
+"raid svc cheap dm me",
+
+"lf 2 more raid fast",
+
+"hosting raids come quick",
+
+"raid carry slots open rn",
+
+"doing raids back2back join",
+
+"lf ppl raid grind fast",
+
+"raid help who can carry",
+
+"hosting raid dm for spot",
+
+"raid svc fast runs",
+
+"doing raids no fail join",
+
+"lf ppl for raid asap",
+
+"raid carry trusted dm",
+
+"hosting raid lf 3 ppl",
+
+"doing raids join quick pls",
+
+"raid spam rn who in",
+
+"lf raid squad now",
+
+"raid svc vouches dm",
+
+"hosting raid need carry",
+
+"doing raids for frags join",
+
+"raid help asap dm",
+
+"lf ppl raid runs fast",
+
+"raid carry cheap slots",
+
+"hosting raid join now pls",
+
+"doing raids spam fast",
+
+"lf help raid quick pls",
+
+"raid svc instant start",
+
+"hosting raid lf pro",
+
+"doing raids quick clear join",
+
+"raid spam fast farm",
+
+"lf ppl for raid run",
+
+"raid carry pro dm",
+
+"hosting raid need ppl asap",
+
+"doing raids nonstop farm",
+
+"raid help fast join pls",
+
+"lf raid carry cheap pls",
+
+"raid svc no fail runs",
+
+"hosting raid fast entry",
+
+"doing raids join now asap",
+
+"raid spam who wanna join",
+
+"lf ppl raid fast run",
+
+"raid carry high lvl dm",
+
+"hosting raid dm quick join",
+
+"doing raids quick frags farm",
+
+"raid help needed quick",
+
+"lf ppl for raid spam rn",
+
+"raid svc open rn dm",
+
+"hosting raid join fast pls",
+
+"doing raids easy farm join",
+
+"raid carry legit fast",
+
+"lf team raid asap pls",
+
+"raid spam nonstop join",
+
+"hosting raid full carry dm",
+
+"doing raids pro runs join",
+
+"raid help dm asap pls",
+
+"lf ppl raid squad fast",
+
+"raid svc best prices dm",
+
+"hosting raid need ppl fast",
+
+"doing raids join quick rn",
+
+"raid carry no fail dm",
+
+"lf ppl raid runs asap",
+
+"raid spam fast clears",
+
+"hosting raid dm for join",
+
+"doing raids instant clear rn",
+
+"raid help join quick pls",
+
+"lf raid carry fast pls",
+
+"raid svc open slots rn",
+
+"hosting raid spam join now",
+
+"doing raids all day join",
+
+"raid carry cheap fast dm",
+
+"lf ppl raid farm asap",
+
+"raid spam join quick rn",
+
+"hosting raid need team now",
+
+"doing raids quick win farm",
+
+"raid help pls join fast",
+
+"lf ppl for raid now pls",
+
+"raid svc dm for invite",
+
+"hosting raid fast runs join",
+
+"doing raids spam nonstop",
+
+"raid carry fast win dm",
+
+"lf raid squad quick pls",
+
+"raid spam who in rn",
+
+"hosting raid join asap pls",
+
+"doing raids pro carry join",
+
+"raid help urgent join",
+
+"lf ppl raid quick asap",
+
+"raid svc fast join dm",
+
+"hosting raid need ppl now",
+
+"doing raids instant win join",
+
+"raid carry best dm",
+
+"lf team raid fast join",
+
+"raid spam join asap rn",
+
+"hosting raid pro runs",
+
+"doing raids full carry join",
+
+"raid help fast pls join",
+
+"lf ppl raid asap join",
+
+"raid svc quick entry dm",
+
+"hosting raid all fruits join",
+
+"doing raids quick spam",
+
+"raid carry dm now pls",
+
+"lf ppl for raid quick rn",
+
+"raid spam join fast asap",
+
+"hosting raid fast clear runs",
+
+"doing raids join rn fast",
+
+"raid help asap join pls",
+
+"lf raid carry cheap dm",
+
+"raid svc legit quick dm",
+
+"hosting raid need 2 more",
+
+"doing raids nonstop asap",
+
+"raid carry fast clear dm",
+
+"lf ppl raid farm now",
+
+"raid spam join quick pls",
+
+"hosting raid dm asap join",
+
+"doing raids fast farm rn",
+
+"raid help join now asap",
+
+"lf ppl raid quick join",
+
+"raid svc open join now",
+
+"hosting raid spam asap",
+
+"doing raids join fast pls",
+
+"raid carry pro fast dm",
+
+"lf ppl raid asap fast",
+
+"raid spam nonstop rn",
+
+"hosting raid need team asap",
+
+"doing raids quick clear rn",
+
+"raid help urgent asap",
+
+"lf ppl raid spam asap",
+
+"raid svc cheap fast join",
+
+"hosting raid join now fast",
+
+"doing raids pro fast runs",
+
+"raid carry join asap dm",
+
+"lf ppl raid quick farm",
+
+"raid spam join now pls",
+
+"hosting raid dm fast pls",
+
+"doing raids instant farm",
+
+"raid help quick asap",
+
+"lf raid team fast asap",
+
+"raid svc dm quick pls",
+
+"hosting raid fast farm join",
+
+"doing raids nonstop join pls",
+
+"raid carry instant dm",
+
+"lf ppl raid asap rn",
+
+"raid spam fast asap join",
+
+"hosting raid quick join pls",
+
+"doing raids easy fast farm",
+
+"raid help join asap rn",
+
+"lf ppl raid spam quick",
+
+"raid svc fast dm now",
+
+"hosting raid join rn asap",
+
+"doing raids fast clear asap",
+
+"raid carry cheap asap dm", 
     "help money",
     "carry money",
     "need help with beli",
@@ -4319,7 +4898,7 @@ const ACC_TRADING_PHRASES = [
     "buy acc","buying acc","wtb acc","wts acc","wtt acc","acc for sale",
     "acc trade","acc swap","account for robux","acc for robux",
     "account for usd","acc for usd","account for money","acc for money",
-    "account for paypal","acc for paypal","account for cash","acc for cash",
+    "account for paypal","acc for paypal","account for cash","acc for cash", "trading max level account", "trading max lvl acc"
 ];
 
 // ══════════════════════════════════════════════════════════
