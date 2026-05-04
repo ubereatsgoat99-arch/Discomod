@@ -948,6 +948,276 @@ const TRIALS_STRICT_PHRASES = [
     'who running trials',
     'who running v4 trials',
     'who doing trials',
+    "Hosting raids fast, join now!",
+
+"Full raid carry, you just chill!",
+
+"Cheap raid services, fast and safe!",
+
+"Need fragments? I got you covered!",
+
+"Auto raid hosting, fast clears!",
+
+"Join for quick and easy raid wins!",
+
+"Carrying all raids, no effort needed!",
+
+"Fast raids, high success rate!",
+
+"Grinding fragments? Join my raids!",
+
+"Raid services open, limited slots!",
+
+"Solo carry raids, guaranteed win!",
+
+"Professional raid service, trusted!",
+
+"Quick flame raids, join up!",
+
+"Hosting Buddha raids, easy wins!",
+
+"Fully AFK raid carry available!",
+
+"Max level helping with raids!",
+
+"Cheap and fast raid hosting!",
+
+"Need awakening? I got raids!",
+
+"Instant raid start, no waiting!",
+
+"Carrying dough raids, join fast!",
+
+"Join for smooth raid clears!",
+
+"Fastest raid service in server!",
+
+"Helping newbies with raids!",
+
+"Raid farm going on, hop in!",
+
+"Carrying light raids, easy frags!",
+
+"Raid grinding nonstop!",
+
+"Full team raids, join quickly!",
+
+"Legendary raid service open!",
+
+"Easy fragments farm here!",
+
+"Raid boss melts instantly!",
+
+"Hosting raids all day!",
+
+"Top tier raid carrier here!",
+
+"Quick raids, fast rewards!",
+
+"Safe and reliable raid service!",
+
+"Join my raid squad now!",
+
+"Raid help for all players!",
+
+"Fast awakenings guaranteed!",
+
+"Grinding raids nonstop!",
+
+"Join for instant raid clears!",
+
+"Carrying phoenix raids!",
+
+"Easy wins, no stress raids!",
+
+"Raid service active, join now!",
+
+"Helping grind fragments fast!",
+
+"Best raid host in server!",
+
+"Carrying magma raids!",
+
+"Raid grind = fast progress!",
+
+"Need help? Join my raids!",
+
+"Full carry, zero effort!",
+
+"Quick join, raid starting!",
+
+"Raid services open 24/7!",
+
+"Pro raid host, fast clears!",
+
+"Join for guaranteed wins!",
+
+"All raids available here!",
+
+"Raid carry with max stats!",
+
+"Grinding awakenings fast!",
+
+"Carrying ice raids!",
+
+"Fast raids, no fail!",
+
+"Top speed raid hosting!",
+
+"Join now before it's full!",
+
+"Instant raid entry available!",
+
+"Carrying dark raids!",
+
+"Raid farm squad ready!",
+
+"Easy fragment farming!",
+
+"Raid carry for everyone!",
+
+"Nonstop raids, join anytime!",
+
+"High level raid support!",
+
+"Need awakening? Join raids!",
+
+"Fast raid completion guaranteed!",
+
+"Reliable raid host here!",
+
+"Join for easy raid wins!",
+
+"Carrying quake raids!",
+
+"Raid help for beginners!",
+
+"Grinding fragments quickly!",
+
+"Raid hosting, fast entry!",
+
+"Full squad raid carry!",
+
+"Instant wins, join raids!",
+
+"Carrying spider raids!",
+
+"Best raid grinding method!",
+
+"Fastest way to get frags!",
+
+"Join raid team now!",
+
+"Pro level raid service!",
+
+"Raid boss deleted instantly!",
+
+"Carrying sand raids!",
+
+"Join for smooth gameplay!",
+
+"Quick and easy raids!",
+
+"Raid squad forming now!",
+
+"High efficiency raid runs!",
+
+"Carrying rumble raids!",
+
+"Grinding made easy with raids!",
+
+"Join fast before start!",
+
+"Raid services trusted!",
+
+"Fastest clears guaranteed!",
+
+"Carrying love raids!",
+
+"Easy awakenings here!",
+
+"Join my raid lobby!",
+
+"Helping all players grow!",
+
+"Raid farming nonstop!",
+
+"Carrying gravity raids!",
+
+"Best value raid service!",
+
+"Quick clears, big rewards!",
+
+"Raid now, win fast!",
+
+"Carrying blizzard raids!",
+
+"Fast grind, no hassle!",
+
+"Join for pro raid help!",
+
+"Raid carry active!",
+
+"Grinding fragments daily!",
+
+"Carrying portal raids!",
+
+"Instant success raids!",
+
+"Join and get carried!",
+
+"Raid help anytime!",
+
+"Carrying venom raids!",
+
+"Fast progression via raids!",
+
+"Join raid crew now!",
+
+"Top raid performance!",
+
+"Carrying control raids!",
+
+"Easy wins every time!",
+
+"Join for best raid experience!",
+
+"Raid hosting right now!",
+
+"Carrying dragon raids!",
+
+"Fastest way to awaken!",
+
+"Join before it fills!",
+
+"Raid pros ready!",
+
+"Carrying leopard raids!",
+
+"Grinding with pros!",
+
+"Join and dominate raids!",
+
+"Raid farm experts here!",
+
+"Carrying kitsune raids!",
+
+"Fast and smooth runs!",
+
+"Join for instant action!",
+
+"Raid kings hosting now!",
+
+"Carrying all fruit raids!",
+
+"Ultimate raid service!",
+
+"Join and get rich in frags!",
+
+"Raid success guaranteed!",
+
+"Top tier grinding squad!",
+
     'who doing v4 trials',
     'need people for v4 trials',
     'need ppl for v4 trials',
@@ -1079,6 +1349,51 @@ function detectTrialsOrTrialsRecruitment(cleanText) {
     if (ns.includes('lookingfor1peoplefortrials') || ns.includes('lookingfor2peoplefortrials') || ns.includes('lookingfor3peoplefortrials')) return true;
     if (ns.includes('lookingfor1peoplefortrails') || ns.includes('lookingfor2peoplefortrails') || ns.includes('lookingfor3peoplefortrails')) return true;
     return false;
+}
+
+function detectRaidOrDungeonRecruitment(cleanText) {
+    const t = (cleanText || '').toLowerCase();
+    const ns = t.replace(/[\s_]/g,'');
+
+    const raidWord = /\b(?:raid|raids|riad|riads)\b/i;
+
+    const hasTarget =
+        raidWord.test(t) ||
+        /\bdungeons?\b/i.test(t) ||
+        /\bdungeon\b/i.test(t) ||
+        /\bdunegon\b/i.test(t) ||
+        /\bchallenge\b/i.test(t) ||
+        /\bnormal\s*dungeons?\b/i.test(t) ||
+        /\bhard\s*dungeons?\b/i.test(t) ||
+        /\bchallenge\s*dungeons?\b/i.test(t) ||
+        /\bnormal\s*raids?\b/i.test(t) ||
+        /\bhard\s*raids?\b/i.test(t) ||
+        /\bchallenge\s*raids?\b/i.test(t);
+
+    if (!hasTarget) return false;
+
+    if (/(?:host|hosting|carry|carrying|run|running|doing|do|need|lf|lfg|looking)[\s\W_]{0,14}(?:for|to|4|with)?[\s\W_]{0,14}(?:people|ppl|players|members|guys)?[\s\W_]{0,14}(?:who\s*wanna\s*join|wanna\s*join|want\s*to\s*join|to\s*join|join)?[\s\W_]{0,14}(?:raid|raids|riad|riads|normal\s*raid|hard\s*raid|challenge\s*raid|dungeon|dungeons|dunegon|normal\s*dungeon|hard\s*dungeon|challenge\s*dungeon)/i.test(t)) return true;
+
+    if (ns.includes('lookingforpeopleforraid') || ns.includes('lfpeopleforraid') || ns.includes('lookingforpplforraid') || ns.includes('lfpplforraid')) return true;
+    if (ns.includes('lookingforpeoplefordungeon') || ns.includes('lfpeoplefordungeon') || ns.includes('lookingforpplfordungeon') || ns.includes('lfpplfordungeon')) return true;
+
+    if (ns.includes('hostingraid') || ns.includes('hostraid') || ns.includes('carryraid') || ns.includes('carryingraid')) return true;
+    if (ns.includes('hostingdungeon') || ns.includes('hostdungeon') || ns.includes('carrydungeon') || ns.includes('carryingdungeon')) return true;
+
+    // added difficulty + join combos (no-space)
+    if (ns.includes('whowannajoinraid') || ns.includes('whowannajoindungeon')) return true;
+    if (ns.includes('normalraid') || ns.includes('hardraid') || ns.includes('challengeraid')) return true;
+    if (ns.includes('normaldungeon') || ns.includes('harddungeon') || ns.includes('challengedungeon')) return true;
+
+    return false;
+}
+
+function isGamesHubChannelId(channelId, gs) {
+    const id = String(channelId || '');
+    if (!id) return false;
+    if (GAMES_HUB_CHANNELS && GAMES_HUB_CHANNELS.has(id)) return true;
+    const conf = String(gs?.gamesHubId || DEFAULT_GAMES_HUB_ID || '');
+    return conf ? id === conf : false;
 }
 
 function getStrictness(gs) {
@@ -1366,10 +1681,12 @@ function getGuildSettings(guildId, data) {
                 'discord.com','discord.gg','discordapp.com',
             ],
             inviteDenylistDomains: [
+                'discord.gg','discord.com','discordapp.com',
                 'discord.me','discord.io','discord.li','discord.id',
                 'disboard.org','top.gg',
                 'invite.gg','inv.gg','discord.link','dsc.gg',
                 'dis.gd','discord.gift',
+                'discordcdn.com','cdn.discordapp.com',
             ],
             inviteAllowedChannelIds: [],
 
@@ -2002,12 +2319,6 @@ const HOMOGLYPHS_EXTRA = {
     '：':':','；':';','，':',','、':',','！':'!','？':'?','％':'%','＃':'#','＆':'&','＠':'@','＊':'*','＋':'+','＝':'=','／':'/','＼':'\\','｜':'|',
     '\u2060':'','\u180e':'','\u200e':'','\u200f':'','\u202a':'','\u202b':'','\u202c':'','\u202d':'','\u202e':'',
     '\u2061':'','\u2062':'','\u2063':'','\u2064':'','\u034f':'',
-    // ── Regional indicator emoji letters (🇦–🇿) — people space them out to spell words ──
-    '\u{1F1E6}':'a','\u{1F1E7}':'b','\u{1F1E8}':'c','\u{1F1E9}':'d','\u{1F1EA}':'e',
-    '\u{1F1EB}':'f','\u{1F1EC}':'g','\u{1F1ED}':'h','\u{1F1EE}':'i','\u{1F1EF}':'j',
-    '\u{1F1F0}':'k','\u{1F1F1}':'l','\u{1F1F2}':'m','\u{1F1F3}':'n','\u{1F1F4}':'o',
-    '\u{1F1F5}':'p','\u{1F1F6}':'q','\u{1F1F7}':'r','\u{1F1F8}':'s','\u{1F1F9}':'t',
-    '\u{1F1FA}':'u','\u{1F1FB}':'v','\u{1F1FC}':'w','\u{1F1FD}':'x','\u{1F1FE}':'y','\u{1F1FF}':'z',
 };
 const LEET_MAP = {
     '4':'a','3':'e','1':'i','0':'o','@':'a','!':'',
@@ -2164,7 +2475,8 @@ const COMMON_WORD_WHITELIST = new Set([
     "deep","shallow","round","flat","sharp","soft","rough","smooth",
     "clean","dirty","safe","happy","sad","angry","afraid","sorry",
     "nice","pretty","bright","rich","poor","busy","lazy","smart",
-    "crazy","normal","strange","special","common","rare","basic",
+    "crazy","normal","strange","random",
+    "special","common","rare","basic",
     "advanced","extra","final","total","exact","certain","complete",
     "correct","wrong","possible","impossible","available","necessary",
     "perfect","natural","social","local","national","personal","physical",
@@ -3578,297 +3890,8 @@ const SERVICE_INTENT_PHRASE_EXTRA = [
     "who can carry raid",
     "help with raid",
     "help with raids",
-    "carry raid", 
-    "carrying some raids",
-    "carrying raids",
-    "hosting raids who join",
-    "dm me for raids",
+    "carry raid",
     "carry raids",
-    "carry some raids",
-    "carry some raid",
-    "carry a raid",
-    "carry few raids",
-    "Hosting raids fast, join now!",
-
-"Full raid carry, you just chill!",
-
-"Cheap raid services, fast and safe!",
-
-"Need fragments? I got you covered!",
-
-"Auto raid hosting, fast clears!",
-
-"Join for quick and easy raid wins!",
-
-"Carrying all raids, no effort needed!",
-
-"Fast raids, high success rate!",
-
-"Grinding fragments? Join my raids!",
-
-"Raid services open, limited slots!",
-
-"Solo carry raids, guaranteed win!",
-
-"Professional raid service, trusted!",
-
-"Quick flame raids, join up!",
-
-"Hosting Buddha raids, easy wins!",
-
-"Fully AFK raid carry available!",
-
-"Max level helping with raids!",
-
-"Cheap and fast raid hosting!",
-
-"Need awakening? I got raids!",
-
-"Instant raid start, no waiting!",
-
-"Carrying dough raids, join fast!",
-
-"Join for smooth raid clears!",
-
-"Fastest raid service in server!",
-
-"Helping newbies with raids!",
-
-"Raid farm going on, hop in!",
-
-"Carrying light raids, easy frags!",
-
-"Raid grinding nonstop!",
-
-"Full team raids, join quickly!",
-
-"Legendary raid service open!",
-
-"Easy fragments farm here!",
-
-"Raid boss melts instantly!",
-
-"Hosting raids all day!",
-
-"Top tier raid carrier here!",
-
-"Quick raids, fast rewards!",
-
-"Safe and reliable raid service!",
-
-"Join my raid squad now!",
-
-"Raid help for all players!",
-
-"Fast awakenings guaranteed!",
-
-"Grinding raids nonstop!",
-
-"Join for instant raid clears!",
-
-"Carrying phoenix raids!",
-
-"Easy wins, no stress raids!",
-
-"Raid service active, join now!",
-
-"Helping grind fragments fast!",
-
-"Best raid host in server!",
-
-"Carrying magma raids!",
-
-"Raid grind = fast progress!",
-
-"Need help? Join my raids!",
-
-"Full carry, zero effort!",
-
-"Quick join, raid starting!",
-
-"Raid services open 24/7!",
-
-"Pro raid host, fast clears!",
-
-"Join for guaranteed wins!",
-
-"All raids available here!",
-
-"Raid carry with max stats!",
-
-"Grinding awakenings fast!",
-
-"Carrying ice raids!",
-
-"Fast raids, no fail!",
-
-"Top speed raid hosting!",
-
-"Join now before it's full!",
-
-"Instant raid entry available!",
-
-"Carrying dark raids!",
-
-"Raid farm squad ready!",
-
-"Easy fragment farming!",
-
-"Raid carry for everyone!",
-
-"Nonstop raids, join anytime!",
-
-"High level raid support!",
-
-"Need awakening? Join raids!",
-
-"Fast raid completion guaranteed!",
-
-"Reliable raid host here!",
-
-"Join for easy raid wins!",
-
-"Carrying quake raids!",
-
-"Raid help for beginners!",
-
-"Grinding fragments quickly!",
-
-"Raid hosting, fast entry!",
-
-"Full squad raid carry!",
-
-"Instant wins, join raids!",
-
-"Carrying spider raids!",
-
-"Best raid grinding method!",
-
-"Fastest way to get frags!",
-
-"Join raid team now!",
-
-"Pro level raid service!",
-
-"Raid boss deleted instantly!",
-
-"Carrying sand raids!",
-
-"Join for smooth gameplay!",
-
-"Quick and easy raids!",
-
-"Raid squad forming now!",
-
-"High efficiency raid runs!",
-
-"Carrying rumble raids!",
-
-"Grinding made easy with raids!",
-
-"Join fast before start!",
-
-"Raid services trusted!",
-
-"Fastest clears guaranteed!",
-
-"Carrying love raids!",
-
-"Easy awakenings here!",
-
-"Join my raid lobby!",
-
-"Helping all players grow!",
-
-"Raid farming nonstop!",
-
-"Carrying gravity raids!",
-
-"Best value raid service!",
-
-"Quick clears, big rewards!",
-
-"Raid now, win fast!",
-
-"Carrying blizzard raids!",
-
-"Fast grind, no hassle!",
-
-"Join for pro raid help!",
-
-"Raid carry active!",
-
-"Grinding fragments daily!",
-
-"Carrying portal raids!",
-
-"Instant success raids!",
-
-"Join and get carried!",
-
-"Raid help anytime!",
-
-"Carrying venom raids!",
-
-"Fast progression via raids!",
-
-"Join raid crew now!",
-
-"Top raid performance!",
-
-"Carrying control raids!",
-
-"Easy wins every time!",
-
-"Join for best raid experience!",
-
-"Raid hosting right now!",
-
-"Carrying dragon raids!",
-
-"Fastest way to awaken!",
-
-"Join before it fills!",
-
-"Raid pros ready!",
-
-"Carrying leopard raids!",
-
-"Grinding with pros!",
-
-"Join and dominate raids!",
-
-"Raid farm experts here!",
-
-"Carrying kitsune raids!",
-
-"Fast and smooth runs!",
-
-"Join for instant action!",
-
-"Raid kings hosting now!",
-
-"Carrying all fruit raids!",
-
-"Ultimate raid service!",
-
-"Join and get rich in frags!",
-
-"Raid success guaranteed!",
-
-"Top tier grinding squad!",
-    "raids for frags",
-    "raid for frags",
-    "raids for fragments",
-    "raid for fragments",
-    "raids for payment",
-    "raids for pay",
-    "ill host raids",
-    "ill host raid",
-    "i host raids",
-    "i host raid",
-    "ill host the raid",
-    "ill host the raids",
     "raid service",
     "raid services",
     "service for raid",
@@ -4363,233 +4386,6 @@ const scanForRaces          = t => genericScan(t, RACES,            RACE_ALIASES
 const scanForPainUpgrades   = t => genericScan(t, PAIN_UPGRADES,    PAIN_UPGRADE_ALIASES);
 const scanForLightningUpgrades = t => genericScan(t, LIGHTNING_UPGRADES, LIGHTNING_UPGRADE_ALIASES);
 
-// ══════════════════════════════════════════════════════════
-//  RAID SERVICE DETECTION
-//  Flags messages where someone is OFFERING or SEEKING
-//  a raid hosting/carry service (should go to #services).
-//  Modelled after detectTrialsOrTrialsRecruitment.
-// ══════════════════════════════════════════════════════════
-
-// Core raid word variants (post-fullClean, leet already collapsed)
-const RAID_CORE_WORDS = [
-    'raid','raids','raiding','riad','riads','raied','raidd','r4id','r4ids',
-];
-
-// Verbs / roles that pair with raid words to signal a service post
-const RAID_SERVICE_VERBS = [
-    // offering
-    'host','hosting','hosted','hoster','hosts',
-    'carry','carrying','carried','carrier','carries',
-    'run','running','runs','runner',
-    'do','doing','done',
-    'clear','clearing','clears',
-    'boost','boosting','boosts',
-    'help','helping','helps',
-    'offer','offering','offers',
-    'provide','providing','provides',
-    'open','opening',
-    'start','starting','starts',
-    'afk',
-    // seeking
-    'need','needing','needed',
-    'lf','lfg','lfs','lf4',
-    'want','wanting','wanna','wana',
-    'looking','searching','seeking',
-    'join','joining',
-    'pay','paying','payment',
-];
-
-// Blox Fruits named raids (post-fullClean, lowercase, no spaces)
-const BF_NAMED_RAIDS_NS = [
-    'flowerraid','flowerraids',
-    'darkbeardraid','darkbeardraids','darkbeardsraid',
-    'factoryraid','factoryraids',
-    'iceadmiralraid','iceadmiralraids',
-    'phoenixraid','phoenixraids',
-    'doughraid','doughraids',
-    'buddharaid','buddharaids',
-    'shadowraid','shadowraids',
-    'flameraid','flameraids',
-    'iceraid','iceraids',
-    'sandraid','sandraids',
-    'lightraid','lightraids',
-    'magmaraid','magmaraids',
-    'quakeraid','quakeraids',
-    'rubberraid','rubberraids',
-    'rumbleraid','rumbleraids','lightningraid','lightningraids',
-    'spiderraid','spiderraids',
-    'loveraid','loveraids',
-    'gravityraid','gravityraids',
-    'spiritraid','spiraids',
-    'venomraid','venomraids',
-    'soundraid','soundraids',
-    'controlraid','controlraids',
-    'leopardraid','leopardraids',
-    'dragonraid','dragonraids',
-    'kitsuneraid','kitsuneraids',
-    'blizzardraid','blizzardraids',
-    'mammothraid','mammothraids',
-    'portalraid','portalraids',
-    'darkraid','darkraids',
-];
-
-// Strict phrase list — dead giveaway combos (all lowercase, matched nospace)
-const RAID_STRICT_PHRASES = [
-    // ── Hosting / offering ────────────────────────────────
-    'hosting raids','hosting raid','hosting a raid','hosting some raids',
-    'hosting full raids','hosting 5 raids','hosting 10 raids',
-    'host raids','host raid','host a raid','host some raids',
-    'host full raids','host 5 raids','host 10 raids',
-    'ill host raids','ill host raid','ill host the raid','ill host the raids',
-    'i host raids','i host raid','i host the raid',
-    'i will host raids','i will host raid','i will host a raid',
-    'im hosting raids','im hosting raid','im hosting a raid',
-    'carry raids','carry raid','carry a raid','carry some raids',
-    'carry full raids','carry 5 raids','carry 10 raids',
-    'carrying raids','carrying raid','carrying a raid','carrying some raids',
-    'carrying full raids','raid carry','raid carries',
-    'afk carry raids','afk carry raid','afk raid carry',
-    'doing raids','doing a raid','doing some raids',
-    'running raids','running a raid','running some raids',
-    'open raids','open raid','raids open','raid open',
-    'starting raid','starting raids','raid starting','raids starting',
-    'raid now','raids now',
-    'raid slots','raid slot','slots for raid','slots for raids',
-    'joining raid','joining raids',
-    // ── Service branding ─────────────────────────────────
-    'raid service','raid services',
-    'raid carry service','raid carry services',
-    'carry service raid','carry services raid',
-    'boost service raid','boost services raid',
-    'cheap raid carry','cheap raid service','cheap raid host',
-    'trusted raid host','trusted raid carry','trusted raid service',
-    'pro raid host','pro raid carry','pro raid service',
-    'fast raid carry','fast raid host','fast raid service',
-    'paid raid carry','paid raid service','paid raid hosting',
-    'free raid carry','free carry raid',
-    'professional raid service','professional raid host',
-    // ── Payment combos ───────────────────────────────────
-    'raids for frags','raid for frags',
-    'raids for fragments','raid for fragments',
-    'raids for payment','raid for payment',
-    'raids for pay','raid for pay',
-    'raids for beli','raid for beli',
-    'raids for robux','raid for robux',
-    'raids for perm','raid for perm',
-    'raids for gp','raid for gp',
-    'raids for gamepass','raid for gamepass',
-    'paying for raids','paying for raid',
-    'pay for raids','pay for raid',
-    'i pay for raids','i pay for raid',
-    'beli for raids','beli for raid',
-    'fruit for raids','fruit for raid',
-    'perm for raids','perm for raid',
-    'gp for raids','gamepass for raids',
-    // ── Seeking ──────────────────────────────────────────
-    'need raid carry','need raids carry',
-    'need carry for raid','need carry for raids',
-    'need raid host','need raids host',
-    'need host for raid','need host for raids',
-    'lf raid carry','lf raid host','lf raid service',
-    'lfg raid carry','lfg raid host','lfg raid service',
-    'need help with raids','need help with raid',
-    'looking for raid carry','looking for raid host','looking for raid service',
-    'looking for someone to host raids','looking for someone to carry raids',
-    'looking for someone to host raid','looking for someone to carry raid',
-    'need someone to host raids','need someone to carry raids',
-    'need someone to host raid','need someone to carry raid',
-    'anyone hosting raids','anyone hosting raid',
-    'anyone carry raids','anyone carry raid',
-    'anyone carrying raids','anyone carrying raid',
-    'who hosting raids','who hosting raid',
-    'who carry raids','who carry raid',
-    'anyone running raids','anyone running raid',
-    'who running raids','who running raid',
-    'anyone doing raids','anyone doing raid',
-    'who doing raids','who doing raid',
-    'who can host raids','who can carry raids',
-    'who can host raid','who can carry raid',
-    'can anyone host raids','can anyone carry raids',
-    'can anyone host raid','can anyone carry raid',
-    'help with raids','help with raid',
-    'carry for raid','carry for raids',
-    'join my raid','join my raids',
-    'join for raid','join for raids',
-    'join raid','join raids',
-    'dm me for raids','dm me for raid',
-    'pm me for raids','pm me for raid',
-    'dm for raids','dm for raid',
-    'message me for raids','message me for raid',
-    // ── Team / recruitment ───────────────────────────────
-    'raid farm','raid farming','raid grind','raid grinding',
-    'raid lobby','raid squad','raid team','raid crew',
-    'raid boss carry','raid boss host',
-    'need 1 for raid','need 2 for raid','need 3 for raid',
-    'need one for raid','need two for raid','need three for raid',
-    'lf 1 for raid','lf 2 for raid','lf 3 for raid',
-    'need more for raid','need more for raids',
-    'need ppl for raids','need people for raids',
-    'need ppl for raid','need people for raid',
-    'lf 1 more for raid','lf 2 more for raid','lf 3 more for raid',
-    'lfg for raids','lfg for raid','lfg raids','lfg raid',
-];
-
-/**
- * Returns true if the message appears to be offering or seeking a
- * Blox Fruits raid carry / hosting service that belongs in #services.
- *
- * @param {string} cleanText - output of fullClean()
- */
-function detectRaidService(cleanText) {
-    const t  = cleanText;
-    const ns = t.replace(/[\s_]/g, '');
-
-    // 1 ── Strict phrase list (nospace match — survives fullClean)
-    for (const phrase of RAID_STRICT_PHRASES) {
-        const p = phrase.toLowerCase().replace(/[\s_]/g, '');
-        if (p.length >= 6 && ns.includes(p)) return true;
-    }
-
-    // 2 ── Named Blox Fruits raids (nospace match)
-    for (const named of BF_NAMED_RAIDS_NS) {
-        if (ns.includes(named)) return true;
-    }
-
-    // 3 ── Fast bail-out: if "raid"/"raids" isn't in the message at all, stop.
-    if (!/(?<![a-z])r+a+i+d+s*(?![a-z])/i.test(t)) return false;
-
-    // 4 ── Regex combos: service / offer verbs near a raid word ─────────────
-
-    // "hosting/carrying/running/doing/open/start raid(s)"
-    if (/\b(?:host(?:ing|s|ed)?|carr(?:y(?:ing)?|ied|ies)|run(?:ning|s)?|doing?|clear(?:ing|s)?|boost(?:ing|s)?|help(?:ing|s)?|offer(?:ing|s)?|open(?:ing|s)?|start(?:ing|s)?|afk(?:\s*carry)?)\b[\s\W]{0,40}\braids?\b/i.test(t)) return true;
-
-    // "raid(s) carry / host / service / run / doing / open / starting"
-    if (/\braids?\b[\s\W]{0,40}\b(?:carry|carr(?:y(?:ing)?|ied|ies)|host(?:ing|s|ed)?|service|run(?:ning|s)?|doing?|clear(?:ing|s)?|boost(?:ing|s)?|offer(?:ing|s)?|open(?:ing|s)?|start(?:ing|s)?|service|help(?:ing)?|asap|now|fast|quick|available|open)\b/i.test(t)) return true;
-
-    // "need/lf/want/looking for/anyone … raid(s)"
-    if (/\b(?:need|lf|lfg|lfs|want|wanna|wana|looking\s+for|searching\s+for|seeking|anyone|any1|someone|some1|who\s+can|dm\s+me|pm\s+me)\b[\s\W]{0,35}\braids?\b/i.test(t)) return true;
-
-    // payment + raid(s)
-    if (/\braids?\b[\s\W]{0,30}(?:for\s+)?(?:frags?|fragments?|pay(?:ment|ing)?|beli|robux|perm|perms|gp|gamepass)\b/i.test(t)) return true;
-    if (/\b(?:pay(?:ment|ing)?|beli|robux|perm|perms|gp|gamepass)\b[\s\W]{0,30}for[\s\W]{0,10}\braids?\b/i.test(t)) return true;
-
-    // join + raid (offering spots)
-    if (/\b(?:join|hop\s+in|come\s+in)\b[\s\W]{0,20}(?:for\s+|my\s+|the\s+)?\braids?\b/i.test(t)) return true;
-
-    // 5 ── Verb proximity check (nospace): raid word within 80 chars of a service verb
-    const nsRaidIdx = ns.search(/r+a+i+d+s*/);
-    if (nsRaidIdx !== -1) {
-        for (const verb of RAID_SERVICE_VERBS) {
-            const vc = verb.replace(/\s/g, '');
-            if (vc.length < 2) continue;
-            const vi = ns.indexOf(vc);
-            if (vi !== -1 && Math.abs(nsRaidIdx - vi) <= 80) return true;
-        }
-    }
-
-    return false;
-}
-
 function scanForServiceIntent(cleanText, strictness = 5) {
     const ns = cleanText.replace(/\s/g, '');
 
@@ -4597,9 +4393,6 @@ function scanForServiceIntent(cleanText, strictness = 5) {
     for (const phrase of SERVICE_INTENT_PHRASE) {
         if (ns.includes(phrase.replace(/\s/g,'')) || cleanText.includes(phrase)) return true;
     }
-
-    // ── Dedicated raid-service detector (comprehensive) ──────────────────
-    if (detectRaidService(cleanText)) return true;
 
     // ── At level 1-2: curated phrases + exact SERVICE_INTENT_EXACT only (no fuzzy, no EXTRA) ──
     if (strictness <= 2) {
@@ -4902,13 +4695,20 @@ function recordSpamMsg(userId, content) {
     return s;
 }
 
-function checkSpam(userId, content) {
+function checkSpam(userId, content, gs) {
     const s = recordSpamMsg(userId, content);
     if (s.msgs.length >= SPAM_MSG_LIMIT) return { spam: true, reason: 'message flood' };
     const dupes = s.msgs.filter(m => m.content === content).length;
     if (dupes >= SPAM_DUPE_LIMIT) return { spam: true, reason: 'duplicate messages' };
     const emojiCount = (content.match(/(<a?:[a-zA-Z0-9_]+:\d+>|[\u{1F300}-\u{1FFFF}])/gu) || []).length;
     if (emojiCount >= SPAM_EMOJI_LIMIT) return { spam: true, reason: 'emoji spam' };
+    if (gs?.capsSpamEnabled) {
+        const letters = content.replace(/[^a-zA-Z]/g,'').length;
+        const capsRatio = content.replace(/\s/g,'').length > 5 && letters > 0
+            ? (content.replace(/[^A-Z]/g,'').length / letters)
+            : 0;
+        if (capsRatio > 0.85 && content.length > 20) return { spam: true, reason: 'all caps spam' };
+    }
     const linkCount = (content.match(/https?:\/\/\S+/g) || []).length;
     if (linkCount >= 4) return { spam: true, reason: 'link spam' };
     return { spam: false };
@@ -4993,6 +4793,13 @@ setInterval(() => {
 // ══════════════════════════════════════════════════════════
 function normalizeDomain(d) {
     return String(d || '').toLowerCase().replace(/^www\./,'').trim();
+}
+function parseDomainArg(input) {
+    const s = String(input || '').trim();
+    if (!s) return '';
+    const m = s.match(/^https?:\/\/([^\s\/?:#]+)(?::\d+)?/i);
+    const host = m && m[1] ? m[1] : s.split(/[\s\/]/)[0];
+    return normalizeDomain(host);
 }
 function domainInList(domain, list) {
     const d = normalizeDomain(domain);
@@ -5118,11 +4925,11 @@ function classifyLinkDomains(domains, gs) {
         if (!d) continue;
         if (domainInList(d, deny)) { out.blocked.push(d); continue; }
         if (SCAM_DOMAIN_BLACKLIST.has(d)) { out.blocked.push(d); continue; }
+        if (domainInList(d, COMMON_ALLOWED_DOMAINS)) { out.allowed.push(d); continue; }
         if (LINK_SHORTENERS.has(d) || LINK_SHORTENERS_EXTRA.has(d)) { out.suspicious.push(d); continue; }
         const parts = d.split('.').filter(Boolean);
         const tld = parts.length ? parts[parts.length-1] : '';
         if (tld && SUSPICIOUS_TLDS.has(tld)) { out.suspicious.push(d); continue; }
-        if (domainInList(d, COMMON_ALLOWED_DOMAINS)) { out.allowed.push(d); continue; }
         if (allow.length && domainInList(d, allow)) { out.allowed.push(d); continue; }
         if (allow.length) { out.blocked.push(d); continue; }
         out.allowed.push(d);
@@ -5433,6 +5240,13 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addSubcommand(s => s.setName('enable').setDescription('Enable no-affiliation mode'))
         .addSubcommand(s => s.setName('disable').setDescription('Disable no-affiliation mode')),
+    new SlashCommandBuilder()
+        .setName('noaffliation')
+        .setDescription('Replace trade/service redirects with a no-affiliation notice')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('enable').setDescription('Enable no-affiliation mode'))
+        .addSubcommand(s => s.setName('disable').setDescription('Disable no-affiliation mode')),
+
     new SlashCommandBuilder()
         .setName('dashboard')
         .setDescription('Open the admin dashboard')
@@ -6787,9 +6601,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'botstatus': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
-            const totalExiled     = Object.keys(data.exiles).length;
-            const totalViolations = Object.values(data.violations).reduce((a,b)=>a+b,0);
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const embed = new EmbedBuilder()
                 .setTitle('📊 Bot Status / Configuration')
                 .setColor(0x5865F2)
@@ -6801,14 +6613,6 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Link Mode', value: String(gs.linkMode || 'strict'), inline: true },
                     { name: 'Link Action', value: String(gs.linkAction || 'warn'), inline: true },
                     { name: 'Auto-Timeouts', value: gs.timeoutEnabled ? '✅ ON' : '❌ OFF', inline: true },
-
-                    { name: 'Scam Detection', value: gs.scamEnabled ? '✅ ON' : '❌ OFF', inline: true },
-                    { name: '🛡️ Immunity', value: imm.enabled ? '✅ ON' : '❌ OFF', inline: true },
-                    { name: '⚙️ Threshold', value: String(gs.violationThreshold || VIOLATION_THRESHOLD), inline: true },
-
-                    { name: '👥 Currently Exiled', value: String(totalExiled), inline: true },
-                    { name: '⚠️ Total Violations', value: String(totalViolations), inline: true },
-                    { name: '⏱️ Exile Duration', value: `${gs.exileDurationMins || EXILE_DURATION_MINS}m`, inline: true },
 
                     { name: 'Verify Gate', value: gs.verifyGateEnabled ? `✅ ON (minDays=${gs.verifyMinAccountAgeDays}, role=${gs.verifyRequiredRoleId || 'None'}, action=${gs.verifyGateAction})` : '❌ OFF', inline: false },
                     { name: 'Timeout Minutes', value: `spam=${gs.timeoutMinutesSpam} scam=${gs.timeoutMinutesScam} command=${gs.timeoutMinutesCommand} trade=${gs.timeoutMinutesTrade} service=${gs.timeoutMinutesService}`, inline: false },
@@ -7317,6 +7121,33 @@ client.on('interactionCreate', async interaction => {
                 .setTitle('📋 Currently Exiled')
                 .setColor(0xFF4400)
                 .setDescription(lines.length ? lines.join('\n') : 'Nobody is currently exiled.')], ephemeral: true });
+            break;
+        }
+
+        // ── /botstatus ────────────────────────────────────
+        case 'botstatus': {
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            const totalExiled     = Object.keys(data.exiles).length;
+            const totalViolations = Object.values(data.violations).reduce((a,b)=>a+b,0);
+            await interaction.reply({ embeds: [new EmbedBuilder()
+                .setTitle('🤖 SKYNET V7 — Status')
+                .setColor(0x5865F2)
+                .addFields(
+                    { name: '🧠 Checks',          value: gs.checksEnabled ? '✅ ON' : '🛑 OFF',       inline: true },
+                    { name: '📡 Trade Channel',    value: `<#${gs.tradeChannelId}>`,              inline: true },
+                    { name: '⚔️ Services Channel', value: `<#${gs.servicesChannelId}>`,           inline: true },
+                    { name: '📋 Log Channel',      value: gs.logChannelId ? `<#${gs.logChannelId}>` : 'Not set', inline: true },
+                    { name: '📩 Appeals Channel',  value: gs.appealsChannelId ? `<#${gs.appealsChannelId}>` : 'Not set', inline: true },
+                    { name: '⛓️ Exile Role',       value: `<@&${gs.exiledRoleId}>`,               inline: true },
+                    { name: '🛡️ Immunity',         value: imm.enabled ? '✅ ON' : '❌ OFF',        inline: true },
+                    { name: '🚨 Scam Detection',   value: gs.scamEnabled ? '✅ ON' : '❌ OFF',      inline: true },
+                    { name: '⚙️ Threshold',        value: String(gs.violationThreshold || VIOLATION_THRESHOLD), inline: true },
+                    { name: '⏱️ Exile Duration',   value: `${gs.exileDurationMins || EXILE_DURATION_MINS}m`, inline: true },
+                    { name: '👥 Currently Exiled', value: String(totalExiled),                    inline: true },
+                    { name: '⚠️ Total Violations', value: String(totalViolations),                inline: true },
+                    { name: '🤖 AI Detection',     value: AI_ENABLED ? '✅ ON' : '❌ OFF',         inline: true },
+                )
+                .setTimestamp()], ephemeral: true });
             break;
         }
 
@@ -7992,6 +7823,8 @@ function isMessageCommand(msg) {
     if (/^[\p{P}\p{S}\s]+$/u.test(t)) return false;
     if (t.startsWith('@') || t.startsWith('<@')) return false;
 
+    if (/^\?afk\b/i.test(t)) return false;
+
     if (/^\-#\s*/.test(t)) return false;
     if (/^\|\|/.test(t)) return false;
     if (/^#{1,6}\s+/.test(t)) return false;
@@ -8008,8 +7841,6 @@ function isMessageCommand(msg) {
     if (/^[.!?]+\s*$/.test(t)) return false;
     // Don't flag quoted speech like "hey" or 'sup' or (lol) as commands
     if (/^["'()\[\]{}]/.test(t)) return false;
-    // ?afk is allowed anywhere — never treat it as a command violation
-    if (/^\?afk(\s|$)/i.test(t)) return false;
     // "char space word" must NOT flag — only "charword" (no space) counts as a command
     if (/^[.!?/;:~`#$%^&*+=|\\]\s+[a-zA-Z]/.test(t)) return false;
     // Must have a non-alphanum prefix char IMMEDIATELY followed by a letter (zero spaces)
@@ -8185,19 +8016,16 @@ function getAttachmentExts(message) {
 function looksLikeCommandButNotCaught(raw, cleaned) {
     const r = (raw || '').trim();
     if (!r) return false;
+    if (/^\s*\?afk\b/i.test(raw || '')) return false;
     if (/^:[a-zA-Z0-9_]{2,32}:/.test(r)) return false;
-    // Don't flag quoted speech like "hey" or (lol) as command evasion
+    const t = cleaned || fullClean(r);
+    const ns = t.replace(/[\s_]/g,'');
     if (/^["'()\[\]{}]/.test(r)) return false;
-    // ?afk is allowed anywhere
-    if (/^\?afk(\s|$)/i.test(r)) return false;
 
     // KEY RULE: "char SPACE word" is NOT a command. Only "charword" (zero spaces) counts.
     // e.g. ".invite" → command; ". invite" → NOT a command; "i am going to .say" → NOT a command
     // A command prefix must be at the START of the message, immediately followed by letters.
     if (/^[^a-zA-Z0-9\s@]\s+/.test(r)) return false; // char then any space → not a command
-
-    const t = cleaned || fullClean(r);
-    const ns = t.replace(/[\s_]/g,'');
 
     // g.command style (no space needed here since it's always "g.word")
     if (/^\s*g\.[a-z0-9_]{2,32}\b/i.test(r)) return true;
@@ -8292,7 +8120,7 @@ client.on('messageCreate', async message => {
     // ── RAID LOCKDOWN (message-time enforcement) ───────────
     if (gs.raidModeEnabled && isRaidLocked(guildId) && !immune && !isCategoryImmune(message.member, guildId, data, 'raid')) {
         if (message.channel && message.channel.isTextBased && message.channel.isTextBased()) {
-            const allow = GAMES_HUB_CHANNELS.has(message.channel.id) || message.channel.id === (gs.logChannelId || '') || message.channel.id === (gs.appealsChannelId || '');
+            const allow = isGamesHubChannelId(message.channel.id, gs) || message.channel.id === (gs.logChannelId || '') || message.channel.id === (gs.appealsChannelId || '');
             if (!allow) {
                 try { await message.delete(); } catch {}
                 incStat(guildId, data, 'raidLockdown', 1);
@@ -8312,8 +8140,7 @@ client.on('messageCreate', async message => {
     // ── COMMAND LOCKDOWN ──────────────────────────────────
     if ((gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message)) {
         const staffCommandImmune = isStaff && immCfg.enabled;
-        const _cmdChId = gs.gamesHubId || DEFAULT_GAMES_HUB_ID;
-        if (!staffCommandImmune && !GAMES_HUB_CHANNELS.has(message.channel.id) && message.channel.id !== _cmdChId) {
+        if (!staffCommandImmune && !isGamesHubChannelId(message.channel.id, gs)) {
             try { await message.delete(); } catch {}
             recordCommandAbuse(message.author.id);
             incStat(guildId, data, 'commandUsage', 1);
@@ -8330,7 +8157,7 @@ client.on('messageCreate', async message => {
         }
     }
 
-    if ((gs.commandRedirectEnabled !== false) && !immune && !isCategoryImmune(message.member, guildId, data, 'command') && !GAMES_HUB_CHANNELS.has(message.channel.id) && message.channel.id !== (gs.gamesHubId || DEFAULT_GAMES_HUB_ID)) {
+    if ((gs.commandRedirectEnabled !== false) && !immune && !isCategoryImmune(message.member, guildId, data, 'command') && !isGamesHubChannelId(message.channel.id, gs)) {
         const { contentClean: cmdClean } = prepareText(message.content);
         if (looksLikeCommandButNotCaught(message.content, cmdClean)) {
             const staffCommandImmune = isStaff && immCfg.enabled;
@@ -8471,10 +8298,8 @@ client.on('messageCreate', async message => {
             if (!deny.length && !allow.length) blocked = true;
             for (const d of invDomains.map(normalizeDomain)) {
                 if (!d) continue;
-                // Allow list and COMMON_ALLOWED_DOMAINS always win — check them first
-                if (allow.length && domainInList(d, allow)) { blocked = false; break; }
-                if (domainInList(d, COMMON_ALLOWED_DOMAINS)) { blocked = false; break; }
                 if (deny.length && domainInList(d, deny)) { blocked = true; break; }
+                if (allow.length && domainInList(d, allow)) { blocked = false; break; }
             }
             if (blocked) {
                 try { await message.delete(); } catch {}
@@ -8497,7 +8322,9 @@ client.on('messageCreate', async message => {
         const minLetters = Math.max(8, Math.min(80, gs.capsMinLetters || 16));
         const maxPct = Math.max(30, Math.min(100, gs.capsMaxPercent || 70));
         const maxRun = Math.max(10, Math.min(120, gs.capsMaxRun || 28));
-        if (m.letters >= minLetters && (m.percent >= maxPct || m.maxRun >= maxRun)) {
+        const pctHit = m.percent >= maxPct;
+        const runHit = (m.maxRun >= maxRun) && (m.percent >= Math.min(90, Math.max(35, maxPct * 0.6)));
+        if (m.letters >= minLetters && (pctHit || runHit)) {
             try { await message.delete(); } catch {}
             await issueViolation(message, data, gs, {
                 title: '⚠️ Caps Spam',
@@ -8593,47 +8420,6 @@ client.on('messageCreate', async message => {
     if (immune) return;
 
     const { contentClean, contentNospace } = prepareText(message.content);
-
-    // ── NO-AFFILIATION EARLY EXIT ──────────────────────────
-    // When noAffiliationEnabled is on, ANY single detection signal is sufficient
-    // to fire the notice — no need to combine signals.
-    if (gs.noAffiliationEnabled &&
-        !isCategoryImmune(message.member, guildId, data, 'service') &&
-        !isCategoryImmune(message.member, guildId, data, 'trade')) {
-
-        const _tier       = hasTierKeyword(contentClean);
-        const _intent     = scanForIntent(contentClean, getStrictness(gs));
-        const _svcIntent  = scanForServiceIntent(contentClean, getStrictness(gs));
-        const _bossHit    = bossRegex.test(contentClean);
-        const _fruitRaid  = fruitRaidRegex.test(contentClean);
-        let   _exchange   = tradeRegex.test(contentClean);
-        if (!_exchange) for (const p of NOSPACE_PATTERNS) if (p.test(contentNospace)) { _exchange = true; break; }
-
-        const _noAffHit = _tier || _intent || _svcIntent || _bossHit || _fruitRaid || _exchange;
-        if (_noAffHit) {
-            const serverName = message.guild?.name || 'This server';
-            if (gs.enforcementMode === 'monitor') {
-                await handlePolicyViolation(message, data, gs, 'service', {
-                    title: '📢 Notice — No Affiliation',
-                    color: 0x5865F2,
-                    reason: `${serverName} is not Blox Fruits related anymore. (No-affiliation mode)`,
-                    footerLabel: 'No Affiliation',
-                    ttlMs: 12000,
-                });
-                return;
-            }
-            try { await message.delete(); } catch {}
-            await issueViolation(message, data, gs, {
-                title: '📢 Notice — No Affiliation',
-                color: 0x5865F2,
-                reason: `${serverName} is not Blox Fruits related anymore. Please use the Official Blox Fruits Discord for services/trades related to Blox Fruits.`,
-                details: message.content,
-                footerLabel: 'No Affiliation',
-                ttlMs: 12000,
-            });
-            return;
-        }
-    }
 
     // ── TRIVIAL MESSAGE GUARD ─────────────────────────────────────
     // Skip scanning for messages that are purely punctuation, dots, reaction
@@ -8736,7 +8522,7 @@ client.on('messageCreate', async message => {
 
     // ── SPAM DETECTION ────────────────────────────────────
     if (gs.spamWarnEnabled !== false && !isCategoryImmune(message.member, guildId, data, 'spam')) {
-        const spamResult = checkSpam(message.author.id, message.content);
+        const spamResult = checkSpam(message.author.id, message.content, gs);
         if (spamResult.spam) {
             await handlePolicyViolation(message, data, gs, 'spam', {
                 title: '⚠️ Spam Detected',
@@ -8916,8 +8702,9 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
     }
 
     const trialsHit = detectTrialsOrTrialsRecruitment(contentClean);
+    const dungeonHit = detectRaidOrDungeonRecruitment(contentClean);
     const hasTarget = hasSvcForRaid || hasBossRegex || bossesFound.length || hasFruitRaid || hasFruitAndRaid || hasAnyItem;
-    const flagged = trialsHit || bypassHit || (svcIntent && hasTarget);
+    const flagged = trialsHit || dungeonHit || bypassHit || (svcIntent && hasTarget);
 
     if (flagged) {
         if (gs.noAffiliationEnabled) {
@@ -8968,31 +8755,6 @@ async function checkRaceViolation(message, contentClean, contentNospace, data, g
     const racesFound = scanForRaces(contentClean);
     for (const r of RACES) { const rc=r.replace(/[\s\-]/g,''); if(rc.length>=4&&contentNospace.includes(rc)&&!racesFound.includes(r)) racesFound.push(r); }
     if (!racesFound.length) return;
-
-    if (gs.noAffiliationEnabled) {
-        const serverName = message.guild?.name || 'This server';
-        if (gs.enforcementMode === 'monitor') {
-            await handlePolicyViolation(message, data, gs, 'service', {
-                title: '📢 Notice — No Affiliation',
-                color: 0x5865F2,
-                reason: `${serverName} is not Blox Fruits related anymore. (No-affiliation mode)`,
-                footerLabel: 'No Affiliation',
-                ttlMs: 12000,
-            });
-            return;
-        }
-        try { await message.delete(); } catch {}
-        await issueViolation(message, data, gs, {
-            title: '📢 Notice — No Affiliation',
-            color: 0x5865F2,
-            reason: `${serverName} is not Blox Fruits related anymore. Please use the Official Blox Fruits Discord for services/trades related to Blox Fruits.`,
-            details: message.content,
-            footerLabel: 'No Affiliation',
-            ttlMs: 12000,
-        });
-        return;
-    }
-
     await handlePolicyViolation(message, data, gs, 'service', {
         title: '⚠️ Race Service — Wrong Channel',
         color: 0x9B59B6,
@@ -10043,7 +9805,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !allowdomain [domain]
     else if (cmd === 'allowdomain' && isAdmin) {
-        const dom = normalizeDomain(args[0]);
+        const dom = parseDomainArg(args[0]);
         if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return message.channel.send('❌ Use: !allowdomain example.com');
         gs.linkAllowlistedDomains = Array.isArray(gs.linkAllowlistedDomains) ? gs.linkAllowlistedDomains : [];
         if (!gs.linkAllowlistedDomains.includes(dom)) gs.linkAllowlistedDomains.push(dom);
@@ -10053,7 +9815,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !denydomain [domain]
     else if (cmd === 'denydomain' && isAdmin) {
-        const dom = normalizeDomain(args[0]);
+        const dom = parseDomainArg(args[0]);
         if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return message.channel.send('❌ Use: !denydomain example.com');
         gs.linkDenylistedDomains = Array.isArray(gs.linkDenylistedDomains) ? gs.linkDenylistedDomains : [];
         if (!gs.linkDenylistedDomains.includes(dom)) gs.linkDenylistedDomains.push(dom);
@@ -10193,7 +9955,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     // !domainremove [allow|deny] [domain]
     else if (cmd === 'domainremove' && isAdmin) {
         const list = (args[0] || '').toLowerCase();
-        const dom = normalizeDomain(args[1]);
+        const dom = parseDomainArg(args[1]);
         if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return message.channel.send('❌ Use: !domainremove allow|deny example.com');
         if (list !== 'allow' && list !== 'deny') return message.channel.send('❌ First arg must be allow or deny.');
         if (list === 'allow') gs.linkAllowlistedDomains = (gs.linkAllowlistedDomains || []).filter(x => normalizeDomain(x) !== dom);
@@ -10367,7 +10129,6 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const lightUpg= scanForLightningUpgrades(cleaned);
         const intent  = scanForIntent(cleaned);
         const svcInt  = scanForServiceIntent(cleaned);
-        const raidSvc = detectRaidService(cleaned);
         const tier    = hasTierKeyword(cleaned);
         const accTrd  = detectAccountTrading(cleaned);
         const beg     = detectBegging(cleaned);
@@ -10386,7 +10147,6 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                 { name: 'Lightning Upgr.', value: lightUpg.join(', ')  || 'None', inline: false },
                 { name: 'Trade Intent',    value: intent   ? '✅' : '❌', inline: true },
                 { name: 'Service Intent',  value: svcInt   ? '✅' : '❌', inline: true },
-                { name: 'Raid Service',    value: raidSvc  ? '🚨 YES' : '✅ CLEAN', inline: true },
                 { name: 'Tier Keyword',    value: tier     ? '✅' : '❌', inline: true },
                 { name: 'Direct Exchange', value: exchange ? '✅' : '❌', inline: true },
                 { name: 'Account Trading', value: accTrd   ? '🚨 YES' : '✅ CLEAN', inline: true },
