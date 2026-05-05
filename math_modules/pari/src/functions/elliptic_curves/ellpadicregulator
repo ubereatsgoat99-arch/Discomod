@@ -1,0 +1,41 @@
+Function: ellpadicregulator
+Section: elliptic_curves
+C-Name: ellpadicregulator
+Prototype: GGLG
+Help: ellpadicregulator(E,p,n,S): E elliptic curve/Q, S a vector of
+ points in E(Q), p prime, n an integer; returns the p-adic
+ cyclotomic regulator of the points of S at precision p^n.
+Doc: Let $E/\Q$ be an elliptic curve. Return the determinant of the Gram
+ matrix of the vector of points $S=(S_{1},\cdots, S_{r})$  with respect to the
+ ``canonical'' cyclotomic $p$-adic height on $E$, given to $n$ ($p$-adic)
+ digits.
+
+ When $E$ has ordinary reduction at $p$, this is the expected Gram
+ determinant in $\Q_{p}$.
+
+ In the case of supersingular reduction of $E$ at $p$, the definition
+ requires care: the regulator $R$ is an element of
+ $D := H^{1}_{dR}(E) \otimes_{\Q} \Q_{p}$, which is a two-dimensional
+ $\Q_{p}$-vector space spanned by $\omega$ and $\eta = x \omega$
+ (which are defined over $\Q$) or equivalently but now over $\Q_{p}$
+ by $\omega$ and $F\omega$ where $F$ is the Frobenius endomorphism on $D$
+ as defined in \kbd{ellpadicfrobenius}. On $D$ we
+ define the cyclotomic height $h_{E} = f \omega + g \eta$
+ (see \tet{ellpadicheight}) and a canonical alternating bilinear form
+ $[.,.]_{D}$ such that $[\omega, \eta]_{D} = 1$.
+
+ For any $\nu \in D$, we can define a height $h_{\nu} := [ h_{E}, \nu ]_{D}$
+ from $E(\Q)$ to $\Q_{p}$ and $\langle \cdot, \cdot \rangle_{\nu}$ the attached
+ bilinear form. In particular, if $h_{E} = f \omega + g\eta$, then
+ $h_{\eta} = [ h_{E}, \eta ]_{D}$ = f and $h_{\omega} = [ h_{E}, \omega ]_{D}
+ = - g$ hence $h_{E} = h_{\eta} \omega - h_{\omega} \eta$.
+ Then, $R$ is the unique element of $D$ such that
+ $$[\omega,\nu]_{D}^{r-1} [R, \nu]_{D} = \det(\langle S_{i}, S_{j} \rangle_{\nu})$$
+ for all $\nu \in D$ not in $\Q_{p} \omega$. The \kbd{ellpadicregulator}
+ function returns $R$ in the basis $(\omega, F\omega)$, which was chosen
+ so that $p$-adic BSD conjectures are easy to state, see \kbd{ellpadicbsd}.
+
+ Note that by definition
+ $$[R, \eta]_{D} = \det(\langle S_{i}, S_{j} \rangle_{\eta})$$
+ and
+ $$[R, \omega+\eta]_{D} =\det(\langle S_{i}, S_{j} \rangle_{\omega+\eta}).$$

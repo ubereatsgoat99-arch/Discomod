@@ -1,0 +1,1236 @@
+)abbrev category ESC2 ExpressionSpace2
+++ Category for domains on which operators can be applied
+++ Author: Manuel Bronstein
+++ Date Created: 22 March 1988
+++ Description:
+++ An expression space is a set which is closed under certain operators;
+++ Keywords: operator, kernel, expression, space.
+ExpressionSpace2(K : KernelCategory(%)) : Category == Defn where
+  N   ==> NonNegativeInteger
+  OP  ==> BasicOperator
+  SY  ==> Symbol
+  PAREN  ==> '%paren
+  BOX    ==> '%box
+
+  Defn ==> Join(Comparable, RetractableTo K,
+                InnerEvalable(K, %), Evalable %) with
+    elt          : (OP, %) -> %
+      ++ elt(op, x) or op(x) applies the unary operator op to x.
+    elt          : (OP, %, %) -> %
+      ++ elt(op, x, y) or op(x, y) applies the binary operator op to x and y.
+    elt          : (OP, %, %, %) -> %
+      ++ elt(op, x, y, z) or op(x, y, z) applies the ternary operator op to x, y and z.
+    elt          : (OP, %, %, %, %) -> %
+      ++ elt(op, x, y, z, t) or op(x, y, z, t) applies the 4-ary operator op to x, y, z and t.
+    elt          : (OP, %, %, %, %, %) -> %
+      ++ elt(op, x, y, z, t, s) applies the 5-ary operator op to
+      ++ x, y, z, t and s
+    elt          : (OP, %, %, %, %, %, %) -> %
+      ++ elt(op, x, y, z, t, s, r) applies the 6-ary operator op to
+      ++ x, y, z, t, s and r
+    elt          : (OP, %, %, %, %, %, %, %) -> %
+      ++ elt(op, x, y, z, t, s, r, q) applies the 7-ary operator op to
+      ++ x, y, z, t, s, r and q
+    elt          : (OP, %, %, %, %, %, %, %, %) -> %
+      ++ elt(op, x, y, z, t, s, r, q, p) applies the 8-ary operator op
+      ++ to x, y, z, t, s, r, q and p
+    elt          : (OP, %, %, %, %, %, %, %, %, %) -> %
+      ++ elt(op, x, y, z, t, s, r, q, p, o) applies the 9-ary operator op
+      ++ to x, y, z, t, s, r, q, p and o
+    elt          : (OP, List %) -> %
+      ++ elt(op, [x1, ..., xn]) or op([x1, ..., xn]) applies the n-ary operator op to x1, ..., xn.
+    subst        : (%, Equation %) -> %
+      ++ subst(f, k = g) replaces the kernel k by g formally in f.
+    subst        : (%, List Equation %) -> %
+      ++ subst(f, [k1 = g1, ..., kn = gn]) replaces the kernels k1, ..., kn
+      ++ by g1, ..., gn formally in f.
+    subst        : (%, List K, List %) -> %
+      ++ subst(f, [k1..., kn], [g1, ..., gn]) replaces the kernels k1, ..., kn
+      ++ by g1, ..., gn formally in f.
+    box          : % -> %
+      ++ box(f) returns f with a 'box' around it that prevents f from
+      ++ being evaluated when operators are applied to it. For example,
+      ++ \spad{log(1)} returns 0, but \spad{log(box 1)}
+      ++ returns the formal kernel log(1).
+    paren        : % -> %
+      ++ paren(f) returns (f). This prevents f from
+      ++ being evaluated when operators are applied to it. For example,
+      ++ \spad{log(1)} returns 0, but \spad{log(paren 1)} returns the
+      ++ formal kernel log((1)).
+    distribute   : % -> %
+      ++ distribute(f) expands all the kernels in f that are
+      ++ formally enclosed by a \spadfunFrom{box}{ExpressionSpace}
+      ++ or \spadfunFrom{paren}{ExpressionSpace} expression.
+    distribute   : (%, %) -> %
+      ++ distribute(f, g) expands all the kernels in f that contain g in their
+      ++ arguments and that are formally
+      ++ enclosed by a \spadfunFrom{box}{ExpressionSpace}
+      ++ or a \spadfunFrom{paren}{ExpressionSpace} expression.
+    height       : %  -> N
+      ++ height(f) returns the highest nesting level appearing in f.
+      ++ Constants have height 0. Symbols have height 1. For any
+      ++ operator op and expressions f1, ..., fn, \spad{op(f1, ..., fn)} has
+      ++ height equal to \spad{1 + max(height(f1), ..., height(fn))}.
+    mainKernel   : %  -> Union(K, "failed")
+      ++ mainKernel(f) returns a kernel of f with maximum nesting level, or
+      ++ "failed" if f has no kernels (i.e. f is a constant).
+    kernels      : %  -> List K
+      ++ kernels(f) returns the list of all the top-level kernels
+      ++ appearing in f, but not the ones appearing in the arguments
+      ++ of the top-level kernels.
+    kernels : List(%) -> List K
+      ++ kernels([f1,...,fn]) returns the list of all the top-level
+      ++ kernels appearing in f1, ..., fn but not the ones appearing
+      ++ in the arguments of the top-level kernels.
+    tower        : %  -> List K
+      ++ tower(f) returns all the kernels appearing in f, no matter
+      ++ what their levels are.
+    tower : List(%) -> List K
+      ++ tower([f1,...,fn]) returns all the kernels appearing in
+      ++ f1, ..., fn no matter what their levels are.
+    operators    : %  -> List OP
+      ++ operators(f) returns all the basic operators appearing in f,
+      ++ no matter what their levels are.
+    operator     : OP -> OP
+      ++ operator(op) returns a copy of op with the domain-dependent
+      ++ properties appropriate for %.
+    belong?      : OP -> Boolean
+      ++ belong?(op) tests if % accepts op as applicable to its
+      ++ elements.
+    is?          : (%, OP)     -> Boolean
+      ++ is?(x, op) tests if x is a kernel and if its operator is op.
+    is?          : (%, SY) -> Boolean
+      ++ is?(x, s) tests if x is a kernel and if the name of its
+      ++ operator is s.
+    kernel       : (OP, %) -> %
+      ++ kernel(op, x) constructs op(x) without evaluating it.
+    kernel       : (OP, List %) -> %
+      ++ kernel(op, [f1, ..., fn]) constructs \spad{op(f1, ..., fn)} without
+      ++ evaluating it.
+    map          : (% -> %, K) -> %
+      ++ map(f, k) returns \spad{op(f(x1), ..., f(xn))} where
+      ++ \spad{k = op(x1, ..., xn)}.
+    freeOf?      : (%, %)  -> Boolean
+      ++ freeOf?(x, y) tests if x does not contain any occurrence of y,
+      ++ where y is a single kernel.
+    freeOf?      : (%, SY) -> Boolean
+      ++ freeOf?(x, s) tests if x does not contain any operator
+      ++ whose name is s.
+    eval         : (%, List SY, List(% -> %)) -> %
+      ++ eval(x, [s1, ..., sm], [f1, ..., fm]) replaces
+      ++ every \spad{si(a)} in x by \spad{fi(a)} for any \spad{a}.
+    eval         : (%, List SY, List(List % -> %)) -> %
+      ++ eval(x, [s1, ..., sm], [f1, ..., fm]) replaces
+      ++ every \spad{si(a1, ..., an)} in x by
+      ++ \spad{fi(a1, ..., an)} for any \spad{a1}, ..., \spad{an}.
+    eval         : (%, SY, List % -> %) -> %
+      ++ eval(x, s, f) replaces every \spad{s(a1, .., am)} in x
+      ++ by \spad{f(a1, .., am)} for any \spad{a1}, ..., \spad{am}.
+    eval         : (%, SY, % -> %) -> %
+      ++ eval(x, s, f) replaces every \spad{s(a)} in x by \spad{f(a)}
+      ++ for any \spad{a}.
+    eval         : (%, List OP, List(% -> %)) -> %
+      ++ eval(x, [s1, ..., sm], [f1, ..., fm]) replaces
+      ++ every \spad{si(a)} in x by \spad{fi(a)} for any \spad{a}.
+    eval         : (%, List OP, List(List % -> %)) -> %
+      ++ eval(x, [s1, ..., sm], [f1, ..., fm]) replaces
+      ++ every \spad{si(a1, ..., an)} in x by
+      ++ \spad{fi(a1, ..., an)} for any \spad{a1}, ..., \spad{an}.
+    eval         : (%, OP, List % -> %) -> %
+      ++ eval(x, s, f) replaces every \spad{s(a1, .., am)} in x
+      ++ by \spad{f(a1, .., am)} for any \spad{a1}, ..., \spad{am}.
+    eval         : (%, OP, % -> %) -> %
+      ++ eval(x, s, f) replaces every \spad{s(a)} in x by \spad{f(a)}
+      ++ for any \spad{a}.
+    if % has Ring then
+      minPoly : K -> SparseUnivariatePolynomial %
+        ++ minPoly(k) returns p such that \spad{p(k) = 0}.
+      definingPolynomial : % -> %
+        ++ definingPolynomial(x) returns an expression p such that
+        ++ \spad{p(x) = 0}.
+    if % has RetractableTo Integer then
+      even? : % -> Boolean
+        ++ even? x is true if x is an even integer.
+      odd? : % -> Boolean
+        ++ odd? x is true if x is an odd integer.
+
+   add
+
+    import from Set(K)
+    import from List(K)
+    import from List(Set(K))
+    import from List(NonNegativeInteger)
+    import from List(Symbol)
+
+    DUMMYVAR := '%dummyVar
+-- the 7 functions not provided are:
+--        kernels   minPoly   definingPolynomial
+--        coerce: K -> %  eval: (%, List K, List %) -> %
+--        subst: (%, List K, List %) -> %
+--        eval: (%, List Symbol, List(List % -> %)) -> %
+
+    allKernels : %      -> Set K
+    listk     : %      -> List K
+    allk      : List % -> Set K
+    unwrap    : (List K, %) -> %
+    okkernel  : (OP, List %) -> %
+    mkKerLists : List Equation % -> Record(lstk : List K, lstv : List %)
+
+    oppren := operator(PAREN)$CommonOperators()
+    opbox  := operator(BOX)$CommonOperators()
+
+    box(x : %)     == opbox [x]
+    paren(x : %)   == oppren [x]
+    belong? op   ==
+        has?(op, 'any) and (is?(op, PAREN) or is?(op, BOX))
+    listk f      == parts allKernels f
+    tower(f : %) : List(K) == sort! listk f
+    allk l       == reduce("union", [allKernels f for f in l], set())
+    tower(lf : List(%)) : List(K) == sort! parts allk(lf)
+    kernels(lf : List(%)) : List(K) ==
+        reduce(setUnion$List(K), [kernels(f) for f in lf], [])$List(List(K))
+    operators f  == [operator k for k in listk f]
+    height f     == reduce("max", [height k for k in kernels f], 0)
+    freeOf?(x : %, s : SY)       == not member?(s, [name k for k in listk x])
+    distribute x == unwrap([k for k in listk x |
+                              is?(k, oppren) or is?(k, opbox)], x)
+
+    if % has Ring then
+
+        derivative(opbox, (x : %) : % +-> 1)$BasicOperatorFunctions1(%)
+        derivative(oppren, (x : %) : % +-> 1)$BasicOperatorFunctions1(%)
+
+    freeOf?(x : %, k : %)              == not member?(retract k, listk x)
+    kernel(op : OP, arg : %)           == kernel(op, [arg])
+    elt(op : OP, x : %)                == op [x]
+    elt(op : OP, x : %, y : %)           == op [x, y]
+    elt(op : OP, x : %, y : %, z : %)      == op [x, y, z]
+    elt(op : OP, x : %, y : %, z : %, t : %) == op [x, y, z, t]
+    elt(op : OP, x : %, y : %, z : %, t : %, s : %) ==
+        op [x, y, z, t, s]
+    elt(op : OP, x : %, y : %, z : %, t : %, s : %, r : %) ==
+        op [x, y, z, t, s, r]
+    elt(op : OP, x : %, y : %, z : %, t : %, s : %, r : %, q : %) ==
+        op [x, y, z, t, s, r, q]
+    elt(op : OP, x : %, y : %, z : %, t : %, s : %, r : %, q : %, p : %) ==
+        op [x, y, z, t, s, r, q, p]
+    elt(op : OP, x : %, y : %, z : %, t : %, s : %, r : %, q : %,
+        p : %, o : %) == op [x, y, z, t, s, r, q, p, o]
+    eval(x : %, s : SY, f : List % -> %) == eval(x, [s], [f])
+    eval(x : %, s : OP, f : List % -> %) == eval(x, [name s], [f])
+    eval(x : %, s : SY, f : % -> %)      ==
+        eval(x, [s], [(y : List %) : % +-> f(first y)])
+    eval(x : %, s : OP, f : % -> %)      ==
+        eval(x, [s], [(y : List %) : % +-> f(first y)])
+    subst(x : %, e : Equation %)       == subst(x, [e])
+
+    eval(x : %, ls : List OP, lf : List(% -> %)) ==
+      eval(x, ls, [y +-> f(first y) for f in lf]$List(List % -> %))
+
+    eval(x : %, ls : List SY, lf : List(% -> %)) ==
+      eval(x, ls, [y +-> f(first y) for f in lf]$List(List % -> %))
+
+    eval(x : %, ls : List OP, lf : List(List % -> %)) ==
+      eval(x, [name s for s in ls]$List(SY), lf)
+
+    map(fn, k) ==
+      (l := [fn x for x in argument k]$List(%)) = argument k => k::%
+      (operator k) l
+
+    operator op ==
+      is?(op, PAREN) => oppren
+      is?(op, BOX) => opbox
+      error concat("Unknown operator 1: ",string(name(op)))$String
+
+    mainKernel x ==
+      empty?(l := kernels x) => "failed"
+      n := height(k := first l)
+      for kk in rest l repeat
+        if height(kk) > n then
+          n := height kk
+          k := kk
+      k
+
+-- takes all the kernels except for the dummy variables, which are second
+-- arguments of rootOf's, integrals, sums and products which appear only in
+-- their first arguments
+    allKernels f ==
+      s := set(l := kernels f)
+      for k in l repeat
+          t :=
+              arg := argument(k)
+              (u := property(operator k, DUMMYVAR)) case None =>
+                  s0  := remove!(retract(second arg)@K, allKernels first arg)
+                  arg := rest rest arg
+                  n   := (u@None) pretend N
+                  if n > 1 then arg := rest arg
+                  union(s0, allk arg)
+              allk(arg)
+          s := union(s, t)
+      s
+
+    kernel(op : OP, args : List %) ==
+      not belong? op => error concat("Unknown operator 2: ",string(name(op)))$String
+      okkernel(op, args)
+
+    okkernel(op, l) ==
+      kernel(op, l, 1 + reduce("max", [height f for f in l], 0))$K :: %
+
+    elt(op : OP, args : List %) ==
+      not belong? op => error concat("Unknown operator 3: ",string(name(op)))$String
+      ((u := arity op) case N) and (#args ~= u@N)
+                                    => error "Wrong number of arguments"
+      (v := evaluate(op, args)$BasicOperatorFunctions1(%)) case % => v
+      okkernel(op, args)
+
+    retract f ==
+      (k := mainKernel f) case "failed" => error "not a kernel"
+      k@K::% ~= f => error "not a kernel"
+      k
+
+    retractIfCan f ==
+      (k := mainKernel f) case "failed" => "failed"
+      k@K::% ~= f => "failed"
+      k
+
+    is?(f : %, s : SY) ==
+      (k := retractIfCan f) case "failed" => false
+      is?(k@K, s)
+
+    is?(f : %, op : OP) ==
+      (k := retractIfCan f) case "failed" => false
+      is?(k@K, op)
+
+    unwrap(l, x) ==
+      for k in reverse! l repeat
+        x := eval(x, k, first argument k)
+      x
+
+    distribute(x, y) ==
+        ky := retract y
+        unwrap([k for k in listk x | (is?(k, oppren) or is?(k, opbox))
+                  and member?(ky, listk(k::%))], x)
+
+    -- in case of conflicting substitutions e.g. [x = a, x = b],
+    -- the first one prevails.
+    -- this is not part of the semantics of the function, but just
+    -- a feature of this implementation.
+    eval(f : %, leq : List Equation %) ==
+      rec := mkKerLists leq
+      eval(f, rec.lstk, rec.lstv)
+
+    subst(f : %, leq : List Equation %) ==
+      rec := mkKerLists leq
+      subst(f, rec.lstk, rec.lstv)
+
+    mkKerLists leq ==
+      lk := empty()$List(K)
+      lv := empty()$List(%)
+      for eq in leq repeat
+        (k := retractIfCan(lhs eq)@Union(K, "failed")) case "failed" =>
+                          error "left hand side must be a single kernel"
+        if not member?(k@K, lk) then
+          lk := concat(k@K, lk)
+          lv := concat(rhs eq, lv)
+      [lk, lv]
+
+    if % has RetractableTo Integer then
+       intpred? : (%, Integer -> Boolean) -> Boolean
+
+       even? x == intpred?(x, even?)
+       odd? x  == intpred?(x, odd?)
+
+       intpred?(x, pred?) ==
+           (u := retractIfCan(x)@Union(Integer, "failed")) case Integer
+                  and pred?(u@Integer)
+
+)abbrev category ES ExpressionSpace
+++ Description:
+++ Specialization of \spadtype{ExpressionSpace2} for \spadtype{Kernel}.
+ExpressionSpace() : Category == ExpressionSpace2(Kernel(%))
+
+)abbrev package ES1 ExpressionSpaceFunctions1
+++ Lifting of maps from expression spaces to kernels over them
+++ Author: Manuel Bronstein
+++ Date Created: 23 March 1988
+++ Description:
+++   This package allows a map from any expression space into any object
+++   to be lifted to a kernel over the expression set, using a given
+++   property of the operator of the kernel.
+-- should not be exposed
+ExpressionSpaceFunctions1(F : ExpressionSpace, S : Type) : with
+    map : (F -> S, Symbol, Kernel F) -> S
+      ++ map(f, p, k) uses the property p of the operator
+      ++ of k, in order to lift f and apply it to k.
+
+  == add
+    --  prop  contains an evaluation function List S -> S
+    map(F2S, prop, k) ==
+      args := [F2S x for x in argument k]$List(S)
+      (p := property(operator k, prop)) case None =>
+                                  ((p@None) pretend (List S -> S)) args
+      error "Operator does not have required property"
+
+)abbrev package ES2 ExpressionSpaceFunctions2
+++ Lifting of maps from expression spaces to kernels over them
+++ Author: Manuel Bronstein
+++ Date Created: 23 March 1988
+++ Description:
+++ This package allows a mapping E -> F to be lifted to a kernel over E;
+++ This lifting can fail if the operator of the kernel cannot be applied
+++ in F; Do not use this package with E = F, since this may
+++ drop some properties of the operators.
+ExpressionSpaceFunctions2(E : ExpressionSpace, F : ExpressionSpace) : with
+    map : (E -> F, Kernel E) -> F
+      ++ map(f, k) returns \spad{g = op(f(a1), ..., f(an))} where
+      ++ \spad{k = op(a1, ..., an)}.
+  == add
+    map(f, k) ==
+      (operator(operator k)$F) [f x for x in argument k]$List(F)
+
+)abbrev category FSC2 FunctionSpace2
+++ Category for formal functions
+++ Author: Manuel Bronstein
+++ Date Created: 22 March 1988
+++ Description:
+++   A space of formal functions with arguments in an arbitrary
+++   ordered set.
+++ Keywords: operator, kernel, function.
+FunctionSpace2(R : Comparable, K : KernelCategory(%)) : Category ==
+                                                   Definition where
+  OP ==> BasicOperator
+  O  ==> OutputForm
+  SY ==> Symbol
+  N  ==> NonNegativeInteger
+  Z  ==> Integer
+  Q  ==> Fraction R
+  PR ==> Polynomial R
+  MP ==> SparseMultivariatePolynomial(R, K)
+  QF ==> PolynomialCategoryQuotientFunctions(IndexedExponents K, K, R, MP, %)
+
+  SPECIALDISP  ==> '%specialDisp
+  SPECIALEQUAL ==> '%specialEqual
+  SPECIALINPUT ==> '%specialInput
+
+  Definition ==> Join(ExpressionSpace2(K), RetractableTo SY, Patternable R,
+                     FullyPatternMatchable R, FullyRetractableTo R) with
+       ground?   : % -> Boolean
+         ++ ground?(f) tests if f is an element of R.
+       ground    : % -> R
+         ++ ground(f) returns f as an element of R.
+         ++ An error occurs if f is not an element of R.
+       variables : %  -> List SY
+         ++ variables(f) returns the list of all the variables of f.
+       variables : List(%) -> List SY
+         ++ variables([f1, ..., fn]) returns the list of all the
+         ++ variables of f1, ..., fn.
+       applyQuote : (SY, %) -> %
+         ++ applyQuote(foo, x) returns \spad{'foo(x)}.
+       applyQuote : (SY, %, %) -> %
+         ++ applyQuote(foo, x, y) returns \spad{'foo(x, y)}.
+       applyQuote : (SY, %, %, %) -> %
+         ++ applyQuote(foo, x, y, z) returns \spad{'foo(x, y, z)}.
+       applyQuote : (SY, %, %, %, %) -> %
+         ++ applyQuote(foo, x, y, z, t) returns \spad{'foo(x, y, z, t)}.
+       applyQuote : (SY, List %) -> %
+         ++ applyQuote(foo, [x1, ..., xn]) returns \spad{'foo(x1, ..., xn)}.
+       if R has ConvertibleTo InputForm then
+         ConvertibleTo InputForm
+         eval     : (%, OP, %, SY) -> %
+           ++ eval(x, s, f, y) replaces every \spad{s(a)} in x by \spad{f(y)}
+           ++ with \spad{y} replaced by \spad{a} for any \spad{a}.
+         eval     : (%, List OP, List %, SY) -> %
+           ++ eval(x, [s1, ..., sm], [f1, ..., fm], y) replaces every
+           ++ \spad{si(a)} in x by \spad{fi(y)}
+           ++ with \spad{y} replaced by \spad{a} for any \spad{a}.
+       if R has SemiGroup then
+         Monoid
+         isTimes : % -> Union(List %, "failed")
+           ++ isTimes(p) returns \spad{[a1, ..., an]}
+           ++ if \spad{p = a1*...*an} and \spad{n > 1}.
+         isExpt : % -> Union(Record(var:K,exponent:Z),"failed")
+           ++ isExpt(p) returns \spad{[x, n]} if \spad{p = x^n}
+           ++ and \spad{n ~= 0}.
+       if R has Group then Group
+       if R has AbelianSemiGroup then
+         AbelianMonoid
+         isPlus : % -> Union(List %, "failed")
+           ++ isPlus(p) returns \spad{[m1, ..., mn]}
+           ++ if \spad{p = m1 +...+ mn} and \spad{n > 1}.
+         isMult : % -> Union(Record(coef:Z, var:K),"failed")
+           ++ isMult(p) returns \spad{[n, x]} if \spad{p = n * x}
+           ++ and \spad{n ~= 0}.
+       if R has AbelianGroup then AbelianGroup
+       if R has Ring then
+         Ring
+         RetractableTo PR
+         PartialDifferentialRing SY
+         FullyLinearlyExplicitOver R
+         coerce    : MP -> %
+           ++ coerce(p) returns p as an element of %.
+         numer     : %  -> MP
+           ++ numer(f) returns the
+           ++ numerator of f viewed as a polynomial in the kernels over R
+           ++ if R is an integral domain. If not, then numer(f) = f viewed
+           ++ as a polynomial in the kernels over R.
+           -- DO NOT change this meaning of numer!  MB 1/90
+         numerator : % -> %
+           ++ numerator(f) returns the numerator of \spad{f} converted to %.
+         isExpt:(%,OP) -> Union(Record(var:K,exponent:Z),"failed")
+           ++ isExpt(p, op) returns \spad{[x, n]} if \spad{p = x^n}
+           ++ and \spad{n ~= 0} and \spad{x = op(a)}.
+         isExpt:(%,SY) -> Union(Record(var:K,exponent:Z),"failed")
+           ++ isExpt(p, f) returns \spad{[x, n]} if \spad{p = x^n}
+           ++ and \spad{n ~= 0} and \spad{x = f(a)}.
+         isPower   : % -> Union(Record(val:%,exponent:Z),"failed")
+           ++ isPower(p) returns \spad{[x, n]} if \spad{p = x^n}
+           ++ and \spad{n ~= 0}.
+         eval : (%, List SY, List N, List(% -> %)) -> %
+           ++ eval(x, [s1, ..., sm], [n1, ..., nm], [f1, ..., fm]) replaces
+           ++ every \spad{si(a)^ni} in x by \spad{fi(a)} for any \spad{a}.
+         eval : (%, List SY, List N, List(List % -> %)) -> %
+           ++ eval(x, [s1, ..., sm], [n1, ..., nm], [f1, ..., fm]) replaces
+           ++ every \spad{si(a1, ..., an)^ni} in x by \spad{fi(a1, ..., an)}
+           ++ for any a1, ..., am.
+         eval : (%, SY, N, List % -> %) -> %
+           ++ eval(x, s, n, f) replaces every \spad{s(a1, ..., am)^n} in x
+           ++ by \spad{f(a1, ..., am)} for any a1, ..., am.
+         eval : (%, SY, N, % -> %) -> %
+           ++ eval(x, s, n, f) replaces every \spad{s(a)^n} in x
+           ++ by \spad{f(a)} for any \spad{a}.
+       if R has CharacteristicZero then CharacteristicZero
+       if R has CharacteristicNonZero then CharacteristicNonZero
+       if R has CommutativeRing then
+         Algebra R
+       if R has IntegralDomain then
+         Field
+         RetractableTo Fraction PR
+         algtower : % -> List K
+           ++ algtower(f) is algtower([f])
+         algtower : List % -> List K
+           ++ algtower([f1, ..., fn]) returns list of kernels
+           ++ \spad{[ak1, ..., akl]} such that each toplevel
+           ++ algebraic kernel in one of f1, ..., fn or in arguments
+           ++ of ak1, ..., akl is one of ak1, ..., akl.
+         convert   : Factored % -> %
+           ++ convert(f1\^e1 ... fm\^em) returns \spad{(f1)\^e1 ... (fm)\^em}
+           ++ as an element of %, using formal kernels
+           ++ created using a \spadfunFrom{paren}{ExpressionSpace}.
+         denom     : %  -> MP
+           ++ denom(f) returns the denominator of f viewed as a
+           ++ polynomial in the kernels over R.
+         denominator : % -> %
+           ++ denominator(f) returns the denominator of \spad{f} converted to %.
+         "/"       : (MP, MP) -> %
+           ++ p1/p2 returns the quotient of p1 and p2 as an element of %.
+         coerce    : Q  -> %
+           ++ coerce(q) returns q as an element of %.
+         coerce    : Polynomial Q -> %
+           ++ coerce(p) returns p as an element of %.
+         coerce    : Fraction Polynomial Q -> %
+           ++ coerce(f) returns f as an element of %.
+         univariate : (%, K) -> Fraction SparseUnivariatePolynomial %
+           ++ univariate(f, k) returns f viewed as a univariate fraction in k.
+         if R has RetractableTo Z then RetractableTo Fraction Z
+   add
+
+    import from BasicOperatorFunctions1(%)
+    import from K
+    import from Integer
+    import from NonNegativeInteger
+    import from String
+    import from List(OutputForm)
+    import from List(%)
+
+    ODD  := 'odd
+    EVEN := 'even
+    SPECIALDIFF  := '%specialDiff
+
+    -- these are needed in Ring only, but need to be declared here
+    -- because of compiler bug: if they are declared inside the Ring
+    -- case, then they are not visible inside the IntegralDomain case.
+    smpIsMult : MP -> Union(Record(coef:Z, var:K),"failed")
+    smpret    : MP -> Union(PR, "failed")
+    smpeval   : (MP, List K, List %) -> %
+    smpsubst  : (MP, List K, List %) -> %
+    smpderiv  : (MP, SY) -> %
+    kerderiv  : (K, SY)  -> %
+    kgrad     : K -> List(List % -> %)
+    opderiv   : (OP, N) -> List(List % -> %)
+    smp2O     : MP -> O
+    bestKernel : List K -> K
+    worse?    : (K, K) -> Boolean
+    diffArg   : (List %, OP, N) -> List %
+    dispdiff  : List % -> Record(name : O, sub : O, arg : List O,
+                                 orig_op : OP, level : N)
+    ddiff     : List % -> O
+    diffEval  : List % -> %
+    dfeval    : (List %, K) -> %
+    smprep    : (List SY, List N, List(List % -> %), MP) -> %
+    diffdiff  : (List %, SY) -> %
+    subs      : (% -> %, K) -> %
+    symsub    : (SY, Z) -> SY
+    notfound  : (K -> %, List K) -> (K -> %)
+
+    equaldiff : (K, K)->Boolean
+    debugA : (List % , List %, Boolean) -> Boolean
+    opdiff := operator('%diff)$CommonOperators()
+    opquote := operator('%quote)$CommonOperators
+
+    ground? x                == retractIfCan(x)@Union(R,"failed") case R
+    ground  x                == retract x
+    coerce(x : SY) : %             == kernel(x)@K :: %
+    retract(x : %) : SY            == symbolIfCan(retract(x)@K)::SY
+    applyQuote(s : SY, x : %)      == applyQuote(s, [x])
+    applyQuote(s, x, y)        == applyQuote(s, [x, y])
+    applyQuote(s, x, y, z)     == applyQuote(s, [x, y, z])
+    applyQuote(s, x, y, z, t)  == applyQuote(s, [x, y, z, t])
+    applyQuote(s : SY, l : List %) == opquote concat(s::%, l)
+    belong? op                 ==
+        has?(op, 'any) and (is?(op, '%diff) or is?(op, '%quote))
+    subs(fn, k) == kernel(operator k, [fn x for x in argument k]$List(%))
+
+    operator op ==
+      is?(op, '%diff) => opdiff
+      is?(op, '%quote) => opquote
+      error concat("Unknown operator 4: ",string(name(op)))$String
+
+    if R has ConvertibleTo InputForm then
+      INP==>InputForm
+      import from MakeUnaryCompiledFunction(%, %, %)
+      indiff : List % -> INP
+      pint  : List INP-> INP
+
+      pint l  == convert concat(convert('D)@INP, l)
+      indiff l ==
+          a3 : % := third(l)
+          do_eval := false
+          s : SY :=
+              (su := retractIfCan(a3)@Union(SY, "failed")) case SY =>
+                  su
+              do_eval := true
+              new()$SY
+          ne := eval(first l, retract(second l)@K, (do_eval => s::%; a3))
+          if not(do_eval) then
+              ne1 := eval(ne, retract(a3)@K, second l)
+              if not(first(l) = ne1) then
+                  s := new()$SY
+                  ne := eval(first l, retract(second l)@K, s::%)
+                  do_eval := true
+          -- Ugly, but otherwise interpreter may have trouble
+          -- evaluating result
+          si := convert([convert("::"::SY)@INP, convert(s)@INP,
+                         convert('Symbol)@INP])@INP
+          d1 := pint([convert(ne)@INP, si])
+          do_eval =>
+              convert([convert('eval)@INP, d1, si, convert(third(l))@INP])
+          d1
+
+      eval(f : %, s : OP, g : %, x : SY) == eval(f, [s], [g], x)
+
+      eval(f : %, ls : List OP, lg : List %, x : SY) ==
+        eval(f, ls, [compiledFunction(g, x) for g in lg])
+
+      setProperty(opdiff, SPECIALINPUT, indiff@(List % -> InputForm) pretend None)
+
+    variables(lx : List(%)) ==
+      l := empty()$List(SY)
+      for k in tower lx repeat
+        if ((s := symbolIfCan k) case SY) then l := concat(s@SY, l)
+      reverse! l
+
+    variables(x : %) == variables([x])
+
+    retractIfCan(x:%):Union(SY, "failed") ==
+      (k := retractIfCan(x)@Union(K,"failed")) case "failed" => "failed"
+      symbolIfCan(k@K)
+
+    if R has Ring then
+
+      import from UserDefinedPartialOrdering(SY)
+      import from MP
+      import from SparseUnivariatePolynomial(%)
+
+-- cannot use new()$Symbol because of possible re-instantiation
+      gendiff := '%%0
+
+      characteristic()    == characteristic()$R
+      coerce(k : K) : %       == k::MP::%
+      symsub(sy, i) == new()$Symbol
+      numerator x         == numer(x)::%
+      eval(x : %, s : SY, n : N, f : % -> %)     ==
+          eval(x, [s], [n], [(y : List %) : % +-> f(first(y))])
+      eval(x : %, s : SY, n : N, f : List % -> %) == eval(x, [s], [n], [f])
+      eval(x : %, l : List SY, f : List(List % -> %)) == eval(x, l, new(#l, 1), f)
+
+      elt(op : OP, args : List %) ==
+        unary? op and ((od? := has?(op, ODD)) or has?(op, EVEN)) and
+          smaller?(leadingCoefficient(numer first args), 0) =>
+            x := op(- first args)
+            od? => -x
+            x
+        elt(op, args)$ExpressionSpace2_&(%, K)
+
+      eval(x : %, s : List SY, n : List N, l : List(% -> %)) ==
+        eval(x, s, n, [y +-> f(first(y)) for f in l]$List(List % -> %))
+
+      -- op(arg)^m ==> func(arg)^(m quo n) * op(arg)^(m rem n)
+      smprep(lop, lexp, lfunc, p) ==
+        (v := mainVariable p) case "failed" => p::%
+        -- symbolIfCan(k := v::K) case SY => p::%
+        k := v@K
+        g := (op := operator k)
+           (arg := [eval(a, lop, lexp, lfunc) for a in argument k]$List(%))
+        q := map(y +-> eval(y::%, lop, lexp, lfunc),
+                 univariate(p, k))$SparseUnivariatePolynomialFunctions2(MP, %)
+        (n := position(name op, lop)) < minIndex lop => q g
+        a : %  := 0
+        f    := eval((lfunc.n) arg, lop, lexp, lfunc)
+        e    := lexp.n
+        while q ~= 0 repeat
+          m  := degree q
+          qr := divide(m, e)
+          t1 := f ^ (qr.quotient)::N
+          t2 := g ^ (qr.remainder)::N
+          a  := a + leadingCoefficient(q) * t1 * t2
+          q  := reductum q
+        a
+
+      dispdiff l ==
+        s := second(l)::O
+        t := third(l)::O
+        a := argument(k := retract(first l)@K)
+        is?(k, opdiff) =>
+          rec := dispdiff a
+          i   := position(s, rec.arg)
+          rec.arg.i := t
+          [rec.name,
+             hconcat(rec.sub, hconcat(","::SY::O, (i+1-minIndex a)::O)),
+               rec.arg, rec.orig_op, (zero?(rec.level) => 0; rec.level + 1)]
+        i   := position(second l, a)
+        m   := [x::O for x in a]$List(O)
+        m.i := t
+        d_name :=
+            (dnu := property(operator k, 'disp_name)) case None =>
+                (dnu@None) pretend O
+            name(operator k)::O
+        [d_name, hconcat(","::SY::O, (i+1-minIndex a)::O),
+            m, operator(k), (empty? rest a => 1; 0)]
+
+      ddiff l ==
+        rec := dispdiff l
+        opname :=
+          zero?(rec.level) => sub(rec.name, rec.sub)
+          differentiate(rec.name, rec.level)
+        (f := property(rec.orig_op, '%diffDisp)) case None =>
+            ((f@None) pretend (List OutputForm -> OutputForm))
+               (cons(opname, rec.arg))
+        prefix(opname, rec.arg)
+
+      Dec_Rec ==> Record(orig_k : K, sub : List(Integer),
+                  oarg : List %, arg : List %, dummies : List(%))
+
+      decode_diff : (List %) -> Dec_Rec
+
+      encode_diff(ker : K, nsub : List(Integer), args : List(%),
+                  nd : List(%)) : % ==
+          li : List(Integer) := []
+          lk : List(Integer) := []
+          i := first(nsub)
+          k : Integer := 1
+          nsub := rest(nsub)
+          while not(empty?(nsub)) repeat
+              ii := first(nsub)
+              nsub := rest(nsub)
+              ii = i => k := k + 1
+              lk := cons(k, lk)
+              li := cons(i, li)
+              i := ii
+              k := 1
+          lk := cons(k, lk)
+          li := cons(i, li)
+          nargs := copy(args)
+          pts : List % := []
+          for i in reverse(li) for dm in nd repeat
+              pts := cons(nargs(i), pts)
+              nargs(i) := dm
+          res := kernel(operator(ker), nargs)
+          for i in li for k in lk for pt in pts for dm in reverse(nd) repeat
+              for kk in 2..k repeat
+                  res := kernel(opdiff, [res, dm, dm])
+              res := kernel(opdiff, [res, dm, pt])
+          res
+
+      insert_sub(lsub : List(Integer), j : Integer) : List(Integer) ==
+          nsub : List(Integer) := []
+          to_insert : Boolean := true
+          for i in lsub repeat
+              if to_insert and not(i > j) then
+                  nsub := cons(j, nsub)
+                  to_insert := false
+              nsub := cons(i, nsub)
+          if to_insert then
+              nsub := cons(j, nsub)
+          reverse!(nsub)
+
+      pos_diff(l : List %, r1 : Dec_Rec, i : Integer) : % ==
+          nsub := insert_sub(r1.sub, i)
+          nd := r1.dummies
+          if not(member?(i, r1.sub)$List(Integer)) then
+              k : NonNegativeInteger := 0
+              ii := first(nsub)
+              for j in nsub repeat
+                  i = j => break
+                  if not(ii = j) then
+                      k := k + 1
+              nd1 := first(nd, k)$List(%)
+              nd2 := rest(nd, k)
+              dm := (new()$Symbol)::%
+              nd := concat(nd1, cons(dm, nd2))
+          encode_diff(r1.orig_k, nsub, r1.arg, nd)
+
+      diffdiff(l, x) ==
+          r1 := decode_diff(l)
+          args := r1.arg
+          res : % := 0
+          for i in minIndex args .. maxIndex args for b in args repeat
+              (db :=  differentiate(b, x)) = 0 => iterate
+              res := res + db*pos_diff(l, r1, i)
+          res
+
+      dfeval(l, g) ==
+        eval(differentiate(first l, symbolIfCan(g)::SY), g, third l)
+
+      diffEval l ==
+        k : K
+        g := retract(second l)@K
+        ((u := retractIfCan(first l)@Union(K, "failed")) case "failed")
+          or (u case K and symbolIfCan(k := u@K) case SY) => dfeval(l, g)
+        op := operator k
+        (ud := derivative op) case "failed" =>
+             -- possible trouble
+             -- make sure it is a dummy var
+             dumm : % := symsub(gendiff, 1)::%
+             ss := subst(l.1, l.2 = dumm)
+             -- output(nl::OutputForm)$OutputPackage
+             -- output("fixed"::OutputForm)$OutputPackage
+             nl := [ss, dumm, l.3]
+             kernel(opdiff, nl)
+        (n := position(second l, argument k)) < minIndex l =>
+              dfeval(l, g)
+        d := ud::List(List % -> %)
+        eval((d.n)(argument k), g, third l)
+
+      diffArg(l, op, i) ==
+        n := i - 1 + minIndex l
+        z := copy l
+        z.n := g := symsub(gendiff, n)::%
+        [kernel(op, z), g, l.n]
+
+      opderiv(op, n) ==
+        (n = 1) =>
+          g := symsub(gendiff, n)::%
+          [x +-> kernel(opdiff, [kernel(op, g), g, first x])]
+        [x +-> kernel(opdiff, diffArg(x, op, i)) for i in 1..n]
+
+      kgrad k ==
+        zero?(n := #(args := argument k)) => empty()
+        op := operator k
+        grad :=
+          (u := derivative op) case "failed" => opderiv(op, n)
+          u@List(List % -> %)
+        #grad ~= n => opderiv(op, n)
+        grad
+
+    -- SPECIALDIFF contains a map (List %, Symbol) -> %
+    -- it is used when the usual chain rule does not apply,
+    -- for instance with implicit algebraics.
+      kerderiv(k, x) ==
+        (v := symbolIfCan(k)) case SY =>
+          v@SY = x => 1
+          0
+        ak := argument k
+        (fn := property(operator k, SPECIALDIFF)) case None =>
+           ((fn@None) pretend ((List %, SY) -> %)) (ak, x)
+        +/[g(ak)*dyx for g in kgrad k for y in ak
+            | (dyx := differentiate(y, x)) ~= 0]
+
+      smpderiv(p, x) ==
+        map((s : R) : R +-> retract differentiate(s::PR, x), p)::% +
+         +/[differentiate(p, k)::% * kerderiv(k, x) for k in variables p]
+
+      coerce(p : PR) : % ==
+        map(s +-> s::%, s+-> s::%, p)$PolynomialCategoryLifting(
+                                      IndexedExponents SY, SY, R, PR, %)
+
+      worse?(k1, k2) ==
+        (u := less?(name operator k1,name operator k2)) case "failed" =>
+          k1 < k2
+        u
+
+      bestKernel l ==
+        empty? rest l => first l
+        a := bestKernel rest l
+        worse?(first l, a) => a
+        first l
+
+      smp2O p ==
+        (r := retractIfCan(p)@Union(R,"failed")) case R =>r@R::OutputForm
+        a :=
+          userOrdered?() => bestKernel variables p
+          mainVariable(p)::K
+        outputForm(map((x : MP) : % +-> x::%, univariate(p,
+         a))$SparseUnivariatePolynomialFunctions2(MP, %), a::OutputForm)
+
+      smpsubst(p, lk, lv) ==
+          map(x +-> match(lk, lv, x,
+                       notfound((z : K) : % +-> subs(s +-> subst(s, lk, lv), z),
+                                lk))$ListToMap(K, %),
+              y +-> y::%,
+              p)$PolynomialCategoryLifting(IndexedExponents K, K, R, MP, %)
+
+      smpeval(p, lk, lv) ==
+          map(x +-> match(lk, lv, x,
+                       notfound((z : K) : % +-> map(s +-> eval(s, lk, lv), z),
+                                lk))$ListToMap(K, %),
+              y +-> y::%,
+              p)$PolynomialCategoryLifting(IndexedExponents K, K, R, MP, %)
+
+-- this is called on k when k is not a member of lk
+      notfound(fn, lk)  ==
+          k +->
+              empty? setIntersection(tower(f := k::%), lk) => f
+              fn k
+
+      smpret p ==
+        "or"/[symbolIfCan(k) case "failed" for k in variables p] =>
+          "failed"
+        map(x +-> symbolIfCan(x)::SY::PR, y +-> y::PR,
+          p)$PolynomialCategoryLifting(IndexedExponents K, K, R, MP, PR)
+
+      isExpt(x : %, op : OP) ==
+        (u := isExpt x) case "failed" => "failed"
+        v := (u@Record(var : K, exponent : Z)).var
+        is?(v, op) and #argument(v) = 1 => u
+        "failed"
+
+      isExpt(x : %, sy : SY) ==
+        (u := isExpt x) case "failed" => "failed"
+        v := (u@Record(var : K, exponent : Z)).var
+        is?(v, sy) and #argument(v) = 1 => u
+        "failed"
+
+      if R has RetractableTo Z then
+          smpIsMult p ==
+            (u := mainVariable p) case K and
+                            (degree(q := univariate(p, u@K))=1)
+              and zero?(leadingCoefficient reductum q)
+                and ((r := retractIfCan(leadingCoefficient q)@Union(R,"failed"))
+                   case R)
+                     and (n := retractIfCan(r@R)@Union(Z, "failed")) case Z =>
+                       [n@Z, u@K]
+            "failed"
+
+      evaluate(opdiff, diffEval)
+
+      debugA(a1, a2, t) ==
+         -- uncomment for debugging
+         -- output(hconcat [a1::OutputForm, a2::OutputForm, t::OutputForm])$OutputPackage
+         t
+
+      decode_diff(l : List %) : Dec_Rec ==
+          da := second(l)
+          pt := third(l)
+          a := argument(k := retract(first l)@K)
+          is?(k, opdiff) =>
+              rec := decode_diff(a)
+              i := position(da, rec.arg)
+              rec.arg.i := pt
+              nd := rec.dummies
+)if false
+              -- This would work with derivatives in canonical order
+              i0 := first(rec.sub)
+              i < i0 =>
+                  print(l::OutputForm)
+                  error "Malformed formal derivative"
+              if i > i0 then
+                  nd := cons(da, nd)
+)else
+              -- For now no order
+              if not(member?(i, rec.sub)$List(Integer)) then
+                  nd := cons(da, nd)
+)endif
+              [rec.orig_k, cons(i, rec.sub), rec.oarg, rec.arg, nd]
+          i := position(da, a)
+          a1 := copy(a)
+          a1.i := pt
+          [k, [i], a, a1, [da]]
+
+      equaldiff(k1, k2) ==
+        a1 := argument k1
+        a2 := argument k2
+        -- check the operator
+        res := operator k1 = operator k2
+        not res => debugA(a1, a2, res)
+        -- check the evaluation point
+        res := (a1.3 = a2.3)
+        not res => debugA(a1, a2, res)
+        a1.2 = a2.2 => a1.1 = a2.1
+        r1 := decode_diff(a1)
+        r2 := decode_diff(a2)
+        not(operator(r1.orig_k) = operator(r2.orig_k)) => false
+        not(r1.sub =$List(Integer) r2.sub) => false
+        not(r1.arg = r2.arg) => false
+        od : List K := [retract(dk)@K for dk in r1.dummies]
+        ok1 : % := (r1.orig_k)::%
+        sk1 : % := subst(ok1, od, r2.dummies)
+        sk1 = (r2.orig_k)::%
+
+      setProperty(opdiff, SPECIALEQUAL,
+                          equaldiff@((K, K) -> Boolean) pretend None)
+      setProperty(opdiff, SPECIALDIFF,
+                          diffdiff@((List %, SY) -> %) pretend None)
+      setProperty(opdiff, SPECIALDISP,
+                              ddiff@(List % -> OutputForm) pretend None)
+
+      if not(R has IntegralDomain) then
+        mainKernel x         == mainVariable numer x
+        kernels(x : %) : List(K) == variables numer x
+        retract(x : %) : R       == retract numer x
+        retract(x : %) : PR      == smpret(numer x)::PR
+        retractIfCan(x:%):Union(R,  "failed") == retract numer x
+        retractIfCan(x:%):Union(PR, "failed") == smpret numer x
+        eval(x : %, lk : List K, lv : List %)  == smpeval(numer x, lk, lv)
+        subst(x : %, lk : List K, lv : List %) == smpsubst(numer x, lk, lv)
+        differentiate(x : %, s : SY)         == smpderiv(numer x, s)
+        coerce(x : %) : OutputForm           == smp2O numer x
+
+
+        eval(x : %, s : List SY, n : List N, f : List(List % -> %)) ==
+          smprep(s, n, f, numer x)
+
+        isPlus x ==
+          (u := isPlus numer x) case "failed" => "failed"
+          [p::% for p in u@List(MP)]
+
+        isTimes x ==
+          (u := isTimes numer x) case "failed" => "failed"
+          [p::% for p in u@List(MP)]
+
+        isExpt x ==
+          (u := isExpt numer x) case "failed" => "failed"
+          r := u@Record(var : K, exponent : NonNegativeInteger)
+          [r.var, r.exponent::Z]
+
+        isPower x ==
+          (u := isExpt numer x) case "failed" => "failed"
+          r := u@Record(var : K, exponent : NonNegativeInteger)
+          [r.var::%, r.exponent::Z]
+
+        if MP has ConvertibleTo Pattern Z then
+          convert(x : %) : Pattern(Z) == convert numer x
+
+        if MP has ConvertibleTo Pattern Float then
+          convert(x : %) : Pattern(Float) == convert numer x
+
+        if R has RetractableTo Z then
+          isMult x == smpIsMult numer x
+
+    if R has CommutativeRing then
+      r : R * x : % == r::MP::% * x
+
+    if R has IntegralDomain then
+
+      import from Fraction(PR)
+      import from MP
+
+      par   : % -> %
+
+      mainKernel x                    == mainVariable(x)$QF
+      kernels(x : %) : List(K)        == variables(x)$QF
+      univariate(x : %, k : K)            == univariate(x, k)$QF
+      isPlus x                        == isPlus(x)$QF
+      isTimes x                       == isTimes(x)$QF
+      isExpt x                        == isExpt(x)$QF
+      isPower x                       == isPower(x)$QF
+      denominator x                   == denom(x)::%
+      coerce(q : Q) : %                   == (numer q)::MP / (denom q)::MP
+      coerce(q : Fraction PR) : %         == (numer q)::% / (denom q)::%
+      coerce(q : Fraction Polynomial Q) == (numer q)::% / (denom q)::%
+      retract(x : %) : PR                == retract(retract(x)@Fraction(PR))
+      retract(x : %) : Fraction(PR) == smpret(numer x)::PR / smpret(denom x)::PR
+      retract(x : %) : R == (retract(numer x)@R exquo retract(denom x)@R)::R
+
+      alg_ker_set(lx : List %) : List(K) ==
+          resl : List(K) := []
+          ak1 : List(K) := []
+          for x in lx repeat
+              for k in kernels x repeat
+                  not(is?(k, 'nthRoot) or is?(k, 'rootOf)) => iterate
+                  ak1 := cons(k, ak1)
+          while not(empty?(ak1)) repeat
+              ak := ak1
+              ak1 := []
+              for k in ak repeat
+                  needed := true
+                  for k1 in resl while needed repeat
+                      if EQ(k1, k)$Lisp then needed := false
+                  for k1 in resl while needed repeat
+                      if k1 = k then needed := false
+                  not(needed) => iterate
+                  resl := cons(k, resl)
+                  arg := argument(k)
+                  for k1 in kernels(arg.1) repeat
+                      if (is?(k1, 'nthRoot) or is?(k1, 'rootOf)) then
+                          ak1 := cons(k1, ak1)
+          resl
+
+      algtower(lx : List %) : List K == reverse!(sort! alg_ker_set(lx))
+
+      algtower(x : %) : List K == algtower([x])
+
+      coerce(x : %) : OutputForm ==
+        ((denom x) = 1) => smp2O numer x
+        smp2O(numer x) / smp2O(denom x)
+
+      retractIfCan(x:%):Union(R, "failed") ==
+        (n := retractIfCan(numer x)@Union(R, "failed")) case "failed" or
+          (d := retractIfCan(denom x)@Union(R, "failed")) case "failed"
+            or (r := n@R exquo d@R) case "failed" => "failed"
+        r@R
+
+
+      if R has ConvertibleTo InputForm then
+
+        eval(x : %, s : List SY, n : List N, f : List(List % -> %)) ==
+          smprep(s, n, f, numer x) / smprep(s, n, f, denom x)
+
+      differentiate(f : %, x : SY) ==
+        (smpderiv(numer f, x) * denom(f)::% -
+          numer(f)::% * smpderiv(denom f, x))
+            / (denom(f)::% ^ 2)
+
+      eval(x : %, lk : List K, lv : List %) ==
+        smpeval(numer x, lk, lv) / smpeval(denom x, lk, lv)
+
+      subst(x : %, lk : List K, lv : List %) ==
+        smpsubst(numer x, lk, lv) / smpsubst(denom x, lk, lv)
+
+      par x ==
+        (r := retractIfCan(x)@Union(R, "failed")) case R => x
+        paren x
+
+      convert(x : Factored %) : % ==
+        par(unit x) * */[par(f.factor) ^ f.exponent for f in factorList x]
+
+      retractIfCan(x:%):Union(PR, "failed") ==
+        (u := retractIfCan(x)@Union(Fraction PR,"failed")) case "failed"
+          => "failed"
+        retractIfCan(u@Fraction(PR))
+
+      retractIfCan(x:%):Union(Fraction PR, "failed") ==
+        (n := smpret numer x) case "failed" => "failed"
+        (d := smpret denom x) case "failed" => "failed"
+        n@PR / d@PR
+
+      coerce(p : Polynomial Q) : % ==
+        map(x +-> x::%, y +-> y::%,
+           p)$PolynomialCategoryLifting(IndexedExponents SY, SY,
+                                                     Q, Polynomial Q, %)
+
+      if R has RetractableTo Z then
+        coerce(x : Fraction Z) : % == numer(x)::MP / denom(x)::MP
+
+        isMult x ==
+           (u := smpIsMult numer x) case "failed"
+              or (v := retractIfCan(denom x)@Union(R, "failed")) case "failed"
+                 or (w := retractIfCan(v@R)@Union(Z, "failed")) case "failed"
+                     => "failed"
+           r := u@Record(coef : Z, var : K)
+           (q := r.coef exquo w@Z) case "failed" => "failed"
+           [q@Z, r.var]
+
+      if MP has ConvertibleTo Pattern Z then
+        convert(x : %) : Pattern(Z) == convert(numer x) / convert(denom x)
+
+      if MP has ConvertibleTo Pattern Float then
+        convert(x : %) : Pattern(Float) ==
+          convert(numer x) / convert(denom x)
+
+)abbrev category FS FunctionSpace
+++ Description:
+++ Specializaton of \spadtype{FunctionSpace2} for \spadtype{Kernel}.
+FunctionSpace(R : Comparable) : Category ==
+    Join(FunctionSpace2(R, Kernel(%)), ExpressionSpace)
+
+)abbrev package FS2 FunctionSpaceFunctions2
+++ Lifting of maps to function spaces
+++ Author: Manuel Bronstein
+++ Date Created: 22 March 1988
+++ Description:
+++   This package allows a mapping R -> S to be lifted to a mapping
+++   from a function space over R to a function space over S;
+FunctionSpaceFunctions2(R, A, S, B) : Exports == Implementation where
+  R, S : Join(Ring, Comparable)
+  A   : FunctionSpace R
+  B   : FunctionSpace S
+
+  K  ==> Kernel A
+  P  ==> SparseMultivariatePolynomial(R, K)
+
+  Exports ==> with
+    map : (R -> S, A) -> B
+      ++ map(f, a) applies f to all the constants in R appearing in \spad{a}.
+
+  Implementation ==> add
+    smpmap : (R -> S, P) -> B
+
+    smpmap(fn, p) ==
+        map(x +-> map(z +-> map(fn, z),
+                      x)$ExpressionSpaceFunctions2(A, B),
+            y +-> fn(y)::B,
+            p)$PolynomialCategoryLifting(IndexedExponents K, K, R, P, B)
+
+    if R has IntegralDomain then
+      if S has IntegralDomain then
+        map(f, x) == smpmap(f, numer x) / smpmap(f, denom x)
+      else
+        map(f, x) == smpmap(f, numer x) * (recip(smpmap(f, denom x))::B)
+    else
+      map(f, x) == smpmap(f, numer x)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-- SPAD files for the functional world should be compiled in the
+-- following order:
+--
+--   op  kl  FSPACE  expr funcpkgs

@@ -1,0 +1,134 @@
+)set break resume
+)expose UnittestCount UnittestAux Unittest
+
+testsuite "bugs2020"
+
+testcase "operations on SingleInteger"
+
+testTrue("(factor(max()$SingleInteger); true)")
+testTrue("(squareFree(max()$SingleInteger); true)")
+
+i : Integer
+j : Integer
+
+i := prevPrime((max()$SingleInteger)::Integer)
+testTrue("prime?(i::SingleInteger)")
+
+do_sint_tst() ==
+    free i, j
+    if max()$SingleInteger > 2^128 then
+        print(message("max()$SingleInteger is surprisingly big")$OutputForm)
+    else
+        i := 8
+        j := 31
+        binomial(j, i) > max()$SingleInteger =>
+            testTrue("binomial(j, i) <= max()$SingleInteger")
+        repeat
+            p := binomial(j, i)
+            i*p > max()$SingleInteger => break
+            j := j + 1
+            j < 3*i => "iterate"
+            i := i + 1
+        testTrue("(binomial(j::SingleInteger, i::SingleInteger); true)")
+
+do_sint_tst()
+
+testcase "singularities in realElementary"
+
+testEquals("realElementary(acot(x*acosh(1)))", "%pi/2")
+testEquals("realElementary(asin(1 + x*acosh(1)))", "%pi/2")
+testEquals("realElementary(asin(-1 + x*acosh(1)))", "-%pi/2")
+testEquals("realElementary(acsc(1 + x*acosh(1)))", "%pi/2")
+testEquals("realElementary(acsc(-1 + x*acosh(1)))", "-%pi/2")
+
+testcase "input form of derivative"
+
+f := operator 'f
+fe := D(f(a, b), b)
+fe2 := eval(fe, a = b)
+i_form := fe2::InputForm
+testTrue("(fe2 = interpret(i_form))@Boolean")
+
+testcase "CoercibleFrom"
+
+testTrue("Polynomial(Integer) has CoercibleFrom(Integer)")
+
+testcase "bad reduction"
+
+p := a^4*b^2*d^4*x^4 + (-2*a^2*b^2 + a^4)*d^2*x^2 + b^2 - a^2
+pu := univariate(p, x)
+-- used to crash
+testTrue("(ll := [factorPolynomial(pu) for i in 1..5000]; true)")
+
+testcase "factor for SUP(EXPR(INT))"
+
+pE := SUP(EXPR(INT))
+
+test_fac1(p, fp) ==
+    fl1 := factorList(fp)
+    free tp1, tp2
+    pr1 := 1$pE
+    free fac1
+    for fac in fl1 repeat
+        pr1 := pr1*fac.factor^fac.exponent
+        fac1 := fac
+        testEquals("fac1.flag", "_"prime_"")
+    pr1 := unit(fp)*pr1
+    tp1 := pr1
+    tp2 := p
+    testEquals("tp1", "tp2")
+
+test_fac(p) ==
+    f1 := factor(p)
+    test_fac1(p, f1)
+    f2 := factorPolynomial(p)$ExpressionFactorPolynomial(INT, EXPR(INT))
+    test_fac1(p, f2)
+
+c0 := exp(x)/(exp(x) - 1)
+c1 := exp(x)/(exp(x) - 2)
+
+p1 := monomial(c1, 1)$pE + c0
+test_fac(p1)
+
+p2 := monomial(c1, 2)$pE + c0
+test_fac(p2)
+
+test_fac(p1*p1)
+test_fac(p1*p2)
+test_fac(p1*p1*p2)
+
+c2 := sqrt(exp(x) - 1)
+p3 := monomial(c2, 1)$pE + c0
+test_fac(p3)
+
+p4 := monomial(c2, 3)$pE + c0
+test_fac(p4)
+
+test_fac(p1*p3)
+test_fac(p3*p4)
+test_fac(p1*p4)
+test_fac(p3^2)
+test_fac(p3*p4^2)
+
+testcase "diophantineSystem"
+
+vI := Vector(INT)
+mI := Matrix(INT)
+sF := SmithNormalForm(INT, vI, vI, mI)
+
+m := matrix([[1, 0, 0], [-1, 0, 0], [3, 0, 100], [-2, 6, 0], [0, -4, 0]])
+v1 := vector([0, 0, 0, 0, 0])
+v2 := vector([1, -1, 303, 10, -8])
+
+testEquals("(diophantineSystem(m, v1)$sF).particular", "vector([0, 0, 0])")
+testEquals("(diophantineSystem(m, v2)$sF).particular", "vector([1, 2, 3])")
+
+testcase "interp construct"
+
+testTrue("(v1 := [[2.0^(i*j) for j in 0..1] for i in 0..1"
+             "]@SquareMatrix(2, Float); true)")
+testTrue("(v2 : SquareMatrix(2, Float) := [[2.0^(i*j) for j in 0..1]"
+             " for i in 0..1]; true)")
+testEquals("v1", "v2")
+
+statistics()

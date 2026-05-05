@@ -1,0 +1,21 @@
+Function: genus2charpoly
+Section: elliptic_curves
+C-Name: genus2charpoly
+Prototype: GG
+Help: genus2charpoly(C, p): C being a genus-2 curve, returns the characteristic
+ polynomial of the action of the Frobenius on the Picard group of C at p.
+Doc: $C$ being a genus-$2$ curve, returns the characteristic
+ polynomial of the action of the Frobenius on the Picard group of $C$ at $p$.
+ When $p=2$ and $2$ has bad reduction, the result might be incorrect.
+ $C$ can be given either by a squarefree polynomial $P$ such that
+ $C: y^{2} = P(x)$ or by a vector $[P,Q]$ such that
+ $C: y^{2} + Q(x)\*y = P(x)$ and $Q^{2}+4\*P$ is squarefree.
+ \bprog
+ ? C = [x^5+x^4-5*x^3-4*x^2+6*x,x^3+x^2];
+ ? forprime(p=2,11,print(p," : ",genus2charpoly(C,p)))
+ 2 : x^2 + x + 2
+ 3 : x^2 + 2*x + 1
+ 5 : x^3 + x^2 + 3*x - 5
+ 7 : x^4 + 14*x^2 + 49
+ 11 : x^4 + 6*x^2 + 121
+ @eprog

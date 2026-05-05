@@ -1,0 +1,172 @@
+/* config/fricas_c_macros.h.in.  Generated from configure.ac by autoheader.  */
+
+/* BSD flavour */
+#undef BSDplatform
+
+/* Host has AF_LOCAL */
+#undef HAVE_AF_LOCAL
+
+/* Host has AF_UNIX */
+#undef HAVE_AF_UNIX
+
+/* Define to 1 if you have the declaration of `closedir', and to 0 if you
+   don't. */
+#undef HAVE_DECL_CLOSEDIR
+
+/* Define to 1 if you have the declaration of `dirfd', and to 0 if you don't.
+   */
+#undef HAVE_DECL_DIRFD
+
+/* Define to 1 if you have the declaration of `fchdir', and to 0 if you don't.
+   */
+#undef HAVE_DECL_FCHDIR
+
+/* Define to 1 if you have the declaration of `fork', and to 0 if you don't.
+   */
+#undef HAVE_DECL_FORK
+
+/* Define to 1 if you have the declaration of `getegid', and to 0 if you
+   don't. */
+#undef HAVE_DECL_GETEGID
+
+/* Define to 1 if you have the declaration of `geteuid', and to 0 if you
+   don't. */
+#undef HAVE_DECL_GETEUID
+
+/* Define to 1 if you have the declaration of `getgid', and to 0 if you don't.
+   */
+#undef HAVE_DECL_GETGID
+
+/* Define to 1 if you have the declaration of `getuid', and to 0 if you don't.
+   */
+#undef HAVE_DECL_GETUID
+
+/* Define to 1 if you have the declaration of `kill', and to 0 if you don't.
+   */
+#undef HAVE_DECL_KILL
+
+/* Define to 1 if you have the declaration of `opendir', and to 0 if you
+   don't. */
+#undef HAVE_DECL_OPENDIR
+
+/* Define to 1 if you have the declaration of `readdir', and to 0 if you
+   don't. */
+#undef HAVE_DECL_READDIR
+
+/* Define to 1 if you have the declaration of `sigaction', and to 0 if you
+   don't. */
+#undef HAVE_DECL_SIGACTION
+
+/* Define to 1 if you have the declaration of `wait', and to 0 if you don't.
+   */
+#undef HAVE_DECL_WAIT
+
+/* Define to 1 if you have the <dirent.h> header file. */
+#undef HAVE_DIRENT_H
+
+/* Host has EPIPE */
+#undef HAVE_EPIPE
+
+/* Define to 1 if you have the <gmp.h> header file. */
+#undef HAVE_GMP_H
+
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
+
+/* Host has MSG_NOSIGNAL */
+#undef HAVE_MSG_NOSIGNAL
+
+/* openpty is available */
+#undef HAVE_OPENPTY
+
+/* openpty is declared */
+#undef HAVE_OPENPTY_DECL
+
+/* Define to 1 if you have the <pty.h> header file. */
+#undef HAVE_PTY_H
+
+/* Define to 1 if you have the <signal.h> header file. */
+#undef HAVE_SIGNAL_H
+
+/* Host has sockaddr_un */
+#undef HAVE_SOCKADDR_UN
+
+/* Host has SO_NOSIGPIPE */
+#undef HAVE_SO_NOSIGPIPE
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdio.h> header file. */
+#undef HAVE_STDIO_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Define to 1 if you have the <sys/socket.h> header file. */
+#undef HAVE_SYS_SOCKET_H
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* Define to 1 if you have the <sys/un.h> header file. */
+#undef HAVE_SYS_UN_H
+
+/* Define to 1 if you have the <sys/wait.h> header file. */
+#undef HAVE_SYS_WAIT_H
+
+/* Host has two arg mkdir */
+#undef HAVE_TWO_ARG_MKDIR
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* Define to 1 if you have the <util.h> header file. */
+#undef HAVE_UTIL_H
+
+/* Define to 1 if you have the <winsock2.h> header file. */
+#undef HAVE_WINSOCK2_H
+
+/* Host has POSIX directory operations */
+#undef HOST_HAS_DIRECTORY_OPERATIONS
+
+/* Host has dirfd and fchdir */
+#undef HOST_HAS_DIRFD_FCHDIR
+
+/* MACOS flavour */
+#undef MACOSXplatform
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* Define to 1 if all of the C90 standard headers exist (not just the ones
+   required in a freestanding environment). This macro is provided for
+   backward compatibility; new code need not use it. */
+#undef STDC_HEADERS
+
+/* Define to 1 if the X Window System is missing or not being used. */
+#undef X_DISPLAY_MISSING

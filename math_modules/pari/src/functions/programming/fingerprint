@@ -1,0 +1,15 @@
+Function: fingerprint
+Section: programming/specific
+C-Name: fingerprint
+Prototype: GD64,L,
+Help: fingerprint(x, {b = 64}): return a b-bit fingerprint of x.
+Doc: return a $b$-bit fingerprint of $x$, assuming $b > 0$
+ ($b = 64$ if omitted). Not suitable for cryptographic use
+ or in an adversarial context: collisions are easily generated.
+ For objects definable on both 32 and 64 bit architectures, the returned
+ value is the same. The main use is to implement unit tests and check results
+ against fingerprints for the expected outputs, not so much for hashtables.
+Variant: Also available is \fun{ulong}{hash_GEN}{GEN x}, which is faster
+ and returns an \kbd{ulong} value, i.e., 64-bit on 64-bit architectures
+ and 32-bit otherwise. This latter function is ideal for internal hashtables
+ but its values are architecture dependent.

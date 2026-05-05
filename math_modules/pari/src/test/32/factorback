@@ -1,0 +1,13 @@
+  ***   at top-level: factorback(Vecsmall([1,2]),[3,4])
+  ***                 ^---------------------------------
+  *** factorback: incorrect type in factorback [not a vector] (t_VECSMALL).
+  ***   at top-level: factorback('x,[3,4])
+  ***                 ^--------------------
+  *** factorback: incorrect type in factorback [not a vector] (t_POL).
+  ***   at top-level: factorback([1,2,3],[3,4])
+  ***                 ^-------------------------
+  *** factorback: incorrect type in factorback [not an exponent vector] (t_VEC).
+  ***   at top-level: factorback([1,2],'x)
+  ***                 ^--------------------
+  *** factorback: incorrect type in factorback [not an exponent vector] (t_POL).
+Total time spent: 0

@@ -1,0 +1,42 @@
+Function: algmodpr
+Section: algebras
+C-Name: algmodpr
+Prototype: GGG
+Help: algmodpr(al,x,modP): image of x in al under the reduction map stored in modP, cf
+ algmodprinit.
+Doc: Given a central simple algebra \var{al} output by \tet{alginit}, an
+ element~\var{x} in~\var{al} and the output~\var{modP} of \tet{algmodprinit},
+ computes the image of~\var{x} under the corresponding map, if it is
+ well-defined.
+ \bprog
+ ? nf = nfinit(y^2-2);
+ ? alg = alginit(nf, [-1,-1]);
+ ? pr = idealprimedec(nf,7)[1];
+ ? modP = algmodprinit(alg,pr);
+ ? a = algrandom(alg,10);
+ ? algmodpr(alg,a,modP)
+ % =
+ [1 4]
+
+ [0 4]
+ ? algmodpr(alg,a/3,modP)
+ % =
+ [5 6]
+
+ [0 6]
+ ? algmodpr(alg,a/7,modP)
+   ***   at top-level: algmodpr(alg,a/7,modP)
+   ***                 ^----------------------
+   *** algmodpr: impossible inverse in algmodpr: Mod(0, 7).
+ ? pr2 = idealprimedec(nf,7)[2];
+ ? b = algdivl(alg, algeltfromnf(alg,pr2.gen[2]), a);
+ ? denominator(b) \\b has a denominator at 7 but not at pr
+ % = 7
+ ? algmodpr(alg,b,modP)
+ % =
+ [6 3]
+
+ [0 3]
+ @eprog
+
+ Also accepts a matrix with coefficients in \var{al}.

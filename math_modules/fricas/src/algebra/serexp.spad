@@ -1,0 +1,236 @@
+)abbrev category TSEREXP TaylorSeriesExpansion
+++ Author: Waldek Hebisch
+++ Description: Category for operations needed by Taylor expansions.
+TaylorSeriesExpansion(Coef : Algebra(Fraction(Integer)),
+        Expon : OrderedAbelianMonoid, Var : OrderedSet,
+        PS : PowerSeriesCategory(Coef, Expon, Var),
+        UTS : UnivariateTaylorSeriesCategory(Coef)) : Category == with
+    taylor_via_deriv : (Coef, List PS, List (Coef -> Coef)) -> PS
+      ++ taylor_via_deriv(f, [x1, ..., xn], [D1, ..., Dn])
+      ++ expands f into Taylor series at (x1, ..., xn) using
+      ++ D1, ..., Dn as partial derivatives
+    taylor_via_deriv : (PS, List PS, List (Coef -> Coef)) -> PS
+      ++ taylor_via_deriv(f, [x1, ..., xn], [D1, ..., Dn])
+      ++ expands f into Taylor series at (x1, ..., xn) using
+      ++ D1, ..., Dn as partial derivatives
+    taylor_via_lode : (List UTS, PS, List Coef) -> PS
+      ++ taylor_via_lode([a0, ..., ak], z, [c0, ..., ck]) expands into
+      ++ Taylor series solution of the linear ordinary differential
+      ++ equation
+    applyTaylor : ((UTS -> UTS), PS) -> PS
+      ++ applyTaylor(g, f) applies g to f
+    apply_taylor : (UTS, PS) -> PS
+      ++ apply_taylor(g, f) applies g to f
+  add
+    taylor_via_deriv(f : Coef, lx : List PS,
+                         ld : List (Coef -> Coef)) : PS ==
+            taylor_via_deriv(monomial(f, 0$Expon)$PS, lx, ld)
+
+
+
+)abbrev package TSEREXPT TaylorSeriesExpansionTaylor
+++ Description:
+++ This package implements operations needed for expansion into
+++ Taylor series.
+TaylorSeriesExpansionTaylor(Coef : Algebra(Fraction(Integer)),
+    UTS    : UnivariateTaylorSeriesCategory Coef) : Exports == Implementation
+  where
+    NNI ==> NonNegativeInteger
+    UTSODE ==> UnivariateTaylorSeriesODESolver(Coef, UTS)
+    ST ==> Stream
+    STTAY ==> StreamTaylorSeriesOperations(Coef)
+    Exports ==> TaylorSeriesExpansion(Coef, NNI,
+                                      SingletonAsOrderedSet, UTS, UTS)
+    Implementation ==> add
+
+        stream_taylor(f : ST Coef, x : ST Coef, xn : ST Coef,
+                      d : (ST(Coef) -> ST(Coef)),
+                     n : Integer) : ST(ST(Coef)) == delay
+            qn : Fraction(Integer) := 1/n
+            ninv : Coef := qn*1$Coef
+            fn := f *$STTAY xn
+            concat(fn, stream_taylor(d(ninv *$STTAY f), x, x *$STTAY xn, d, n + 1))
+
+        taylor_via_deriv(f : UTS, lx : List UTS,
+                         ld : List (Coef -> Coef)) : UTS ==
+            #lx ~= #ld =>
+                error "taylor_via_deriv: number of variables must equal number of derivatives"
+            #lx = 0 => f
+            x1 := first lx
+            order(x1, 1) < 1 =>
+                error "taylor_via_deriv: variable has constant term"
+            f := taylor_via_deriv(f, rest lx, rest ld)
+            fs := coefficients(f)
+            xs := coefficients(x1)
+            empty?(xs) => f
+            xs := rest(xs)
+            one := coefficients(1::UTS)
+            ds := stream_taylor(fs, xs, one,
+                                (s : ST Coef) : ST Coef +-> map(first ld, s),
+                                1)
+            series(addiag(ds)$STTAY)
+
+        taylor_via_lode(la : List UTS, z : UTS, lc : List Coef) : UTS ==
+            order(z, 1) < 1 =>
+                error "taylor_via_lode: variable has constant term"
+            #lc ~= #la =>
+                error "taylor_via_lode: number of coefficient and initial values must be equal"
+            (ode((ls : List UTS) : UTS +->
+                   reduce(_+, [s*a for s in ls for a in la]),
+                lc)$UTSODE)(z)
+
+        applyTaylor(g, f) == g(f)
+
+        apply_taylor(g, f) == elt(g, f)
+
+
+)abbrev package TSEREXPL TaylorSeriesExpansionLaurent
+++ Description:
+++ This package implements operations needed for expansion into
+++ Laurent series.
+TaylorSeriesExpansionLaurent(Coef : Algebra(Fraction(Integer)),
+    UTS : UnivariateTaylorSeriesCategory Coef,
+    ULS : UnivariateLaurentSeriesConstructorCategory(Coef, UTS)
+    ) : Exports == Implementation
+  where
+    TET ==> TaylorSeriesExpansionTaylor(Coef, UTS)
+    Exports ==> TaylorSeriesExpansion(Coef, Integer,
+                                      SingletonAsOrderedSet, ULS, UTS)
+    Implementation ==> add
+
+        taylor_via_deriv(f : ULS, lx : List ULS,
+                         ld : List (Coef -> Coef)) : ULS ==
+            ft := taylor(f)
+            lxt := [taylor(x) for x in lx]
+            (taylor_via_deriv(ft, lxt, ld)$TET) :: ULS
+
+        taylor_via_lode(la : List UTS, z : ULS, lc : List Coef) : ULS ==
+            zt := taylor(z)
+            (taylor_via_lode(la, zt, lc)$TET)::ULS
+
+        applyTaylor(g, f) ==
+            (applyTaylor(g, taylor(f))$TET) :: ULS
+
+        apply_taylor(g, f) ==
+            (apply_taylor(g, taylor(f))$TET)::ULS
+
+
+
+)abbrev package TSEREXPP TaylorSeriesExpansionPuiseux
+++ Description:
+++ This package implements operations needed for expansion into
+++ Puiseux series.
+TaylorSeriesExpansionPuiseux(Coef : Algebra(Fraction(Integer)),
+    UTS : UnivariateTaylorSeriesCategory Coef,
+    ULS : UnivariateLaurentSeriesConstructorCategory(Coef, UTS),
+    UPS : UnivariatePuiseuxSeriesConstructorCategory(Coef, ULS)
+    ) : Exports == Implementation
+  where
+    TEL ==> TaylorSeriesExpansionLaurent(Coef, UTS, ULS)
+    RN ==> Fraction Integer
+    Exports ==> TaylorSeriesExpansion(Coef, RN,
+                                      SingletonAsOrderedSet, UPS, UTS)
+
+    Implementation ==> add
+
+        rescale(p : UPS, r0 : RN, rn : RN) : ULS ==
+            s := (retract(r0/rn)@Integer)::PositiveInteger
+            multiplyExponents(laurentRep(p), s)
+
+        common_rep(lp : List UPS) : Record(laus : List ULS, rpow : RN) ==
+            lr : List(RN) := [rationalPower(p) for p in lp]
+            rn := gcd([numer(r) for r in lr]@List(Integer))/
+                    lcm([denom(r) for r in lr]@List(Integer))
+            [[rescale(p, r, rn) for p in lp for r in lr], rn]
+
+        taylor_via_deriv(f : UPS, lx : List UPS,
+                         ld : List (Coef -> Coef)) : UPS ==
+            nrep := common_rep(cons(f, lx))
+            lla := nrep.laus
+            lres := (taylor_via_deriv(first lla, rest lla, ld)$TEL)
+            puiseux(nrep.rpow, lres)
+
+        taylor_via_lode(la : List UTS, z : UPS, lc : List Coef) : UPS ==
+            nrep := common_rep([z])
+            lau := first(nrep.laus)
+            lres := (taylor_via_lode(la, lau, lc)$TEL)
+            puiseux(nrep.rpow, lres)
+
+        applyTaylor(g, f) ==
+            nrep := common_rep([f])
+            lres := (applyTaylor(g, first(nrep.laus))$TEL)
+            puiseux(nrep.rpow, lres)
+
+        apply_taylor(g, f) ==
+            nrep := common_rep([f])
+            lres := (apply_taylor(g, first(nrep.laus))$TEL)
+            puiseux(nrep.rpow, lres)
+
+
+
+)abbrev package TSEREXPG TaylorSeriesExpansionGeneralized
+++ Description:
+++ This package implements operations needed for expansion into
+++ various generalised univariate series.
+TaylorSeriesExpansionGeneralized(
+    Coef : Algebra(Fraction(Integer)),
+    Expon : OrderedAbelianMonoid,
+    UPS : UnivariatePowerSeriesCategory(Coef, Expon) with (
+           infsum : Stream(%) -> % ;
+           apply_taylor : (Stream(Coef), %) -> %;
+           removeZeros : (%, Expon) -> %
+        ),
+    UTS : UnivariateTaylorSeriesCategory(Coef)
+    ) : Exports == Implementation where
+
+  UTSODE ==> UnivariateTaylorSeriesODESolver(Coef, UTS)
+  Exports ==> TaylorSeriesExpansion(Coef, Expon,
+                  SingletonAsOrderedSet, UPS, UTS)
+  Implementation ==> add
+
+    Term ==> Record(k : Expon, c : Coef)
+
+    stream_taylor(f : UPS, x : UPS, xn : UPS,
+                  d : (UPS -> UPS),
+                  n : Integer) : Stream(UPS) == delay
+        qn : Fraction(Integer) := 1/n
+        ninv : Coef := qn*1$Coef
+        fn := f*xn
+        concat(fn, stream_taylor(d(ninv*f), x, x*xn, d, n + 1))
+
+    taylor_via_deriv(f : UPS, lx : List UPS,
+                         ld : List (Coef -> Coef)) : UPS ==
+        #lx ~= #ld =>
+            error "taylor_via_deriv: number of variables must equal number of derivatives"
+        #lx = 0 => f
+        x1 := removeZeros(first lx, 0)
+        order(x1, 0) < 0 =>
+            error "taylor_via_deriv: variable is of negative order"
+        coefficient(x1, 0) ~= 0 =>
+            error "taylor_via_deriv: variable has constant term"
+        x1 :=
+            degree(x1) > 0 => x1
+            reductum(x1)
+        f := taylor_via_deriv(f, rest lx, rest ld)
+        d1 := first(ld)
+        ss := stream_taylor(f, x1, 1$UPS, (y : UPS) : UPS +-> map(d1, y), 1)
+        -- print(ss::OutputForm)
+        infsum(ss)
+
+    taylor_via_lode(la : List UTS, z : UPS, lc : List Coef) : UPS ==
+        #lc ~= #la =>
+            error "taylor_via_lode: number of coefficient and initial values must be equal"
+        ts : UTS:= (ode((ls : List UTS) : UTS +->
+                   reduce(_+, [s*a for s in ls for a in la]),
+                lc)$UTSODE)
+        apply_taylor(coefficients(ts), z)
+
+    applyTaylor(g, f) ==
+        f := removeZeros(f, 0)
+        degree(f) < 0 => error "applyTaylor: f of negative degree"
+        c0 := coefficient(f, 0)
+        sg : UTS := g(c0::UTS + monomial(1, 1)$UTS)
+        apply_taylor(coefficients(sg)$UTS, f - c0::UPS)
+
+    apply_taylor(g, f) ==
+        apply_taylor(coefficients(g)$UTS, f)

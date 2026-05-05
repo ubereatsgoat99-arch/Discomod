@@ -1,0 +1,41 @@
+Function: ellmaninconstant
+Section: elliptic_curves
+C-Name: ellmaninconstant
+Prototype: GD0,L,
+Help: ellmaninconstant(E,{fl=0}): let E be an elliptic curve over Q given by
+ ellinit or a rational isogeny class given by ellisomat. Return the
+ Manin constant of the curve (resp. the Manin constants of the isogeny class).
+ If fl=0, the algorithm is slow but unconditional. If fl=1, use Cremona table or
+ Watkins conjecture.
+Doc: let $E$ be an elliptic curve over $Q$ given by \kbd{ellinit}, this function
+ returns the Manin constant $c_E$ of the curve.
+
+ Let $N$ be the conductor of $E$, let $f$ and $\omega_{f} = f(q)dq/q$ be the
+ normalized newform and differential on $X_{0}(N)$ associated to the rational
+ isogeny class of $E$. Let $\phi: X_0(N) \to E$ be a parametrization of minimal
+ degree. Then the Manin constant $c$ is the positive integer that scales $\omega_{f}$
+ into the pullback of a N\'{e}ron differential $\omega_E = dx / (2y + a_{1} x +
+ a_{3})$ attached to a minimal model: $\phi^{*}(\omega_{E}) = \pm c \cdot \omega_{f}$.
+ Manin conjectured that $c=1$ for optimal parametrizations; see also
+ \kbd{ellweilcurve}.
+
+ \item If $\fl=0$, the algorithm uses modular symbols. It is unconditional but
+ slow: it runs in time $\tilde{O}(N^{\log_{2} 7})$.
+
+ \item If $\fl=1$, the algorithm is conditional but fast but requires $N \leq
+ 500000$ and  returns the value in Cremona's table, which is believed to be
+ correct and was checked to be correct at least for $N \leq 400000$.
+
+ The input can also be a rational isogeny class given by \kbd{ellisomat}
+ and in this case the function returns the list of Manin constants for all the
+ isogeny class. The time complexity is about the same as for computing the Manin
+ constant for a single curve.
+
+ \bprog
+ ? E = ellinit("11a3");
+ ? ellmaninconstant(E)
+ %2 = 5
+ ? L = ellisomat(E,,1);
+ ? ellmaninconstant(L)
+ %4 = [5, 1, 1]
+ @eprog

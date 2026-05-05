@@ -1,0 +1,3 @@
+glpk
+glpk-devel
+glpk-utils

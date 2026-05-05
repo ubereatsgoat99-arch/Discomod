@@ -1,0 +1,289 @@
+)abbrev package CLIP TwoDimensionalPlotClipping
+++ Automatic clipping for 2-dimensional plots
+++ Author: Clifton J. Williamson
+++ Date Created: 22 December 1989
+++ Keywords: plot, singularity
+++ Examples:
+++ References:
+
+TwoDimensionalPlotClipping() : Exports == Implementation where
+  ++ The purpose of this package is to provide reasonable plots of
+  ++ functions with singularities.
+  B      ==> Boolean
+  L      ==> List
+  SEG    ==> Segment
+  RN     ==> Fraction Integer
+  SF     ==> DoubleFloat
+  Pt     ==> Point DoubleFloat
+  PLOT   ==> Plot
+  CLIPPED ==> Record(brans : L L Pt, xValues : SEG SF, yValues : SEG SF)
+
+  Exports ==> with
+    clip : PLOT -> CLIPPED
+      ++ clip(p) performs two-dimensional clipping on a plot, p, from
+      ++ the domain \spadtype{Plot} for the graph of one variable,
+      ++ \spad{y = f(x)}; the default parameters \spad{1/4} for the fraction
+      ++ and \spad{5/1} for the scale are used in the \spadfun{clip} function.
+    clip : (PLOT, RN, RN) -> CLIPPED
+      ++ clip(p, frac, sc) performs two-dimensional clipping on a plot, p,
+      ++ from the domain \spadtype{Plot} for the graph of one variable
+      ++ \spad{y = f(x)}; the fraction parameter is specified by \spad{frac}
+      ++ and the scale parameter is specified by \spad{sc} for use in the
+      ++ \spadfun{clip} function.
+    clipParametric : PLOT -> CLIPPED
+      ++ clipParametric(p) performs two-dimensional clipping on a plot,
+      ++ p, from the domain \spadtype{Plot} for the parametric curve
+      ++ \spad{x = f(t)}, \spad{y = g(t)}; the default parameters \spad{1/2}
+      ++ for the fraction and \spad{5/1} for the scale are used in the
+      ++ \pspadfun{iClipParametric} subroutine, which is called by this
+      ++ function.
+    clipParametric : (PLOT, RN, RN) -> CLIPPED
+      ++ clipParametric(p, frac, sc) performs two-dimensional clipping on a
+      ++ plot, p, from the domain \spadtype{Plot} for the parametric curve
+      ++ \spad{x = f(t)}, \spad{y = g(t)}; the fraction parameter is
+      ++ specified by \spad{frac} and the scale parameter is specified
+      ++ by \spad{sc} for use in the \pspadfun{iClipParametric} subroutine,
+      ++ which is called by this function.
+    clipWithRanges : (L L Pt, SF, SF, SF, SF) -> CLIPPED
+      ++ clipWithRanges(pointLists, xMin, xMax, yMin, yMax) performs clipping
+      ++ on a list of lists of points, \spad{pointLists}.  Clipping is
+      ++ done within the specified ranges of \spad{xMin}, \spad{xMax} and
+      ++ \spad{yMin}, \spad{yMax}.  This function is used internally by
+      ++ the \pspadfun{iClipParametric} subroutine in this package.
+    clip : L Pt -> CLIPPED
+      ++ clip(l) performs two-dimensional clipping on a curve l, which is
+      ++ a list of points; the default parameters \spad{1/2} for the
+      ++ fraction and \spad{5/1} for the scale are used in the
+      ++ \pspadfun{iClipParametric} subroutine, which is called by this
+      ++ function.
+    clip : L L Pt -> CLIPPED
+      ++ clip(ll) performs two-dimensional clipping on a list of lists
+      ++ of points, \spad{ll}; the default parameters \spad{1/2} for
+      ++ the fraction and \spad{5/1} for the scale are used in the
+      ++ \pspadfun{iClipParametric} subroutine, which is called by this
+      ++ function.
+
+  Implementation ==> add
+
+    import from PointPackage(DoubleFloat)
+    import from ListFunctions2(Point DoubleFloat, DoubleFloat)
+    import from List(List(Pt))
+
+    point : (SF, SF) -> Pt
+    discardAndSplit : (L Pt, Pt -> B, SF, SF, SF, SF) -> L L Pt
+    norm : Pt -> SF
+    iClipParametric : (L L Pt, RN, RN) -> CLIPPED
+    findPt : L L Pt -> Union(Pt,"failed")
+    Fnan? : SF ->Boolean
+    Pnan? : Pt ->Boolean
+
+    Fnan? x == x ~= x
+    Pnan? p == any?(Fnan?, p)
+
+    iClipParametric(pointLists, fraction, scale) ==
+      -- error checks and special cases
+      (fraction < 0) or (fraction > 1) =>
+        error "clipDraw: fraction should be between 0 and 1"
+      empty? pointLists => [[], segment(0, 0), segment(0, 0)]
+      -- put all points together , sort them according to norm
+      sortedList := sort((x : Pt, y : Pt) : Boolean +-> norm(x) < norm(y),
+            select((z : Pt) : Boolean +-> not Pnan? z, concat pointLists))
+      empty? sortedList => [[], segment(0, 0), segment(0, 0)]
+      n := # sortedList
+      num := numer fraction
+      den := denom fraction
+      clipNum := (n * num) quo den
+      lastN := n - 1 - clipNum
+      firstPt : Pt := first sortedList
+      xMin : SF := xCoord firstPt
+      xMax : SF := xCoord firstPt
+      yMin : SF := yCoord firstPt
+      yMax : SF := yCoord firstPt
+      -- calculate min/max for the first (1-fraction)*N points
+      -- this contracts the range
+      -- this unnecessarily clips monotonic functions (step-function, x^(high power), etc.)
+      for k in 0..lastN  for pt in rest sortedList repeat
+        xMin := min(xMin, xCoord pt)
+        xMax := max(xMax, xCoord pt)
+        yMin := min(yMin, yCoord pt)
+        yMax := max(yMax, yCoord pt)
+      xDiff := xMax - xMin; yDiff := yMax - yMin
+      xDiff = 0 =>
+        yDiff = 0 =>
+          [pointLists, segment(xMin-1, xMax+1), segment(yMin-1, yMax+1)]
+        [pointLists, segment(xMin-1, xMax+1), segment(yMin, yMax)]
+      single_eps := (2.0::SF)^(-19)
+      if yDiff < single_eps then
+          yMin :=
+              abs(yMin) < 1 => yMin - single_eps
+              yMin < 0 => yMin*(1 + single_eps)
+              yMin*(1 - single_eps)
+          yMax :=
+              abs(yMax) < 1 => yMax + single_eps
+              yMax < 0 => yMax*(1 - single_eps)
+              yMax*(1 + single_eps)
+      numm := numer scale; denn := denom scale
+      -- now expand the range by scale
+      xMin := xMin - (numm :: SF) * xDiff / (denn :: SF)
+      xMax := xMax + (numm :: SF) * xDiff / (denn :: SF)
+      yMin := yMin - (numm :: SF) * yDiff / (denn :: SF)
+      yMax := yMax + (numm :: SF) * yDiff / (denn :: SF)
+      -- clip with the calculated range
+      newclip := clipWithRanges(pointLists, xMin, xMax, yMin, yMax)
+      -- if we split the lists use the new clip
+      # (newclip.brans) > # pointLists   => newclip
+      -- calculate extents
+      xs : L SF := map (xCoord, sortedList)
+      ys : L SF := map (yCoord, sortedList)
+      xMin : SF := reduce (min, xs)
+      yMin : SF := reduce (min, ys)
+      xMax : SF := reduce (max, xs)
+      yMax : SF := reduce (max, ys)
+      xseg : SEG SF := xMin..xMax
+      yseg : SEG SF := yMin..yMax
+      -- return original
+      [pointLists, xseg, yseg]@CLIPPED
+
+
+
+
+    point(xx, yy) == point(l : L SF := [xx, yy])
+
+    discardAndSplit(pointList, pred, xMin, xMax, yMin, yMax) ==
+      ans : L L Pt := []
+      list : L Pt  := []
+      lastPt? : B  := false
+      lastPt : Pt  := point(0, 0)
+      while not empty? pointList repeat
+        pt := first pointList
+        pointList := rest pointList
+        pred(pt) =>
+          list := cons(pt, list)
+        if not empty? list then
+          ans := cons( list, ans)
+        lastPt := pt
+        lastPt? := true
+        list := []
+      empty? list => ans
+      reverse! cons(reverse! list, ans)
+
+    clip(plot, fraction, scale) ==
+      (fraction < 0) or (fraction > 1/2) =>
+        error "clipDraw: fraction should be between 0 and 1/2"
+      xVals := xRange plot
+      empty?(pointLists := listBranches plot) =>
+        [[], xVals, segment(0, 0)]
+      more?(pointLists := listBranches plot, 1) =>
+        error "clipDraw: plot has more than one branch"
+      empty?(pointList := first pointLists) =>
+        [[], xVals, segment(0, 0)]
+      sortedList := sort((x, y) +-> yCoord(x) < yCoord(y), pointList)
+      n := # sortedList; num := numer fraction; den := denom fraction
+      clipNum := (n * num) quo den
+      -- throw out points with large and small y-coordinates
+      yMin := yCoord(sortedList.clipNum)
+      yMax := yCoord(sortedList.(n - 1 - clipNum))
+      if Fnan? yMin then yMin : SF := 0
+      if Fnan? yMax then yMax : SF := 0
+      (yDiff := yMax - yMin) = 0 =>
+        [pointLists, xRange plot, segment(yMin - 1, yMax + 1)]
+      numm := numer scale; denn := denom scale
+      xMin := low(xVals); xMax := high(xVals)
+      yMin := yMin - (numm :: SF) * yDiff / (denn :: SF)
+      yMax := yMax + (numm :: SF) * yDiff / (denn :: SF)
+      lists := discardAndSplit(pointList,
+         x +-> (yCoord(x) < yMax) and (yCoord(x) > yMin),
+         xMin, xMax, yMin, yMax)
+      yMin := yCoord(sortedList.clipNum)
+      yMax := yCoord(sortedList.(n - 1 - clipNum))
+      if Fnan? yMin then yMin : SF := 0
+      if Fnan? yMax then yMax : SF := 0
+      for list in lists repeat
+        for pt in list repeat
+          if not Fnan?(yCoord pt) then
+            yMin := min(yMin, yCoord pt)
+            yMax := max(yMax, yCoord pt)
+      [lists, xVals, segment(yMin, yMax)]
+
+    clip(plot : PLOT) == clip(plot, 1/4, 5/1)
+
+    norm(pt) ==
+      x := xCoord(pt); y := yCoord(pt)
+      if Fnan? x then
+        if Fnan? y then
+          r : SF := 0
+        else
+          r : SF := y^2
+      else
+        if Fnan? y then
+          r : SF := x^2
+        else
+          r : SF := x^2 + y^2
+      r
+
+    findPt lists ==
+      for list in lists repeat
+        not empty? list =>
+             for p in list repeat
+               not Pnan? p => return p
+      "failed"
+
+    clipWithRanges(pointLists, xMin, xMax, yMin, yMax) ==
+      lists : L L Pt := []
+      for pointList in pointLists repeat
+        lists := concat(lists, discardAndSplit(pointList, _
+           (x : Pt) : Boolean +-> (xCoord(x) <= xMax) and (xCoord(x) >= xMin)_
+              and (yCoord(x) <= yMax) and (yCoord(x) >= yMin), _
+           xMin, xMax, yMin, yMax))
+      (pt := findPt lists) case "failed" =>
+        [[], segment(0, 0), segment(0, 0)]
+      firstPt := pt@Pt
+      xMin : SF := xCoord firstPt; xMax : SF := xCoord firstPt
+      yMin : SF := yCoord firstPt; yMax : SF := yCoord firstPt
+      for list in lists repeat
+        for pt in list repeat
+          if not Pnan? pt then
+            xMin := min(xMin, xCoord pt)
+            xMax := max(xMax, xCoord pt)
+            yMin := min(yMin, yCoord pt)
+            yMax := max(yMax, yCoord pt)
+      [lists, segment(xMin, xMax), segment(yMin, yMax)]
+
+    clipParametric(plot, fraction, scale) ==
+      iClipParametric(listBranches plot, fraction, scale)
+
+    clipParametric plot == clipParametric(plot, 1/2, 5/1)
+
+    clip(l : L Pt)   == iClipParametric(list l, 1/2, 5/1)
+    clip(l : L L Pt) == iClipParametric(l, 1/2, 5/1)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

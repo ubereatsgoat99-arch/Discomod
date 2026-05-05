@@ -1,0 +1,18 @@
+Function: _def_graphcolors
+Class: default
+Section: default
+C-Name: sd_graphcolors
+Prototype:
+Help:
+Doc: entries in the
+ \tet{graphcolormap} that will be used to plot multi-curves. The successive
+ curves are drawn in colors whose index in \kbd{graphcolormap} are the
+ non-negative integers
+
+ \kbd{graphcolors[1]}, \kbd{graphcolors[2]}, \dots
+
+ cycling when the \kbd{graphcolors} list is exhausted. Beware that for
+ historical and compatibility reasons, \kbd{graphcolormap} is $0$-based.
+
+ The default value is \kbd{[4,5]}. With factory settings for
+ \kbd{graphcolormap}, this corresponds to \kbd{"red"} then \kbd{"green"}.

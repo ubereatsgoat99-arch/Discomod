@@ -1,0 +1,58 @@
+Function: _def_primelimit
+Class: default
+Section: default
+C-Name: sd_primelimit
+Prototype:
+Help:
+Doc: \kbd{gp} precomputes a list of
+ all primes less than \kbd{primelimit} at initialization time, and can build
+ fast sieves on demand to quickly iterate over primes up to the \emph{square}
+ of \kbd{primelimit}. These are used by functions looping over consecutive
+ small primes. A related default is \kbd{factorlimit}, setting an upper
+ bound for the small primes that can be quickly detected through fast trial
+ division; you can still trial divide far above \kbd{factorlimit}, through
+ $\kbd{factor}(N, B)$ with large $B$ but a slow algorithm will be used
+ above \kbd{factorlimit}. If \kbd{primelimit} is set to a lower value than
+ \kbd{factorlimit}, it is silently increased to match \kbd{factorlimit}.
+
+ The default value is $2^{20} = 1048576$. Since almost all arithmetic functions
+ eventually require some table of prime numbers, PARI guarantees that the
+ first 6547 primes, up to and including $65557 = 2^{16} + 21$, are precomputed,
+ even if \kbd{primelimit} is $1$. The value of \kbd{primelimit} cannot exceed
+ $2^{32}$ since the prime table is stored as \kbd{unsigned int} values; if the
+ user provides a larger value, it will be silently capped at $2^{32}$.
+
+ A value of $2^{32}$ allows to quickly iterate over consecutive primes up
+ to $2^{64}$, and is
+ the upper range of what is generally useful. (Allow for a startup time of
+ about 6 seconds.) On the other hand, \kbd{factorlimit} is more expensive: it
+ must build a product tree of all primes up to the bound, which can
+ considerably increase startup time. A \kbd{factorlimit} of $2^{32}$ will
+ increase startup time to about 5 minutes; and is only useful if you
+ intend to call \kbd{factor}$(N, D)$ \emph{many} times with values of $D$ about
+ $2^{32}$ or $2^{33}$.
+
+ This default is only used on startup: changing it will not recompute a new
+ table. Here are sample timings for startup using increasing
+ values of \kbd{primelimit}:
+ \bprog
+ 2^20:      40 ms
+ 2^23:     230 ms
+ 2^26:   2,410 ms
+ 2^29:  27,240 ms
+ 2^32: 293,660 ms
+ @eprog
+
+ \misctitle{Deprecated feature} \kbd{factorlimit} was used in some
+ situations by algebraic number theory functions using the
+ \tet{nf_PARTIALFACT} flag (\tet{nfbasis}, \tet{nfdisc}, \tet{nfinit}, \dots):
+ this assumes that all primes $p > \kbd{factorlimit}$ have a certain
+ property (the equation order is $p$-maximal). This is never done by default,
+ and must be explicitly set by the user of such functions. Nevertheless,
+ these functions now provide a more flexible interface, and their use
+ of the global default \kbd{factorlimit} is deprecated.
+
+ \misctitle{Deprecated feature} \kbd{factor(N, 0)} is used to partially
+ factor integers by removing all prime factors $\leq$ \kbd{factorlimit}.
+ Don't use this, supply an explicit bound: \kbd{factor(N, bound)},
+ which avoids relying on an unpredictable global variable.

@@ -1,0 +1,254 @@
+)abbrev package PFBR PolynomialFactorizationByRecursion
+++ Description: PolynomialFactorizationByRecursion(R, E, VarSet, S)
+++ is used for factorization of sparse univariate polynomials over
+++ a domain S of multivariate polynomials over R.
+PolynomialFactorizationByRecursion(R, E, VarSet : OrderedSet, S) : public ==
+ private where
+  R : PolynomialFactorizationExplicit
+  E : OrderedAbelianMonoidSup
+  S : PolynomialCategory(R, E, VarSet)
+  PI ==> PositiveInteger
+  SupR ==> SparseUnivariatePolynomial R
+  SupSupR ==> SparseUnivariatePolynomial SupR
+  SupS ==> SparseUnivariatePolynomial S
+  SupSupS ==> SparseUnivariatePolynomial SupS
+  LPEBFS ==> LinearPolynomialEquationByFractions(S)
+  public ==  with
+     solveLinearPolynomialEquationByRecursion : (List SupS, SupS)  ->
+                                                Union(List SupS,"failed")
+        ++ \spad{solveLinearPolynomialEquationByRecursion([p1, ..., pn], p)}
+        ++ returns the list of polynomials \spad{[q1, ..., qn]}
+        ++ such that \spad{sum qi/pi = p / prod pi}, a
+        ++ recursion step for solveLinearPolynomialEquation
+        ++ as defined in \spadtype{PolynomialFactorizationExplicit} category
+        ++ (see \spadfun{solveLinearPolynomialEquation}).
+        ++ If no such list of qi exists, then "failed" is returned.
+     factorByRecursion :  SupS -> Factored SupS
+        ++ factorByRecursion(p) factors polynomial p. This function
+        ++ performs the recursion step for factorPolynomial,
+        ++ as defined in \spadtype{PolynomialFactorizationExplicit} category
+        ++ (see \spadfun{factorPolynomial})
+     factorSquareFreeByRecursion :  SupS -> Factored SupS
+        ++ factorSquareFreeByRecursion(p) returns the square free
+        ++ factorization of p. This functions performs
+        ++ the recursion step for factorSquareFreePolynomial,
+        ++ as defined in \spadtype{PolynomialFactorizationExplicit} category
+        ++ (see \spadfun{factorSquareFreePolynomial}).
+     randomR : Integer -> R  -- has to be global, since has alternative definitions
+        ++ randomR produces a random element of R
+     bivariateSLPEBR : (List SupS, SupS,  VarSet)  -> Union(List SupS,"failed")
+        ++ bivariateSLPEBR(lp, p, v) implements
+        ++ the bivariate case of
+        ++ \spadfun{solveLinearPolynomialEquationByRecursion};
+        ++ its implementation depends on R
+  private  == add
+   supR : SparseUnivariatePolynomial R
+   pp : SupS
+   lpolys, factors : List SupS
+   vv : VarSet
+   lvpolys, lvpp : List VarSet
+   r : R
+   lr : List R
+   import from FactoredFunctionUtilities(SupS)
+   import from FactoredFunctions2(S, SupS)
+   import from FactoredFunctions2(SupR, SupS)
+   import from CommuteUnivariatePolynomialCategory(S, SupS, SupSupS)
+   import from UnivariatePolynomialCategoryFunctions2(S, SupS, SupS, SupSupS)
+   import from UnivariatePolynomialCategoryFunctions2(SupS, SupSupS, S, SupS)
+   import from UnivariatePolynomialCategoryFunctions2(S, SupS, R, SupR)
+   import from UnivariatePolynomialCategoryFunctions2(R, SupR, S, SupS)
+   import from UnivariatePolynomialCategoryFunctions2(S, SupS, SupR, SupSupR)
+   import from UnivariatePolynomialCategoryFunctions2(SupR, SupSupR, S, SupS)
+   chooseSLPEViableSubstitutions : (List VarSet, List SupS, SupS) ->
+    Record(substnsField : List R, lpolysRField : List SupR, ppRField : SupR)
+     --++ chooseSLPEViableSubstitutions(lv, lp, p) chooses substitutions
+     --++ for the variables in first arg (which are all
+     --++ the variables that exist) so that the polys in second argument don't
+     --++ drop in degree and remain square-free, and third arg doesn't drop
+     --++ drop in degree
+   chooseFSQViableSubstitutions : (List VarSet, SupS) ->
+    Record(substnsField : List R, ppRField : SupR)
+     --++ chooseFSQViableSubstitutions(lv, p) chooses substitutions for the variables in first arg (which are all
+     --++ the variables that exist) so that the second argument poly doesn't
+     --++ drop in degree and remains square-free
+   raise : SupR -> SupS
+   lower : SupS -> SupR
+   SLPEBR : (List SupS, List VarSet, SupS, List VarSet)  ->
+                                         Union(List SupS,"failed")
+
+   MLIFT ==> MultivariateLifting(E, VarSet, R, S)
+
+   gen_solv1(fl : List(SupR)) : (SupR -> Union(List(SupR), "failed")) ==
+       pr +-> solveLinearPolynomialEquation(fl, pr)$R
+
+   gen_solv(fl : List(SupR)
+           ) : Union(SupR -> Union(List(SupR), "failed"), "failed") ==
+       gen_solv1(fl)
+
+   if R has Finite then
+      randomR(n) == random()$R
+   else
+      randomR(n) == (random(2*n+1)$Integer - n)::R
+
+   if R has FiniteFieldCategory then
+     bivariateSLPEBR(lpolys, pp, v) ==
+       lpolysR : List SupSupR := [map(univariate, u) for u in lpolys]
+       ppR : SupSupR := map(univariate, pp)
+       ans := solveLinearPolynomialEquation(lpolysR, ppR)$SupR
+       ans case "failed" => "failed"
+       [map(z1 +-> multivariate(z1, v), w) for w in ans]
+   else
+     bivariateSLPEBR(lpolys, pp, v) ==
+       solveLinearPolynomialEquationByFractions(lpolys, pp)$LPEBFS
+   chooseFSQViableSubstitutions(lvpp, pp) ==
+     substns : List R
+     ppR : SupR
+     n : Integer := 1
+     while true repeat
+        n := 2*n + 1
+        substns := [randomR(n) for v in lvpp]
+        zero? eval(leadingCoefficient pp,lvpp,substns ) => "next"
+        ppR := map(z1 +-> (retract eval(z1, lvpp, substns))::R, pp)
+        degree gcd(ppR,differentiate ppR)>0 => "next"
+        break
+     [substns, ppR]
+   chooseSLPEViableSubstitutions(lvpolys, lpolys, pp) ==
+     substns : List R
+     lpolysR : List SupR
+     ppR : SupR
+     n : Integer := 1
+     while true repeat
+        n := 2*n + 1
+        substns := [randomR(n) for v in lvpolys]
+        zero? eval(leadingCoefficient pp,lvpolys,substns ) => "next"
+        "or"/[zero? eval(leadingCoefficient u,lvpolys,substns)
+                    for u in lpolys] => "next"
+        lpolysR := [map(z1 +-> (retract eval(z1, lvpolys, substns))::R, u)
+                  for u in lpolys]
+        uu := lpolysR
+        while not empty? uu repeat
+          "or"/[degree(gcd(uu.first, v)) > 0 for v in uu.rest] => break
+          uu := rest uu
+        not empty? uu => "next"
+        break
+     ppR := map(z1 +-> (retract eval(z1, lvpolys, substns))::R, pp)
+     [substns, lpolysR, ppR]
+   raise(supR) == map(z1 +-> (z1::R)::S, supR)
+   lower(pp) == map(z1 +-> retract(z1)::R, pp)
+   SLPEBR(lpolys, lvpolys, pp, lvpp) ==
+     not empty? (m := setDifference(lvpp, lvpolys)) =>
+         v := first m
+         lvpp := remove(v, lvpp)
+         pp1 : SupSupS := swap map(z1 +-> univariate(z1, v), pp)
+         -- pp1 is mathematically equal to pp, but is in S[z][v]
+         -- so we wish to operate on all of its coefficients
+         ans : List SupSupS := [0 for u in lpolys]
+         for m in reverse! monomials pp1 repeat
+             ans1 := SLPEBR(lpolys, lvpolys, leadingCoefficient m, lvpp)
+             ans1 case "failed" => return "failed"
+             d := degree m
+             ans := [monomial(a1, d)+a for a in ans for a1 in ans1]
+         [map(z1 +-> multivariate(z1, v), swap pp1) for pp1 in ans]
+     empty? lvpolys =>
+         lpolysR : List SupR
+         ppR : SupR
+         lpolysR := [map(retract, u) for u in lpolys]
+         ppR := map(retract, pp)
+         ansR := solveLinearPolynomialEquation(lpolysR, ppR)
+         ansR case "failed" => return "failed"
+         [map(z1 +-> z1::S, uu) for uu in ansR]
+     cVS := chooseSLPEViableSubstitutions(lvpolys, lpolys, pp)
+     ansR := solveLinearPolynomialEquation(cVS.lpolysRField, cVS.ppRField)
+     ansR case "failed" => "failed"
+     #lvpolys = 1 => bivariateSLPEBR(lpolys, pp, first lvpolys)
+     solveLinearPolynomialEquationByFractions(lpolys, pp)$LPEBFS
+
+   solveLinearPolynomialEquationByRecursion(lpolys, pp) ==
+     pp = 0 => [0 for u in lpolys]
+     lvpolys := removeDuplicates!
+                  concat [ concat [variables z for z in coefficients u]
+                                               for u in lpolys]
+     lvpp := removeDuplicates!
+                concat [variables z for z in coefficients pp]
+     SLPEBR(lpolys, lvpolys, pp, lvpp)
+
+   factorByRecursion pp ==
+     lv : List(VarSet) := removeDuplicates!
+                           concat [variables z for z in coefficients pp]
+     empty? lv =>
+         map(raise, factorPolynomial lower pp)
+     c := content pp
+     unit? c => refine(squareFree pp, factorSquareFreeByRecursion)
+     pp := (pp exquo c)::SupS
+     mergeFactors(refine(squareFree pp, factorSquareFreeByRecursion),
+                  map(z1 +-> (z1::S)::SupS, factor(c)$S))
+
+   factorSquareFreeByRecursion pp ==
+       cpp := coefficients pp
+       lv : List(VarSet) := removeDuplicates! concat [variables z for z in cpp]
+       v_degs : List(NonNegativeInteger) := [
+           "max"/[degree(z, v) for z in cpp] for v in lv]
+       empty? lv => map(raise, factorPolynomial lower pp)
+       lcu : S := 1
+       if unit? (lcpp := leadingCoefficient pp) then
+           lcu := lcpp
+           pp := (pp exquo lcu)::SupS
+           lcpp := 1
+       oldnfact : NonNegativeInteger := degree(pp) + 1
+       while true repeat -- a loop over possible false splits
+           cVS := chooseFSQViableSubstitutions(lv, pp)
+           newppR := primitivePart cVS.ppRField
+           factorsR := factorSquareFreePolynomial(newppR)
+           (nfact := numberOfFactors factorsR) = 1 =>
+                      return makeFR(lcu::SupS, [["irred", pp, 1]])
+           nfact > oldnfact => "next"   -- can't be a good reduction
+           fl1 := [u.factor for u in factorList factorsR]
+           -- OK, force all leading coefficients to be equal to the leading
+           -- coefficient of the input
+           lcppR := leadingCoefficient cVS.ppRField
+           fl2 := [(lcppR exquo leadingCoefficient f1)::R * f1 for f1 in fl1]
+           -- factors now multiplies to give cVS.ppRField * lcppR^(#factors-1)
+           -- Now change the leading coefficient to be lcpp^(#factors-1)
+           ppAdjust := (lcppPow := lcpp^#(rest fl2))*pp
+           llc := [lcpp for f1 in fl2]
+           flu := lifting(ppAdjust, lv, fl2, cVS.substnsField, llc, v_degs,
+               gen_solv)$MLIFT
+           flu case "failed" => "next"
+           factors := flu@List(SupS)
+           factors := [(lc := content w; lcppPow := (lcppPow exquo lc)::S;
+                        (w exquo lc)::SupS) for w in factors]
+           not unit? lcppPow =>
+               error "internal error in factorSquareFreeByRecursion"
+           return makeFR(lcu*(recip lcppPow)::S::SupS,
+                         [["irred", w, 1] for w in factors])
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

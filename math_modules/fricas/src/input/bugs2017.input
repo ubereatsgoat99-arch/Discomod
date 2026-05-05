@@ -1,0 +1,197 @@
+)set break resume
+)expose UnittestCount UnittestAux Unittest
+
+testsuite "bugs2017"
+
+testcase "latex(1)"
+
+testEquals("latex(1)", "_"1_"")
+
+testcase "~= in interpreter"
+
+testTrue("(x~=y)$Expression(Integer)")
+
+testcase "simplification of embedded roots"
+
+testEquals("rootSimp(sqrt(2 * sqrt(a^4)))", "a*sqrt(2)")
+
+testEquals("rootSimp(exp(x/sqrt(x^2)-1))", "1")
+
+testEquals("rootPower(atan(2*(x^(1/6))^3))", "atan(2*sqrt(x))")
+
+testEquals("rootPower(exp(x^(1/6)*(x^(1/12))^2))", "exp(x^(1/3))")
+
+testEquals("rootPower(sqrt((x^(1/6))^3 + 1))", "sqrt(sqrt(x) + 1)")
+
+testEquals("rootPower(exp(sqrt(x)/(x^(1/6))^3 - 1))", "1")
+
+testEquals("rootPower(sqrt(sqrt(x)/(x^(1/6))^3 - 1))", "0")
+
+testEquals("rootProduct(sin((x^(1/4))^2*x^(1/5)))", "sin(x^(7/10))")
+
+testcase "linear algebra with empty matrices"
+
+emi := empty()$Matrix(Integer)
+qF := Fraction(Integer)
+emq := empty()$Matrix(qF)
+
+testEquals("determinant(emi)", "1")
+testEquals("determinant(emq)", "1")
+testEquals("minordet(emi)", "1")
+testEquals("minordet(emq)", "1")
+testEquals("inverse(emi)", "emq")
+testEquals("inverse(emq)", "emq")
+testEquals("invertIfCan(emi)", "emi")
+ai := adjoint(emi)
+testEquals("ai.adjMat", "emi")
+testEquals("ai.detMat", "1")
+aq := adjoint(emq)
+testEquals("aq.adjMat", "emq")
+testEquals("aq.detMat", "1")
+vQF := Vector(qF)
+iMF := InnerMatrixLinearAlgebraFunctions(qF, vQF, vQF, Matrix(qF))
+testEquals("generalizedInverse(emq)$iMF", "emq")
+
+testcase "determinant of zero matrix"
+
+testEquals("determinant(zero(2,2)$Matrix(POLY PF 2))", "0")
+
+testcase "simplifyExp and expand of logarithm"
+
+testEquals("simplifyExp(exp(exp(a)*exp(b)))", "exp(exp(a+b))")
+testEquals("simplifyExp(d^(c^a*c^b))", "d^(c^(a+b))")
+testEquals("simplifyExp(exp(a)/exp(b))", "exp(a-b)")
+testEquals("simplifyExp(a^b/a^c)", "a^(b-c)")
+testEquals("simplifyExp(exp((exp(a)+1)/exp(b))*exp(-(2*exp(a)+1)/exp(b)))",
+           "exp(-exp(a-b))")
+testEquals("expand(log(a*b)^c)", "(log(b)+log(a))^c")
+
+testcase "simplification with variable named exp and log"
+
+expr := exp::Expression Integer
+testEquals("simplify(expr)", "expr")
+testEquals("htrigs(expr)", "expr")
+testEquals("simplifyLog(log)", "log")
+
+testcase "simplifyLog"
+
+a := log((-2*sqrt(2)+3)^2)-2*log((-2*sqrt(2)+3));
+testEquals("simplifyLog(a)", "0")
+testEquals("simplifyLog(exp(a + 1))", "exp(1)")
+testEquals("simplifyLog(sin(a + 1))", "sin(1)")
+testEquals("simplifyLog(exp(log(x)+log(y)))", "x*y")
+
+testEquals("simplifyLog(log(sqrt(x+1)+sqrt(x)) + log(sqrt(x+1) - sqrt(x)))",
+           "0")
+testEquals("simplifyLog(2*(log(x) + 2*log(y)))", "log(x^2*y^4)")
+
+testcase "0^0 for polynomials"
+
+testEquals("(0::SUP(INT))^0", "1")
+testEquals("(0::DMP([x, y, z], INT))^0", "1")
+
+testcase "conjugate"
+
+testEquals("conjugate(sin(x)) - sin(conjugate(x))", "0")
+testEquals("conjugate(exp(conjugate(x)))", "exp(x)")
+testEquals("conjugate(sqrt(x + %i))", "sqrt(conjugate(x) - %i)")
+
+testcase "derivatives of box and paren"
+
+xp := paren(x + 1)
+xb := box(x + 1)
+testEquals("D(xp^100, x)", "100*xp^99")
+testEquals("D(xb^100, x)", "100*xb^99")
+
+testcase "monomial?"
+
+testTrue("monomial?((x*y)::POLY(INT))")
+testTrue("monomial?(1::POLY(INT))")
+testTrue("not(monomial?(0::POLY(INT)))")
+
+testcase "symmetric and antisymmetric tensors"
+
+m1 := matrix([[1, 0], [0, 0], [0, 1]])
+m2 := matrix([[1, 0, 0], [0, 0, 1]])
+am1 := antisymmetricTensors(m1, 2)
+am2 := antisymmetricTensors(m2, 2)
+testEquals("am2*am1", "matrix[[1]]")
+sm1 := symmetricTensors(m1, 2)
+sm2 := symmetricTensors(m2, 2)
+testEquals("sm2*sm1", "symmetricTensors(m2*m1, 2)")
+
+testcase "node? from URAGG"
+
+testTrue("not(node?([],[])$List(Integer))")
+
+testcase "leading coefficient during factorization"
+
+p :=
+  5929*mp^2*yrq^8+(-29645)*mp^2*yqp*yrp*yrq^7+((47432*mp^2*yqp^2+17787*mp^2)_
+  *yrp^2+(11858*mp^2*yqp^2+((-17787)*mp^2+(-77)*mp)))*yrq^6+(((-23716)*mp^2_
+  *yqp^3+(-59290)*mp^2*yqp)*yrp^3+((-35574)*mp^2*yqp^3+(59290*mp^2+308*mp)*_
+  yqp)*yrp)*yrq^5+((47432*mp^2*yqp^2+17787*mp^2)*yrp^4+(23716*mp^2*yqp^4+_
+  ((-23716)*mp^2+(-462)*mp)*yqp^2+((-35574)*mp^2+(-154)*mp))*yrp^2+(5929*_
+  mp^2*yqp^4+(-23716)*mp^2*yqp^2+(17787*mp^2+154*mp)))*yrq^4+((-29645)*_
+  mp^2*yqp*yrp^5+(((-35574)*mp^2+308*mp)*yqp^3+(59290*mp^2+462*mp)*yqp)*_
+  yrp^3+((-5929)*mp^2*yqp^5+35574*mp^2*yqp^3+((-29645)*mp^2+(-462)*mp)*yqp)*_
+  yrp)*yrq^3+(5929*mp^2*yrp^6+((11858*mp^2+(-462)*mp)*yqp^2+((-17787)*mp^2+_
+  (-77)*mp))*yrp^4+((5929*mp^2+(-154)*mp)*yqp^4+((-23716)*mp^2+462*mp+1)*_
+  yqp^2+(17787*mp^2+154*mp))*yrp^2+(((-5929)*mp^2+77*mp)*yqp^4+(11858*mp^2-_
+  1)*yqp^2+((-5929)*mp^2+(-77)*mp)))*yrq^2+(154*mp*yqp*yrp^5+((154*mp-1)*_
+  yqp^3+((-308)*mp+(-1))*yqp)*yrp^3+(((-154)*mp+1)*yqp^3+(154*mp+1)*yqp)*_
+  yrp)*yrq+(yqp^2*yrp^4+(-1)*yqp^2*yrp^2)
+
+up := univariate(p, mp);
+testTrue("(fp := factor(up); true)")
+testEquals("up - expand(fp)", "0")
+
+testcase "content in GENPGCD and PFBR"
+
+p1 := _
+  3725309280*x4^3+(643177920*x2+(156525600*x1+652190))*x4^2+(27747720*x2^2+_
+  (25884320*x1+55055)*x2)*x4+1069640*x1*x2^2
+
+p2 :=
+  905157792*x4^4+(15393840*x3+(89103168*x2+(44189376*x1+(-2920302))))*x4^3+_
+  ((1358280*x2+(646800*x1+2695))*x3+(814968*x2^2+(7088928*x1+(-270039))*x2+_
+  (258720*x1^2+(-128282)*x1+(-539))))*x4^2+(52360*x1*x2*x3+(303072*x1*x2^2+_
+  (150304*x1^2+(-9933)*x1)*x2))*x4+10472*x1^2*x2^2
+
+g := 439824*x4^2+(38808*x2+(18480*x1+77))*x4+1496*x1*x2
+oV := OVAR([s, t])
+rP := POLY(SMP(INT, oV))
+p1r := p1::rP;
+p2r := p2::rP;
+gr := g::rP;
+testEquals("gcd(p1r, p2r)", "gr")
+q := 454039611480*x3 - 4954226319320678400*x1^5 - 161042123364761600*x1^4 _
+     + 3681144170266624*x1^3 + 25031160975872*x1^2 - 915767478400*x1 + _
+     540523347
+testTrue("(fq := factor(q); true)")
+testEquals("#factors(fq)", "1")
+
+testcase "gcd in fields"
+
+rN := Fraction(Integer)
+testEquals("gcd(0$rN, 0$rN)", "0")
+
+testcase "mergeFactors"
+
+a := factor 14
+b := factor 15
+testEquals("mergeFactors(a, b)", "a*b")
+testEquals("b", "factor(15)")
+
+testcase "reverse in Segment"
+
+testEquals("3..1 by -1", "reverse(1..3)")
+testEquals("[i for i in reverse(1..2)]", "[2, 1]")
+
+testcase "size? for streams"
+
+testTrue("not(size?([1,2]::Stream Integer, 1))")
+
+)set output algebra on
+
+statistics()

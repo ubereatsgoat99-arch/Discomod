@@ -1,0 +1,288 @@
+)abbrev domain STACK Stack
+++ Author: Michael Monagan and Stephen Watt
+++ Date Created: June 86 and July 87
+++ Basic Operations:
+++ Related Domains:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++ Linked List implementation of a Stack
+
+Stack(S : SetCategory) : StackAggregate S with
+    stack : List S -> %
+      ++ stack([x, y, ..., z]) creates a stack with first (top)
+      ++ element x, second element y, ..., and last element z.
+  == add
+    Rep := Reference List S
+    s = t == deref s = deref t
+    parts s == deref s
+    map(f : S -> S, s : %) == ref map(f, deref s)$List(S)
+    map!(f : S -> S, s : %) ==
+        setref(s, map!(f, deref s)$List(S))
+        s
+    copy s == ref copy deref s
+    # s == #deref s
+    pop! (s : %) : S ==
+        empty? s => error "empty stack"
+        e := first deref s
+        setref(s, rest deref s)
+        e
+    extract! (s : %) : S == pop! s
+    top (s : %) : S ==
+        empty? s => error "empty stack"
+        first deref s
+    inspect s == top s
+    push!(e, s) == (setref(s, cons(e, deref s));e)
+    insert!(e : S, s : %) : % == (push!(e, s);s)
+    empty() == ref []$List(S)
+    empty? s == empty?(deref(s))
+    construct s == ref copy s
+    stack s == construct s
+
+    if S has Hashable then
+
+        hashUpdate!(st, s) == hashUpdate!(st, deref s)
+
+)abbrev domain ASTACK ArrayStack
+++ Author: Michael Monagan and Stephen Watt
+++ Date Created: June 86 and July 87
+++ Basic Operations:
+++ Related Domains:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++ A stack represented as a flexible array.
+
+ArrayStack(S : SetCategory) : StackAggregate(S) with
+    arrayStack : List S -> %
+      ++ arrayStack([x, y, ..., z]) creates an array stack with first (top)
+      ++ element x, second element y, ..., and last element z.
+  == add
+    Rep := IndexedFlexibleArray(S, 0)
+
+    -- system operations
+    # s == _#(s)$Rep
+    s = t == s =$Rep t
+    copy s == copy(s)$Rep
+    coerce(d) : OutputForm ==
+        empty? d => empty()$(List S) ::OutputForm
+        n := #d
+        [(d.(n - i))::OutputForm for i in 1..n]::OutputForm
+
+    -- stack operations
+    empty? s == empty?(s)$Rep
+    extract! s == pop! s
+    inspect(s) == top(s)
+    insert!(e, s) == (push!(e, s);s)
+    parts(s) == reverse(parts(s)$Rep)
+    push!(e, s) == (concat!(s, e); e)
+    pop! s ==
+        if empty? s then error "empty stack"
+        m := maxIndex s
+        r := s.m
+        delete!(s, m)
+        r
+    top s == if empty? s then error "empty stack" else s.maxIndex(s)
+    construct(l) == construct(reverse(l))$Rep
+    arrayStack l == construct(l)
+    empty() == empty()$Rep
+    map(f, s) == map(f, s)$Rep
+    map!(f, s) == map!(f, s)$Rep
+
+    if S has Hashable then
+
+        hashUpdate!(hs, s) == hashUpdate!(hs, s)$Rep
+
+)abbrev domain QUEUE Queue
+++ Author: Michael Monagan and Stephen Watt
+++ Date Created: June 86 and July 87
+++ Basic Operations:
+++ Related Domains:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++ Linked List implementation of a Queue
+
+Queue(S : SetCategory) : QueueAggregate S with
+    queue : List S -> %
+      ++ queue([x, y, ..., z]) creates a queue with first (top)
+      ++ element x, second element y, ..., and last (bottom) element z.
+  == Stack S add
+    Rep := Reference List S
+    lastTail==> LAST$Lisp
+
+    enqueue!(e, q) ==
+        if empty?(deref(q)) then setref(q, list e)
+        else lastTail.(deref q).rest := list e
+        e
+    insert!(e, q) == (enqueue!(e, q);q)
+    dequeue! q ==
+        empty? q => error "empty queue"
+        e := first deref q
+        setref(q, rest deref q)
+        e
+    extract! q == dequeue! q
+    rotate! q == if empty? q then q else (enqueue!(dequeue! q, q); q)
+    front q == if empty? q then error "empty queue" else first deref q
+    inspect q == front q
+    back q == if empty? q then error "empty queue" else last deref q
+    queue q == construct(q)
+
+)abbrev domain DEQUEUE Dequeue
+++ Author: Michael Monagan and Stephen Watt
+++ Date Created: June 86 and July 87
+++ Basic Operations:
+++ Related Domains:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++ Linked list implementation of a Dequeue
+
+Dequeue(S : SetCategory) : DequeueAggregate S with
+     dequeue : List S -> %
+       ++ dequeue([x, y, ..., z]) creates a dequeue with first (top or front)
+       ++ element x, second element y, ..., and last (bottom or back) element z.
+  == Queue S add
+    Rep := Reference List S
+    bottom d ==
+         if empty? d then error "empty dequeue" else last deref d
+    dequeue d == construct(d)
+    extractBottom! d ==
+        if empty? d then error "empty dequeue"
+        p := deref d
+        n := maxIndex p
+        n = 1 =>
+           r := first p
+           setref(d, [])
+           r
+        q := rest(p, (n-2)::NonNegativeInteger)
+        r := first rest q
+        q.rest := []
+        r
+    extractTop! d ==
+        e := top d
+        setref(d, rest deref d)
+        e
+    insertTop!(e, d) == (setref(d, cons(e, deref d)); e)
+    lastTail==> LAST$Lisp
+    insertBottom!(e, d) ==
+        if empty? d then setref(d, list e)
+        else lastTail.(deref d).rest := list e
+        e
+    top d == if empty? d then error "empty dequeue" else first deref d
+    reverse! d == (setref(d, reverse deref d); d)
+    pop!(d) == extractTop!(d)
+    push!(e, d) == insertTop!(e, d)
+
+)abbrev domain HEAP Heap
+++ Author: Michael Monagan and Stephen Watt
+++ Date Created: June 86 and July 87
+++ Basic Operations:
+++ Related Domains:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++ Heap implemented in a flexible array to allow for insertions
+++ Complexity: O(log n) insertion, extraction and O(n) construction
+
+Heap(S : OrderedSet) : Exports == Implementation where
+  Exports == PriorityQueueAggregate S with
+    heap : List S -> %
+      ++ heap(ls) creates a heap of elements consisting of the
+      ++ elements of ls.
+    if S has Hashable then Hashable
+  Implementation == IndexedFlexibleArray(S, 0) add
+    Rep := IndexedFlexibleArray(S, 0)
+    empty() == empty()$Rep
+    heap l == construct(l)
+    siftUp : (%, Integer, Integer) -> Void
+    siftUp(r, i, n) ==
+       -- assertion 0 <= i < n
+       t := r.i
+       while (j := 2*i+1) < n repeat
+          if (k := j+1) < n and r.j < r.k then j := k
+          if t < r.j then (r.i := r.j; r.j := t; i := j) else break
+
+    extract! r ==
+       -- extract the maximum from the heap O(log n)
+       n := #r :: Integer
+       n = 0 => error "empty heap"
+       t := r(0)
+       r(0) := r(n-1)
+       delete!(r, n-1)
+       n = 1 => t
+       siftUp(r, 0, n-1)
+       t
+
+    insert!(x, r) ==
+       -- Williams' insertion algorithm O(log n)
+       j := (#r) :: Integer
+       r := concat!(r, x)
+       while j > 0 repeat
+          i := (j-1) quo 2
+          if r(i) >= x then break
+          r(j) := r(i)
+          j := i
+       r(j) := x
+       r
+
+    max r ==
+        #r = 0 => error "empty heap"
+        r(0)
+
+    inspect r == max r
+
+    makeHeap(r : %) : % ==
+       -- Floyd's heap construction algorithm O(n)
+       n := #r
+       for k in n quo 2 -1 .. 0 by -1 repeat siftUp(r, k, n)
+       r
+    construct l == makeHeap construct(l)$Rep
+    merge(a, b) == makeHeap concat(a, b)
+    merge!(a, b) == makeHeap concat!(a, b)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

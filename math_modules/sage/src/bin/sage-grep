@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cd "$SAGE_SRC"
+
+find sage -name "*.py" -o -name "*.pyx" -o -name "*.pxi" -o -name "*.pxd" | xargs grep "$@"

@@ -1,0 +1,33 @@
+\p115
+E(v)=[exponent(z)|z<-v];
+z1 = 0.1732*I; tau1 = 0.2+0.433*I;
+T=theta(z1,tau1,0)
+C=[[0,0],[0,1],[1,0],[1,1]];
+exponent(T-vector(4,j,theta(z1,tau1,C[j])))
+E(vector(3,j,thetanull(tau1,j+1)-theta(0,tau1,j+1)))
+exponent(thetanull(tau1,[1,1])-theta'(0,tau1,[1,1]))
+k = 1/3; z = I/2+1; A = elljacobi(z,k)
+exponent(elljacobi(z+4*ellK(k)+4*I*ellK(sqrt(1-k^2)), k) - A)
+\p38
+T = thetanull(tau1,0); U = theta(z1,tau1,0);
+ETA(t) = eta(t, 1);
+e = ETA(tau1);
+E(T - [ETA((tau1+1)/2)^2/ETA(tau1+1), ETA(tau1/2)^2/e, 2*ETA(2*tau1)^2/e, -2*Pi*e^3])
+E([T[2]^4+T[3]^4-T[1]^4, T[1]*T[2]*T[3]-2*e^3])
+
+f(m) = T[2]^(4*m)+T[3]^(4*m)+(-1)^m*T[1]^(4*m);
+E4 = mfeval(mfinit([1,4]),mfEk(4),tau1);
+E([f(1), f(2)-2*E4, f(3)+48*e^12, f(4)-f(2)^2/2, f(5)+80*e^12*E4])
+exponent(U[3]^2*T[2]^2-(U[2]^2*T[3]^2-U[4]^2*T[1]^2))
+exponent(U[1]*U[2]*U[3]*U[4]-e^3*theta(2*z1,tau1,[1,1]))
+exponent(U[1]^4+U[4]^4-U[2]^4-U[3]^4)
+
+theta(10^30,I,0)
+
+\\ #2635
+z = 0.2795*I; tau = 0.12*I+Pi/4; th = theta(z, tau, 0);
+for(j=8,12,print(j,":",vecmax(abs(theta(z + j*I/100000., tau, 0) - th))))
+
+\\ ERRORS, keep at end of file
+\\ #2616
+theta(2+x,3+2*I,[0,0])

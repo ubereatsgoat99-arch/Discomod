@@ -1,0 +1,19 @@
+Function: ellchangeinvert
+Section: elliptic_curves
+C-Name: ellchangeinvert
+Prototype: GG
+Help: ellchangeinvert(E,v): inverts the transformations given
+ by v=[u,r,s,t].
+Doc:
+ Invert the transformations given by \kbd{v=[u,r,s,t]} and return
+ the transformation \kbd{[1/u,-r/u\^{}2,-s/u,(s*r-t)/u\^{}3]}.
+ \bprog
+ ? v = [u,r,s,t]; P = [x,y]; E = ellinit([1,1]);
+ ? w = ellchangeinvert(E, v)
+ %2 = [1/u,-r/u^2,-s/u,(s*r-t)/u^3]
+ ? ellchangepointinv(E,P,v) == ellchangepoint(E,P,w)
+ %3 = 1
+ @eprog\noindent Note that the elliptic curve $E$ is not needed in itself,
+ it indicates the domain over which the transformation is defined. This
+ is required when $E$ and the transformation are defined over a number field,
+ in order to support number field elements given in column form.

@@ -1,0 +1,17 @@
+Function: thetanull
+Section: transcendental
+C-Name: thetanull
+Prototype: GDGp
+Help: thetanull(tau,{flag=0}): Jacobi Thetanullwerte: if flag is not 1 or
+ [1,1], same as theta(0, tau, flag). Otherwise, (d/dz)theta(z,tau,flag) at z=0.
+ If flag = 0 or omitted, vector of all four.
+Doc: Jacobi Thetanullwerte: if \kbd{flag} is present, but neither $0$, $1$
+ nor \kbd{[1,1]},
+ this is the same as \kbd{theta(0,tau,flag)}. Note that $\theta_{1,1}(0,\tau)
+ = \theta_1(0,\tau) = 0$ for all $\tau$. So we compute the derivative of
+ \kbd{theta(z, tau, flag)} with respect to $z$ at $z=0$ for $\fl = 1$
+ or \kbd{[1,1]}.
+ Finally, if $\fl = 0$ or omitted, returns the vector of all four values
+ $$[\theta_{0,0}(0,\tau), \theta_{0,1}(0,\tau), \theta_{1,0}(0,\tau),
+ \theta'_{1,1}(0,\tau)]\;.$$
+ (Note the derivative in the last entry!)

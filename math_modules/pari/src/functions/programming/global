@@ -1,0 +1,5 @@
+Function: global
+Section: programming/specific
+Help: global(list of variables): Declare global variables for GP2C.
+Doc: Declare global variables for GP2C. This should appear before any use of
+ the variables in a function.

@@ -1,0 +1,213 @@
+r"""
+Sphinx configuration shared by sage.misc.sphinxify and sage_docbuild
+
+AUTHORS:
+
+- Matthias Koeppe, Kwankyu Lee (2022): initial version
+- Vincent Macri (2025-09-01): process_docstring_aliases
+"""
+
+# ****************************************************************************
+#       Copyright (C) 2022 Matthias Koeppe <mkoeppe@math.ucdavis.edu>
+#                     2022 Kwankyu Lee <ekwankyu@gmail.com>
+#                     2025 Vincent Macri <vincent.macri@ucalgary.ca>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#                  https://www.gnu.org/licenses/
+# ****************************************************************************
+
+from docutils import nodes
+from docutils.transforms import Transform
+from sphinx.ext.doctest import blankline_re
+
+# The reST default role (used for this markup: `text`) to use for all documents.
+default_role = 'math'
+
+
+def process_docstring_aliases(app, what, name, obj, options, docstringlines):
+    """
+    Change the docstrings for aliases to point to the original object.
+    """
+
+    if what not in ('function', 'method'):
+        # Alias detection doesn't make sense for modules.
+        # Alias handling is implemented for classes in:
+        # src/sage_docbuild/ext/sage_autodoc.py
+
+        # Since sage_autodoc is supposed to be replaced (issue #30893)
+        # we implement function/method alias handling here rather than
+        # where class alias handling is implemented.
+        return
+
+    if not hasattr(obj, '__name__'):
+        # obj has no __name__
+        # This usually happens with factory functions, which should have their
+        # own docstring anyway.
+        return  # Skip alias detection if __name__ is not present
+
+    obj_name = name.rpartition('.')[2]  # Unqualified name
+    original_name = obj.__name__
+
+    if obj_name == original_name or original_name.startswith('_'):
+        # If obj_name == original_name this is not an alias.
+
+        # If original_name starts with '_' then this is a public alias
+        # of a private function/method and so we keep the docstring.
+        return None
+
+    if what == 'method':
+        docstringlines[:] = [f'alias of :meth:`{original_name}`.']
+        return
+
+    # We now have `what == 'function'`
+
+    if original_name != '<lambda>':
+        docstringlines[:] = [f'alias of :func:`{original_name}`.']
+        return
+
+    # If original_name == '<lambda>' then the function is
+    # a lambda expression, hence not an alias of something
+    # with its own docstring.
+    return
+
+
+def process_directives(app, what, name, obj, options, docstringlines):
+    """
+    Remove 'nodetex' and other directives from the first line of any
+    docstring where they appear.
+    """
+    if len(docstringlines) == 0:
+        return
+    first_line = docstringlines[0]
+    directives = [d.lower() for d in first_line.split(',')]
+    if 'nodetex' in directives:
+        docstringlines.pop(0)
+
+
+def process_docstring_cython(app, what, name, obj, options, docstringlines):
+    """
+    Remove Cython's filename and location embedding.
+    """
+    if len(docstringlines) <= 1:
+        return
+
+    first_line = docstringlines[0]
+    if first_line.startswith('File:') and '(starting at' in first_line:
+        # Remove the first two lines
+        docstringlines.pop(0)
+        docstringlines.pop(0)
+
+
+def process_docstring_module_title(app, what, name, obj, options, docstringlines):
+    """
+    Removes the first line from the beginning of the module's docstring.  This
+    corresponds to the title of the module's documentation page.
+    """
+    if what != "module":
+        return
+
+    # Remove any additional blank lines at the beginning
+    title_removed = False
+    while len(docstringlines) > 1 and not title_removed:
+        if docstringlines[0].strip() != "":
+            title_removed = True
+        docstringlines.pop(0)
+
+    # Remove any additional blank lines at the beginning
+    while len(docstringlines) > 1:
+        if docstringlines[0].strip() == "":
+            docstringlines.pop(0)
+        else:
+            break
+
+
+def process_dollars(app, what, name, obj, options, docstringlines):
+    r"""
+    Replace dollar signs with backticks.
+
+    See sage.misc.sagedoc.process_dollars for more information.
+    """
+    if len(docstringlines) and name.find("process_dollars") == -1:
+        from sage.misc.sagedoc import process_dollars as sagedoc_dollars
+        s = sagedoc_dollars("\n".join(docstringlines))
+        lines = s.split("\n")
+        for i in range(len(lines)):
+            docstringlines[i] = lines[i]
+
+
+def process_inherited(app, what, name, obj, options, docstringlines):
+    """
+    If we're including inherited members, omit their docstrings.
+    """
+    if not options.get('inherited-members'):
+        return
+
+    if what in ['class', 'data', 'exception', 'function', 'module']:
+        return
+
+    name = name.split('.')[-1]
+
+    if what == 'method' and hasattr(obj, 'im_class'):
+        if name in obj.im_class.__dict__.keys():
+            return
+
+    if what == 'attribute' and hasattr(obj, '__objclass__'):
+        if name in obj.__objclass__.__dict__.keys():
+            return
+
+    for i in range(len(docstringlines)):
+        docstringlines.pop()
+
+
+def skip_TESTS_block(app, what, name, obj, options, docstringlines):
+    """
+    Skip blocks labeled "TESTS:".
+
+    See sage.misc.sagedoc.skip_TESTS_block for more information.
+    """
+    from sage.misc.sagedoc import skip_TESTS_block as sagedoc_skip_TESTS
+    if not docstringlines:
+        # No docstring, so don't do anything. See Issue #19932.
+        return
+    s = sagedoc_skip_TESTS("\n".join(docstringlines))
+    lines = s.split("\n")
+    for i in range(len(lines)):
+        docstringlines[i] = lines[i]
+    while len(docstringlines) > len(lines):
+        del docstringlines[len(lines)]
+
+
+class SagemathTransform(Transform):
+    """
+    Transform for code-blocks.
+
+    This allows Sphinx to treat code-blocks with prompt "sage:" as
+    associated with the pycon lexer, and in particular, to change
+    "<BLANKLINE>" to a blank line.
+    """
+    default_priority = 500
+
+    def apply(self):
+        for node in self.document.findall(nodes.literal_block):
+            if node.get('language') is None and node.astext().startswith('sage:'):
+                node['language'] = 'ipycon'
+                source = node.rawsource
+                source = blankline_re.sub('', source)
+                node.rawsource = source
+                node[:] = [nodes.Text(source)]
+
+# This is only used by sage.misc.sphinxify
+
+
+def setup(app):
+    app.connect('autodoc-process-docstring', process_docstring_cython)
+    app.connect('autodoc-process-docstring', process_directives)
+    app.connect('autodoc-process-docstring', process_docstring_module_title)
+    app.connect('autodoc-process-docstring', process_dollars)
+    app.connect('autodoc-process-docstring', process_inherited)
+    app.connect('autodoc-process-docstring', skip_TESTS_block)
+
+    app.add_transform(SagemathTransform)

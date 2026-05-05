@@ -1,0 +1,707 @@
+)abbrev domain FR Factored
+++ Author: Robert S. Sutor
+++ Date Created: 1985
+++ Basic Operations:
+++   expand, factorList, factors, flagFactor, irreducibleFactor, primeFactor,
+++   nilFactor, sqfrFactor, numberOfFactors, makeFR, map, unit, unitNormalize
+++ Related Constructors: FactoredFunctionUtilities, FactoredFunctions2
+++ Also See:
+++ AMS Classifications: 11A51, 11Y05
+++ Keywords: factorization, prime, square-free, irreducible, factor
+++ References:
+++ Description:
+++   \spadtype{Factored} creates a domain whose objects are kept in
+++   factored form as long as possible.  Thus certain operations like
+++   multiplication and gcd are relatively easy to do.  Others, like
+++   addition require somewhat more work, and unless the argument
+++   domain provides a factor function, the result may not be
+++   completely factored.  Each object consists of a unit and a list of
+++   factors, where a factor has a member of R (the "base"), and
+++   exponent and a flag indicating what is known about the base.  A flag
+++   may be one of "nil", "sqfr", "irred" or "prime", which respectively mean
+++   that nothing is known about the base, it is square-free, it is
+++   irreducible, or it is prime.  The current
+++   restriction to integral domains allows simplification to be
+++   performed without worrying about multiplication order.
+
+Factored(R : IntegralDomain) : Exports == Implementation where
+  fUnion ==> Union("nil", "sqfr", "irred", "prime")
+  FF     ==> Record(flag : fUnion, factor : R, exponent : NonNegativeInteger)
+
+  Exports ==> Join(IntegralDomain, DifferentialExtension R, Algebra R,
+                   FullyEvalableOver R, FullyRetractableTo R) with
+    expand : % -> R
+      ++ expand(f) multiplies the unit and factors together, yielding an
+      ++ "unfactored" object. Note: this is purposely not called
+      ++ \spadfun{coerce} which would cause the interpreter to do this
+      ++ automatically.
+
+    makeFR  : (R, List FF) -> %
+      ++ makeFR(unit, listOfFactors) creates a factored object (for
+      ++ use by factoring code).
+
+    factorList : % -> List FF
+      ++ factorList(u) returns the list of factors with flags (for
+      ++ use by factoring code).
+
+    nilFactor : (R, NonNegativeInteger) -> %
+      ++ nilFactor(base, exponent) creates a factored object with
+      ++ a single factor with no information about the kind of
+      ++ base (flag = "nil").
+
+    factors : % -> List Record(factor : R, exponent : NonNegativeInteger)
+      ++ factors(u) returns a list of the factors in a form suitable
+      ++ for iteration. That is, it returns a list where each element
+      ++ is a record containing a base and exponent.  The original
+      ++ object is the product of all the factors and the unit (which
+      ++ can be extracted by \spad{unit(u)}).
+
+    irreducibleFactor : (R, NonNegativeInteger) -> %
+      ++ irreducibleFactor(base, exponent) creates a factored object with
+      ++ a single factor whose base is asserted to be irreducible
+      ++ (flag = "irred").
+
+    numberOfFactors : % -> NonNegativeInteger
+      ++ numberOfFactors(u) returns the number of factors in \spad{u}.
+
+    primeFactor : (R, NonNegativeInteger) -> %
+      ++ primeFactor(base, exponent) creates a factored object with
+      ++ a single factor whose base is asserted to be prime
+      ++ (flag = "prime").
+
+    sqfrFactor : (R, NonNegativeInteger) -> %
+      ++ sqfrFactor(base, exponent) creates a factored object with
+      ++ a single factor whose base is asserted to be square-free
+      ++ (flag = "sqfr").
+
+    flagFactor : (R, NonNegativeInteger, fUnion) -> %
+      ++ flagFactor(base, exponent, flag) creates a factored object with
+      ++ a single factor whose base is asserted to be properly
+      ++ described by the information flag.
+
+    unit :    % -> R
+      ++ unit(u) extracts the unit part of the factorization.
+
+    unitNormalize : % -> %
+      ++ unitNormalize(u) normalizes the unit part of the factorization.
+      ++ For example, when working with factored integers, this operation will
+      ++ ensure that the bases are all positive integers.
+
+    map :     (R -> R, %) -> %
+      ++ map(fn, u) maps the function \userfun{fn} across the factors of
+      ++ \spad{u} and creates a new factored object. Note: this clears
+      ++ the information flags (sets them to "nil") because the effect of
+      ++ \userfun{fn} is clearly not known in general.
+
+    mergeFactors : (%, %) -> %
+      ++ mergeFactors(u, v) is used when the factorizations of \spad{u}
+      ++ and \spad{v} are known to be disjoint, e.g. resulting from a
+      ++ content/primitive part split. Essentially, it creates a new
+      ++ factored object by multiplying the units together and appending
+      ++ the lists of factors.
+
+    -- the following operations are conditional on R
+
+    if R has GcdDomain then GcdDomain
+    if R has RealConstant then RealConstant
+    if R has UniqueFactorizationDomain then UniqueFactorizationDomain
+
+    if R has ConvertibleTo InputForm then ConvertibleTo InputForm
+
+    if R has IntegerNumberSystem then
+      rational?    : % -> Boolean
+        ++ rational?(u) tests if \spad{u} is actually a
+        ++ rational number (see \spadtype{Fraction Integer}).
+      rational     : % -> Fraction Integer
+        ++ rational(u) assumes \spad{u} is actually a rational number
+        ++ and does the conversion to rational number
+        ++ (see \spadtype{Fraction Integer}).
+      rationalIfCan : % -> Union(Fraction Integer, "failed")
+        ++ rationalIfCan(u) returns a rational number if u
+        ++ really is one, and "failed" otherwise.
+
+    if R has Eltable(%, %) then Eltable(%, %)
+    if R has Evalable(%) then Evalable(%)
+    if R has InnerEvalable(Symbol, %) then InnerEvalable(Symbol, %)
+
+  Implementation ==> add
+
+    -- For ordered R, the fct part is a sorted list.  Otherwise we
+    -- use quadratic loops to match factors.  Code assumes that
+    -- factors either are equal or coprime, this may fail if
+    -- factors of two different kinds meet in an operation.
+    -- Also, if R does not have unitNormalCanonical, then even
+    -- prime factors may be equivalent but unequal.
+    -- In principle for GcdDomain-s we could do gcd decomposition
+    -- to match and refine factors, but this is more expensive
+    -- than current implementation and not done.
+    Rep := Record(unt : R, fct : List FF)
+
+    if R has ConvertibleTo InputForm then
+      convert(x : %) : InputForm ==
+        empty?(lf := reverse factorList x) => convert(unit x)@InputForm
+        l := empty()$List(InputForm)
+        for rec in lf repeat
+          rec.factor = 1 => messagePrint("WARNING (convert$Factored):_
+ 1 should not appear as factor.")$OutputForm
+          iFactor := coerceToType(convert(rec.factor)@InputForm
+                                 )$InputFormFunctions1(R)
+          iExpon  : InputForm := convert(rec.exponent)@InputForm
+          iFun    : List InputForm :=
+            rec.flag case "nil" =>
+               [convert('nilFactor)@InputForm, iFactor, iExpon]$List(InputForm)
+            rec.flag case "sqfr" =>
+               [convert('sqfrFactor)@InputForm, iFactor, iExpon]$List(InputForm)
+            rec.flag case "prime" =>
+               [convert('primeFactor)@InputForm, iFactor, iExpon
+                     ]$List(InputForm)
+            rec.flag case "irred" =>
+               [convert('irreducibleFactor)@InputForm, iFactor, iExpon
+                     ]$List(InputForm)
+            []$List(InputForm)
+          l := concat( iFun pretend InputForm, l )
+--          l := concat(convert(rec.factor)@InputForm, l)
+--        l := concat(convert(rec.factor)@InputForm ^ rec.exponent, l)
+        empty? l => convert(unit x)@InputForm
+        if unit x ~= 1 then l := concat(convert(unit x)@InputForm, l)
+        empty? rest l => first l
+        binary(convert("*"::Symbol)@InputForm, l)@InputForm
+
+    ordered_R? := R has OrderedSet
+    comparable_R? := R has Comparable
+
+    has_order? := ordered_R? or (comparable_R? and R has Canonical)
+
+    compare(f1 : FF, f2 : FF) : Boolean ==
+        ordered_R? => f1.factor < f2.factor
+        comparable_R? => smaller?(f1.factor, f2.factor)
+        error "unimplemented"
+
+    group_terms!(l : List(FF)) : List(FF) ==
+        if comparable_R? then
+            l := sort!(compare, l)
+        has_order? => l
+        res : List(FF) := []
+        while not(empty?(l)) repeat
+            t1 := first(l)
+            res := cons(t1, res)
+            f1 := t1.factor
+            l := rest(l)
+            l1 : List(FF) := []
+            while not(empty?(l)) repeat
+                s1 := first(l)
+                l := rest(l)
+                s1.factor = f1 =>
+                    res := cons(s1, res)
+                l1 := cons(s1, l1)
+            l := reverse!(l1)
+        reverse!(res)
+
+  -- Private function signatures:
+    mkFF                    : (R, List FF) -> %
+    stricterFlag            : (fUnion, fUnion) -> fUnion
+
+    nilFactor(r, i)      == flagFactor(r, i, "nil")
+    sqfrFactor(r, i)     == flagFactor(r, i, "sqfr")
+    irreducibleFactor(r, i)      == flagFactor(r, i, "irred")
+    primeFactor(r, i)    == flagFactor(r, i, "prime")
+    unit? u              == (empty? u.fct) and (not zero? u.unt)
+    factorList u         == u.fct
+    unit u               == u.unt
+    numberOfFactors u    == # u.fct
+    0                    == [1, [["nil", 0, 1]$FF]]
+    zero? u              == size?(u.fct, 1) and
+                             first(u.fct).flag case "nil" and
+                              zero? first(u.fct).factor and
+                               (u.unt = 1)
+    1                    == [1, empty()]
+    one? u               == empty? u.fct and u.unt = 1
+    mkFF(r, x)           == [r, x]
+    coerce(j : Integer) : %  == (j::R)::%
+    characteristic()     == characteristic()$R
+    i : Integer * u : %      == (i :: %) * u
+    r : R * u : %            == (r :: %) * u
+    factors u            == [[fe.factor, fe.exponent] for fe in factorList u]
+    expand u == unit u * _*/[y.factor ^ y.exponent for y in factorList u]
+
+    makeFR(u, x) ==
+-- normalizing code to be installed when contents are handled better
+-- current squareFree returns the content as a unit part.
+--        if (not unit?(u)) then
+--            x := cons(["nil", u, 1]$FF, x)
+--            u := 1
+        u = 0 => 0
+        empty? x => mkFF(u, empty())
+        x := group_terms!(x)
+        while not empty? x and x.first.exponent = 0 repeat x := rest x
+        empty? x => mkFF(u, empty())
+        o := x -- o is the constant pointer that holds the list
+        p := x -- p is the pointer that points to the previous node of x
+        f := first p -- f is the node that p is pointing at
+        f.factor = 0 => 0
+        x := rest x  -- x is the pointer that iterates through the list
+        while not empty? x repeat
+            f1 := first x
+            f1.exponent = 0 or f1.factor = 1 =>
+                setrest!(p, rest x)
+                x := rest x
+            f1.factor = 0 => return 0
+            f1.factor = f.factor =>
+                f := [stricterFlag(f.flag, f1.flag), f.factor,
+                      f.exponent + f1.exponent]
+                setfirst!(p, f)
+                setrest!(p, rest x)
+                x := rest x
+            p := x
+            f := f1
+            x := rest x
+        unitNormalize mkFF(u, o)
+
+    if R has IntegerNumberSystem then
+      rational? x     == true
+      rationalIfCan x == rational x
+
+      rational x ==
+        convert(unit x)@Integer *
+           _*/[(convert(f.factor)@Integer)::Fraction(Integer)
+                                    ^ f.exponent for f in factorList x]
+
+    if R has Eltable(R, R) then
+      elt(x : %, v : %) == x(expand v)
+
+    if R has Evalable(R) then
+      eval(x : %, l : List Equation %) ==
+        eval(x, [expand lhs e = expand rhs e for e in l]$List(Equation R))
+
+    if R has InnerEvalable(Symbol, R) then
+      eval(x : %, ls : List Symbol, lv : List %) ==
+        eval(x, ls, [expand v for v in lv]$List(R))
+
+    if R has RealConstant then
+  --! negcount and rest commented out since RealConstant doesn't support
+  --! positive? or negative?
+  --  negcount: % -> Integer
+  --  positive?(x: %): Boolean == not(zero? x) and even?(negcount x)
+  --  negative?(x: %): Boolean == not(zero? x) and odd?(negcount x)
+  --  negcount x ==
+  --    n := count(s +-> negative?(s.factor), factorList x)$List(FF)
+  --    negative? unit x => n + 1
+  --    n
+
+      convert(x : %) : Float ==
+        convert(unit x)@Float *
+                _*/[convert(f.factor)@Float ^ f.exponent for f in factorList x]
+
+      convert(x : %) : DoubleFloat ==
+        convert(unit x)@DoubleFloat *
+          _*/[convert(f.factor)@DoubleFloat ^ f.exponent for f in factorList x]
+
+    ordered_mul(lu : List(FF), lv : List(FF)) : List(FF) ==
+        res : List FF := []
+        while not(empty?(lu)) and not(empty?(lv)) repeat
+            u1 := first lu; v1 := first lv
+            u1.factor = v1.factor =>
+                res := cons([stricterFlag(u1.flag, v1.flag),
+                             u1.factor, u1.exponent + v1.exponent], res)
+                lu := rest lu; lv := rest lv
+            compare(u1, v1) =>
+                res := cons(u1, res)
+                lu := rest(lu)
+            res := cons(v1, res)
+            lv := rest(lv)
+        concat!(reverse!(res), if empty? lu then lv else lu)
+
+    unordered_mul(lu : List(FF), lv : List(FF)) : List(FF) ==
+        res : List FF := []
+        for u1 in lu repeat
+            f1 := u1.factor
+            lv1 : List FF := []
+            factor_done := false
+            while not empty? lv repeat
+                v1 := first(lv)
+                lv := rest(lv)
+                f1 = v1.factor =>
+                    res := cons([stricterFlag(u1.flag, v1.flag),
+                                 u1.factor, u1.exponent + v1.exponent], res)
+                    factor_done := true
+                    break
+                lv1 := cons(v1, lv1)
+            if not(factor_done) then
+                res := cons(u1, res)
+            for v1 in lv1 repeat
+                lv := cons(v1, lv)
+        concat!(reverse!(res), lv)
+
+    u : % * v : % ==
+        zero? u or zero? v => 0
+        one? u => v
+        one? v => u
+        lu := copy(factorList(u)); lv := copy(factorList(v))
+        res : List FF :=
+            has_order? => ordered_mul(lu, lv)
+            unordered_mul(lu, lv)
+        mkFF(unit u * unit v, res)
+
+    u : % ^ n : NonNegativeInteger ==
+      n = 0 => 1
+      n = 1 => u
+      mkFF(unit(u)^n, [[x.flag, x.factor, n * x.exponent] for x in factorList u])
+
+    coerce(x : %) : OutputForm ==
+      empty?(lf := reverse factorList x) => (unit x)::OutputForm
+      l := empty()$List(OutputForm)
+      for rec in lf repeat
+        rec.factor = 1 => messagePrint "WARNING (coerce$Factored): 1 should not appear as factor."
+        rec.exponent = 1 =>
+          l := concat(rec.factor :: OutputForm, l)
+        l := concat(rec.factor::OutputForm ^ rec.exponent::OutputForm, l)
+      empty? l => (unit x) :: OutputForm
+      e :=
+        empty? rest l => first l
+        reduce(_*, l)
+      1 = unit x => e
+      (unit x)::OutputForm * e
+
+    retract(u : %) : R == expand u
+    retractIfCan(u : %) : Union(R, "failed") == expand(u)
+
+    stricterFlag(fl1, fl2) ==
+      fl1 case "prime"   => fl1
+      fl1 case "irred"   =>
+        fl2 case "prime" => fl2
+        fl1
+      fl1 case "sqfr"    =>
+        fl2 case "nil"   => fl1
+        fl2
+      fl2
+
+
+    if R has IntegerNumberSystem then
+
+        coerce(r : R) : % ==
+          factor(r)$IntegerFactorizationPackage(R) pretend %
+
+    else if R has UniqueFactorizationDomain then
+
+        coerce(r : R) : % ==
+            zero? r => 0
+            unit? r => mkFF(r, empty())
+            R has Field => error "zero divisor in a field"
+            unitNormalize(squareFree(r) pretend %)
+
+    else
+
+        coerce(r : R) : % ==
+            (r = 1) => 1
+            unitNormalize mkFF(1, [["nil", r, 1]$FF])
+
+    u = v ==
+        has_order? =>
+            unit u ~= unit v => false
+            lu := factorList u; lv := factorList v
+            while not empty? lu and not empty? lv repeat
+                u1 := first lu; v1 := first lv
+                u1.exponent ~= v1.exponent => return false
+                u1.factor ~= v1.factor => return false
+                lu := rest lu; lv := rest lv
+            empty? lu and empty? lv
+        expand(u) = expand(v)
+
+    - u ==
+      zero? u => u
+      mkFF(- unit u, factorList u)
+
+    recip u  ==
+      not empty? factorList u => "failed"
+      (r := recip unit u) case "failed" => "failed"
+      mkFF(r@R, empty())
+
+    flagFactor(r, i, fl) ==
+      zero? i => 1
+      zero? r => 0
+      unitNormalize mkFF(1, [[fl, r, i]$FF])
+
+    differentiate(u : %, deriv : R -> R) ==
+      ans := deriv(unit u) * mkFF(1, factorList u)
+      ans + (_+/[fact.exponent * deriv(fact.factor) *
+       ((u exquo nilFactor(fact.factor, 1))::%) for fact in factorList u])
+
+    map(fn, u) ==
+        l := concat(["nil", fn(unit u), 1]$FF, _
+                   [["nil", fn(f.factor), f.exponent]$FF for f in factorList u])
+        makeFR(1, l)
+
+    if R has OrderedSet then
+
+        mergeFactors(f, g) ==
+            mkFF(unit(f)*unit(g), merge(compare, factorList(f), factorList(g)))
+
+    else
+
+        mergeFactors(f, g) ==
+            mkFF(unit(f)*unit(g), append(factorList(f), factorList(g)))
+
+    do_ordered_exquo(lu : List(FF), lv : List(FF)
+                    ) : Union(List(FF), "failed") ==
+        res : List FF := []
+        while not empty? lu and not empty? lv repeat
+            u1 := first lu; v1 := first lv
+            u1.factor = v1.factor =>
+                expn := u1.exponent - v1.exponent
+                expn < 0 => return "failed"
+                if expn > 0 then
+                    nf : FF := [stricterFlag(u1.flag, v1.flag),
+                                     u1.factor, expn::NonNegativeInteger]
+                    res := cons(nf, res)
+                lu := rest lu; lv := rest lv
+            compare(u1, v1) =>
+                res := cons(u1, res)
+                lu := rest lu
+            return "failed"
+        not empty? lv => "failed"
+        concat!(reverse!(res), lu)
+
+    u exquo v ==
+        newunit := (unit(u) exquo unit(v))::R
+        lu := copy(factorList(u)); lv := factorList(v)
+        empty? lv => mkFF(newunit, lu)
+        has_order? =>
+            new_ff := do_ordered_exquo(lu, lv)
+            new_ff case "failed" => "failed"
+            mkFF(newunit, new_ff)
+        res : List FF := []
+        for v1 in lv repeat
+            factor_done := false
+            lu1 : List FF := []
+            while not empty? lu repeat
+                u1 := first lu
+                lu := rest(lu)
+                u1.factor = v1.factor =>
+                    expn := u1.exponent - v1.exponent
+                    expn < 0 => return "failed"
+                    if expn > 0 then
+                        nf : FF := [stricterFlag(u1.flag, v1.flag),
+                                         u1.factor, expn::NonNegativeInteger]
+                        res := concat(nf, res)
+                    factor_done := true
+                    break
+                lu1 := cons(u1, lu1)
+            not(factor_done) => return "failed"
+            for u1 in lu1 repeat
+                lu := cons(u1, lu)
+        mkFF(newunit, concat!(reverse! res, lu))
+
+    unitNormal u == -- does a bunch of work, but more canonical
+      (ur := recip(un := unit u)) case "failed" => [1, u, 1]
+      as := ur@R
+      vl := empty()$List(FF)
+      for x in factorList u repeat
+        ucar := unitNormal(x.factor)
+        e := x.exponent
+        un := un * (ucar.unit ^ e)
+        as := as * (ucar.associate ^ e)
+        if not ((ucar.canonical) = 1) then
+          vl := concat([x.flag, ucar.canonical, e], vl)
+      [mkFF(un, empty()), mkFF(1, reverse! vl), mkFF(as, empty())]
+
+    unitNormalize u ==
+      uca := unitNormal u
+      mkFF(unit(uca.unit)*unit(uca.canonical), factorList(uca.canonical))
+
+    if R has GcdDomain then
+      u + v ==
+        zero? u => v
+        zero? v => u
+        u1 := gcd(u, v)
+        eu1 := expand(u1)
+        ((expand(u) exquo eu1)::R + (expand(v) exquo eu1)::R) * u1
+
+      all_primes(lf : List(FF)) : Boolean ==
+          for f in lf repeat
+              fg := f.flag
+              if not(fg case "prime" or fg case "irred") then
+                  return false
+          true
+
+      all_sqf(lf : List(FF)) : Boolean ==
+          for f in lf repeat
+              fg := f.flag
+              if fg case "nil" then
+                  return false
+          true
+
+      gcd1(lu : List(FF), lv : List(FF)) : % ==
+          (nu, nv) := (#lu, #lv)
+          vr := new(nu + nv, 0)$Vector(R)
+          for f in lu for i in 1..nu repeat
+              vr(i) := f.factor
+          for f in lv for i in (nu + 1)..(nu + nv) repeat
+              vr(i) := f.factor
+          dr := gcdDecomposition(vr)$GcdBasis(R)
+          nfv := dr.basis
+          tr := dr.transform
+          res := []$List(FF)
+          fg : fUnion :=
+              all_sqf(lu) and all_sqf(lv) => "sqfr"
+              "nil"
+          for j in 1..#nfv repeat
+              nf := nfv(j)
+              unit?(nf) => iterate
+              eu := 0$NonNegativeInteger
+              for f in lu for i in 1..nu repeat
+                  eu := eu + f.exponent*qcoerce(tr(j, i))
+              eu = 0 => iterate
+              ev := 0$NonNegativeInteger
+              for f in lv for i in (nu + 1)..(nu + nv) repeat
+                  ev := ev + f.exponent*qcoerce(tr(j, i))
+              ev = 0 => iterate
+              res := cons([fg, nf, min(eu, ev)]$FF, res)
+          res :=
+              has_order? => group_terms!(res)
+              res
+          mkFF(1, res)
+
+      gcd(u, v) ==
+          one? u or one? v => 1
+          zero? u => v
+          zero? v => u
+          lu := factorList u; lv := factorList v
+          not(all_primes(lu) and all_primes(lv)) =>
+              gcd1(lu, lv)
+          res : List FF := []
+          (nu, nv) := (#lu, #lv)
+          if nu > nv then
+              (lu, lv) := (lv, lu)
+          for u1 in lu repeat
+              for v1 in lv repeat
+                  if u1.factor = v1.factor then
+                      res := cons([stricterFlag(u1.flag, v1.flag), u1.factor,
+                                   min(u1.exponent, v1.exponent)], res)
+                      break
+          mkFF(1, reverse! res)
+
+    else   -- R not a GCD domain
+      u + v ==
+        zero? u => v
+        zero? v => u
+        nilFactor(expand u + expand v, 1)
+
+    if R has UniqueFactorizationDomain then
+      prime? u ==
+          l := factorList u
+          size?(l, 1) and (l.first.exponent = 1) and (l.first.flag case "prime")
+
+)abbrev package FRUTIL FactoredFunctionUtilities
+++ Author:
+++ Basic Operations: refine
+++ Related Constructors: Factored
+++ Also See:
+++ AMS Classifications: 11A51, 11Y05
+++ Keywords: factor
+++ References:
+++ Description:
+++   \spadtype{FactoredFunctionUtilities} implements some utility
+++   functions for manipulating factored objects.
+FactoredFunctionUtilities(R) : Exports == Implementation where
+  R : IntegralDomain
+  FR ==> Factored R
+
+  Exports ==> with
+    refine : (FR, R -> FR) -> FR
+      ++ refine(u, fn) is used to apply the function \userfun{fn} to
+      ++ each factor of \spad{u} and then build a new factored
+      ++ object from the results.  For example, if \spad{u} were
+      ++ created by calling \spad{nilFactor(10, 2)} then
+      ++ \spad{refine(u, factor)} would create a factored object equal
+      ++ to that created by \spad{factor(100)} or
+      ++ \spad{primeFactor(2, 2) * primeFactor(5, 2)}.
+
+  Implementation ==> add
+    fUnion ==> Union("nil", "sqfr", "irred", "prime")
+    FF     ==> Record(flag : fUnion, factor : R, exponent : NonNegativeInteger)
+
+    refine(f, func) ==
+       u := unit(f)
+       l : List FF := empty()
+       for item in factorList f repeat
+         fitem := func item.factor
+         u := u*unit(fitem) ^ item.exponent
+         if item.exponent = 1 then
+            l := concat(factorList fitem, l)
+         else l := concat!([[v.flag, v.factor, v.exponent * item.exponent]
+                            for v in factorList fitem], l)
+       makeFR(u, l)
+
+)abbrev package FR2 FactoredFunctions2
+++ Author: Robert S. Sutor
+++ Date Created: 1987
+++ Basic Operations: map
+++ Related Constructors: Factored
+++ Also See:
+++ AMS Classifications: 11A51, 11Y05
+++ Keywords: map, factor
+++ References:
+++ Description:
+++   \spadtype{FactoredFunctions2} contains functions that involve
+++   factored objects whose underlying domains may not be the same.
+++   For example, \spadfun{map} might be used to coerce an object of
+++   type \spadtype{Factored(Integer)} to
+++   \spadtype{Factored(Complex(Integer))}.
+FactoredFunctions2(R, S) : Exports == Implementation where
+  R : IntegralDomain
+  S : IntegralDomain
+
+  Exports ==> with
+    map : (R -> S, Factored R) -> Factored S
+      ++ map(fn, u) is used to apply the function \userfun{fn} to every
+      ++ factor of \spad{u}. The new factored object will have all its
+      ++ information flags set to "nil". This function is used, for
+      ++ example, to coerce every factor base to another type.
+    map_preserving : (R -> S, Factored R) -> Factored S
+      ++ map_preserving(fn, u) is used to apply the function \userfun{fn}
+      ++ to every factor of \spad{u}.  The new factored object will
+      ++ have the same flags as original.
+
+  Implementation ==> add
+    fUnion ==> Union("nil", "sqfr", "irred", "prime")
+    FF     ==> Record(flag : fUnion, factor : S, exponent : NonNegativeInteger)
+    map(fn, u) ==
+        l := concat(["nil", fn(unit u), 1]$FF, _
+                   [["nil", fn(f.factor), f.exponent]$FF for f in factorList u])
+        makeFR(1, l)
+
+    map_preserving(fn, u) ==
+        nu := fn(unit(u))
+        nl := [[f.flag, fn(f.factor), f.exponent]$FF for f in factorList u]
+        makeFR(nu, nl)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

@@ -1,0 +1,57 @@
+)set break resume
+)expose UnittestCount UnittestAux Unittest
+
+testsuite "bugs2021"
+
+testcase "smaller? for arrays"
+
+aT := Vector(Complex(Integer))
+v1 := vector([0, 1])$aT
+v2 := vector([1, 0])$aT
+testTrue("smaller?(v1, v2)")
+
+testcase "complex to fractional power"
+
+testEquals("(-1 :: Complex(Float))^(1/2)", "%i")
+testEquals("(-1 :: Complex(Float))^(3/2)", "-%i")
+testEquals("(-1 :: Complex(DoubleFloat))^(1/2)", "%i")
+testEquals("(-1 :: Complex(DoubleFloat))^(3/2)", "-%i")
+
+testcase "predicates in rules"
+
+p1 := suchThat(x, (x : EXPR(INT)) : Boolean +-> even?(x))
+p2 := suchThat(x, (x : EXPR(INT)) : Boolean +-> odd?(x))
+
+op1 := operator(kernels(p1).1)
+op2 := operator(kernels(p2).1)
+
+testTrue("not(op1 = op2)")
+
+rl := rule
+  cos(y)^(x | even?(x)) == 1
+  cos(y)^(x | odd?(x)) == 0
+
+testEquals("rl(cos(x)^2)", "1")
+testEquals("rl(cos(x)^3)", "0")
+
+testcase "hash in List"
+
+a := [1]
+b := [2]
+testEquals("hash(a)", "hash(a)")
+testTrue("not(hash(a) = hash(b))")
+
+testcase "changing result of solve"
+
+eq1 := %pi/2 - asin(n/2) = asin(n)
+s1 := solve(eq1, n)
+testEquals("(s2 := solve(eq1, n))", "s1")
+subst(eq1,s2.1)::Equation Expression Float
+subst(eq1,s2.2)::Equation Expression Float
+-- clearing caused trouble
+)clear all
+eq1 := %pi/2 - asin(n/2) = asin(n)
+s1 := solve(eq1, n)
+testEquals("(s2 := solve(eq1, n))", "s1")
+
+statistics()

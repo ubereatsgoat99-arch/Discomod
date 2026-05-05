@@ -1,0 +1,51 @@
+Function: matmodhnf
+Section: linear_algebra
+C-Name: matmodhnf
+Prototype: GGD&
+Help: matmodhnf(A,H, {&Q}): reduce the column vector or matrix A modulo the HNF
+ matrix H (integral, square, with positive diagonal elements). If Q is
+ present, set it to the matrix such that A = H*Q + R, where R is the reduction.
+Doc: reduce the column vector $A$ modulo the HNF matrix $H$. We
+ assume that $H$ is integral, square, upper triangular with positive
+ diagonal entries; but it need not be an actual HNF (off-diagonal entries
+ may not be reduced).
+
+ If $Q$ is present, set it to the integral column vector such that $A = HQ +
+ R$, where $R$ is the reduction. The reduction satisfies $0 \leq R[i] <
+ H[i,i]$ for all $i$: both $Q$ and $R$ are uniquely defined. For convenience,
+
+ \item a \emph{row} vector $A$ is allowed, in which case $Q$ and $R$ are now
+ \emph{row} vectors such that ${}^{t} A = H{}^{t} Q + {}^{t} R$.
+
+ \item a \emph{row} or \emph{column} vector $H$ is allowed , in which case it
+ is understood as the diagonal matrix whose diagonal was given. For instance,
+ we can input the vector of elementary divisors \kbd{$G$.cyc} attached to a
+ finite abelian group $G$.
+
+ \item a \emph{matrix} $A$ is allowed, in which case we define
+ $A_i = H Q_i + R_i$ for all $i$, where $X_i$ is the $i$-the column of the
+ matrix $X$. We now have the matrix equality $A = HQ + R$.
+
+ \bprog
+ ? A = [4, 3]~; H = [3, 1; 0, 2];
+ ? matmodhnf(A, H)
+ %2 = [0, 1]~
+ ? R = matmodhnf(A, H, &Q); [Q, R]
+ %3 = [[1, 1]~, [0, 1]~]
+ ? A == H*Q + R
+ %4 = 1
+
+ ? matmodhnf([4, 3], H) \\ row vector input
+ %5 = [0, 1] \\ ... and result
+
+ ? matmodhnf(A, [3,2]) \\ modulo diagonal matrix
+ %6 = [1, 1]~
+
+ ? B = [5, 6; 1, 2]; R = matmodhnf(B, H, &Q) \\ matrix input
+ %7 =
+ [2 2]
+
+ [1 0]
+ ? B == H*Q + R
+ %8 = 1
+ @eprog

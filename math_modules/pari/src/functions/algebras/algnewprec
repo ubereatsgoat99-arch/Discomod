@@ -1,0 +1,8 @@
+Function: algnewprec
+Section: algebras
+C-Name: algnewprec
+Prototype: Gp
+Help: algnewprec(al): returns a copy of the algebra structure al using the
+ current (usually larger) precision.
+Doc: Returns a copy of the algebra \kbd{al} using the current (usually larger)
+ precision.

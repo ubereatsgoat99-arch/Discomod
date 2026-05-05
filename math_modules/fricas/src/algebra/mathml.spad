@@ -1,0 +1,943 @@
+)if false
+\documentclass{article}
+\usepackage{axiom}
+\begin{document}
+\title{\$SPAD/src/algebra mathml.spad}
+\author{Arthur C. Ralfs}
+\maketitle
+\begin{abstract}
+MathMLFormat is a package to produce presentation mathematical
+markup language from OutputForm.
+\end{abstract}
+\eject
+\tableofcontents
+\eject
+\section{Preface}
+
+Both this code and documentation are still under development and
+I don't pretend they are anywhere close to perfect or even finished.
+However the code does work and I hope it might be useful to somebody
+both for its ability to output MathML from FriCAS and as an example
+of how to write a new output form.
+
+\section{Introduction to Mathematical Markup Language}
+
+MathML exists in two forms : presentation and content.
+At this time (2007-02-11) the package only has a presentation
+package.  A content package is in the
+works however it is more difficult.  Unfortunately FriCAS does
+not make its semantics easily available.  The \spadtype{OutputForm}
+domain mediates between the individual FriCAS domains and the
+user visible output but \spadtype{OutputForm} does not provide full
+semantic information.  From my currently incomplete understanding
+of FriCAS it appears that remedying this would entail going back
+to the individual domains and rewriting a lot of code.
+However some semantics are conveyed directly by \spadtype{OutputForm} and other
+things can be deduced from \spadtype{OutputForm} or from the original
+user command.
+
+\section{Displaying MathML}
+
+The MathML string produced by ")set output mathml on" can be pasted
+directly into an appropriate xhtml page and then viewed in Firefox
+or some other MathML aware browser. The boiler plate code needed for
+a test page, testmathml.xml, is:
+
+\begin{verbatim}
+<?xml version="1.0" ?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 plus MathML 2.0//EN"
+                      "http://www.w3.org/Math/DTD/mathml2/xhtml-math11-f.dtd" [
+<!ENTITY mathml "http://www.w3.org/1998/Math/MathML">
+]>
+
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xlink="http://www.w3.org/1999/xlink" >
+
+
+  <head>
+    <title>MathML Test </title>
+  </head>
+
+  <body>
+
+  </body>
+</html>
+\end{verbatim}
+
+
+Paste the MathML string into the body element and it should display
+nicely in Firefox.
+
+\section{Test Cases}
+
+The testing is made using {\tt of.input} test file.
+
+\section{)set output mathml on}
+
+
+Making mathml appear as output during a normal FriCAS session
+by invoking ")set output mathml on" proved to be a bit tedious
+and seems to be undocumented.  I document my experience here
+in case it proves useful to somebody else trying to get a new
+output format from FriCAS.
+
+In \spadtype{MathMLFormat} the functions
+\spadfun{coerce(expr : OutputForm) : String} and
+\spadfun{display(s : String) : Void} provide the desired mathml output.
+Note that this package was constructed by close examination of
+Robert Sutor's \spadtype{TexFormat} domain and much remains from that source.
+To have mathml displayed as output we need to get FriCAS to
+call display(coerce(expr)) at the appropriate place.  Here's what
+I did to get that to happen. Note that my starting point here was
+an attempt by Andrey Grozin to do the same.  To figure things out
+I searched through files for "tex" to see what was done for the
+\spadtype{TexFormat} domain, and used grep to find which files had mention of
+\spadtype{TexFormat}.
+
+\subsection{File src/interp/setvars.boot}
+
+
+  Create an output mathml section by analogy to the tex section.
+Remember to add the code chunk "outputmathmlCode" at the end.
+
+The relevant code chunks appearing in "setvars.boot" are:
+\begin{verbatim}
+    outputmathmlCode
+    setOutputMathml
+    describeSetOutputMathml
+\end{verbatim}
+and the relevant variables are:
+\begin{verbatim}
+    setOutputMathml
+    $mathmlOutputStream
+    $mathmlOutputFile
+    $mathmlFormat
+    describeSetOutputMathml
+\end{verbatim}
+
+\subsection{File setvart.boot}
+
+
+Create an output mathml section in "setvart.boot" again
+patterned after the tex section.  I changed the default file
+extension from ".stex" to ".smml".
+
+To the "section{output}" table I added the line
+\begin{verbatim}
+   mathml                  created output in MathML style       Off : CONSOLE
+\end{verbatim}
+Added the code chunk "outputmathml" to the code chunk "output"
+in "section{output}".
+
+Relevant code chunks:
+\begin{verbatim}
+         outputmathml
+\end{verbatim}
+Relevant variables:
+\begin{verbatim}
+         setOutputMathml
+         $mathmlFormat
+         $mathmlOutputFile
+\end{verbatim}
+
+Note when copying the tex stuff I changed occurrences of "tex"
+to "mathml", "Tex" to "Mathml" and "TeX" to "MathML".
+
+\subsection{File src/algebra/Makefile.in}
+
+
+The file "src/algebra/tex.spad" contains
+the domain \spadtype{TexFormat} (TEX) and the package
+\spadtype{TexFormat1} (TEX1).
+However the sole function of \spadtype{TexFormat1} is to \spadfun{coerce}
+objects from a domain into \spadtype{OutputForm} and then apply
+\spadtype{TexFormat}
+to them.  It is to save programmers the trouble of doing
+the coercion themselves from inside spad code.  It does
+not appear to be used for the main purpose of delivering
+FriCAS output in TeX format.  In order to keep the mathml
+package as simple as possible, and because I didn't see much
+use for this, I didn't copy the \spadtype{TexFormat1} package.  So
+no analog of the TEX1 entries in "Makefile.in" were
+needed.
+
+Added appropriate lines to "SPADFILES".
+
+\subsection{File src/algebra/exposed.lsp}
+
+Add the line "(|MathMLFormat| . MMLFORM)"
+
+\subsection{File interp/i-output.boot}
+
+
+This is where the \spadfun{coerce} and \spadfun{display} functions
+from MathMLFormat
+actually get called.  The following was added:
+
+\begin{verbatim}
+mathmlFormat expr ==
+  mml := '(MathMLFormat)
+  mmlrep := '(String)
+  formatFn := getFunctionFromDomain("coerce",mml,[$OutputForm])
+  displayFn := getFunctionFromDomain("display",mml,[mmlrep])
+  SPADCALL(SPADCALL(expr, formatFn), displayFn)
+  TERPRI $mathmlOutputStream
+  FORCE_-OUTPUT $mathmlOutputStream
+  NIL
+\end{verbatim}
+
+Note that compared to the texFormat function there are a couple
+of differences.  Since \spadtype{MathMLFormat} is currently a package rather
+than a domain there is the "mmlrep" variable whereas in texFormat
+the argument of the "display" function is an instance of the
+domain.  Also the \spadfun{coerce} function here only has one argument,
+namely "\$OutputForm".
+
+Also for the function "output(expr,domain)" add lines for mathml,
+e.g. "if \$mathmlFormat then mathmlFormat expr".
+
+After these changes FriCAS compiled with mathml enabled under
+)set output.
+
+\section{package MMLFORM MathMLFormat}
+
+\subsection{Public Declarations}
+
+The declarations
+\begin{verbatim}
+  E      ==> OutputForm
+  I      ==> Integer
+  L      ==> List
+  S      ==> String
+  US     ==> UniversalSegment(Integer)
+\end{verbatim}
+provide abbreviations for domains used heavily in the code.
+The publicly exposed functions are:
+
+    \spadfun{coerce : E -$>$ S}  This function is the main one for converting
+an expression in domain OutputForm into a MathML string.
+
+    \spadfun{coerceS : E -$>$ S}  This function is for use from the command line.
+It converts an OutputForm expression into a MathML string and does
+some formatting so that the output is not one long line.  If you take
+the output from this function, stick it in an emacs buffer in
+nxml-mode and then indent according to mode, you'll get something that's
+nicer to look at than what comes from coerce. Note that coerceS returns
+the same value as coerce but invokes a display function as well so that
+the result will be printed twice in different formats.  The need for this
+is that the output from coerce is automatically formatted with line breaks
+by FriCAS' output routine that are not in the right place.
+
+    \spadfun{coerceL : E -$>$ S}  Similar to coerceS except that the displayed result
+is the MathML string in one long line.  These functions can be used,
+for instance, to get the MathML for the previous result by typing
+coerceL(%)\$MMLFORM.
+
+    \spadfun{exprex : E -$>$ S}  Converts \spadtype{OutputForm} to
+\spadtype{String} with
+the structure preserved with braces.  This is useful in developing this
+package. Actually this is not quite accurate.  The function
+\spadfun{precondition} is first applied to the \spadtype{OutputForm}
+expression before \spadfun{exprex}.   Raw \spadtype{OutputForm} and the nature
+of the \spadfun{precondition} function is still obscure to me at the time of
+this writing (2007-02-14), however I probably need to understand it to make
+sure I'm not missing any semantics.  The spad function \spadfun{precondition}
+is just a wrapper for the lisp function outputTran2\$Lisp, which I guess is
+compiled from boot.
+
+    \spadfun{display : S -$>$ Void}  This one prints the string returned by coerce as one
+long line, adding "math" tags: <math ...$>$ ... </math$>$.  Thus the output
+from this can be stuck directly into an appropriate html/xhtml page and will
+be displayed nicely by a MathML aware browser.
+
+    \spadfun{displayF : S -$>$ Void}  This function doesn't exist
+yet but it would be nice
+to have a humanly readable formatted output as well.  The basics do exist in
+the coerceS function however the formatting still needs some work to be
+really good.
+
+\subsubsection{Formatting Functions}
+
+Still need to format \\zag in formatSpecial!
+
+In formatPlex the case op = "INTSIGN" is now passed off to
+formatIntSign which is a change from the TexFormat domain.
+This is done here for presentation mark up to replace the
+ugly bound variable that FriCAS delivers.  For content mark up
+this has to be done anyway.
+
+In the function formatSpecial various cases are handled including
+SUB and SUPERSUB.  These cases are now caught in formatMml and so
+the code in formatSpecial doesn't get executed.  The only cases
+I know of using these are partial derivatives for SUB and ordinary
+derivatives or SUPERSUB however in TexFormat the capability is there
+to handle multiscripts, i.e. an object with subscripts, superscripts,
+pre-subscripts and pre-superscripts but I am so far unaware of any
+FriCAS command that produces such a multiscripted object.
+
+Another question is how to represent derivatives.  At present I have
+differential notation for partials and prime notation for ordinary
+derivatives,
+but it would be nice to allow for different derivative notations in
+different circumstances, maybe some options to )set output mathml on.
+
+Ordinary derivatives are formatted in formatSuperSub and there are
+2 versions, formatSuperSub and formatSuperSub1, which at this point
+have to be switched by swapping names.
+)endif
+
+)abbrev domain MMLFORM MathMLFormat
+++ Author: Arthur C. Ralfs
+++ Date: January 2007
+++ This package is based on the TeXFormat domain by Robert S. Sutor
+++ without which I wouldn't have known where to start.
+++ Basic Operations: coerce, coerceS, coerceL, display
+++ Description:
+++    \spadtype{MathMLFormat} provides a coercion from \spadtype{OutputForm}
+++    to MathML format.
+
+MathMLFormat() : public == private where
+  E      ==> OutputForm
+  I      ==> Integer
+  L      ==> List
+  S      ==> String
+  SY     ==> Symbol
+  US     ==> UniversalSegment(Integer)
+
+  public == SetCategory with
+    coerce :    E -> S
+      ++ coerce(o) changes o in the standard output format to MathML
+      ++ format.
+    coerceS :   E -> S
+      ++ coerceS(o) changes o in the standard output format to MathML
+      ++ format and displays formatted result.
+    coerceL :   E -> S
+      ++ coerceL(o) changes o in the standard output format to MathML
+      ++ format and displays result as one long string.
+    display :   S -> Void
+      ++ prints the string returned by coerce, adding <math ...> tags.
+
+  private == add
+    import from OutputForm
+    import from Character
+    import from Integer
+    import from List OutputForm
+    import from List String
+    import from OutputFormTools
+
+    sayMsg ==> say$DisplayPackage
+
+    -- local variable declarations and definitions
+
+    expr : E
+    prec, opPrec : I
+    str :  S
+    blank         : S := " \  "
+
+    maxPrec       : I   := 1000000
+    minPrec       : I   := 0
+
+    unaryOps      : L(SY) := ["-"::SY]
+    unaryPrecs    : L I := [710]$(L I)
+
+    -- the precedence of / in the following is relatively low because
+    -- the bar obviates the need for parentheses.
+    binaryOps   : L(SY) := ["+->"::SY, "|"::SY, "^"::SY, "/"::SY, "="::SY,
+                             "~="::SY, "<"::SY, "<="::SY, ">"::SY, ">="::SY,
+                               'OVER, 'LET]
+    binaryPrecs   : L I := [0, 0, 900, 700, 400,
+                            400, 400, 400, 400, 400,
+                              700, 125]$(L I)
+
+    naryOps     : L(SY) := ["-"::SY, "+"::SY, "*"::SY, ","::SY, ";"::SY,
+                             'ROW, 'STRSEP, 'TENSOR]
+    naryPrecs     : L I := [700, 700, 800, 110, 110,
+                            0, 0, 850]$(L I)
+    naryNGOps   : L(SY) := ['ROW]
+
+    plexOps     : L(SY) := ['SIGMA, 'SIGMA2, 'PI, 'PI2, 'INTSIGN]
+    plexPrecs     : L I := [ 750, 750, 750, 750, 700]$(L I)
+
+    specialOps  : L(SY) := ['MATRIX, 'BRACKET, 'BRACE, 'CONCATB, 'VCONCAT,  _
+                             'AGGLST, 'CONCAT, 'OVERBAR, 'ROOT, 'SUB, _
+                             "~>"::Symbol, _
+                             'SUPERSUB, 'ZAG, 'AGGSET, 'SC, 'PAREN, _
+                             'SEGMENT, 'QUOTE, 'theMap, 'SLASH, 'PRIME, _
+                             'BOX, 'EQUATNUM, 'BINOMIAL, 'NOTHING]
+
+    -- the next two lists provide translations for some strings for
+    -- which MML provides special macros.
+
+    specialStrings : L(SY) :=
+      ['cos, 'cot, 'csc, 'log, 'sec, 'sin, 'tan,
+        'cosh, 'coth, 'csch, 'sech, 'sinh, 'tanh,
+          'acos, 'asin, 'atan, 'erf, "..."::SY, "$"::SY, 'infinity,
+            'Gamma]
+    specialStringsInMML : L S :=
+      ["<mo>cos</mo>","<mo>cot</mo>","<mo>csc</mo>","<mo>log</mo>","<mo>sec</mo>","<mo>sin</mo>","<mo>tan</mo>",
+        "<mo>cosh</mo>","<mo>coth</mo>","<mo>csch</mo>","<mo>sech</mo>","<mo>sinh</mo>","<mo>tanh</mo>",
+          "<mo>arccos</mo>","<mo>arcsin</mo>","<mo>arctan</mo>","<mo>erf</mo>","<mo>&#x2026;</mo>","<mo>$</mo>","<mo>&#x221E;</mo>","<mo>&#x0413;</mo>"]
+
+    -- local function signatures
+
+    addBraces :      S -> S
+    addBrackets :    S -> S
+    displayElt :     S -> Void
+      ++ function for recursively displaying mathml nicely formatted
+    eltLimit :       (S, I, S) -> I
+      ++ demarcates end position of mathml element with name: S starting at
+      ++ position i: I in mathml string s: S and returns end of end tag as
+      ++  i: I position in mathml string, i.e. find start and end of
+      ++  substring:  <name ...>...</name>
+    eltName :        (I, S) -> S
+      ++ find name of mathml element starting at position i: I in string s: S
+    group :          S -> S
+    formatBinary :   (SY, L(E), I) -> S
+    formatFunction : (E, L E, I) -> S
+    formatMatrix :   L E -> S
+    formatNary :     (SY, S, I, L(E), I) -> S
+    formatNaryNoGroup : (SY, S, I, L(E), I) -> S
+    formatNullary :  SY -> S
+    formatPlex :     (SY, L(E), I) -> S
+    formatSpecial :  (SY, L(E), I) -> S
+    formatUnary :    (SY, E, I) -> S
+    formatExpr :      (E, I) -> S
+
+    formatPrime : (L E, I) -> S
+    formatSub :      (E, L E, I) -> S
+    formatSuperSub : (E, L E, I) -> S
+    newWithNum :     I -> %
+    parenthesize :   S -> S
+
+    postcondition :  S -> S
+      -- this function is applied after all other OutputForm -> MathML
+      -- transformations.  In the TexFormat domain the ungroup function
+      -- first peels off the outermost set of braces however I have
+      -- replaced braces with <mrow>s here and sometimes the outermost set
+      -- of <mrow>s is necessary to get proper display in Firefox.  For
+      -- instance with getting the correct size of brackets on a matrix
+      -- the whole expression needs to be enclosed in a mrow element.
+      -- It also checks for +- and removes the +.
+
+    tagEnd :         (S, I, S) -> I
+      ++  finds closing ">" of start or end tag for mathML element
+    ungroup :        S -> S
+
+    -- public function definitions
+
+    coerce(expr : E) : S ==
+      s : S := postcondition formatExpr(precondition expr, minPrec)
+      s
+
+    sayExpr(s : S) : Void ==
+        sayMathML$Lisp s
+
+    coerceS(expr : E) : S ==
+        s : S := postcondition formatExpr(precondition expr, minPrec)
+        sayExpr "<math xmlns=_"http://www.w3.org/1998/Math/MathML_" mathsize=_"big_" display=_"block_">"
+        displayElt(s)
+        sayExpr "</math>"
+        s
+
+    coerceL(expr : E) : S ==
+        s : S := postcondition formatExpr(precondition expr, minPrec)
+        sayExpr "<math xmlns=_"http://www.w3.org/1998/Math/MathML_" mathsize=_"big_" display=_"block_">"
+        sayExpr s
+        sayExpr "</math>"
+        s
+
+    display(mathml : S) : Void ==
+        sayExpr "<math xmlns=_"http://www.w3.org/1998/Math/MathML_" mathsize=_"big_" display=_"block_">"
+        sayExpr mathml
+        sayExpr "</math>"
+        void()$Void
+
+
+
+    displayElt(mathML : S) : Void ==
+      -- Takes a string of syntactically complete mathML
+      -- and formats it for display.
+--      sayMsg "****displayElt1****"
+--      sayMsg mathML
+      enT:I -- marks end of tag, e.g. "<name>"
+      enE:I -- marks end of element, e.g. "<name> ... </name>"
+      end : I -- marks end of mathML string
+      u : US
+      end := #mathML
+      length : I := 60
+--      sayMsg "****displayElt1.1****"
+      name : S := eltName(1, mathML)
+--      sayMsg name
+--      sayMsg concat("****displayElt1.2****",name)
+      enE := eltLimit(name, 2+#name, mathML)
+--      sayMsg "****displayElt2****"
+      if enE < length then
+--        sayMsg "****displayElt3****"
+        u := segment(1, enE)$US
+        sayMsg mathML.u
+      else
+--        sayMsg "****displayElt4****"
+        enT := tagEnd(name, 1, mathML)
+        u := segment(1, enT)$US
+        sayMsg mathML.u
+        u := segment(enT+1, enE-#name-3)$US
+        displayElt(mathML.u)
+        u := segment(enE-#name-2, enE)$US
+        sayMsg mathML.u
+      if end > enE then
+--        sayMsg "****displayElt5****"
+        u := segment(enE+1, end)$US
+        displayElt(mathML.u)
+
+      void()$Void
+
+    eltName(pos : I, mathML : S) : S ==
+      -- Assuming pos is the position of "<" for a start tag of a mathML
+      -- element finds and returns the element's name.
+      i : I := pos+1
+      --sayMsg "eltName:mathmML string: "mathML
+      while member?(mathML.i, lowerCase()$CharacterClass)$CharacterClass repeat
+         i := i+1
+      u : US := segment(pos+1, i-1)
+      name : S := mathML.u
+
+    eltLimit(name : S, pos : I, mathML : S) : I ==
+      -- Finds the end of a mathML element like "<name ...> ... </name>"
+      -- where pos is the position of the space after name in the start tag
+      -- although it could point to the closing ">".  Returns the position
+      -- of the ">" in the end tag.
+      pI : I := pos
+      startI : I
+      endI : I
+      startS:S := concat ["<",name]
+      endS:S := concat ["</",name,">"]
+      level : I := 1
+      --sayMsg "eltLimit: element name: "name
+      while (level > 0) repeat
+        startI := position(startS, mathML, pI)$String
+
+        endI := position(endS, mathML, pI)$String
+
+        if (startI = 0) then
+          level := level-1
+          --sayMsg "****eltLimit 1******"
+          pI := tagEnd(name, endI, mathML)
+        else
+          if (startI < endI) then
+            level := level+1
+            pI := tagEnd(name, startI, mathML)
+          else
+            level := level-1
+            pI := tagEnd(name, endI, mathML)
+      pI
+
+
+    tagEnd(name : S, pos : I, mathML : S) : I ==
+      -- Finds the closing ">" for either a start or end tag of a mathML
+      -- element, so the return value is the position of ">" in mathML.
+      pI : I := pos
+      while  (mathML.pI ~= char ">") repeat
+        pI := pI+1
+      --u : US := segment(pos, pI)$US
+      --sayMsg "tagEnd: "mathML.u
+      pI
+
+    ungroup(str : S) : S ==
+      len : I := #str
+      len < 14 => str
+      lrow : S :=  "<mrow>"
+      rrow : S :=  "</mrow>"
+      -- drop leading and trailing mrows
+      u1 : US := segment(1, 6)$US
+      u2 : US := segment(len-6, len)$US
+      if (str.u1 =$S lrow) and (str.u2 =$S rrow) then
+        u : US := segment(7, len-7)$US
+        str := str.u
+      str
+
+    postcondition(str : S) : S ==
+--      str := ungroup str
+      len : I := #str
+      plusminus : S := "<mo>+</mo><mo>-</mo>"
+      pos : I := position(plusminus, str, 1)
+      if pos > 0 then
+        ustart : US := segment(1, pos-1)$US
+        uend : US := segment(pos+20, len)$US
+        str := concat [str.ustart,"<mo>-</mo>",str.uend]
+        if pos < len-18 then
+          str := postcondition(str)
+      str
+
+
+
+    optionalWrap(expr : E) : S ==
+        tmp : S := formatExpr(expr, minPrec)
+        tmp = "" or tmp = " " => "<none/>"
+        concat ["<mrow>", tmp, "</mrow>"]
+
+    group str ==
+      concat ["<mrow>",str,"</mrow>"]
+
+    addBraces str ==
+      concat ["<mo>{</mo>",str,"<mo>}</mo>"]
+
+    addBrackets str ==
+      concat ["<mo>[</mo>",str,"<mo>]</mo>"]
+
+    parenthesize str ==
+      concat ["<mo>(</mo>",str,"<mo>)</mo>"]
+
+    formatSpecial(op : SY, args : L(E), prec : I) : S ==
+        arg : E
+        op = 'theMap => "<mtext>theMap(...)</mtext>"
+        op = 'AGGLST =>
+            formatNary(","::SY, "", 0, args, prec)
+        op = 'AGGSET =>
+            formatNary(";"::SY, "", 0, args, prec)
+        op = "~>"::Symbol =>
+            group concat [formatExpr(first args, prec),
+                          "<mo>&#x021DD;</mo>",
+                            formatExpr(second args, prec)]
+                         --RightArrow
+        op = 'SLASH =>
+            group concat [formatExpr(first args, prec),
+                          "<mo>/</mo>", formatExpr(second args,prec)]
+        op = 'VCONCAT =>
+            group concat ["<mtable><mtr>",
+                          concat([concat ["<mtd>", formatExpr(u, minPrec),
+                                          "</mtd>"] for u in args]::L S),
+                            "</mtr></mtable>"]
+        op = 'CONCATB =>
+            formatNary('STRSEP, " ", 0, args, minPrec)
+        op = 'CONCAT =>
+            formatNary('STRSEP, "", 0, args, minPrec)
+        op = 'QUOTE =>
+            group concat("<mo>'</mo>", formatExpr(first args, minPrec))
+        op = 'BRACKET =>
+            group addBrackets ungroup formatExpr(first args, minPrec)
+        op = 'BRACE =>
+            group addBraces ungroup formatExpr(first args, minPrec)
+        op = 'PAREN =>
+            group parenthesize ungroup formatExpr(first args, minPrec)
+        op = 'PRIME =>
+            formatPrime(args, prec)
+        op = 'OVERBAR =>
+            empty?(args) => ""
+            group concat ["<mover accent='true'><mrow>",
+                          formatExpr(first args, minPrec),
+                           "</mrow><mo stretchy='true'>&#x000AF;</mo></mover>"]
+        op = 'ROOT =>
+            empty?(args) => ""
+            tmp : S := group formatExpr(first args, minPrec)
+            empty?(rest(args)) => concat ["<msqrt>", tmp, "</msqrt>"]
+            group concat ["<mroot><mrow>", tmp, "</mrow>",
+                          formatExpr(first rest args, minPrec), "</mroot>"]
+        op = 'SEGMENT =>
+            tmp : S := concat [formatExpr(first args, minPrec), "<mo>..</mo>"]
+            group
+                empty?(rest(args)) => tmp
+                concat [tmp, formatExpr(first rest args, minPrec)]
+        op = 'SUB =>
+            group concat ["<msub>", formatExpr(first args, minPrec),
+                formatSpecial('AGGLST, rest args, minPrec), "</msub>"]
+        op = 'SUPERSUB =>
+            base : S := concat["<mrow>", formatExpr(first args, minPrec),
+                               "</mrow>"]
+            args := rest args
+            n := #args
+            n > 4 => error "multiscript object has more than 4 scripts"
+            tmp1 := optionalWrap(args(1))
+            n = 1 => concat ["<msub>", base, tmp1, "</msub>"]
+            tmp2 := optionalWrap(args(2))
+            n = 2 => concat ["<msubsup>", base, tmp1, tmp2, "</msubsup>"]
+            tmp3 := optionalWrap(args(3))
+            base := concat ["<mmultiscripts>", base, tmp1, tmp2,
+                            "<mprescripts/>", tmp3]
+            n = 3 => concat [base, "<none/></mmultiscripts>"]
+            concat [base, optionalWrap(args(4)), "</mmultiscripts>"]
+        op = 'SC =>
+            -- need to handle indentation someday
+            empty?(args) => ""
+            tmp := formatNaryNoGroup('STRSEP, "</mtd></mtr><mtr><mtd>",
+                                     800, args, minPrec)
+            group concat ["<mtable><mtr><mtd>", tmp, "</mtd></mtr></mtable>"]
+        op = 'MATRIX => formatMatrix rest args
+        op = 'BOX =>
+            empty?(args) => ""
+            tmp := formatNaryNoGroup('STRSEP, "", 0, args, minPrec)
+            group concat ["<mtable frame=_"solid_"><mtr><mtd>", tmp,
+                          "</mtd></mtr></mtable>"]
+        op = 'EQUATNUM =>
+            concat ["<mtable><mtr><mtd>", formatExpr(args.1, minPrec),
+                    "</mtd><mtd style=_"padding-left: 50px;_">",
+                      formatExpr(args.2, minPrec), "</mtd></mtr></mtable>"]
+        op = 'BINOMIAL =>
+            -- binomial('f: OutputForm, 'z: OutputForm) produces
+            -- (BINOMIAL f z)
+            concat ["<mrow><mo stretchy=_"true_">(</mo>",
+                    "<mfrac linethickness=_"0_">",
+                      formatExpr(args.1, minPrec),
+                        formatExpr(args.2, minPrec),
+                          "</mfrac><mo>)</mo></mrow>"]
+        op = 'NOTHING => "<none/>"
+        op = 'ZAG =>
+            concat ["<mtable><mtr><mtd style=_"border-right: solid 1px black;",
+             " border-bottom: solid 1px black; padding-right: 2px;",
+              " padding-left: 2px;_">", formatExpr(first args, minPrec),
+               "</mtd></mtr><mtr><mtd style=_"border-left: solid 1px black;",
+                 " padding-left: 2px; padding-right: 2px;_">",
+                   formatExpr(first rest args, minPrec),
+                     "</mtd></mtr></mtable>"]
+        concat ["<mtext>not done yet for: ", string(op),"</mtext>"]
+
+    -- this produces prime notation ordinary derivatives.
+    formatPrime(args : L E, prec : I) : S ==
+        arg2 := second(args)
+        if string?(arg2) then
+            commaS : S := string(arg2)
+            commaTest : S := ","
+            if position(commaTest, commaS, 1) > 0 then
+               s : S := "<mo>&#x02032;</mo>"
+               for i in 2..#commaS repeat
+                   commaTest := commaTest","
+                   s := s"<mo>&#x02032;</mo>"
+               if commaS = commaTest then
+                   arg2 := message(s)
+        formatSpecial('SUPERSUB, [first args, empty()$E, arg2], prec)
+
+    formatPlex(op : SY, args : L(E), prec : I) : S ==
+        p : I := position(op, plexOps)
+        p < 1 => error "unknown plex op"
+        opPrec := plexPrecs.p
+        n : I := #args
+        (n ~= 2) and (n ~= 3) => error "wrong number of arguments for plex"
+        ops : S :=
+            op = 'SIGMA =>
+                -- sum(a::OutputForm, b::OutputForm) produces
+                -- (SIGMA b a)
+                n = 2 => "&Sum;"
+                error "wrong number of arguments for plex"
+            op = 'SIGMA2 =>
+                 -- sum(a::OutputForm, b::OutputForm, c::OutputForm) produces
+                 -- (SIGMA2 b c a)
+                 n = 3 => "&Sum;"
+                 error "wrong number of arguments for plex"
+            op = 'PI =>
+                -- prod(a::OutputForm, b::OutputForm) produces
+                -- (PI b a)
+                n = 2 =>  "&Pi;"
+                error "wrong number of arguments for plex"
+            op = 'PI2 =>
+                -- prod(a::OutputForm, b::OutputForm, c::OutputForm) produces
+                -- (PI2 b c a)
+                n = 3 => "&Pi;"
+                error "wrong number of arguments for plex"
+            op = 'INTSIGN =>
+                -- int(a::OutputForm) produces
+                -- (INTSIGN NOTHING NOTHING a)
+                -- int(a::OutputForm, b::OutputForm) produces
+                -- (INTSIGN b NOTHING a)
+                -- int(a::OutputForm, b::OutputForm, c::OutputForm) produces
+                -- (INTSIGN b c a)
+                n = 3 => "&int;"
+                error "wrong number of arguments for plex"
+            error "Unexpected plex op:" string(op)
+        body :=
+            op = 'INTSIGN =>
+                formatExpr(args(3), minPrec)
+            formatExpr(args(n), opPrec)
+        t2 : S :=
+            n = 3 => formatExpr(args.2, minPrec)
+            "<none/>"
+        t1 := formatExpr(args(1), minPrec)
+        s := concat ["<munderover><mo>", ops, "</mo>", t1, t2, "</munderover>",
+                     body]
+        if opPrec < prec then s := parenthesize s
+        group s
+
+    formatMatrix(args : L E) : S ==
+        -- format for args is [[ROW ...], [ROW ...], [ROW ...]]
+        -- generate string for formatting columns (centered)
+        group addBrackets concat
+            ["<mtable><mtr><mtd>",
+             formatNaryNoGroup('STRSEP, "</mtd></mtr><mtr><mtd>",
+                               0, args, minPrec),
+               "</mtd></mtr></mtable>"]
+
+    formatFunction(op : E, args : L E, prec : I) : S ==
+        ops := formatExpr(op, minPrec)
+        group concat ["<mo>", ops, "</mo>",
+                      parenthesize formatNary(","::SY, "", 0, args, minPrec)]
+
+    formatNullary(op : SY) ==
+        op = 'NOTHING => ""
+        group concat ["<mo>", string(op), "</mo><mo>(</mo><mo>)</mo>"]
+
+    formatUnary(op : SY, arg : E, prec : I) ==
+        p : I := position(op, unaryOps)
+        p < 1 => error "unknown unary op"
+        opPrec := unaryPrecs.p
+        s : S := concat ["<mo>", string(op), "</mo>", formatExpr(arg, opPrec)]
+        opPrec < prec => group parenthesize s
+        op = "-"::SY => s
+        group s
+
+    formatBinary(op : SY, args : L(E), prec : I) : S ==
+        p : I := position(op, binaryOps)
+        p < 1 => error "unknown binary op"
+        opPrec := binaryPrecs.p
+        s1 := formatExpr(first args, opPrec)
+        s2 := formatExpr(first rest args, opPrec)
+        s : S :=
+            op = "^"::SY => concat ["<msup><mrow>", s1, "</mrow><mrow>",
+                                    s2, "</mrow></msup>"]
+            op = "/"::SY => concat ["<mfrac><mrow>", s1, "</mrow><mrow>",
+                                    s2, "</mrow></mfrac>"]
+            op = 'OVER => concat ["<mfrac><mrow>", s1, "</mrow><mrow>",
+                                  s2, "</mrow></mfrac>"]
+            op = "->"::SY => concat [s1, "<mo>&#x02192;</mo>", s2]
+            ops : S :=
+                op = 'LET => ":="
+                op = "<"::SY => "&lt;"
+                op = "<="::SY => "&lt;="
+                string(op)
+            concat ["<mrow>", s1, "</mrow><mo>", ops, "</mo><mrow>",
+                    s2, "</mrow>"]
+        group
+            op = "/"::SY or op = 'OVER => s
+            opPrec < prec => parenthesize s
+            s
+
+    formatNary(op : SY, sep : S, opprec : I, args : L(E), prec : I) : S ==
+        group formatNaryNoGroup(op, sep, opprec, args, prec)
+
+    formatNaryNoGroup(op : SY, sep : S, opprec : I, args : L(E), prec : I
+                     ) : S ==
+        empty?(args) => ""
+        p : I := position(op, naryOps)
+        p < 1 => error "unknown nary op"
+        ops : S :=
+            op = 'STRSEP => sep
+            op = "*"::SY   => "<mo>&#x02062;</mo>"
+            op = 'ROW      => "</mtd><mtd>"
+            op = 'TENSOR => "<mo>&#x02297;</mo>"
+            concat ["<mo>", string(op), "</mo>"]
+        l : L S := []
+        opPrec :=
+            op = 'STRSEP => opprec
+            naryPrecs.p
+        for a in args repeat
+            l := concat(ops, concat(formatExpr(a, opPrec), l)$L(S))$L(S)
+        s : S := concat reverse rest l
+        opPrec < prec => parenthesize s
+        s
+
+    formatExpr(expr : E, prec : I) : S ==
+      i, len : Integer
+      intSplitLen : Integer := 20
+      atom?(expr) =>
+        -- this bit deals with integers
+        integer?(expr) =>
+          i := integer(expr)
+          str := string(i)
+          if i < 0 or i > 9 then
+              group
+                 nstr : String := ""
+                 -- insert some blanks into the string, if too long
+                 while ((len := #str) > intSplitLen) repeat
+                   nstr := concat [nstr, " ",
+                     elt(str, segment(1, intSplitLen)$US)]
+                   str := elt(str, segment(intSplitLen + 1)$US)
+                 empty? nstr => concat ["<mn>", str, "</mn>"]
+                 nstr :=
+                   empty? str => nstr
+                   concat [nstr, " ", str]
+                 concat ["<mn>", elt(nstr, segment(2)$US), "</mn>"]
+          else
+              concat ["<mn>", str, "</mn>"]
+        if symbol?(expr) then
+            es := symbol(expr)
+            es = "%pi"::SY => return "<mi>&#x003C0;</mi>"
+            es = "%e"::SY => return "<mi>&#x02147;</mi>"
+            es = "%i"::SY  => return "<mi>&#x02148;</mi>"
+            str := string(es)
+        else if string?(expr) then
+            str := string(expr)
+        else
+            error "Unrecognized atom in OutputForm"
+        len := #str
+        len > 0 and str.1 = char "%" => concat ["<mi>", str, "</mi>"]
+        -- should handle floats
+        len > 1 and digit? str.1 => concat ["<mn>", str, "</mn>"]
+        -- presumably this is a literal string
+        len > 0 and str.1 = char "_"" =>
+          concat ["<mtext>", str, "</mtext>"]
+        len = 1 and str.1 = char " " => " "
+        if symbol?(expr) then
+            op := symbol(expr)
+            (i := position(op, specialStrings)) > 0 =>
+                specialStringsInMML.i
+        (i := position(char " ", str)) > 0 =>
+          -- We want to preserve spacing, so use a roman font.
+          concat ["<mtext>", str, "</mtext>"]
+        -- if we get to here does that mean it's a variable?
+        concat ["<mi>", str, "</mi>"]
+      opf : E := operator(expr)
+      args : L E := arguments(expr)
+      nargs : I := #args
+
+      symbol?(opf) =>
+          op := symbol(opf)
+          -- special cases
+          member?(op, specialOps) => formatSpecial(op, args, prec)
+          member?(op, plexOps)    => formatPlex(op, args, prec)
+
+          -- nullary case
+          0 = nargs => formatNullary op
+
+          -- unary case
+          (1 = nargs) and member?(op, unaryOps) =>
+            formatUnary(op, first args, prec)
+
+          -- binary case
+          (2 = nargs) and member?(op, binaryOps) =>
+            formatBinary(op, args, prec)
+
+          -- nary case
+          member?(op, naryNGOps) => formatNaryNoGroup(op, "", 0, args, prec)
+          member?(op, naryOps) => formatNary(op, "", 0, args, prec)
+          formatFunction(opf, args, prec)
+      formatFunction(opf, args, prec)
+
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

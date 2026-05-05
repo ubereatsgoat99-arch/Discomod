@@ -1,0 +1,303 @@
+)abbrev package INTEF ElementaryIntegration
+++ Integration of elementary functions
+++ Author: Manuel Bronstein
+++ Date Created: 1 February 1988
+++ Description:
+++ This package provides functions for integration, limited integration,
+++ extended integration and the risch differential equation for
+++ elementary functions.
+++ Keywords: elementary, function, integration.
+ElementaryIntegration(R, F) : Exports == Implementation where
+  R : Join(GcdDomain, Comparable, CharacteristicZero,
+           PolynomialFactorizationExplicit,
+           RetractableTo Integer, LinearlyExplicitOver Integer)
+  F : Join(AlgebraicallyClosedField, TranscendentalFunctionCategory,
+           FunctionSpace R)
+
+  SY  ==> Symbol
+  K   ==> Kernel F
+  P   ==> SparseMultivariatePolynomial(R, K)
+  UP  ==> SparseUnivariatePolynomial F
+  RF  ==> Fraction UP
+  IR  ==> IntegrationResult F
+  IRRF ==> IntegrationResult RF
+  FF  ==> Record(ratpart : RF, coeff : RF)
+  LLG ==> List Record(coeff : F, logand : F)
+  Ext_Rec ==> Record(ratpart:F, coeff:F)
+  U2  ==> Union(Ext_Rec, "failed")
+  U3  ==> Union(Record(mainpart:F, limitedlogs:LLG), "failed")
+  U4  ==> Union(Record(ratpart : F, coeff : F, prim : F), "failed")
+  ANS ==> Record(special : F, integrand : F)
+  PSOL==> Record(ans : F, right : F, sol? : Boolean)
+  PSOL2 ==> Record(ans : F, right : F, primpart : F, sol? : Boolean)
+  FAIL==> error "failed - cannot handle that integrand"
+  OPDIFF ==> '%diff
+  Param_Rec_F ==> Record(ratpart : F, coeffs : Vector F)
+
+  Exports ==> with
+    lfextendedint : (F, SY, F) -> U2
+       ++ lfextendedint(f, x, g) returns functions \spad{[h, c]} such that
+       ++ \spad{dh/dx = f - cg}, if (h, c) exist, "failed" otherwise.
+    lfintegrate  : (F, SY) -> IR
+       ++ lfintegrate(f, x) = g such that \spad{dg/dx = f}.
+
+  Implementation ==> add
+    import from IntegrationTools(R, F)
+    import from RationalIntegration(F, UP)
+    import from AlgebraicIntegration(R, F)
+    import from AlgebraicManipulations(R, F)
+    import from TranscendentalIntegration(F, UP)
+    import from PureAlgebraicIntegration(R, F, F)
+    import from IntegrationResultFunctions2(F, F)
+    import from IntegrationResultFunctions2(RF, F)
+    import from FunctionSpacePrimitiveElement(R, F)
+    import from PolynomialCategoryQuotientFunctions(IndexedExponents K,
+                                                             K, R, P, F)
+    import from ParametricIntegration(R, F)
+
+    N ==> NonNegativeInteger
+
+    PRIM := 'prim
+    ALGOP := '%alg
+
+    alglfint    : (F, K, List K, SY) -> IR
+    algprimint  : (F, K, K, SY) -> IR
+    algexpint   : (F, K, K, SY) -> IR
+    primint     : (F, SY, K) -> IR
+    expint      : (F, SY, K) -> IR
+    lambint     : (F, SY, K) -> IR
+    prim?       : (K, SY)  -> Boolean
+    isx?        : (F, SY)  -> Boolean
+    addx        : (IR, F) -> IR
+    lfintegrate0 : (F, SY) -> IR
+    unknownint  : (F, SY) -> IR
+    diffint     : (F, SY, K) -> IR
+    tryChangeVar : (F, K, SY) -> Union(IR, "failed")
+
+    prim?(k, x)      == is?(k, 'log) or has?(operator k, PRIM)
+
+    lambint(f, x, k) ==
+        eta' := differentiate(eta := first argument k, x)
+        dfac := (monomial(1, 1)$UP + 1$UP)
+        derivative : UP -> UP :=
+           (x1 : UP) : UP +-> dfac*differentiate(x1,
+              (x2 : F) : F +-> differentiate(x2, x), 0$UP) +
+                differentiate(x1, (x2 : F) : F +-> 0,
+                  monomial(eta'/eta, 1))
+        -- XXX FIXME need proper extended integration function
+        extint : F -> U2 := f +-> lfextendedint(f, x, eta'/eta)
+        r1 := lambintegrate((monomial(1, 1)$UP + 1$UP)*univariate(f, k),
+                      eta'/eta, (x1 : F) : F +-> differentiate(x1, x),
+                      derivative, extint, (x2 : F) : IR +-> lfintegrate(x2, x))
+        map((x1 : RF) : F +-> multivariate(x1, k), r1.answer) + r1.a0
+
+-- tries various tricks since the integrand contains something not elementary
+    unknownint(f, x) ==
+      (da := differentiate(a := denom(f)::F, x)) ~= 0 and
+        zero? differentiate(c := numer(f)::F / da, x) => (c * log a)::IR
+      mkAnswer(0, empty(), [[f, x::F]])
+
+    LOG ==> Record(scalar : Fraction(Integer), coeff : UP, logand : UP)
+
+    dummy := create()$SingletonAsOrderedSet
+
+    diffint1(f : F, x : SY, k : K) : Union(IR, "failed") ==
+        fu := univariate(f, k)
+        denom(fu) ~= 1 => "failed"
+        nfu := numer(fu)
+        degree(nfu) ~= 1 => "failed"
+        f1 := leadingCoefficient(nfu)
+        args := argument(k)
+        #args ~= 3 => error "internal error, k is not a diff"
+        arg3 := args(3)
+        da3 := differentiate(arg3, x)
+        da3 = 0 => "failed"
+        k1 := eval(args(1), retract(args(2))@K, arg3)
+        dv := new()$Symbol
+        f2 := eval(f1/da3, k1, dv::F)
+        nres := lfintegrate(f2, dv)
+        not(empty?(notelem(nres))) => "failed"
+        logs := logpart(nres)
+        nlogs : List(LOG) := []
+        nrat : F := 0
+        for lg in logs repeat
+            cpol := lg.coeff
+            every?((x1 : F) : Boolean +-> D(x1, x) = 0, coefficients(cpol)) =>
+                nlogs := cons(lg, nlogs)
+            degree(cpol) ~= 1 =>
+                -- print(lg::OutputForm)
+                return "failed"
+            alpha := -coefficient(cpol, 0)/leadingCoefficient(cpol)
+            nrat := nrat + lg.scalar*alpha*
+                      log(retract(eval(lg.logand, dummy, alpha))@F)
+        nres2 := mkAnswer(ratpart(nres) + nrat, reverse!(nlogs), [])
+        nres3 := map((x1 : F) : F+->eval(x1, kernel(dv), k1::F), nres2)
+        f3 := f - differentiate(nres3, x)
+        -- should not happen in differential transcendental
+        -- case, but in principle possible
+        member?(k, kernels(f3)) => "failed"
+        nres3 + lfintegrate(f3, x)
+
+    diffint(f, x, k) ==
+        (r1 := diffint1(f, x, k)) case IR => r1
+        mkAnswer(0, empty(), [[f, x::F]])
+
+    isx?(f, x) ==
+      (k := retractIfCan(f)@Union(K, "failed")) case "failed" => false
+      (r := symbolIfCan(k@K)) case "failed" => false
+      r@SY = x
+
+    alglfint(f, k, l, x) ==
+      xf := x::F
+      symbolIfCan(kx := ksec(k, l, x)) case SY => addx(palgint(f, kx, k), xf)
+      is?(kx, 'exp) => addx(algexpint(f, kx, k, x), xf)
+      prim?(kx, x)       => addx(algprimint(f, kx, k, x), xf)
+      has?(operator kx, ALGOP) =>
+        is?(operator k, 'nthRoot) and is?(operator kx, 'nthRoot) and
+           not(member?(kx, tower(k::F))) =>
+              al :=  alg_split_roots([f], k, kx)$RootFSSplit(R, F)
+              -- print(al::OutputForm)
+              res := 0$IR
+              for rec in al repeat
+                  ir1 := lfintegrate(first(rec.funs), x)
+                  if rec.npow1 + rec.npow2 > 0 then
+                      oroot := (k::F)^rec.npow1*(kx::F)^rec.npow2
+                      ir1 := map((x1 : F) : F +->
+                                eval(x1, retract(rec.nroot)@K, oroot),
+                                ir1)
+                  res := res + ir1
+              -- print(res::OutputForm)
+              res
+        rec := primitiveElement(kx::F, k::F)
+        y   := rootOf(rec.prim)
+        map((x1 : F) : F+->eval(x1, retract(y)@K, rec.primelt),
+          lfintegrate(eval(f, [kx, k], [(rec.pol1) y, (rec.pol2) y]), x))
+      unknownint(f, x)
+
+    lfintegrate(f, x) ==
+      zero? f => 0
+      xf := x::F
+      empty?(l := varselect(kernels f, x)) => (xf * f)::IR
+      symbolIfCan(k := kmax l) case SY =>
+        map((x1 : RF) : F+->multivariate(x1, k), integrate univariate(f, k))
+      is?(k, 'exp)  => addx(expint(f, x, k), xf)
+      is?(k, 'lambertW) => addx(lambint(f, x, k), xf)
+      prim?(k, x)        => addx(primint(f, x, k), xf)
+      has?(operator k, ALGOP) => alglfint(f, k, l, x)
+      is?(k, OPDIFF) => diffint(f, x, k)
+      unknownint(f, x)
+
+    addx(i, x) ==
+      elem? i => i
+      mkAnswer(ratpart i, logpart i,
+                                [[ne.integrand, x] for ne in notelem i])
+
+    tryChangeVar(f, t, x) ==
+        z := new()$Symbol
+        g := subst(f / differentiate(t::F, x), [t], [z::F])
+        freeOf?(g, x) =>               -- can we do change of variables?
+            map((x1 : F) : F+->eval(x1, kernel z, t::F), lfintegrate(g, z))
+        "failed"
+
+
+    algexpint(f, t, y, x) ==
+        (u := tryChangeVar(f, t, x)) case IR => u
+        algint(f, t, y,
+          (x1 : UP) : UP+->differentiate(x1,
+            (x2 : F) : F+->differentiate(x2, x),
+                       monomial(differentiate(first argument t, x), 1)),
+               f1 +-> lfintegrate(f1, x))
+
+    algprimint(f, t, y, x) ==
+        (u := tryChangeVar(f, t, x)) case IR => u
+        algint(f, t, y,
+          (x1 : UP) : UP+->differentiate(x1,
+            (x2 : F) : F+->differentiate(x2, x),
+                                            differentiate(t::F, x)::UP),
+               f1 +-> lfintegrate(f1, x))
+
+    lfextendedint(f, x, g) ==
+      res1 := extendedint(f, x, [g]).particular
+      res1 case "failed" => "failed"
+      [res1.ratpart, (res1.coeffs)(1)]
+
+
+    DREC ==> Record(answer : RF, logpart : RF, ir : IRRF)
+
+    denint_dummy(f : RF) : DREC == [0, f, 0]
+
+    DMap ==> (RF, K, SY) -> DREC
+
+    denint_li : DMap :=
+        R is Integer and F is Expression(Integer) =>
+            (li_int$DenominatorIntegration(R, F))@DMap
+        R is Complex(Integer) and F is Expression(Complex(Integer)) =>
+            (li_int$DenominatorIntegration(R, F))@DMap
+        (rf : RF, k : K, x : SY) : DREC +-> denint_dummy(rf)
+
+    denint_poly : DMap :=
+        R is Integer and F is Expression(Integer) =>
+            (poly_int$DenominatorIntegration(R, F))@DMap
+        R is Complex(Integer) and F is Expression(Complex(Integer)) =>
+            (poly_int$DenominatorIntegration(R, F))@DMap
+        (rf : RF, k : K, x : SY) : DREC +-> denint_dummy(rf)
+
+    primint(f, x, k) ==
+      lk := varselect([a for a in tower f | a ~= k], x)
+      denint : RF -> DREC :=
+          is?(k, 'log) => (rf : RF) : DREC +-> denint_li(rf, k, x)
+          denint_dummy
+      dk := differentiate(k::F, x)
+      ext := (f1 : F, d : N) : U4 +->
+          polylog_int(f1, x, k, d, lk, dk)
+      r1 := primintegrate(univariate(f, k),
+              (x1 : UP) : UP+->differentiate(x1,
+                (x2 : F) : F+->differentiate(x2, x), dk::UP),
+                  denint, ext)
+      map((x1 : RF) : F+->multivariate(x1, k), r1.answer) + lfintegrate(r1.a0, x)
+
+    risch_de_solver(x3 : Integer, x4 : F, eta : F, x : SY) : PSOL2 ==
+        risch_de_ext(x3, eta, x4, x
+                    )$ElementaryRischDEX2(R, F)
+
+    expint(f, x, k) ==
+      eta := first argument k
+      r1  := expintegrate(univariate(f, k),
+               (x1 : UP) : UP+->differentiate(x1,
+                 (x2 : F) : F+->differentiate(x2, x),
+                 monomial(differentiate(eta, x), 1)),
+               (rf : RF) : DREC +-> denint_poly(rf, k, x),
+               (x3 : Integer, x4 : F) : PSOL2 +->
+                    risch_de_solver(x3, x4, eta, x))
+      map((x1 : RF) : F+->multivariate(x1, k), r1.answer) + lfintegrate(r1.a0, x)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

@@ -1,0 +1,26 @@
+Function: hyperellperiods
+Section: elliptic_curves
+C-Name: hyperellperiods
+Prototype: GD0,L,p
+Help: hyperellperiods(X,{flag}): X being a nonsingular hyperelliptic curve
+ defined over the complex numbers, return a period matrix. X can be given
+ either by a squarefree polynomial P such that X:y^2=P(x) or by a
+ vector [P,Q] such that X:y^2+Q(x)*y=P(x) and Q^2+4P is squarefree.
+ If flag=0 (default), return a reduced period matrix in Siegel space.
+ If flag=1, return the big period matrix of size (g x 2g),
+ If flag=2, return the BSD period.
+Doc:
+ $X$ being a nonsingular hyperelliptic curve defined over the complex,
+ return a period matrix for the integration pairing
+ $H^{1}(X,\Omega^{1})\times H_{1}(X,\Z) \to \C$.
+ $X$ can be given either by a squarefree polynomial $P$ such that
+ $X: y^{2} = P(x)$ or by a vector $[P,Q]$ such that
+ $X:y^{2}+Q(x)y = P(x)$ and $Q^{2} + 4P$ is squarefree.
+ If $\fl=0$ (default), return a reduced period in the Siegel space, obtained
+ when the differentials form a dual basis of the first homology cycles.
+ If $\fl=1$, return the big period matrix whose $2g$ columns correspond to a
+ symplectic basis of $H_{1}(X,\Z)$,
+ and whose $g$ rows correspond to the differentials ${x^{k} \text{d}x \over y}$.
+ if $\fl=2$, return the period occuring in the BSD conjecture, that is the
+ volume of the real part of the period lattice multiplied by the number of
+ connected components.

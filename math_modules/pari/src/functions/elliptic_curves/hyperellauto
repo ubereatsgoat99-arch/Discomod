@@ -1,0 +1,17 @@
+Function: hyperellauto
+Section: elliptic_curves
+C-Name: hyperellauto
+Prototype: GDG
+Help: hyperellauto(E,{nf}): C being a hyperelliptic curve given by a Weierstrass
+ equation, either over the rationals or over the number field nf if given,
+ return the group of automorphisms of C as a vector of changes of
+ coordinates of the form [e, [a,b;c,d], H].
+Doc:
+ $C$ being a hyperelliptic curve given by a Weierstrass equation,
+ either over the rationals or over the number field \var{nf} if given,
+ return the group of automorphisms of $C$ as a vector of changes of coordinates
+ of the form $[e, [a,b;c,d], H]$.
+
+ $C$ can be given either by a squarefree polynomial $P$ such that
+ $C: y^{2} = P(x)$ or by a vector $[P,Q]$ such that
+ $C: y^{2} + Q(x)\*y = P(x)$ and $Q^{2}+4\*P$ is squarefree.

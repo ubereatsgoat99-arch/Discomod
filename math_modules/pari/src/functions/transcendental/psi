@@ -1,0 +1,13 @@
+Function: psi
+Section: transcendental
+C-Name: gpsi_der
+Prototype: GD0,L,p
+Help: psi(x,{der}): psi-function at x (der-th derivative of psi if der is set)
+Doc: the $\psi$-function of $x$, i.e.~the logarithmic derivative
+ $\Gamma'(x)/\Gamma(x)$. If $\var{der}$ is set, return the $\var{der}$-th derivative.
+ For $s$ a \typ{PADIC}, evaluates the $\var{der}$-th derivative of the Morita
+ $\psi$ function at $s$.
+Variant: For a \typ{PADIC} $x$, the function
+ \fun{GEN}{Qp_psi}{GEN x, long der} is also available.
+ For $\var{der} = 0$,
+ \fun{GEN}{gpsi}{GEN x, long prec} is also available.

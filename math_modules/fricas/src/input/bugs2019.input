@@ -1,0 +1,46 @@
+)set break resume
+)expose UnittestCount UnittestAux Unittest
+
+testsuite "bugs2019"
+
+testcase "'^' in 'sign'"
+
+testEquals("sign(2^x)@Union(INT,_"failed_")", "1")
+
+testcase "input form for formal diffs"
+
+f := operator 'f
+di2 := D(f(x, y^2), [x, y], [2, 1])
+idi2 := di2::InputForm
+testEquals("interpret(idi2) - di2", "0")
+
+testcase "'*' and 'gcd' in Factored"
+
+testEquals("factor(x-1)*0", "0")
+testEquals("gcd(factor(x-1), 1)", "1")
+testEquals("factor(x^2-1)+1-x^2", "0")
+
+a := squareFree(x^2 - 1)
+b := squareFree((x + 1)*(x + 2))
+testEquals("gcd(a, b)", "sqfrFactor(x + 1, 1)")
+
+testcase "simplification of square root in 'radicalSolve'"
+
+testEquals("rhs first radicalSolve(x^2+2*a*x+2*b,x)", "-sqrt(a^2-2*b)-a")
+testEquals("rhs first radicalSolve(x^2+2*a*c*x+2*b*c^2,x)", "-c*sqrt(a^2-2*b)-a*c")
+
+testcase "fix 'construct' in MRING"
+-- 'construct' in MRING should not modify its argument
+T := MonoidRing(Integer, Integer)
+R := Record(k : Integer, c : Integer)
+l1 := [[2, 5]::R, [2, 5]::R]
+l2 := [[2, 5]::R, [2, 5]::R]
+construct(l1)$T
+testEquals("l1", "l2")
+
+testcase "'concat! : List % -> %' in URAGG"
+
+l := [[1], [2], [3], [4]]
+testEquals("concat! l", "[1, 2, 3, 4]")
+
+statistics()

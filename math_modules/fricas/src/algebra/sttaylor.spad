@@ -1,0 +1,723 @@
+)abbrev category STTAYOC StreamTaylorSeriesOperationsCategory
+++ Description:
+++  This is category specifying operations for Taylor series
+++  arithmetic, where a Taylor series is represented by a stream
+++  of its coefficients.  Relevant operations satisfy usual axioms
+++  like Ring and LeftModule.  This category was extracted and
+++  generalized from StreamTaylorSeriesOperations to factor out
+++  common interface.
+StreamTaylorSeriesOperationsCategory(R, M) : Category == Exports where
+  R : Ring
+  M : LeftModule(R)
+  RN ==> Fraction Integer
+  I  ==> Integer
+  ST ==> Stream
+  Exports ==> with
+    "+"          : (ST M, ST M) -> ST M
+      ++ a + b returns the power series sum of \spad{a} and \spad{b}:
+      ++ \spad{[a0, a1, ..] + [b0, b1, ..] = [a0 + b0, a1 + b1, ..]}
+    "-"          : (ST M, ST M) -> ST M
+      ++ a - b returns the power series difference of \spad{a} and
+      ++ \spad{b}: \spad{[a0, a1, ..] - [b0, b1, ..] = [a0 - b0, a1 - b1, ..]}
+    "-"          : ST M -> ST M
+      ++ - a returns the power series negative of \spad{a}:
+      ++ \spad{- [a0, a1, ...] = [- a0, - a1, ...]}
+    "*"          : (ST R, ST M) -> ST M
+      ++ a * b returns the power series (Cauchy) product of \spad{a} and b:
+      ++ \spad{[a0, a1, ...] * [b0, b1, ...] = [c0, c1, ...]} where
+      ++ \spad{ck = sum(i + j = k, ai * bk)}.
+    "*"          : (R, ST M) -> ST M
+      ++ r * a returns the power series scalar multiplication of r by \spad{a}:
+      ++ \spad{r * [a0, a1, ...] = [r * a0, r * a1, ...]}
+    if M has RightModule(R) then
+      "*"          : (ST M, R) -> ST M
+        ++ a * r returns the power series scalar multiplication of \spad{a} by
+        ++ r: \spad{[a0, a1, ...] * r = [a0 * r, a1 * r, ...]}
+      "*"          : (M, ST(R)) -> ST(M)
+      mapmult      : (ST M, ST R) -> ST M
+        ++ mapmult([a0, a1, ..], [b0, b1, ..])
+        ++ returns \spad{[a0*b0, a1*b1, ..]}.
+      eval         : (ST M, R) -> ST M
+        ++ eval(a, r) returns a stream of partial sums of the power series
+        ++ \spad{a} evaluated at the power series variable equal to r.
+      compose      : (ST M, ST R) -> ST M
+        ++ compose(a, b) composes the power series \spad{a} with
+        ++ the power series b.
+    monom        : (M, I) -> ST M
+      ++ monom(coef, deg) is a monomial of degree deg with coefficient
+      ++ coef.
+    integers     : I -> ST I
+      ++ integers(n) returns \spad{[n, n+1, n+2, ...]}.
+    oddintegers  : I -> ST I
+      ++ oddintegers(n) returns \spad{[n, n+2, n+4, ...]}.
+    int          : R -> ST R
+      ++ int(r) returns [r, r+1, r+2, ...], where r is a ring element.
+    mapmult      : (ST R, ST M) -> ST M
+      ++ mapmult([a0, a1, ..], [b0, b1, ..])
+      ++ returns \spad{[a0*b0, a1*b1, ..]}.
+    deriv        : ST M -> ST M
+      ++ deriv(a) returns the derivative of the power series with
+      ++ respect to the power series variable. Thus
+      ++ \spad{deriv([a0, a1, a2, ...])} returns \spad{[a1, 2 a2, 3 a3, ...]}.
+    gderiv       : (I -> R, ST M)  -> ST M
+      ++ gderiv(f, [a0, a1, a2, ..]) returns
+      ++ \spad{[f(0)*a0, f(1)*a1, f(2)*a2, ..]}.
+    coerce       : M -> ST M
+      ++ coerce(r) converts a module element r to a stream with one element.
+    addiag       : ST ST M -> ST M
+      ++ addiag(x) performs diagonal addition of a stream of streams.
+      ++ if \spad{x = [[a<0, 0>, a<0, 1>, ..], [a<1, 0>, a<1, 1>, ..],
+      ++ [a<2, 0>, a<2, 1>, ..], ..]} and \spad{addiag(x) = [b<0, b<1>, ...]},
+      ++ then \spad{b<k> = sum(i+j=k, a<i, j>)}.
+    multisect    : (I, I, ST M) -> ST M
+      ++ multisect(a, b, st)
+      ++ selects the coefficients of \spad{x^((a+b)*n+a)},
+      ++ and changes them to \spad{x^n}.
+    invmultisect : (I, I, ST M) -> ST M
+      ++ invmultisect(a, b, st) substitutes \spad{x^((a+b)*n)} for \spad{x^n}
+      ++ and multiplies by \spad{x^b}.
+    if R has Algebra RN then
+      integrate  : (M, ST M) -> ST M
+        ++ integrate(r, a) returns the integral of the power series \spad{a}
+        ++ with respect to the power series variable where
+        ++ r denotes the constant of integration. Thus
+        ++ \spad{integrate(a, [a0, a1, a2, ...]) = [a, a0, a1/2, a2/3, ...]}.
+      lazyIntegrate  : (M, () -> ST M) -> ST M
+        ++ lazyIntegrate(r, f) is a version of integrate
+        ++ used for fixed point computations.
+
+
+)abbrev package STTAYLO2 StreamTaylorSeriesOperations2
+++ Description:
+++  StreamTaylorSeriesOperations2 implements operations from
+++  StreamTaylorSeriesOperationsCategory, allowing operations
+++  on series having values in modules.  Operations were
+++  extracted and generalized from StreamTaylorSeriesOperations.
+StreamTaylorSeriesOperations2(R, M) : Exports == Implementation where
+  R : Ring
+  M : LeftModule(R)
+  RN ==> Fraction Integer
+  I  ==> Integer
+  NNI ==> NonNegativeInteger
+  ST ==> Stream
+  SP2 ==> StreamFunctions2
+
+  Exports ==> StreamTaylorSeriesOperationsCategory(R, M)
+
+  Implementation ==> add
+
+--% definitions
+
+    zro : () -> ST M
+    -- returns a zero power series
+    zro() == empty()$ST(M)
+
+--% arithmetic
+
+    x + y == delay
+      empty? y => x
+      empty? x => y
+      eq?(x, rst x) => map(z +-> frst x + z, y)
+      eq?(y, rst y) => map(z +-> frst y + z, x)
+      concat(frst x + frst y, rst x + rst y)
+
+    x - y == delay
+      empty? y => x
+      empty? x => -y
+      eq?(x, rst x) => map(z +-> frst x - z, y)
+      eq?(y, rst y) => map(z +-> z - frst y, x)
+      concat(frst x - frst y, rst x - rst y)
+
+    -y == map(z +-> -z, y)
+
+    (s : R) * (x : ST M) ==
+      zero? s => zro()
+      map(z +-> s*z, x)
+
+    pow_y(y : ST(R)) : ST(ST(R)) == stream(
+        t +-> y *$StreamTaylorSeriesOperations2(R, R) t, y)
+
+    if M has RightModule(R) then
+        (x : ST M) * (s : R) ==
+            zero? s => zro()
+            map(z +-> z*s, x)
+
+        ((m : M) * (x : ST(R))) : ST(M) ==
+            zero?(m) => zro()
+            map((z : R) : M +-> m*z, x)$SP2(R, M)
+
+        mul_and_trim(x : ST(M), n : NNI, ys : ST(ST(R))) : ST(ST(M)) == delay
+            empty?(x) or empty?(ys) => empty()
+            y1 := rest(frst(ys), n)
+            concat(frst(x)*y1, mul_and_trim(rst(x), n + 1, rst(ys)))
+
+        compose(x, y) == delay
+            empty?(x) => zro()
+            empty?(y) => concat(frst(x), zro())
+            not(zero?(frst(y))) => error
+                "compose: 2nd argument should have 0 constant coefficient"
+            ys := pow_y(y)
+            addiag(concat(frst(x)::ST(M), mul_and_trim(rst(x), 1, ys)))
+
+        mapmult(x : ST(M), y : ST(R)) : ST(M) == delay
+            empty? y => zro()
+            empty? x => zro()
+            concat(frst(x)*frst(y), mapmult(rst x, rst y))
+
+        eval(x, at) == scan(0, (y, z) +-> y + z,
+                       mapmult(x, stream(y +-> at * y, 1)))$SP2(M, M)
+
+--% multiplication
+
+    stmult(n0 : Integer, x0 : ST R, y0 : ST M, _
+           ll0 : List M) : ST M == delay
+        x := x0
+        y := y0
+        n := n0
+        ll := ll0
+        if empty? y then
+             n < 0 => return empty()
+             empty? x => return empty()
+             x := rst x
+        else
+             c := frst y
+             y := rst y
+             if n < 0 and c = 0 then
+                 return concat(0, stmult(n, x, y, ll))
+             else
+                 ll := cons(c, ll)
+                 n := n + 1
+        res : M := 0
+        xp := x
+        llp := ll
+        for i in 0..n repeat
+            empty? xp =>
+                i = 0 => return empty()
+                break
+            res := res + frst xp * first(llp)
+            llp := rest(llp)
+            xp := rst xp
+        -- make sure that when we multiply finite streams
+        -- tail is explicitly empty
+        explicitlyEmpty? rst x and
+          explicitlyEmpty? y => concat(res, empty())
+        concat(res, stmult(n, x, y, ll))
+
+    (x : ST R) * (y : ST M) == delay
+        empty? y => zro()
+        empty? x => zro()
+        stmult(-1, x, y, [])
+
+--% derivatives
+
+    integers z == stream(y +-> y + 1, z)
+
+    oddintegers z == stream(y +-> y + 2, z)
+
+    int s == stream(y +-> y + 1, s)
+
+    mapmult(x : ST(R), y : ST(M)) : ST(M) == delay
+      empty? y => zro()
+      empty? x => zro()
+      concat(frst x * frst y, mapmult(rst x, rst y))
+
+    deriv x ==
+      empty? x => zro()
+      mapmult(int 1, rest x)
+
+    gderiv(f, x) ==
+      empty? x => zro()
+      mapmult(map(f, integers 0)$SP2(I, R), x)
+
+--% coercions
+
+    coerce(s : M) ==
+      zero? s => zro()
+      concat(s, zro())
+
+--% lambert functions
+
+    addiag(ststa : ST ST M) == delay
+      empty? ststa => zro()
+      empty? frst ststa => concat(0, addiag rst ststa)
+      concat(frst(frst ststa), rst(frst ststa) + addiag(rst ststa))
+
+--% misc. functions
+
+    ms : (I, I, ST M) -> ST M
+    ms(m, n, s) == delay
+      empty? s => zro()
+      zero? n => concat(frst s, ms(m, m-1, rst s))
+      ms(m, n-1, rst s)
+
+    multisect(b, a, x) == ms(a+b, 0, rest(x, a :: NNI))
+
+    rpSt(z : I, s : M) : ST(M) == delay
+      z <= 0 => empty()
+      concat(s, rpSt(z-1, s))
+
+    monom(s,z) ==
+      z < 0 => error "monom: cannot create monomial of negative degree"
+      concat(rpSt(z,0),concat(s,zro()))
+
+    altn : (ST M, ST M) -> ST M
+    altn(zs, s) == delay
+      empty? s => zro()
+      concat(frst s, concat(zs, altn(zs, rst s)))
+
+    invmultisect(a, b, x) ==
+      concat(rpSt(b, 0), altn(rpSt(a + b - 1, 0), x))
+
+    if R has Algebra RN then
+      integre : (ST M, I) -> ST M
+      integre(x, n) == delay
+        empty? x => zro()
+        concat((1$I/n)::R * frst(x), integre(rst x, n + 1))
+
+      integ : ST M -> ST M
+      integ x == integre(x, 1)
+
+      integrate(a, x) == concat(a, integ x)
+      lazyIntegrate(s, xf) == concat(s, integ(delay xf))
+
+)abbrev package STTAYLOR StreamTaylorSeriesOperations
+++ Author: William Burge, Stephen Watt, Clifton J. Williamson
+++ Date Created: 1986
+++ Basic Operations:
+++ Related Domains: Stream(A), ParadoxicalCombinatorsForStreams(A),
+++   StreamTranscendentalFunctions(A),
+++   StreamTranscendentalFunctionsNonCommutative(A)
+++ Also See:
+++ AMS Classifications:
+++ Keywords: stream, Taylor series
+++ Examples:
+++ References:
+++ Description:
+++   StreamTaylorSeriesOperations implements Taylor series arithmetic,
+++   where a Taylor series is represented by a stream of its coefficients,
+++   see corresponding operations in the category Ring.
+StreamTaylorSeriesOperations(A) : Exports == Implementation where
+  A :        Ring
+  RN     ==> Fraction Integer
+  I      ==> Integer
+  NNI    ==> NonNegativeInteger
+  ST     ==> Stream
+  SP2    ==> StreamFunctions2
+  SP3    ==> StreamFunctions3
+  L      ==> List
+  LA     ==> List A
+  YS     ==> Y$ParadoxicalCombinatorsForStreams(A)
+  UN     ==> Union(ST A,"failed")
+  Exports ==> StreamTaylorSeriesOperationsCategory(A, A) with
+    "exquo"      : (ST A,ST A) -> Union(ST A,"failed")
+      ++ exquo(a, b) returns the power series quotient of \spad{a} by b,
+      ++ if the quotient exists, and "failed" otherwise
+    "/"          : (ST A,ST A) -> ST A
+      ++ a / b returns the power series quotient of \spad{a} by b.
+      ++ An error message is returned if \spad{b} is not invertible.
+      ++ This function is used in fixed point computations.
+    recip        : ST A -> UN
+      ++ recip(a) returns the power series reciprocal of \spad{a}, or
+      ++ "failed" if not possible.
+    lagrange     : ST A -> ST A
+      ++ lagrange(g) produces the power series for f where f is
+      ++ implicitly defined as \spad{f(z) = z*g(f(z))}.
+    revert       : ST A -> ST A
+      ++ revert(a) computes the inverse of a power series \spad{a}
+      ++ with respect to composition.
+      ++ the series should have constant coefficient 0 and invertible
+      ++ first order coefficient.
+    prodiag : ST ST A -> ST A
+      ++ prodiag(x) performs "diagonal" infinite product of a stream
+      ++ of streams.  When \spad{x(i)} is interpreted as stream of
+      ++ coefficients of series \spad{f_i(z), i=1,...}, then
+      ++ \spad{prodiag(x) = (1 + z*f_1(z))*(1 + z^2*f_2(x))*...}
+    lambert      : ST A -> ST A
+      ++ lambert(st) computes \spad{f(x) + f(x^2) + f(x^3) + ...}
+      ++ if st is a stream representing \spad{f(x)}.
+      ++ This function is used for computing infinite products.
+      ++ If \spad{f(x)} is a power series with constant coefficient 1 then
+      ++ \spad{prod(f(x^n), n = 1..infinity) = exp(lambert(log(f(x))))}.
+    oddlambert   : ST A -> ST A
+      ++ oddlambert(st) computes \spad{f(x) + f(x^3) + f(x^5) + ...}
+      ++ if st is a stream representing \spad{f(x)}.
+      ++ This function is used for computing infinite products.
+      ++ If f(x) is a power series with constant coefficient 1 then
+      ++ \spad{prod(f(x^(2*n-1)), n=1..infinity) = exp(oddlambert(log(f(x))))}.
+    evenlambert  : ST A -> ST A
+      ++ evenlambert(st) computes \spad{f(x^2) + f(x^4) + f(x^6) + ...}
+      ++ if st is a stream representing \spad{f(x)}.
+      ++ This function is used for computing infinite products.
+      ++ If \spad{f(x)} is a power series with constant coefficient 1, then
+      ++ \spad{prod(f(x^(2*n)), n=1..infinity) = exp(evenlambert(log(f(x))))}.
+    generalLambert : (ST A, I, I) -> ST A
+      ++ generalLambert(f(x), a, d) returns
+      ++ \spad{f(x^a) + f(x^(a + d)) + f(x^(a + 2 d)) + ...}.
+      ++ \spad{f(x)} should have zero constant
+      ++ coefficient and \spad{a} and d should be positive.
+    general_Lambert_product : (ST A, I, I) -> ST A
+      ++ general_Lambert_product(f(x), a, d) returns
+      ++ \spad{f(x^a)*f(x^(a + d))*f(x^(a + 2 d))* ...}.
+      ++ \spad{f(x)} should have constant coefficient equal to one
+      ++ and \spad{a} and d should be positive.
+    if A has Algebra RN then
+      nlde       : ST ST A -> ST A
+        ++ nlde(u) solves a
+        ++ first order non-linear differential equation described by u of the
+        ++ form \spad{[[b<0, 0>, b<0, 1>, ...], [b<1, 0>, b<1, 1>, .], ...]}.
+        ++ the differential equation has the form
+        ++ \spad{y' = sum(i=0 to infinity, j=0 to infinity, b<i, j>*(x^i)*(y^j))}.
+      powern : (RN, ST A) -> ST A
+        ++ powern(r, f) raises power series f to the power r.
+      if A has Field then
+        mapdiv     : (ST A, ST A) -> ST A
+          ++ mapdiv([a0, a1, ..], [b0, b1, ..]) returns
+          ++ \spad{[a0/b0, a1/b1, ..]}.
+        lazyGintegrate : (I -> A, A, () -> ST A) -> ST A
+          ++ lazyGintegrate(f, r, g) is used for fixed point computations.
+        power      : (A, ST A) -> ST A
+          ++ power(a, f) returns the power series f raised to the power
+          ++ \spad{a}.
+
+  Implementation ==> StreamTaylorSeriesOperations2(A, A) add
+
+--% definitions
+
+    zro : () -> ST A
+    -- returns a zero power series
+    zro() == empty()$ST(A)
+
+--% arithmetic
+
+-------------------------------------------------------------------
+
+    -- We use
+    -- https://en.wikipedia.org/wiki/Formal_power_series#Multiplicative_inverse.
+    -- For the actual computation formula (non-commutative case) see
+    -- explanation for / below with f=1.
+    -- recip computes the zeroth coefficient and computes arguments
+    -- for restRecip to compute the remaining coefficients.
+    -- restRecip avoids zero multiplication if the tail of the yet computed
+    -- partial stream ends in zeros.
+    -- Assume that x = (a0,a1,a2,...)
+    -- Arguments for restRecip:
+    -- a = (a1, a2, a3,...)
+    -- u = - 1/a0
+    -- n = in this invocation we compute (cn, c(n+1), ...)
+    -- k = the resulting coefficients ck, c(k+1), ..., c(n-1) are equal to 0
+    -- ra = (ak,a(k+1),a(k+2),...) substream of x starting at k
+    -- revc = [c(k-1),c(k-2),...,c(0)] the first k coefficients of the result
+    --        in reverse order, c(k-1)~=0.
+
+    -- local
+    revSum(ra : ST A, rvc : List A) : A ==
+        cc : A := 0
+        for c in rvc while not empty? ra repeat
+            cc := cc + c * frst(ra)
+            ra := rst ra
+        cc
+
+    -- local
+    restRecip(a : ST A, u : A, n : I, k : I, ra : ST A, revc : List A): ST A ==
+      delay
+        --assert(k=#revc)
+        --assert(for i in k .. n-1 while not empty? a repeat a := rst a; a=ra)
+        --assert(#revc>0)
+        empty? ra => empty()
+        rvc : List A := revc -- create a local variable inside 'delay'
+        cn : A := u * revSum(ra, rvc) -- u = -1/a(0)
+        zero? cn => concat(cn, restRecip(a, u, n+1, k, rst ra, rvc))
+        for i in k..n-1 repeat rvc := cons(0, rvc) -- fill rvc with zeros
+        concat(cn, restRecip(a, u, n+1, n+1, a, cons(cn, rvc)))
+
+    recip(x : ST A) : UN ==
+        empty? x => "failed"
+        ua : Union(A, "failed") := recip frst x
+        ua case "failed" => "failed"
+        c0 : A := ua @ A
+        concat(c0, restRecip(rst x, -c0, 1, 1, rst x, [c0])) :: UN
+
+-------------------------------------------------------------------
+
+    -- We use
+    -- https://en.wikipedia.org/wiki/Formal_power_series#Division.
+    -- In fact, the Wikipedia formula is for the commutative case.
+    -- We allow / also for the non-commutative case to mean "right-division",
+    -- i.e. if h=f/g then h*g=f. Thus,
+    -- $f=\sum_{n=0}^\infty b_n x^n$,
+    -- $g=\sum_{n=0}^\infty a_n x^n$,
+    -- $h=\sum_{n=0}^\infty c_n x^n$ as in the Wikipedia article, we get:
+    -- $\sum_{n=0}^\infty c_n x^n \sum_{n=0}^\infty a_n x^n
+    -- = \sum_{n-0}^\infty b_n x^n$ and by equating coefficients we get
+    -- for any $n\ge0$ that $b_n = \sum_{i=0}^n c_{n-i} a_i$.
+    -- Therefore $c_0 = b_0 / a_0 = b_0 a_0^{-1}$ and
+    -- $c_n = (b_n - \sum_{i=1}^n c_{n-i} a_i) / a_0$.
+
+    -- / computes the zeroth coefficient and computes arguments
+    -- for restDiv to compute the remaining coefficients.
+    -- restDiv avoids zero multiplication if the tail of the yet computed
+    -- partial stream ends in zeros.
+    -- Assume that x = (b0,b1,b2,...), y = (a0,a1,a2,...).
+    -- Arguments for restDiv:
+    -- a = (a1, a2, a3,...)
+    -- u = - 1/a0
+    -- n = in this invocation we compute (cn, c(n+1), ...)
+    -- k = the resulting coefficients ck, c(k+1), ..., c(n-1) are equal to 0
+    -- ra = (ak,a(k+1),a(k+2),...) substream of x starting at k
+    -- b = (bn, b(n+1), b(n+2),...)
+    -- revc = [c(k-1),c(k-2),...,c(0)] the first k coefficients of the result
+    --        in reverse order, c(k-1)~=0.
+
+    -- local
+    restDiv(a : ST A, u : A, n : I, k : I, ra : ST A, b : ST A,_
+            revc : List A) : ST A == delay
+        --assert(k=#revc)
+        --assert(for i in k .. n-1 while not empty? a repeat a := rst a; a=ra)
+        --assert(#revc>0)
+        empty? b => restRecip(a, u, n, k, ra, revc)
+        rvc : List A := revc -- create a local variable inside 'delay'
+        cn : A := (revSum(ra, rvc) - frst b) * u -- u = -1/a(0)
+        zero? cn => concat(cn, restDiv(a, u, n+1, k, rst ra, rst b, rvc))
+        for i in k..n-1 repeat rvc := cons(0, rvc) -- fill rvc with zeros
+        concat(cn, restDiv(a, u, n+1, n+1, a, rst b, cons(cn, rvc)))
+
+    ((x : ST A) exquo (y : ST A)) : UN ==
+        for n in 1..1000 repeat
+            empty? y => return "failed"
+            empty? x => return empty()
+            not zero? frst y => break
+            not zero? frst x => return "failed"
+            x := rst x
+            y := rst y
+        ua : Union(A, "failed") := recip frst y
+        ua case "failed" => "failed"
+        u : A := ua @ A
+        c0 := frst(x) * u
+        concat(c0, restDiv(rst y, -u, 1, 1, rst y, rst x, [c0]))
+
+    ((x : ST A) / (y : ST A)) : ST A == delay
+        empty? y => error "/: division by zero"
+        empty? x => empty()
+        ua : Union(A, "failed") := recip frst y
+        ua case "failed" => error "/: second argument is not invertible"
+        u : A := ua @ A
+        c0 := frst(x) * u
+        concat(c0, restDiv(rst y, -u, 1, 1, rst y, rst x, [c0]))
+
+-------------------------------------------------------------------
+
+--% coefficients
+
+    rp : (I, A) -> L A
+    -- rp(z, s) is a list of length z each of whose entries is s.
+    rp(z, s) ==
+      z <= 0 => empty()
+      concat(s, rp(z-1, s))
+
+    rpSt : (I, A) -> ST A
+    -- rpSt(z, s) is a stream of length z each of whose entries is s.
+    rpSt(z, s) == delay
+      z <= 0 => empty()
+      concat(s, rpSt(z-1, s))
+
+--% reversion
+
+    lagrangere : (ST A, ST A) -> ST A
+    lagrangere(x, c) == delay(concat(0, compose(x, c)))
+    lagrange x == YS(y +-> lagrangere(x, y))
+
+    revert x ==
+      empty? x => error "revert: should be nonzero"
+      zero? frst x =>
+        empty? rst x => error "revert: should be nonzero"
+        y := recip(rst x)
+        y case ST(A) =>
+            lagrange(y@ST(A))
+        error "revert: should start 0, x, ... with invertible x"
+      error "revert: should start 0, x, ..."
+
+    -- prodiag1([f_n, ...], n) computes
+    -- ((1 + z^n*f_n)*(1 + z^{n+1}*f_{n+1})... - 1)/z^n
+    prodiag1(ststa : ST ST A, n : Integer) : ST(A) == delay
+        empty? ststa => zro()
+        f1 := frst ststa
+        r1 := rst ststa
+        p1 := prodiag1(r1, n + 1)
+        empty? f1 => concat(0, p1)
+        concat(frst(f1), rst(f1) + p1 + concat(rpSt(n, 0), f1*p1))
+
+    prodiag(ststa : ST ST A) == concat(1, prodiag1(ststa, 1))
+
+--% lambert functions
+
+-- lambert operates on a series +/[a[i]x^i for i in 1..] , and produces
+-- the series +/[a[i](x^i/(1-x^i)) for i in 1..] i.e. forms the
+-- coefficients A[n] which is the sum of a[i] for all divisors i of n
+-- (including 1 and n)
+
+    rptg1 : (I, A) -> ST A
+    --                               ---------
+    -- returns the repeating stream [s, 0, ..., 0]; (there are z zeroes)
+    rptg1(z, s) == repeating concat(s, rp(z, 0))
+
+    rptg2 : (I, A) -> ST A
+    --                                       ---------
+    -- returns the repeating stream [0, ..., 0, s, 0, ..., 0]
+    -- there are z leading zeroes and z-1 in the period
+    rptg2(z, s) == repeating concat(rp(z, 0), concat(s, rp(z-1, 0)))
+
+    rptg3 : (I, I, I, A) -> ST A
+    rptg3(a, d, n, s) ==
+      concat(rpSt(n*(a-1), 0), repeating(concat(s, rp(d*n-1, 0))))
+
+    lambert x == delay
+      empty? x => zro()
+      zero? frst x =>
+        concat(0, addiag(map(rptg1, integers 0, rst x)$SP3(I, A, ST A)))
+      error "lambert:constant coefficient should be zero"
+
+    oddlambert x == delay
+      empty? x => zro()
+      zero? frst x =>
+        concat(0, addiag(map(rptg1, oddintegers 1, rst x)$SP3(I, A, ST A)))
+      error "oddlambert: constant coefficient should be zero"
+
+    evenlambert x == delay
+      empty? x => zro()
+      zero? frst x =>
+        concat(0, addiag(map(rptg2, integers 1, rst x)$SP3(I, A, ST A)))
+      error "evenlambert: constant coefficient should be zero"
+
+    generalLambert(st, a, d) == delay
+      a < 1 or d < 1 =>
+        error "generalLambert: both integer arguments must be positive"
+      empty? st => zro()
+      zero? frst st =>
+        concat(0, addiag(map((x, y) +-> rptg3(a, d, x, y), _
+                 integers 1, rst st)$SP3(I, A, ST A)))
+      error "generalLambert: constant coefficient should be zero"
+
+    rptg4(a : I, d : I, st : ST A) : ST A == delay
+        empty? st => zro()
+        concat(rpSt(a, 0),  concat(frst(st), rptg4(d, d, rst(st))))
+
+    general_Lambert_product(st, a, d) == delay
+        a < 1 or d < 1 => error
+          "general_Lambert_product: both integer arguments must be positive"
+        empty? st or (frst st ~= 1) => error
+          "general_Lambert_product: constant coefficient should be one"
+        st1 := rst st
+        prodiag(map(n +-> rptg4(a + n*d - n - 1, a + n*d - 1, st1),
+                 integers 0)$SP2(I, ST A))
+
+--% misc. functions
+
+-- comps(ststa, y) forms the composition of +/b[i, j]*y^i*x^j
+-- where y is a power series in y.
+
+    cssa ==> concat$(ST ST A)
+    mapsa ==> map$SP2(ST A, ST A)
+    comps : (ST ST A, ST A) -> ST ST A
+    comps(ststa, x) == delay$(ST ST A)
+       empty? ststa => empty()$(ST ST A)
+       empty? x => cssa(frst ststa, empty()$(ST ST A))
+       cssa(frst ststa, mapsa(y +-> (rst x)*y, comps(rst ststa, x)))
+
+    if A has Algebra RN then
+      integre : (ST A, I) -> ST A
+      integre(x, n) == delay
+        empty? x => zro()
+        concat((1$I/n) * frst(x), integre(rst x, n + 1))
+
+      integ : ST A -> ST A
+      integ x == integre(x, 1)
+
+      nldere : (ST ST A, ST A) -> ST A
+      nldere(lslsa, c) == lazyIntegrate(0, addiag(comps(lslsa, c)))
+      nlde lslsa == YS(y +-> nldere(lslsa, y))
+
+      RATPOWERS : Boolean := A has "^": (A,RN) -> A
+
+      smult : (RN, ST A) -> ST A
+      smult(rn, x) == map(y +-> rn*y, x)
+      powerrn : (RN, ST A, ST A) -> ST A
+      powerrn(rn, x, c) == delay
+        concat(1, integ(smult(rn + 1, c * deriv x)) - rst x * c)
+      powern(rn, x) ==
+        order : I := 0
+        for n in 0.. repeat
+          empty? x => return zro()
+          not zero? frst x => (order := n; break)
+          x := rst x
+          n = 1000 =>
+            error "^: series with many leading zero coefficients"
+        (ord := (order exquo denom(rn))) case "failed" =>
+          error "^: rational power does not exist"
+        co := frst x
+        if ord > 0 and rn < 0 then
+           error "^: negative power does not exist"
+        (invCo := recip co) case "failed" =>
+           error "^ rational power of coefficient undefined"
+-- This error message is misleading, isn't it? see sups.spad/cRationalPower
+        power :=
+          (co = 1) => YS(y +-> powerrn(rn, x, y))
+          (denom rn) = 1 =>
+            not negative?(num := numer rn) =>
+-- It seems that this cannot happen, but I don't know why
+              (co^num::NNI) * YS(y +-> powerrn(rn, (invCo::A)*x, y))
+            (invCo::A)^((-num)::NNI) * YS(y +-> powerrn(rn, (invCo::A)*x, y))
+
+          RATPOWERS => co^rn * YS(y +-> powerrn(rn, (invCo::A)*x, y))
+          error "^ rational power of coefficient undefined"
+        monom(1, (ord :: I) * numer(rn)) * power
+
+    if A has Field and A has Algebra(RN) then
+      mapdiv(x, y) == delay
+        empty? y => error "stream division by zero"
+        empty? x => zro()
+        concat(frst x/frst y, mapdiv(rst x, rst y))
+
+      ginteg : (I -> A, ST A) -> ST A
+      ginteg(f, x) == mapdiv(x, map(f, integers 1)$SP2(I, A))
+
+      lazyGintegrate(fntoa, s, xf) == concat(s, ginteg(fntoa, delay xf))
+
+      finteg : ST A -> ST A
+      finteg x == mapdiv(x, int 1)
+      powerre : (A, ST A, ST A) -> ST A
+      powerre(s, x, c) == delay
+        empty? x => zro()
+        frst x ~= 1 => error "^:constant coefficient should be 1"
+        concat(frst x, finteg((s+1)*(c*deriv x))-rst x * c)
+      power(s, x) == YS(y +-> powerre(s, x, y))
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

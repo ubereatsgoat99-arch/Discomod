@@ -1,0 +1,198 @@
+)abbrev package FLAGG2 FiniteLinearAggregateFunctions2
+++ Description:
+++ FiniteLinearAggregateFunctions2 provides functions involving two
+++ FiniteLinearAggregates where the underlying domains might be
+++ different. An example of this might be creating a list of rational
+++ numbers by mapping a function across a list of integers where the
+++ function divides each integer by 1000.
+
+FiniteLinearAggregateFunctions2(S, A, R, B):
+ Exports == Implementation where
+  S, R : Type
+  A   : Join(LinearAggregate S, finiteAggregate)
+  B   : Join(LinearAggregate R, finiteAggregate)
+
+  Exports ==> with
+    map    : (S -> R, A) -> B
+      ++ map(f, a) applies function f to each member of aggregate
+      ++ \spad{a} resulting in a new aggregate over a
+      ++ possibly different underlying domain.
+
+    reduce : ((S, R) -> R, A, R) -> R
+      ++ reduce(f, a, r) applies function f to each
+      ++ successive element of the
+      ++ aggregate \spad{a} and an accumulant initialized to r.
+      ++ For example,
+      ++ \spad{reduce(_+$Integer, [1, 2, 3], 0)}
+      ++ does \spad{3+(2+(1+0))}. Note: third argument r
+      ++ may be regarded as the
+      ++ identity element for the function f.
+
+    scan   : ((S, R) -> R, A, R) -> B
+      ++ scan(f, a, r) successively applies
+      ++ \spad{reduce(f, x, r)} to more and more leading sub-aggregates
+      ++ x of aggregate \spad{a}.
+      ++ More precisely, if \spad{a} is \spad{[a1, a2, ...]}, then
+      ++ \spad{scan(f, a, r)} returns
+      ++ \spad{[reduce(f, [a1], r), reduce(f, [a1, a2], r), ...]}.
+
+  Implementation ==> add
+    if A has ListAggregate(S) then         -- A is a list-oid
+      reduce(fn, l, ident) ==
+        empty? l => ident
+        reduce(fn, rest l, fn(first l, ident))
+
+      if B has ListAggregate(R) or not(B has shallowlyMutable) then
+        -- A is a list-oid, and B is either list-oids or not mutable
+        map(f, l) == construct [f s for s in entries l]
+
+        scan(fn, l, ident) ==
+          empty? l => empty()
+          val := fn(first l, ident)
+          concat(val, scan(fn, rest l, val))
+
+      else                      -- A is a list-oid, B a mutable array-oid
+        map(f, l) ==
+          empty?(l) => empty()
+          l1 := entries(l)
+          i := minIndex(w := new(#l1, f(first(l1)))$B) + 1
+          for a in rest entries l repeat (qsetelt!(w, i, f a); i := inc i)
+          w
+
+        scan(fn, l, ident) ==
+          empty?(l) => empty()
+          l1 := entries(l)
+          vl := fn(first(l1), ident)
+          i := minIndex(w := new(#l1, vl)$B) + 1
+          for a in rest entries l repeat
+            vl := qsetelt!(w, i, fn(a, vl))
+            i := inc i
+          w
+
+    else                              -- A is an array-oid
+      reduce(fn, v, ident) ==
+        val := ident
+        for i in minIndex v .. maxIndex v repeat
+          val := fn(qelt(v, i), val)
+        val
+
+      if B has ListAggregate(R) then   -- A is an array-oid, B a list-oid
+        map(f, v) ==
+          construct [f qelt(v, i) for i in minIndex v .. maxIndex v]
+
+        scan(fn, v, ident) ==
+          w := empty()$B
+          for i in minIndex v .. maxIndex v repeat
+            ident := fn(qelt(v, i), ident)
+            w := concat(ident, w)
+          reverse! w
+
+      else                             -- A and B are array-oid's
+        if B has shallowlyMutable then -- B is also mutable
+          map(f, v) ==
+            n := #v
+            n = 0 => empty()
+            i0 := minIndex v
+            w := new(#v, f qelt(v, i0))$B
+            for i in i0 + 1 .. maxIndex w repeat
+              qsetelt!(w, i, f qelt(v, i))
+            w
+
+          scan(fn, v, ident) ==
+            n := #v
+            n = 0 => empty()
+            i0 := minIndex v
+            vl := fn(qelt(v, i0), ident)
+            w   := new(#v, vl)$B
+            for i in i0 + 1 .. maxIndex v repeat
+              vl := qsetelt!(w, i, fn(qelt(v, i), vl))
+            w
+
+        else                                   -- B non mutable array-oid
+          map(f, v) ==
+            construct [f qelt(v, i) for i in minIndex v .. maxIndex v]
+
+          scan(fn, v, ident) ==
+            w := empty()$B
+            for i in minIndex v .. maxIndex v repeat
+              ident := fn(qelt(v, i), ident)
+              w := concat(w, ident)
+            w
+
+)abbrev package FSAGG2 FiniteSetAggregateFunctions2
+++ Author: Robert S. Sutor
+++ Date Created: 15 May 1990
+++ Description:
+++ FiniteSetAggregateFunctions2 provides functions involving two
+++ finite set aggregates where the underlying domains might be
+++ different. An example of this is to create a set of rational
+++ numbers by mapping a function across a set of integers, where the
+++ function divides each integer by 1000.
+
+FiniteSetAggregateFunctions2(S, A, R, B) : Exports == Implementation where
+   S, R : SetCategory
+   A   : FiniteSetAggregate S
+   B   : FiniteSetAggregate R
+
+   Exports ==> with
+     map : (S -> R, A) -> B
+         ++ map(f, a) applies function f to each member of
+         ++ aggregate \spad{a}, creating a new aggregate with
+         ++ a possibly different underlying domain.
+
+     reduce : ((S, R) -> R, A, R) -> R
+         ++ reduce(f, a, r) applies function f to each
+         ++ successive element of the aggregate \spad{a} and an
+         ++ accumulant initialized to r.
+         ++ For example,
+         ++ \spad{reduce(_+$Integer, [1, 2, 3], 0)}
+         ++ does a \spad{3+(2+(1+0))}.
+         ++ Note: third argument r may be regarded
+         ++ as an identity element for the function.
+
+     scan : ((S, R) -> R, A, R) -> B
+         ++ scan(f, a, r) successively applies \spad{reduce(f, x, r)}
+         ++ to more and more leading sub-aggregates x of
+         ++ aggregate \spad{a}.
+         ++ More precisely, if \spad{a} is \spad{[a1, a2, ...]}, then
+         ++ \spad{scan(f, a, r)} returns
+         ++ \spad {[reduce(f, [a1], r), reduce(f, [a1, a2], r), ...]}.
+
+   Implementation ==> add
+     map(fn, a) ==
+       set(map(fn, parts a)$ListFunctions2(S, R))$B
+     reduce(fn, a, ident) ==
+       reduce(fn, parts a, ident)$ListFunctions2(S, R)
+     scan(fn, a, ident) ==
+       set(scan(fn, parts a, ident)$ListFunctions2(S, R))$B
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

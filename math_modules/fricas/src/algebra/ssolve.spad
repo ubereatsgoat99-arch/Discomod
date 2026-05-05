@@ -1,0 +1,347 @@
+)if false
+\documentclass{article}
+\usepackage{axiom, amsthm, amsmath}
+\newtheorem{ToDo}{ToDo}[section]
+
+\begin{document}
+\title{solve.spad}
+\author{Martin Rubey}
+\maketitle
+\begin{abstract}
+\end{abstract}
+\tableofcontents
+\section{domain SMPEXPR SparseMultivariatePolynomialExpressions}
+
+)endif
+
+)abbrev domain SMPEXPR SparseMultivariatePolynomialExpressions
+++ Description:
+++ This domain is a hack, in some sense. What is needed is providing -
+++ automatically - all operations supported by the coefficient
+++ domain, as long as the polynomials can be retracted to that domain,
+++ i.e., as long as they are just constants.
+-- I don't see another way to do this, unfortunately.
+SparseMultivariatePolynomialExpressions(R : Ring
+                                       ) : Exports == Implementation where
+
+    Exports ==> PolynomialCategory(R, IndexedExponents NonNegativeInteger,
+                                   NonNegativeInteger) with
+
+        if R has TranscendentalFunctionCategory
+        then TranscendentalFunctionCategory
+
+    Implementation ==> SparseMultivariatePolynomial(R, NonNegativeInteger) add
+
+        if R has TranscendentalFunctionCategory then
+            log(p : %) : % ==
+                ground? p => coerce log ground p
+                output("log p for p=", p::OutputForm)$OutputPackage
+                error "SUPTRAFUN: log only defined for elements of the coefficient ring"
+
+            exp(p : %) : % ==
+                ground? p => coerce exp ground p
+                output("exp p for p=", p::OutputForm)$OutputPackage
+                error "SUPTRAFUN: exp only defined for elements of the coefficient ring"
+            sin(p : %) : % ==
+                ground? p => coerce sin ground p
+                output("sin p for p=", p::OutputForm)$OutputPackage
+                error "SUPTRAFUN: sin only defined for elements of the coefficient ring"
+            asin(p : %) : % ==
+                ground? p => coerce asin ground p
+                output("asin p for p=", p::OutputForm)$OutputPackage
+                error "SUPTRAFUN: asin only defined for elements of the coefficient ring"
+            cos(p : %) : % ==
+                ground? p => coerce cos ground p
+                output("cos p for p=", p::OutputForm)$OutputPackage
+                error "SUPTRAFUN: cos only defined for elements of the coefficient ring"
+            acos(p : %) : % ==
+                ground? p => coerce acos ground p
+                output("acos p for p=", p::OutputForm)$OutputPackage
+                error "SUPTRAFUN: acos only defined for elements of the coefficient ring"
+
+
+)if false
+
+\section{package UTSSOL TaylorSolve}
+
+[[UTSSOL]] is a facility to compute the first few coefficients of a Taylor
+series given only implicitly by a function [[f]] that vanishes when applied to
+the Taylor series.
+
+It uses the method of undetermined coefficients.
+
+\begin{ToDo}
+  Could I either
+  \begin{itemize}
+  \item take a function [[UTSCAT F -> UTSCAT F]] and still be able to compute
+    with undetermined coefficients, or
+  \item take a function [[F -> F]], and do likewise?
+  \end{itemize}
+
+  Let's see.
+
+  Try to compute the equation without resorting to power series. I.e., %
+  [[c : SUP SUP F]], and [[f : SUP SUP F -> SUP SUP F]]. Won't this make the
+  computation of coefficients terribly slow?
+
+  I could also try to replace transcendental kernels with variables\dots
+
+  Unfortunately, [[SUP F]] does not have [[TRANFUN]] -- well, it can't, of
+  course. However, I'd like to be able to compute %
+  [[sin(1+monomial(1, 1)$UFPS SUP EXPR INT)]].
+\end{ToDo}
+)endif
+
+)abbrev package UTSSOL TaylorSolve
+++ Description:
+++ This package computes the first few coefficients of a Taylor series
+++ given only implicitly by a function \spad{f} that vanishes when applied
+++ to the Taylor series.
+TaylorSolve(F, UTSF, UTSSMPF) : Exports == Implementation where
+    F : Field
+    SMPF  ==> SparseMultivariatePolynomialExpressions F
+    UTSF : UnivariateTaylorSeriesCategory F
+    UTSSMPF : UnivariateTaylorSeriesCategory SMPF
+    NNI  ==> NonNegativeInteger
+
+    Exports == with
+        seriesSolve : (UTSSMPF -> UTSSMPF, List F) -> UTSF
+          ++ seriesSolve(f, l) returns y solving equation \spad{f(y) = 0}.
+          ++ \spad{l} gives initial coefficients of y.
+
+    Implementation == add
+
+)if false
+
+[[coeffs]] is the stream of coefficients of the solution.  We store in [[st.2]]
+the stream of all coefficients, and in [[st.1]] the stream starting with the
+first coefficient that has possibly not yet been computed.
+
+Consider an arbitrary equation $f\big(x, y(x)\big)=0$. When setting $x = 0$, we
+obtain $f\big(0, y(0)\big)=0$. It is not necessarily the case that this
+determines $y(0)$ uniquely, so we need one initial value that satisfies this
+equation.
+\begin{ToDo}
+  [[seriesSolve]] should check that the given initial values satisfy $f\big(0, y(0),
+  y'(0), ...\big) = 0$.
+\end{ToDo}
+Now consider the derivatives of $f$, where we write $y$ instead of $y(x)$ for
+better readability:
+\begin{equation*}
+  \frac{d}{dx}f(x, y)=f_1(x, y) + f_2(x, y)y^\prime
+\end{equation*}
+and
+\begin{align*}
+  \frac{d^2}{dx^2}f(x, y)&=f_{1, 1}(x, y)\\
+                         &+f_{1, 2}(x, y)y^\prime\\
+                         &+f_{2, 1}(x, y)y^\prime\\
+                         &+f_{2, 2}(x, y)(y^\prime)^2\\
+                         &+f_2(x, y)y^{\prime\prime}.
+\end{align*}
+In general, $\frac{d^2}{dx^2}f(x, y)$ depends only linearly on
+$y^{\prime\prime}$.
+
+\begin{ToDo}
+  This points to another possibility : Since we know that we only need to solve
+  linear equations, we could compute two values and then use interpolation.
+  This might be a bit slower, but more importantly : can we still check that we
+  have enough initial values? Furthermore, we then really need that $f$ is
+  analytic, i.e., operators are not necessarily allowed anymore. However, it
+  seems that composition is allowed.
+\end{ToDo}
+
+)endif
+
+        seriesSolve(f, l) ==
+            l1 := [e::SMPF for e in l]::Stream SMPF
+            s1 : Stream Integer := stream(inc, 0)$Stream(Integer)
+            l2 := map(i +-> monomial(1, monomial(1, i::NNI)
+                                                $IndexedExponents(NNI))
+                            $SMPF, s1)$StreamFunctions2(Integer, SMPF)
+
+            coeffs : Stream SMPF := concat(l1, l2)
+            st : List Stream SMPF := [coeffs, coeffs]
+
+            next : () -> F :=
+                nr : Stream SMPF := st.1
+                res : F
+
+                if ground?(coeff : SMPF := first nr)$SMPF then
+-- If the next element was already calculated, we can simply return it:
+
+                    res := ground coeff
+                    st.1 := rest nr
+                else
+
+-- Otherwise, we have to find the first non-satisfied relation and solve it.  It
+-- should be linear, or a single non-constant monomial. That is, the solution
+-- should be unique.
+                    eqs : Stream SMPF := coefficients f series(st.2)
+                    eq : SMPF
+                    while zero?(eq := first eqs) repeat eqs := rest eqs
+
+                    vars := variables eq
+                    if not member?(retract(coeff)@NNI, vars) then
+                        output("The variable is:",
+                                       coeff::OutputForm)$OutputPackage
+                        output("The next equations are:",
+                                       (st.2)::OutputForm)$OutputPackage
+
+                        if empty? vars then
+                            error "seriesSolve: there is no solution with"
+                                  " the given initial values"
+                        else
+                            error "seriesSolve: coefficient does not appear"
+                                  " in equation"
+
+                    if not one?(# vars) or degree(eq, first vars) > 1 then
+                        if monomial? eq then
+                            for var in vars repeat
+                                i : Integer := 1
+                                while ground?(nr.i) or
+                                      (retract(nr.i)@NNI ~= var) repeat
+                                    i := i+1
+                                nr.i := 0
+                            st.1 := rest nr
+                            res := 0
+                        else
+                            output("The variable is:",
+                                           coeff::OutputForm)$OutputPackage
+                            output("The equation is:",
+                                           eq::OutputForm)$OutputPackage
+                            error "seriesSolve: coefficient not uniquely"
+                                  " determined"
+                    else
+                        res := (-coefficient(eq,
+                                             monomial(0$NNI, first vars
+                                                     )$IndexedExponents(NNI)
+                                            )$(SMPF)
+                                 /coefficient(eq,
+                                              monomial(1$NNI, first vars
+                                                      )$IndexedExponents(NNI)
+                                             )$(SMPF))
+
+                        nr.1 := res::SMPF
+                        st.1 := rest nr
+
+                res
+
+            series stream next
+
+
+)if false
+
+\section{package EXPRSOL ExpressionSolve}
+
+\begin{ToDo}
+  I'd really like to be able to specify a function that works for all domains
+  in a category. For example, [[x +-> y(x)^2 + sin x + x]] should \lq work\rq\
+  for [[EXPR INT]] as well as for [[UTS INT]], both being domains having
+  [[TranscendentalFunctionCategory]].
+\end{ToDo}
+)endif
+
+)abbrev package EXPRSOL ExpressionSolve
+ExpressionSolve(R, F, UTSF, UTSSMPF) : Exports == Implementation where
+    R : Join(Comparable, IntegralDomain, ConvertibleTo InputForm)
+    F : FunctionSpace R
+    UTSF : UnivariateTaylorSeriesCategory F
+    SMPF ==> SparseMultivariatePolynomialExpressions F
+    UTSSMPF : UnivariateTaylorSeriesCategory SMPF
+    OP   ==> BasicOperator
+    SY   ==> Symbol
+    NNI  ==> NonNegativeInteger
+    MKF ==> MakeBinaryCompiledFunction(F, UTSSMPF, UTSSMPF, UTSSMPF)
+
+    Exports == with
+
+        seriesSolve : (F, OP, SY, List F) -> UTSF
+        replaceDiffs : (F, OP, Symbol) -> F
+
+    Implementation == add
+
+)if false
+
+The general method is to transform the given expression into a form which can
+then be compiled. There is currently no other way in FriCAS to transform an
+expression into a function.
+
+We need to replace the differentiation operator by the corresponding function
+in the power series category, and make composition explicit. Furthermore, we
+need to replace the variable by the corresponding variable in the power series.
+It turns out that the compiler doesn't find the right definition of
+[[monomial(1, 1)]]. Thus we introduce it as a second argument. In fact, maybe
+that's even cleaner. Also, we need to tell the compiler that kernels that are
+independent of the main variable should be coerced to elements of the
+coefficient ring, since it will complain otherwise.
+\begin{ToDo}
+  I cannot find an example for this behaviour right now. However, if I do use
+  the coerce, the following fails:
+  \begin{verbatim}
+     seriesSolve(h x -1-x*h x *h(q*x), h, x, [1])
+  \end{verbatim}
+\end{ToDo}
+
+)endif
+
+        opelt := operator('elt)$OP
+        opdiff := operator('D)$OP
+        opcoerce := operator('coerce)$OP
+
+--        replaceDiffs: (F, OP, Symbol) -> F
+        replaceDiffs (expr, op, sy) ==
+            lk := kernels expr
+            for k in lk repeat
+--                if freeOf?(coerce k, sy) then
+--                    expr := subst(expr, [k], [opcoerce [coerce k]])
+
+                if is?(k, op) then
+                    arg := first argument k
+                    if arg = sy::F
+                    then expr := subst(expr, [k], [(name op)::F])
+                    else expr := subst(expr, [k], [opelt [(name op)::F,
+                                                          replaceDiffs(arg, op,
+                                                          sy)]])
+--                    => iterate
+
+                if is?(k, '%diff) then
+                    args := argument k
+                    differentiand :=
+                        replaceDiffs(subst(args.1, args.2 = args.3), op, sy)
+                    expr := subst(expr, [k], [opdiff differentiand])
+--                    => iterate
+            expr
+
+
+        seriesSolve(expr, op, sy, l) ==
+            ex := replaceDiffs(expr, op, sy)
+            f := compiledFunction(ex, name op, sy)$MKF
+            seriesSolve(x +-> f(x, monomial(1, 1)$UTSSMPF),
+                        l)$TaylorSolve(F, UTSF, UTSSMPF)
+
+
+--Copyright (c) 2006-2007, Martin Rubey <Martin.Rubey@univie.ac.at>
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

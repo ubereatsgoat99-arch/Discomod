@@ -1,0 +1,31 @@
+Function: ellchangepoint
+Section: elliptic_curves
+C-Name: ellchangepoint0
+Prototype: GGDG
+Help: ellchangepoint(E,x,v): change data on point or vector of points x on an
+ elliptic curve according to v=[u,r,s,t].
+Doc:
+ changes the coordinates of the point or
+ vector of points $x$ on $E$ using the vector \kbd{v=[u,r,s,t]},
+ i.e.~if $x'$ and
+ $y'$ are the new coordinates, then $x=u^{2}x'+r$, $y=u^{3}y'+su^{2}x'+t$
+ (see also \kbd{ellchangecurve}).
+ \bprog
+ ? E0 = ellinit([1,1]); P0 = [0,1]; v = [1,2,3,4];
+ ? E = ellchangecurve(E0, v);
+ ? P = ellchangepoint(E0,P0,v)
+ %3 = [-2, 3]
+ ? ellisoncurve(E, P)
+ %4 = 1
+ ? ellchangepointinv(E,P,v)
+ %5 = [0, 1]
+ @eprog
+Variant: The reciprocal function
+ \fun{GEN}{ellchangepointinv0}{GEN E, GEN x, GEN ch}
+ inverts the coordinate change. The curve is needed to
+ identify the domain over which operations are performed. When $v$ and $x$ are
+ defined over a simple domain which can be infered from the coordinates (e.g.,
+ a finite field or the rationals), so that generic arithmetic operations
+ (\kbd{gadd}, \kbd{gmul}, etc.) apply directly, then the elliptic curve is not
+ needed: one may then use \fun{GEN}{ellchangepoint}{GEN x, GEN ch}.
+

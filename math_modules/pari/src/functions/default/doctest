@@ -1,0 +1,15 @@
+Function: _def_doctest
+Class: default
+Section: default
+C-Name: sd_doctest
+Prototype:
+Help:
+Doc: If set to $1$, this default allows to copy-paste examples from the
+ documentation unmodified and check whether results match (doctesting). In
+ this mode, \kbd{gp} discards lines starting with a whitespace, unless the
+ first non-whitespace character is a prompt ('?' followed by a space), in
+ which case the prompt is ignored, the rest of the input line is evaluated,
+ and the result is output as usual. Can also be switched on and off
+ using \b{z}.
+
+ The default value is \kbd{0}.

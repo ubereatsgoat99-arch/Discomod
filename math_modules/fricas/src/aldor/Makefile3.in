@@ -1,0 +1,60 @@
+VPATH=@srcdir@
+ALDOR=@ALDOR@
+ALDOR_datadir=@ALDOR_datadir@
+INTERPSYS = DAASE=$(fricas_targetdir) FRICAS_INITFILE='' $(fricas_target_bindir)/FRICASsys
+
+# We assume that the file al/libfricas.al is up-to-date.
+# ${ALDOR_datadir}/lib/libfoam.al must exist.
+# Furthermore the calling process for this Makefile3.in should set the
+# variable aldor_srcs to the same value as in Makefile.in.
+default: runtimefiles
+
+###################################################################
+# Runtime - things required to run aldor files
+# It is not clear whether actually all files in $(aldor_srcs) are needed.
+runtime_files = $(patsubst %,lib/%.$(FASLEXT), runtime $(aldor_srcs))
+$(runtime_files): lib/%.$(FASLEXT): lsp/%.lsp
+aldor_ao_files  = $(patsubst %,ao/%.ao, $(aldor_srcs))
+aldor_lsp_files = $(patsubst %,lsp/%.lsp, $(aldor_srcs))
+lsp/runtime.lsp: runtime.ao lsp/.dir
+	$(ALDOR) -flsp=$@ $<
+
+runtime.ao: $(ALDOR_datadir)/lib/libfoam.al ao/.dir
+	ar x $< $@
+
+$(aldor_ao_files): ao/%.ao: al/libfricas.al ao/.dir
+	ar x $< $*.ao
+	mv $*.ao $@
+
+$(aldor_lsp_files): lsp/%.lsp: ao/%.ao lsp/.dir
+	$(ALDOR) -flsp=$@ $<
+
+$(runtime_files): lib/%.$(FASLEXT): tmp/mko_%.lsp lsp/%.lsp lib/.dir
+	$(INTERPSYS) < $< > tmp/mko_$*.log
+	test -f $@
+
+build_runtime_files := $(foreach i,$(runtime_files), \
+                                 $(fricas_targetdir)/aldor/$(i))
+
+$(build_runtime_files): $(fricas_targetdir)/aldor/% : %
+	mkdir -p $$(dirname $@)
+	cp $< $@
+
+tmp/mko_%.lsp: tmp/.dir
+	echo ')lisp (compile-file "$(abs_builddir)/lsp/$*.lsp" :output-file "$(abs_builddir)/lib/$*.$(FASLEXT)")' > $@
+	echo ')lisp (quit)' >> $@
+
+runtimefiles: $(runtime_files) $(build_runtime_files)
+
+
+#
+# :: Directories
+#
+
+###################################################################
+# Creation of build subdirectories.
+# TODO: Maybe that can be removed some day. There is no real need to create
+# subdirectories.
+%/.dir:
+	${MKDIR_P} $(patsubst %/.dir,%,$@)
+	touch -t 199901010000 $@

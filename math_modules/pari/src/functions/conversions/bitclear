@@ -1,0 +1,40 @@
+Function: bitclear
+C-Name: bitclear
+Section: conversions
+Prototype: vWL
+Help: bitclear(~x,n): clear bit n of x in place, assuming x >= 2^(n+1).
+Doc:
+ Clear \emph{in place} the $n^{\text{th}}$ bit of the integer
+ $x \geq 2^{n+1}$ starting from the right, i.e.~the coefficient of $2^{n}$ in
+ the binary expansion of $x$. This slightly awkward specification ensures the
+ highest bit of $x$ remains set, in particular \kbd{exponent}$(x)$ and the
+ total number of bits in the binary expansion remain constant. This allows to
+ use $x$ as a bit vector of constant length, without worrying about
+ setting the sign of $x$ to zero in case all bits we cleared.
+ To clear a higher bit, use \kbd{x = bitnegimply(x, 1<<n)}.
+
+ See \kbd{bitset} for more details. Here is a naive GP implementation of the
+ sieve of Eratosthenes, where bit $j$ in the bit vector represents the
+ integer $j \in \{0, 1, \dots, N\}$ and remains set at the end if and only
+ if $j$ is prime:
+ \bprog
+ ? sieve(N) =
+ { \\@com set all bits up to N+2, representing [0..N] plus a sentinel bit
+   my(V = 1<<(N+2) - 1);
+   bitclear(~V, 0);
+   bitclear(~V, 1); \\ clear bits 0, 1: not prime
+   for (p = 2, sqrtint(N), \\ 2*p, 3*p, ... are not prime
+      if (bittest(V,p), forstep (j = 2*p, N, p, bitclear(~V,j))));
+   vecextract([0..N], bitnegimply(V, 1<<(N+1)));
+ }
+ ? sieve(100)
+ %2 = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97]
+ ? sieve(2^20) == primes([1,2^20])
+ %3 = 1
+ ? ##
+   ***   last result computed in 157 ms.
+ @eprog\noindent Note the technical complication of having to set (then
+ unset) the $N + 1$ sentinel bit, using \kbd{bitnegimply} since
+ \kbd{bitclear} cannot clear a highest bit. Standard improvements such as not
+ including even numbers, or more generally restricting to appropriate
+ congruence classes, are left to the reader.

@@ -1,0 +1,620 @@
+
+
+# How to add a new constructor:
+#
+#   - if the constructor is in separate file(s) add name of the
+#     file(s) to SPAD_SRCS
+#
+#   - add abbreviated name(s) of new constructors to SPADLISTx
+#     (where 'x' is from 1 to 8) keeping names in alphabetic order.
+#
+#   - if you add a category add it to CATLIST, if the category provides
+#     default implementation (has 'add' part) add it to CATDOMS.
+#
+# If you want to know mechanics of algebra build see
+# 'doc/algebra_build.txt'.
+
+ECHO_B=printf '%s\\\n'
+ECHO_T=printf '\t%s\n'
+
+OUT=$(fricas_targetdir)/algebra
+DOC=$(fricas_target_docdir)/src/algebra
+OUTSRC=$(fricas_target_srcdir)/algebra
+# INPUT=${INT}/input
+INPUT=../input
+
+
+INTERPSYS=FRICAS=${FRICAS} FRICAS_INITFILE='' $(fricas_build_bindir)/interpsys
+
+
+SPAD_SRCS= \
+     acplot aggcat2 aggcat ainterval algcat algext algfact \
+     algfunc alg_top allfact alql amodgcd any array1 \
+     array2 attribs bags bezout boolean \
+     brill card carten \
+     catdef cden charpol clifford clip coerce \
+     color combfunc combinat complet computation \
+     computil constant contfrac \
+     coordsys cra crfp curve cycles \
+     cyclo cyldec defaults defintef defintrf \
+     derham dhmatrix dirichlet discrgrp distro divisor \
+     dpolcat drawopt drawpak draw efstruc efuls efupxs \
+     eigen elemntry elfuts equation1 error \
+     evalut expexpan export3D expps expr2ups expr extred \
+     facutil fdalg ffact ffcat ffdoms fffg \
+     files float flopak fmod \
+     fmt fmt1d fmt2d fmtjfricas fmtlatex fmtmathjax \
+     fname fnla \
+     fops fortcat fortmac fortout fortpak fortran forttyp \
+     fourier fparfrac fraction free fr fs2expxp \
+     fs2ups fspace galfact \
+     gaussfac gaussian gbeuclid gbintern \
+     gb gdirprod gdpoly geneez generic genser \
+     genups ghensel gnudraw gpgcd gpol gpresent graph grdef groebf \
+     groebsol gseries hashstate html hypertex ideal idecomp indexedp \
+     intaf intalg intaux intclos intden intef integer \
+     integrat interval intfact intlocp intpar intpm intrf intspec irexpand \
+     irsn ituple jet kl kovacic laplace laurent \
+     leadcdet lie limitps lindep lingrob linpen liouv \
+     listgcd list lll lmdict lodof lodof2 lodo logic \
+     mama manip mantepse math_sym mathml mappkg matcat matfuns matrix \
+     matstor mesh mfinfact mkfunc mkrecord \
+     mlift modgcd modhpsol modmonom modmon modring \
+     moebius mring mrv_limit mset mts muldep multfact multpoly \
+     multsqfr naalgc naalg newdata newpoint newpoly \
+     nlinsol npcoef nregset nsregset numarr numeigen \
+     numeric numode numquad numsolve numtheor oct \
+     odeef oderf omcat omdev omerror \
+     omserver opalg openmath op ordinal ore outform outform2 \
+     out pade padecf padiclib padic paramete partperm \
+     patmatch1 pattern pcurve perman \
+     permgrps perm pfbr pfo pfr \
+     pgcd pgrobner pinterp pleqn plot3d plot \
+     plottool polset poltopol polycat poly primelt \
+     product prs prtition pscat pseudolin \
+     ptranfn puiseux qalgset quat radeigen radix \
+     random ratfact rdeefx real0q \
+     realzero reclos rec regset rep1 rep2 \
+     resring retract rf riccati rinterp rsimp \
+     rule scene seg serexp setorder sets sex sf \
+     sgcf sign si skpol smith smith2 solvedio \
+     solvelin solverad sortpak space special special2 sregset \
+     ssolve stream string sttaylor sttf \
+     sturm suchthat sum sups \
+     symbol syssolp system tableau table \
+     taylor tensor tex texd texmacs timeout transsolve tree trigcat \
+     triset tube twofact u32vec unittest updecomp \
+     utsode variable vector view2D view3D viewDef \
+     vecrec viewpack vsbasis weier wtpol \
+     xdpolyf xhash xlpoly xpfact xpoly \
+     ystream zerodim
+
+SPADFILES=$(patsubst %, $(OUTSRC)/%.spad, $(SPAD_SRCS))
+
+
+ALDOR_SRCS=\
+  axtimer ffrac herm interval invnode invrender \
+  invtypes invutils iviews ndftip nepip noptip \
+  nqip nrc nsfip
+
+ALDORFILES=$(patsubst %, $(OUTSRC)/%.as, $(ALDOR_SRCS))
+
+
+subdir = src/algebra/
+
+
+
+SPADLIST1=\
+     A1AGG ABELGRP ABELMON ABELSG ACF ACFS \
+     ACPLOT AF AGG AHYP AINTCAT AINTRVL ALAGG ALGEBRA \
+     ALGFACT ALGFF ALGMANIP ALGMFACT ALGPKG ALGSC \
+     ALIST AMR ANON AN ANTISYM ANY1 \
+     ANY APPLYORE APPRULE APRODC ARR2CAT ARRAY12 ARRAY1 \
+     ARRAY2 ARRAY22 ASSOCEQ ASTACK \
+     ATCS ATADDVA ATAPPRO ATARBEX ATARBPR ATCANCL ATCANON  ATCUNOR \
+     ATFINAG ATLR ATMULVA ATNZDIV ATRIG ATSHMUT ATTWSR \
+     ATUNIKN ATVCWC AUTOMOR \
+     BALFACT BASFILE BASTYPE BBTREE BDISTL BEZOUT BEZOUT2 BGAGG BIALG BICPO \
+     BINARY BITS BITST BJOIN BKAFILE BLAT BMEET BMODULE BOOLEAN BOP1 \
+     BOP BOUNDZRO BRAGG BRILL BRINFO \
+     BSTREE BTAGG BTCAT BTOURN BTREE CABMON \
+     CACHSET CAD CADU CARD CARTEN2 CARTEN CCLASS CDEN CDFMAT CDFVEC \
+     CELL CFACET CFCAT CHAINC CHARNZ CHARPOL CHARPOL0 CHARPOL2 CHARPOL3 \
+     CHARPOL4 CHAR CHARZ CHVAR \
+     CINTSLPE CKP CLAGG CLIF CLINDEP CLIP CMPLXRT \
+     COALG COCHNC CODCPO COLOR \
+     COMBF COMBINAT COMBOPC COMM COMMUPC COMPCODE COMPUTIL COMPAR \
+     COMPCAT COMPLEX2 COMPLEX COMPLPAT COMPPROP \
+     COMRING CONTFRAC COORDSYS CPIMA CPMATCH CRAPACK \
+     CRFP CSTTOOLS CTRIGMNP CUBEC CUBECF CVMP CYCGRP \
+     CYCLES CYCLOT2
+
+SPADLIST2=\
+     DBASE DBLRESP \
+     DECIMAL DEFINTEF DEFINTRF DEGRED DELTAC DELTCF DEQUEUE DERHAM DFELEM \
+     DFINTTLS DFLOAT DFMAT DFVEC DFSFUN DFSFUN2 DGRPH DHMATRIX DIAGG DIFEXT \
+     DIFRING DIHGRP DIOPS DIOSP DIRPCAT DIRPROD2 DIRPROD DIRRING \
+     DISPLAY DISTCAT DISTEX DISTLAT DISTPOL DISTRO DISTRO2 DIVRING DJBP \
+     DLAGG DLIST DLP DMP \
+     DCPO DPMM DPMO DPOLCAT DQAGG DRAWCFUN DRAWCURV \
+     DRAWCX DRAWHACK DRAWPT DRAW DROPT0 DROPT1 \
+     DROPT DSMP DSTCFPG DVARCAT EAB \
+     EF EFACTOR EFGUSER EFSTRUC EFULS EFUPXS ELAGG ELEMFUN \
+     ELFUTS ELINSOL ELIPIDF ELTAB ELTAGG EMR ENTIRER EP \
+     EQ2 EQ EQTBL ERRIND ERROR ES1 ES2 \
+     ESC2 ES \
+     EUCDOM EVALAB EVALCYC EXIT EXP3D EXPEXPAN EXPR2 \
+     EXPR2UPS EXPRODE EXPR EXPRTUBE EXPUPXS EXTRED FACTCAT FACTFUNC \
+     FACUTIL FAKEPOL FAMR FARRAY \
+     FAXF FBICPO FCDCPO FCOMP FCPAK1 FCTOOL FC FDALG FDIV2 FDIVCAT \
+     FDIV FDCPO FELEM FELFUN FEVALAB FEXPR FFCAT2 FFCAT FFCGP \
+     FFCG FFCGX FFF FFHOM FFIELDC FFINTBAS \
+     FFNBP FFNB FFNBX FFPOLY2 FFPOLY FFP \
+     FFSLPE FF FFX FGLMICPK FGROUP FGRPH FIELD \
+     FILECAT FILE FILSER FINAALG FINGEN FINGPKG \
+     FINGRP FINITE FINLAT FINRALG FLAGG2
+
+SPADLIST3=\
+     FLAGG FLALG FLASORT FLINEXP FLIOUFUN FLOATCP FLOATRP \
+     FLOAT FLOOPS FMAGMA FMCAT FMC FMFUN FMOEBF FMONOID \
+     FM FM2 FMCF2 FMTC \
+     FMT1D FMT2D FMTCAT FMTLATEX FMTMJAX FMTOUT \
+     FNAME FNCAT FNGRPH FNLA FOP \
+     FORDER FORMAT FORMCAT FORTCAT FORTFN FORTFORM FORTRAN FOUT \
+     FPARFRAC FPATMAB FPC FPOSET FPS FR2 \
+     FRAC2 FRAC FRAMALG FRETRCT FRIDEAL2 FRIDEAL \
+     FRIMOD FRMOD FRNAAF2 FRNAALG FR FRUTIL FS2EXPXP \
+     FS2 FS2UPS FS2UPS2 FSAGG2 FSAGG FSC2 FSCINT FSCINTA FSERIES \
+     FSFUN FSINT FSPECF FSPRMELT FSRED FSRROOT FS FST \
+     FTEM FT FUNCTION FVC FVFUN \
+     GALFACS GALFACT GALFACTU GALPOLYU GAUSSFAC GBEUCLID \
+     GBF GBINTERN GB GCDBAS GCDDOM GCNAALG GDMP GDRAW \
+     GENEEZ GENMFACT GENMOEBF GENPGCD GENUPS GENUPS1 GENUPS2 GENUSER GHENSEL \
+     GMODPOL GOSPER GPOLCAT GPOLSET GRALG GRAY GRDEF \
+     GRIMAGE GRMOD GROEBSOL GROUP GROUPP GROUPPF1 GSERIES GSTBL \
+     GTSET HACKPI HANKP HASHABL HASHSTAT HASHTBL HB \
+     HDASSOC HDCONN HDMP HDP HDPAGE \
+     HEAP HELLFDIV HEUGCD HEXADEC HOAGG HOMOL HOPFALG HTMLFORM HYPCAT \
+     I16MAT I16VEC I32MAT I32VEC I8MAT I8VEC \
+     IALGFACT IARRAY1 IARRAY2 IBACHIN IBATOOL \
+     IBITS IBPTOOLS ICARD ICDEN IDEAL IDECOMP \
+     IDPC IDPO IEP \
+     IEVALAB IFARRAY IFF IIARRAY2 IJB ILIST ILOGIC
+
+SPADLIST4=\
+     IMATLIN IMATQF IMATRIX IMODHP INBFF INCALG INCRMAPS INDE \
+     INEP INFCG INFINITY INFORM1 INFORM INFPROD0 INFSP \
+     INMODGCD INNMFACT INPSIGN INS \
+     INTABL INTAF INTALG INTALG2 INTBIT INTCAT INTDEN INTDOM INTDSOL \
+     INTEF INTFACT INTG0 INTGEL INTHEORY INTHERAL \
+     INTHERTR INTLOCP INTPAF INTPAR1 INTPAR2 INTPM INTRAT INTRET \
+     INTRF INTRVL INTSLPE INT INTTOOLS INTTR \
+     INVLAPLA IPADIC IPC IPF IPRNTPK IR2F IR2 \
+     IROOT IRRF2F IRSN IR IRURPK \
+     ISMITH ISTRING ISUMP ISUPS ITAYLOR ITFUN2 ITFUN3 \
+     ITRIGMNP ITUPLE IVECTOR IXAGG JBBFC JBC \
+     JBE JBFC JBLF JBOPCAT JBP JBSA JBUNDLE JBX JCT \
+     JDE JDIFF JFRICAS JGB JLF JVF JOINLAT JORDAN KAFILE \
+     KDAGG KERCAT KERNEL2 KERNEL KOERCE KOERCEF KONVERF KONVERT KOVACIC \
+     LALG LAMBDA LAPLACE LA LAT LATJOFM LATMOFJ LAUPOL LAZM3PK LEADCDET \
+     LEXP LEXTRIPK LFCAT LF LGROBP LIB \
+     LIECAT LIE LIMITPS LIMITRF LINCOMB LINDEP LINEXP LINPEN \
+     LIST2MAP LIST2 LIST3 LIST LISTPKG LLINDEP LLLRED LMDICT LMODULE \
+     LMOPS LNAGG LO LODEEF LODO1 LODO2 LODO3 LODO3AUX LODOCAT \
+     LODOCONV LODOF LODOF2 LODOOPS LODO LOGIC LOOP LORER LPEFRAC \
+     LPOLY LSAGG LSMP1 LSMP2 LSMP LSPP LSQM LUD \
+     LWORD LZSTAGG M3D MAGCD MAGCD2 MAGCDOC MAGCDT2 MAGCDT3 MAGCDT4 \
+     MAGMA MAGMAWU MAMA MAPHACK1 MAPHACK2 \
+     MAPHACK3 MAPPKG1 MAPPKG2 MAPPKG3 MATCAT2 MATCAT MATHSYM
+
+SPADLIST5=\
+     MATLIN MATOP32 MATOPC MATRIX MATSTOR MCALCFN MCDEN MCMPLX \
+     MDAGG MEETLAT MESH MEVCAT MEVAL1 MEVAL2 \
+     MFGRPH MFINFACT MFLOAT MFOPC MHROWRED \
+     MINT MKBCFUNC MKCHSET MKFUNC MKRECORD \
+     MKUCFUNC MLIFT MMAP MMLFORM \
+     MODFACK MODFACT MODFACTG MODFIELD MODFT1 MODFT3 \
+     MODHP MODHPS MODMONOM \
+     MODMON MODOP MODRING MODULE MOEBIUS MOMPKG \
+     MONOGEN MONOID MONOTOOL MORECAT MPC2 MPC3 \
+     MPCPF MPOLY MPRFF MRATFAC MRCAT MRF2 MRING MRVLIM \
+     MSETAGG MSET MSYSCMD MTHING MTSCAT MULDEP MULTFACT \
+     MULTSQFR NAALG NARING NARNG \
+     NASRING NASRNG NBLM NCEP NCNTFRAC NFINTBAS NGROEB \
+     NLINSOL NNI NNRAT NODE1 NONE1 NONE NORMMA \
+     NORMPK NORMRETR NPCOEF NREP NSMP NSUP2 \
+     NSUP NTPOLFN NTSCAT NUMERIC NUMFMT \
+     NUMODE NUMQUAD NUMTUBE OAGROUP OAMON OAMONS \
+     OASGP OCAMON OC OCTCT2 OCT \
+     ODECONST ODEEF ODEINT ODEPAL \
+     ODEPRIM ODEPRRIC ODERAT ODERED ODERTRIC \
+     ODESYS ODETOOLS ODPOL ODP ODR ODVAR OEXPR \
+     OFACET OFTOOL OINTDOM OMCONN OMDEV OMENC OMERRK \
+     OMERR OMEXPR OMPKG OMSAGG OMSERVER \
+     OM ONECOMP2 ONECOMP OPQUERY OP OPHANDL
+
+SPADLIST6=\
+     ORDCOMP2 ORDCOMP OREMAT ORDFIN ORDFUNS \
+     ORDMON ORDRING ORDSET OREPCAT OREPCTO ORESUP \
+     OREUP ORTHPOL OSGROUP OSI OUTFORM OUT OUTBOX OVAR \
+     OWP PADECF PADEPAC PADE PADICCT PADICRC \
+     PALETTE PAN2EXPR PARCCURV PARPC2 PARPCURV PARRPKG PARSC2 \
+     PARSCURV PARSU2 PARSURF PARTPERM PATAB PATLRES \
+     PATMAB PATMATCH PATRES2 PATRES PATTERN1 PATTERN2 \
+     PATTERN PBWLB PCDEN PDO PDOHLP \
+     PDRING PENDTREE PERMAN PERMCAT PERMGRP \
+     PERM PEVALUT PFACET PFBR PFECAT PFOQ PFO \
+     PFOTOOLS PFRPAC PFR PFUTIL PF PGCD PGE \
+     PGROEB PICOERCE PID PINTERPA PINTERP PIT PI \
+     PLEQN PLOT1 PLOT3D PLOT PLOTTOOL PMASSFS \
+     PMASS PMDOWN PMFS PMINS PMKERNEL PMLSAGG \
+     PMPLCAT PMPREDFS PMPRED PMQFCAT PMSYM PMTOOLS \
+     PNTHEORY POINT POLTOPOL POLUTIL POLVECF POLVECP POLY2 POLY2UP \
+     POLYCATQ POLYCAT POLYLIFT POLYROOT POLYVEC \
+     POLY PORDER POSET POSETF PPCURVE \
+     PREASSOC PREORD PRIGCD3 PRIMARR2 PRIMARR PRIMCAT PRIMELT PRIMES \
+     PRIMMAT2 PRINT PRODUCT PRQAGG PR PRROOT PRS PRTITION \
+     PSCAT PSCURVE PSETCAT PSETPK PSEUDLIN PSQFR \
+     PTCAT PTFUNC2 PTPACK PTRANFN PUSHVAR PWFFINTB
+
+SPADLIST7=\
+     QALGSET2 QALGSET QCMPACK QEQUAT QFCAT2 QFCAT \
+     QFORM QUAGG QUATCAT QUATCT2 QUAT2 QUAT QUEUE \
+     RADCAT RADFF RADIX RADUTIL RANDSRC RATFACT RATPSCT \
+     RATRET RCAGG RCFIELD RDEAUX RDEEFX RDEEFX2 RDEPAR \
+     RDIST RDIV REAL0Q REAL0 REALSOLV \
+     REAL RECLOS REDORDER REF REGSET REP1 \
+     REP2 REPDB REP REPSQ RESLATC RESRING \
+     RESULT RETFROM RETRACT RETSOL RFDIST RFFACT \
+     RFSSPLIT RF RGCHAIN RIDIST RING RINTERP RMATCAT \
+     RMATRIX RMCAT2 RMODULE RNG RNORM RNS ROIRC \
+     ROMAN ROOTUT RPOLCAT RRCC RSDCMPK RSETCAT \
+     RSETGCD RSIMP RULECOLD RULESET RULE RURPK \
+     SAE SAOS SARGND SBOUND SCACHE SCANUTIL \
+     SCELL SCENE SCIFS SCNP SCONF SCPKG SCRT SDPOL \
+     SDVAR SEG2 SEGBIND2 SEGBIND SEGCAT SEG \
+     SEGXCAT SEM SEQU SEQU2 SEQUCAT SETAGG SETCAT SETMN SETLAT SEXCAT \
+     SEXOF SEX SFORT SFQCMPK SFRGCD SFRTCAT \
+     SGCF SGROUP SHDP SHP SIGNEF SIGNRF \
+     SIMPAN SIMPC SIMPCF SINT SKAGG \
+     SKICOMB SKSMP SMATCAT SMITH SMP SMPCOER \
+     SMTS SNTSCAT SOLVEFOR SOLVERAD SOLVESER SOLVETRA \
+     SORD SOREXPV SORTPAK SPACE3 SPACEC SPECOUT SPFCAT SPFUTS SPLNODE \
+     SPLTREE SPTCAT SQMATRIX SRAGG SRDCMPK SREGSET \
+     SRNG SRING SSKPOLC STACK STEXPS STEXPST STR
+
+SPADLIST8=\
+     STAGG STBL STEP STRANS STREAM1 STREAM2 \
+     STREAM3 STREAM STRICAT STRING STRTBL STTAYLOR STTAYLO2 STTAYOC \
+     STTFNC STTF SUBRESP SUBSPACE SUCH SULS \
+     SUMFS SUMRF SUP2 SUP SUPXS \
+     SUTS SWITCH SYMANA SYMBOL SYMFUNC SYMPOLY SYMS \
+     SYMTAB SYSSOLP TABLBUMP TABLEAU TABLE TANEXP \
+     TBAGG TBCMPPK TEMUTL \
+     TENSCAT TENSOR TENSPC TENSPOW TENSPO2 TENSPRP \
+     TEX1 TEX TEXPARSE TEXSCAN TEXTFILE TEXTREE TIMEOUT TMFORM \
+     TOOLSIGN TOPSP TRANFUN TREE TRIGCAT TRIGMNIP TRIGMNPA \
+     TRIMAT TRMANIP TSEREXP TSEREXPG TSEREXPL TSEREXPP TSEREXPT \
+     TSETCAT TS TUBE TUBETOOL \
+     TUPLE TWOFACT TYPE TYPED U64INT U16MAT U16VEC \
+     U32MAT U32VEC U8MAT U8VEC UDGRPH UDPO UDVO UFD UFFACT UGAUSS \
+     ULS2 ULSCAT ULSCCAT ULSCONS ULS \
+     UNISEG2 UNISEG UNTYPED UP2 UPCDEN UPDECOMP UPDIVP \
+     UPMP UPOLYC2 UPOLYC UPSCAT UP UPSQFREE \
+     UPXS2 UPXSCAT UPXSCCA UPXSCONS UPXSSING UPXS \
+     URAGG UTS2 UTSCAT UTSODE UTSODETL UTS VARCAT \
+     VARIABLE VECTCAT VECTOR2 VECREC1 VECREC2 VECTOR \
+     VHPSOLV \
+     VIEW2D VIEW3D VIEWDEF VIEW VOID VSBASIS WEIER \
+     WGRPH WP WUTSET XALG XDPOLY XDPOLYF XEXPPKG XFALG \
+     XF XHASHTBL XML XMLAT XMLEL XPFACT XPOLYC XPOLY XPR XRPOLY \
+     YSTREAM ZDSOLVE ZLINDEP ZMOD
+
+# Full list of categories
+CATLIST= AHYP AINTCAT ATCS ATADDVA ATAPPRO ATARBEX ATARBPR \
+        ATCANCL ATCANON ATCUNOR ATFINAG ATLR ATMULVA  \
+        ATNZDIV ATSHMUT ATTWSR ATUNIKN ATVCWC \
+        CFCAT ELTAB KOERCE KOERCEF KONVERF KONVERT OM PRIMCAT PTRANFN \
+        SPFCAT TYPE BASTYPE IEVALAB AGG EVALAB SETCAT COMPAR HOAGG CLAGG \
+        RADCAT RETFROM RETRACT TRIGCAT ATRIG HYPCAT ELEMFUN ELTAGG IXAGG \
+        LNAGG ORDSET FLAGG A1AGG ABELSG ABELMON CABMON ABELGRP \
+        SGROUP MONOID SRNG SRING RNG LMODULE RMODULE BMODULE MODULE \
+        RING ALGEBRA \
+        COMRING ENTIRER DISTCAT DIVRING INTDOM GCDDOM PID EUCDOM UFD FIELD \
+        ACF CHARNZ CHARZ ES ESC2 LINEXP FLINEXP PATMAB FPATMAB FRETRCT \
+        GROUP PDRING PATAB FS FSC2 ACFS BGAGG DIOPS DIAGG ELAGG KDAGG \
+        RCAGG URAGG STAGG LSAGG TBAGG ALAGG AMR ARR2CAT BRAGG LOGIC \
+        BTAGG BTCAT CACHSET COMBOPC DIFRING DIFEXT FPC FINITE STEP \
+        FFIELDC FINRALG FRAMALG FEVALAB MONOGEN PFECAT TRANFUN COMPCAT \
+        OASGP OAMON OCAMON OAGROUP OAMONS ORDRING DIRPCAT DLAGG \
+        FAMR POLYCAT DPOLCAT QUAGG SKAGG DQAGG DVARCAT XF FAXF \
+        FDIVCAT FFCAT FILECAT FINGEN FINGRP MAGMA MORECAT NARNG \
+        NAALG FINAALG LIECAT FLALG \
+        FORTCAT FMC FMCAT FMFUN FMTC FMTCAT \
+        FNCAT FORTFN REAL RNS FPS FRNAALG \
+        SETAGG FSAGG FVC FVFUN GPOLCAT GRMOD GRALG APRODC IPC IDPC OINTDOM \
+        INS INTCAT LALG LORER \
+        LFCAT OREPCAT LODOCAT LZSTAGG MATCAT MDAGG MAGMAWU MRCAT MSETAGG \
+        PSCAT MTSCAT NARING NASRNG NASRING PSETCAT TSETCAT RSETCAT NTSCAT OC \
+        PRQAGG OMSAGG ORDFIN OSGROUP ORDMON PADICCT PERMCAT PORDER POSET \
+        PPCURVE PSCURVE PREORD VECTCAT PTCAT QFCAT QUATCAT RCFIELD RMATCAT \
+        RPOLCAT RRCC SEGCAT SEGXCAT SEQUCAT SEXCAT SFRTCAT SMATCAT SNTSCAT \
+        SPACEC SPTCAT SRAGG SSKPOLC STRICAT \
+        UPSCAT ULSCAT ULSCCAT UPOLYC UPXSCAT \
+        UPXSCCA UTSCAT XALG XFALG XPOLYC \
+        TENSCAT TENSPRP TENSPC BIALG COALG HOPFALG TSEREXP \
+        JBOPCAT JBC JBFC JBBFC VARCAT FGRPH MAGCDOC FORMCAT MEVCAT DCPO \
+        CODCPO BICPO MEETLAT BMEET JOINLAT BJOIN LAT BLAT DISTLAT \
+        BDISTL FACTCAT FRMOD RATPSCT KERCAT MFOPC HASHABL MATOPC STTAYOC
+
+SPADLIST=${SPADLIST1} ${SPADLIST2} ${SPADLIST3} ${SPADLIST4} \
+        ${SPADLIST5} ${SPADLIST6} ${SPADLIST7} ${SPADLIST8}
+
+# List of core domains
+DOMLIST= ALIST BOOLEAN CHAR DFLOAT FRAC HASHSTAT \
+        IARRAY1 ISTRING IVECTOR \
+        INT LIST NNI OUTFORM PI PRIMARR REF SEX SINT STRING SYMBOL VECTOR \
+        MATRIX ARRAY1 IIARRAY2 ARRAY2 U32VEC U32MAT U16VEC U16MAT U8VEC \
+        U8MAT I32VEC I32MAT I16VEC I16MAT I8VEC I8MAT PRIMMAT2 \
+        DFVEC DFMAT COMPLEX CDFVEC CDFMAT \
+        SOREXPV U64INT
+
+# List of categories which provide default implementations
+CATDOMS= A1AGG ABELGRP ABELMON ABELSG ACF ACFS AGG AINTCAT \
+        ALAGG ALGEBRA AMR ARR2CAT \
+        ATRIG BASTYPE BGAGG BRAGG BTAGG BTCAT CLAGG COMPCAT DIAGG \
+        DIFEXT DIFRING DIOPS DIRPCAT DIVRING DPOLCAT DVARCAT ELAGG \
+        ELEMFUN ELTAGG ENTIRER ESC2 EUCDOM EVALAB \
+        FACTCAT FAMR FAXF FDIVCAT FEVALAB \
+        FFCAT FFIELDC FGRPH FIELD FINAALG FINGRP FINITE FINRALG FLINEXP FMCAT \
+        FMTCAT FPC FPS FRAMALG FRETRCT FRMOD FRNAALG FSAGG FSC2 \
+        GCDDOM GPOLCAT GRALG GRMOD \
+        GROUP HASHABL HOAGG HYPCAT IEVALAB INS IXAGG \
+        JBBFC JBC JBFC KDAGG LALG LIECAT \
+        LNAGG LODOCAT LOGIC LSAGG LZSTAGG MAGMA MAGMAWU MATCAT MODULE \
+        MONOGEN MTSCAT NAALG NARING NARNG NASRNG \
+        OAGROUP OC OM ORDSET OREPCAT \
+        PDRING PFECAT POLYCAT PORDER POSET PSCAT PSETCAT QFCAT QUATCAT RADCAT \
+        RCAGG RCFIELD RETFROM RETRACT RMATCAT RNG \
+        RNS RPOLCAT RRCC RSETCAT \
+        SETAGG SETCAT SMATCAT SPTCAT SRAGG STAGG TBAGG TENSPC TRANFUN \
+        TRIGCAT TSEREXP TSETCAT UFD \
+        ULSCAT ULSCCAT UPOLYC UPSCAT UPXSCCA URAGG \
+        UTSCAT VECTCAT XF
+
+EXTRASPADS=BPADIC BPADICRT COMMONOP GALUTIL MKFLCFN PADIC PADICRAT \
+       SET WFFINTBS XPBWPOLY
+
+GUESSLIST= SMPEXPR FAMR2 NEWTON UFPS GOPT GUESSF1 GUESSP1\
+           UTSSOL FFFG UFPS1 GOPT0 EXPRSOL FFFGF \
+           RECOP STNSR GUESS GUESSEB  GUESSINT GUESSF GUESSP GUESSPI GUESSAN
+
+TESTLIST= TESTCNT TESTAUX TESTUNIT
+
+
+.PHONY: all all-algebra
+all: all-ax
+
+# Note that the value of ${PREGENERATED} must be an absolute directory.
+all-ax all-algebra: abbrev.list
+	if test -d "${PREGENERATED}/src/algebra"; then \
+          ${MAKE} BUILD_WAY=use_lisp stamp-alg ; \
+	else \
+	  ${MAKE} BUILD_WAY=normal stamp ; \
+	fi
+	@ echo finished $(builddir)
+
+ifeq ($(BUILD_WAY),use_lisp)
+SPADLIST99=${EXTRASPADS} ${GUESSLIST} ${TESTLIST} \
+               $(patsubst %, %-, ${CATDOMS})
+
+FULL_FASL_LIST=${SPADLIST} ${SPADLIST99}
+LISTS=1 2 3 4 5 6 7 8 99
+STAMP_FASLS=${patsubst %, stamp-fasls%, ${LISTS}}
+TARGET_FASLS=$(patsubst %, ${OUT}/%.$(FASLEXT), ${FULL_FASL_LIST})
+SRC_LSP=$(patsubst %, %.lsp, ${FULL_FASL_LIST})
+stamp-alg: ${TARGET_FASLS} stamp-spadsrc
+
+${STAMP_FASLS}: stamp-fasls% :
+	( for A in ${SPADLIST$*} ; do \
+	   echo ')boot fricas_compile_fasl(' \
+                \''"$(PREGENERATED)/src/algebra/'$$A'.lsp",' \
+                ' '\''"${OUT}/'$$A'.${FASLEXT}")' ; \
+	done ; \
+	echo ')quit' ) | \
+	DAASE=$(fricas_targetdir) $(INTERPSYS)
+	${STAMP} $@
+
+${TARGET_FASLS}: ${STAMP_FASLS}
+endif
+
+NSPADLIST = ${SPADLIST} ${EXTRASPADS} ${GUESSLIST} ${TESTLIST}
+
+stamp-db: $(patsubst %, %.spad, ${NSPADLIST})
+	@echo doing stamp-db
+	@if [ ! -f stamp-db ] ; then \
+          cp ${srcdir}/boo_db.input . ; \
+          rm -f komp_all.input ; \
+          for A in ${NSPADLIST} ; do \
+              echo ")compile $$A.spad" >> komp_all.input ; \
+          done ; \
+          rm -f boot_doms.input ; \
+          for A in ${CATLIST} ${DOMLIST} ; do \
+              echo ")compile $$A.spad" >> boot_doms.input ; \
+          done ; \
+          ${MKDIR_P} r1/algebra ; \
+          cp $(fricas_src_datadir)/algebra/*.daase r1/algebra ; \
+          rm -rf axp ; \
+          mkdir axp ; \
+          cp -r ${FRICAS}/algebra axp ; \
+          cp -r ${FRICAS}/lib axp ; \
+          cp -r ${FRICAS}/share axp ; \
+          ( echo ')read "boo_db.input"' | \
+              FRICAS=./axp DAASE=./r1 FRICAS_INITFILE='' \
+              $(fricas_build_bindir)/interpsys ) || \
+              exit 1 ; \
+          ${MKDIR_P} r7/algebra && \
+          mv category.daase interp.daase \
+              operation.daase r7/algebra || exit 1 ; \
+          cp r1/algebra/browse.daase r7/algebra ; \
+          touch stamp-db ; \
+        fi
+
+stamp-oboo3: stamp-db
+	@echo doing stamp-oboo3
+	@if [ ! -f stamp-oboo3 ] ; then \
+           echo "Bootstrap object copy" ; \
+           for A in ${CATLIST} ${DOMLIST} ; do \
+              cp $$A.NRLIB/$$A.$(FASLEXT) ${OUT}/$$A.$(FASLEXT) || exit 1 ; \
+           done; \
+           for A in ${CATDOMS} ; do \
+              cp $${A}-.NRLIB/$${A}-.$(FASLEXT) ${OUT}/$${A}-.$(FASLEXT)  || exit 1 ; \
+           done; \
+           rm -rf *.NRLIB ; \
+           echo "Stage 3 object bootstrap (normal mode)" ; \
+           echo > oboo3.input ; \
+           for A in ${DOMLIST} ; do \
+              echo ')compile "'$$A'.spad"' >> oboo3.input ; \
+           done; \
+           ( echo ')read "oboo3.input"' | \
+              DAASE=./r7 ${INTERPSYS} ) || exit 1 ; \
+	   echo "Stage 3 object copy" ; \
+	   for A in ${DOMLIST} ; do \
+	      cp $$A.NRLIB/$$A.$(FASLEXT) ${OUT}/$$A.$(FASLEXT) || exit 1 ; \
+	   done ; \
+	   touch stamp-oboo3 ; \
+	fi
+
+stamp-bootstrap: stamp-oboo3
+	@echo doing stamp-bootstrap
+	@if [ ! -f stamp-bootstrap ] ; then \
+           $(ECHO_B) 'main-bootstrap: ' > boot.mak ; \
+           for A in ${NSPADLIST} ; do \
+               $(ECHO_B) $${A}.NRLIB/$${A}.lsp" " >> boot.mak ; \
+           done ; \
+           echo >> boot.mak ; \
+           for A in ${NSPADLIST} ; do \
+              echo $${A}.NRLIB/$${A}.lsp: $${A}.spad >> boot.mak ; \
+              $(ECHO_T) 'echo ")compile" $$< | DAASE=./r7 ${INTERPSYS}' \
+                      >> boot.mak ; \
+              echo >> boot.mak ; \
+           done ; \
+           ${MAKE} -f boot.mak main-bootstrap && \
+	   echo ')boot make_databases([], false)' | \
+              DAASE=./r7 ${INTERPSYS} && \
+	   ${MKDIR_P} rf/algebra && \
+	   mv category.daase interp.daase \
+	      operation.daase rf/algebra || exit 1 ; \
+	   cp r1/algebra/browse.daase rf/algebra ; \
+	   touch stamp-bootstrap ; \
+	fi
+
+ifneq ($(BUILD_WAY),use_lisp)
+$(patsubst %, ${OUT}/%.$(FASLEXT), ${NSPADLIST}) : stamp-bootstrap
+endif
+
+stamp: stamp-src
+	-rm -f stamp
+	$(STAMP) stamp
+
+# We would prefer to use simple rule like this, unfortunately
+# make can not handle pattern rule for remaking .NRLIBs
+# so we expand rules to separate makefile
+#
+# update-spads: \
+#          $(patsubst %, ${OUT}/%.$(FASLEXT), ${SPADLIST} ${EXTRASPADS})
+
+do-update-spads: stamp-bootstrap spad.mak
+	${MAKE} -f spad.mak update-spads
+
+
+spad.mak : Makefile
+	@echo making spad.mak
+	$(ECHO_B) 'update-spads: ' > spad.mak
+	@for A in ${NSPADLIST} ; do \
+	    $(ECHO_B) "${OUT}"/$${A}."$(FASLEXT) " >> spad.mak ; \
+	done
+	@for A in $(patsubst %, ${OUT}/%-.$(FASLEXT), ${CATDOMS}) ; do \
+	    $(ECHO_B) $${A}" " >> spad.mak ; \
+	done
+	@for A in ${NSPADLIST} ; do \
+	    echo >> spad.mak ; \
+	    echo '${OUT}/'$${A}'.$(FASLEXT): ' \
+	         $${A}.NRLIB/$${A}.$(FASLEXT) >> spad.mak ; \
+	    $(ECHO_T) 'cp $$< $$@.tmp' >> spad.mak ; \
+	    $(ECHO_T) 'mv $$@.tmp $$@' >> spad.mak ; \
+	    echo >> spad.mak ; \
+	    echo $${A}.NRLIB/$${A}'.$(FASLEXT) : '$${A}.spad >> spad.mak ; \
+	    $(ECHO_T) '@ echo compiling '$${A}.spad >> spad.mak ; \
+	    $(ECHO_T) 'rm -rf '$${A}.NRLIB >> spad.mak ; \
+	    $(ECHO_T) 'echo ")co" '$${A}'.spad | DAASE=./rf ${INTERPSYS}' \
+	        >> spad.mak ; \
+	done
+	@for A in ${CATDOMS} ; do \
+	    echo >> spad.mak ; \
+	    echo '${OUT}/'$${A}'-.$(FASLEXT): ' \
+	         $${A}-.NRLIB/$${A}-.$(FASLEXT) >> spad.mak ; \
+	    $(ECHO_T) 'cp $$< $$@ ' >> spad.mak ; \
+	    echo >> spad.mak ; \
+	    echo $${A}-.NRLIB/$${A}'-.$(FASLEXT) : ' \
+	         $${A}.NRLIB/$${A}.$(FASLEXT) >> spad.mak ; \
+        done
+	echo >> spad.mak
+	echo 'srcdir=$(srcdir)' >> spad.mak
+	echo 'unpack_file=$(unpack_file)' >> spad.mak
+	echo >> spad.mak
+	echo 'include extract-spad.mk' >> spad.mak
+
+stamp-src: stamp-spadsrc do-update-spads
+	if [ ! -f stamp-src ] ; then \
+	    echo 4304 Done building NRLIBS from spad sources ; \
+	    touch stamp-src ; \
+	fi
+
+
+stamp-spadsrc: ${SPADFILES}
+	touch stamp-spadsrc
+
+
+# ifneq ($(BUILD_WAY),use_lisp)
+# ${OUT}/%.$(FASLEXT): %.NRLIB/%.$(FASLEXT)
+# 	cp $*.NRLIB/$*.$(FASLEXT) $@
+# endif
+
+
+#
+# .PRECIOUS: %.NRLIB/%.$(FASLEXT)
+
+#
+# Causes useless recompilation
+#
+# %.NRLIB/%.$(FASLEXT): %.spad
+#	@ echo compiling $*.spad to $*.NRLIB
+#	rm -rf $*.NRLIB
+#	( \
+#	     echo ')co $*.spad' | DAASE=./rf ${INTERPSYS} \
+#	   )
+
+abbrev.list: $(patsubst %, $(srcdir)/%.spad, $(SPAD_SRCS))
+	(cd $(srcdir); \
+	 sed -n 's/^)abbrev [a-z]*  *\([A-Z0-9]*\) *\([^ ]*\)/\1 \2/p' \
+	 $(patsubst %, %.spad, $(SPAD_SRCS))) > $@
+
+$(OUTSRC)/%.spad: $(srcdir)/%.spad
+	cp $< $@
+
+
+clean-local:
+	-rm -f stamp*
+	-rm *.$(FASLEXT) *.lib *.fn [A-VX-Z]*.data W*.data
+	-rm -f abbrevs.input oboo3.input boot.mak *.daase
+	-rm -f boot_doms.input comdb.text komp_all.input libdb.text
+	-rm -r *.NRLIB
+	-rm -r axp r[1-8f] DEPENDENTS.DAASE USERS.DAASE
+	-rm -f spad.mak
+	-rm -f $(patsubst %, %.spad, ${NSPADLIST})
+
+distclean-local: clean-local
+	-rm extract-spad.mk abbrev.list
+
+include extract-spad.mk

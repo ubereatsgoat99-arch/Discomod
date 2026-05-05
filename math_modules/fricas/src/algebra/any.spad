@@ -1,0 +1,282 @@
+)abbrev domain NONE None
+++ Author:
+++ Basic Functions: coerce
+++ Related Constructors: NoneFunctions1
+++ Also See: Any
+++ AMS Classification:
+++ Keywords: none
+++ Description:
+++    \spadtype{None} implements a universal type, that is, a type
+++    which can represent values of any normal type. It is mainly
+++    used in technical situations where such a thing is needed (e.g.
+++    the interpreter and some of the internal \spadtype{Expression}
+++    code).
+
+None() : SetCategory == add
+    coerce(none : %) : OutputForm == message("NONE")
+    x : % = y : % == EQ(x, y)$Lisp
+
+)abbrev package NONE1 NoneFunctions1
+++ Author:
+++ Basic Functions: coerce
+++ Related Constructors: None
+++ Also See:
+++ AMS Classification:
+++ Keywords:
+++ Description:
+++   \spadtype{NoneFunctions1} implements functions on \spadtype{None}.
+++   It includes a particularly dangerous coercion from
+++   any other type to \spadtype{None}.
+
+NoneFunctions1(S : Type) : Exports == Implementation where
+  Exports ==> with
+    coerce : S -> None
+      ++ coerce(x) changes \spad{x} into an object of type
+      ++ \spadtype{None}.
+
+  Implementation ==> add
+    coerce(s : S) : None == s pretend None
+
+)abbrev domain ANY Any
+++ Author: Robert S. Sutor
+++ Basic Functions: any, domainOf, objectOf, dom, obj, showTypeInOutput
+++ Related Constructors: AnyFunctions1
+++ Also See: None
+++ AMS Classification:
+++ Keywords:
+++ Description:
+++   \spadtype{Any} implements a type that packages up objects and their
+++   types in objects of \spadtype{Any}. Roughly speaking that means
+++   that if \spad{s : S} then when converted to \spadtype{Any}, the new
+++   object will include both the original object and its type. This is
+++   a way of converting arbitrary objects into a single type without
+++   losing any of the original information. Any object can be converted
+++   to one of \spadtype{Any}.
+
+Any() : SetCategory with
+        any             : (SExpression, None) -> %
+          ++ any(type, object) is a technical function for creating
+          ++ an object of \spadtype{Any}. Argument \spad{type} is
+          ++ a \spadgloss{LISP} form for the type of \spad{object}.
+        domainOf        : % -> OutputForm
+          ++ domainOf(a) returns a printable form of the type of the
+          ++ original object that was converted to \spadtype{Any}.
+        objectOf        : % -> OutputForm
+          ++ objectOf(a) returns a printable form of the
+          ++ original object that was converted to \spadtype{Any}.
+        dom             : % -> SExpression
+          ++ dom(a) returns a \spadgloss{LISP} form of the type of the
+          ++ original object that was converted to \spadtype{Any}.
+        obj             : % -> None
+          ++ obj(a) essentially returns the original object that was
+          ++ converted to \spadtype{Any} except that the type is forced
+          ++ to be \spadtype{None}.
+        showTypeInOutput : Boolean -> String
+          ++ showTypeInOutput(bool) affects the way objects of
+          ++ \spadtype{Any} are displayed. If \spad{bool} is true
+          ++ then the type of the original object that was converted
+          ++ to \spadtype{Any} will be printed. If \spad{bool} is
+          ++ false, it will not be printed.
+
+ == add
+     Rep := Record(dm : SExpression, ob : None)
+
+     printTypeInOutputP : Boolean := false
+
+     obj x      == x.ob
+     dom x      == x.dm
+     domainOf(x) == typeToOutputForm(x.dm)$Lisp
+     x = y      ==
+         dx := dom x
+         dy := dom y
+         dx ~= dy => false
+         Dx : Type := evalType(dx)$Lisp
+         Dx has BasicType =>
+             (obj x) pretend Dx = (obj y) pretend Dx
+         -- FIXME: we want
+         -- error "Comparison in domain which is not a BasicType"
+         -- but currently pattern matching needs
+         EQ(obj x, obj y)$Lisp
+
+     objectOf(x : %) : OutputForm ==
+       spad2BootCoerce(x.ob, x.dm,
+          list('OutputForm)$List(Symbol))$Lisp
+
+     showTypeInOutput(b : Boolean) : String ==
+      printTypeInOutputP := b
+      b=> "Type of object will be displayed in output of a member of Any"
+      "Type of object will not be displayed in output of a member of Any"
+
+     coerce(x) : OutputForm ==
+         obj1 : OutputForm := objectOf x
+         not printTypeInOutputP => obj1
+         dom1 :=
+             p : SExpression := prefix2String(devaluate(x.dm)$Lisp)$Lisp
+             atom?(p) => list(p pretend OutputForm)$List(OutputForm)
+             p pretend List(OutputForm)
+         hconcat cons(obj1, cons(message(":"), dom1))
+
+     any(domain, object) ==
+       (isValidType(domain)$Lisp)@Boolean => [domain, object]
+       domain := devaluate(domain)$Lisp
+       (isValidType(domain)$Lisp)@Boolean => [domain, object]
+       error "function any must have a domain as first argument"
+
+)abbrev package ANY1 AnyFunctions1
+++ Author:
+++ Basic Functions:  coerce, retractIfCan, retractable?, retract
+++ Related Constructors: Any
+++ Also See:
+++ AMS Classification:
+++ Keywords:
+++ Description:
+++   \spadtype{AnyFunctions1} implements several utility functions for
+++   working with \spadtype{Any}. These functions are used to go back
+++   and forth between objects of \spadtype{Any} and objects of other
+++   types.
+
+AnyFunctions1(S : Type) : with
+        coerce      : S -> Any
+          ++ coerce(s) creates an object of \spadtype{Any} from the
+          ++ object \spad{s} of type \spad{S}.
+        retractIfCan : Any -> Union(S, "failed")
+          ++ retractIfCan(a) tries to change \spad{a} into an object
+          ++ of type \spad{S}. If it can, then such an object is
+          ++ returned. Otherwise, "failed" is returned.
+        retractable? : Any -> Boolean
+          ++ retractable?(a) tests if \spad{a} can be converted
+          ++ into an object of type \spad{S}.
+        retract     : Any -> S
+          ++ retract(a) tries to convert \spad{a} into an object of
+          ++ type \spad{S}. If possible, it returns the object.
+          ++ Error: if no such retraction is possible.
+
+    == add
+        import from NoneFunctions1(S)
+
+        Sexpr : SExpression := devaluate(S)$Lisp
+
+        retractable? a  == dom(a) = Sexpr
+        coerce(s : S) : Any == any(Sexpr, s::None)
+
+        retractIfCan a ==
+            retractable? a => obj(a) pretend S
+            "failed"
+
+        retract a ==
+            retractable? a => obj(a) pretend S
+            error "Cannot retract value."
+
+)abbrev domain VOID Void
+-- These types act as the top and bottom of the type lattice
+-- and are known to the compiler and interpreter for type resolution.
+++ Author: Stephen M. Watt
+++ Date Created: 1986
+++ Basic Operations:
+++ Related Domains: ErrorFunctions, ResolveLatticeCompletion, Exit
+++ Also See:
+++ AMS Classifications:
+++ Keywords: type, mode, coerce, no value
+++ Examples:
+++ References:
+++ Description:
+++   This type is used when no value is needed, e.g., in the \spad{then}
+++   part of a one armed \spad{if}.
+++   All values can be coerced to type Void.  Once a value has been coerced
+++   to Void, it cannot be recovered.
+
+Void : with
+        void : () -> %            ++ void() produces a void object.
+        coerce : % -> OutputForm
+          ++ coerce(v) coerces void object to OutputForm.
+    == add
+        Rep := String
+        void()      == voidValue()$Lisp
+        coerce(v : %) == coerce(void())$Rep
+
+)abbrev domain EXIT Exit
+++ Author: Stephen M. Watt
+++ Date Created: 1986
+++ Basic Operations:
+++ Related Domains: ErrorFunctions, ResolveLatticeCompletion, Void
+++ Also See:
+++ AMS Classifications:
+++ Keywords: exit, throw, error, non-local return
+++ Examples:
+++ References:
+++ Description:
+++   A function which does not return directly to its caller should
+++   have Exit as its return type.
+++
+++   Note: It is convenient to have a formal \spad{coerce} into each type from
+++   type Exit. This allows, for example, errors to be raised in
+++   one half of a type-balanced \spad{if}.
+Exit : SetCategory == add
+        coerce(n:%) == error "Cannot use an Exit value."
+        n1 = n2     == error "Cannot use an Exit value."
+
+)abbrev package RESLATC ResolveLatticeCompletion
+++ Author: Stephen M. Watt
+++ Date Created: 1986
+++ Basic Operations:
+++ Related Domains: ErrorFunctions, Exit, Void
+++ Also See:
+++ AMS Classifications:
+++ Keywords: mode, resolve, type lattice
+++ Examples:
+++ References:
+++ Description:
+++   This package provides coercions for the special types \spadtype{Exit}
+++   and \spadtype{Void}.
+ResolveLatticeCompletion(S : Type) : with
+        coerce : S -> Void
+             ++ coerce(s) throws all information about s away.
+             ++ This coercion allows values of any type to appear
+             ++ in contexts where they will not be used.
+             ++ For example, it allows the resolution of different types in
+             ++ the \spad{then} and \spad{else} branches when an \spad{if}
+             ++ is in a context where the resulting value is not used.
+        coerce : Exit -> S
+             ++ coerce(e) is never really evaluated.  This coercion is
+             ++ used for formal type correctness when a function will not
+             ++ return directly to its caller.
+    == add
+        coerce(s : S) : Void == void()
+        coerce(e : Exit) : S ==
+            error "Bug: Should not be able to obtain value of type Exit"
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-- Any and None complete the type lattice. They are also used in the
+-- interpreter in various situations. For example, it is always possible
+-- to resolve two types in the interpreter because at worst the answer
+-- may be Any.

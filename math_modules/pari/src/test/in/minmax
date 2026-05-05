@@ -1,0 +1,20 @@
+v = [-3,7,-2,11];
+w = [-oo,-Pi^100,2^100,+oo];
+obj = [1, v, Vecsmall(v), List(v), [-3,7;-2,11], w];
+
+{
+for (i = 1, #obj,
+  my (o = obj[i], u,v);
+  vecmin(o, &u);
+  vecmax(o, &v);
+  print(i, ": ", [vecmax(o), vecmin(o), u, v, abs(vecmax(o)), abs(vecmin(o))]);
+)
+}
+
+\\ ERRORS
+vecmin([])
+vecmin(Mat())
+vecmin(List())
+vecmax([])
+vecmax(Mat())
+vecmax(List())

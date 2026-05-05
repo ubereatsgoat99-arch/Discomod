@@ -1,0 +1,51 @@
+Function: elltrace
+Section: elliptic_curves
+C-Name: elltrace
+Prototype: GG
+Help: elltrace(E,P): sum of the Galois conjugates of the point P on elliptic
+ curve E.
+Doc: let $E$ be an elliptic curve over a base field and a point $P$ defined
+ over an extension field using \typ{POLMOD} constructs. Returns the sum of
+ the Galois conjugates of $P$.
+ The field over which $P$ is defined must be specified, even in the (silly)
+ case of a trivial extension:
+ \bprog
+ ? E = ellinit([1,15]);  \\ y^2 = x^3 + x + 15, over Q
+ ? P = Mod([a/8-1, 1/32*a^2-11/32*a-19/4], a^3-135*a-408);
+ ? ellisoncurve(E,P) \\ P defined over a cubic extension
+ %3 = 1
+ ? elltrace(E,P)
+ %4 = [2,-5]
+ @eprog
+
+ \bprog
+ ? E = ellinit([-13^2, 0]);
+ ? P = Mod([13,0], a^2-2); \\ defined over Q, seen over a quadratic extension
+ ? elltrace(E,P) == ellmul(E,P,2)
+ %3 = 1
+ ? elltrace(E,[13,0]) \\ number field of definition of the point unspecified!
+   ***   at top-level: elltrace(E,[13,0])
+   ***                 ^------------------
+   *** elltrace: incorrect type in elltrace (t_INT).
+ ? elltrace(E,Mod([13,0],a)) \\ trivial extension
+ %5 = [Mod(13, a), Mod(0, a)]
+ ? P = Mod([-10*x^3+10*x-13, -16*x^3+16*x-34], x^4-x^3+2*x-1);
+ ? ellisoncurve(E,P)
+ %7 = 1
+ ? Q = elltrace(E,P)
+ %8 = [11432100241 / 375584400, 1105240264347961 / 7278825672000]
+ ? ellisoncurve(E,Q)
+ %9 = 1
+ @eprog
+
+ \bprog
+ ? E = ellinit([2,3], 19); \\ over F_19
+ ? T = a^5+a^4+15*a^3+16*a^2+3*a+1; \\ irreducible
+ ? P = Mod([11*a^3+11*a^2+a+12,15*a^4+9*a^3+18*a^2+18*a+6], T);
+ ? ellisoncurve(E, P)
+ %4 = 1
+ ? Q = elltrace(E, P)
+ %5 = [Mod(1,19), Mod(14,19)]
+ ? ellisoncurve(E, Q)
+ %6 = 1
+ @eprog

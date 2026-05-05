@@ -1,0 +1,199 @@
+)abbrev category FORMCAT OutputFormatterCategory
+++ Description: This category specifies the required interface
+++ to output formatters.
+OutputFormatterCategory : Category == with
+    convert :  (OutputForm, Integer) -> %
+      ++ convert(o, step) changes o in standard output format to
+      ++ given format and also adds the given step number.
+    display : % -> Void
+      ++ display(t) outputs the formatted code
+
+
+
+)abbrev package OFTOOL OutputFormTools
+++ Description: This package implements tools for handling
+++ \spadtype{OutputForm}
+OutputFormTools : with
+    atom? : OutputForm -> Boolean
+      ++ atom?(f) checks if form f is atomic, false means composite
+    atom_to_string : OutputForm -> String
+      ++ atom_to_string(f) converts f to string form.
+    empty? : OutputForm -> Boolean
+      ++ empty?(f) checks if form f is empty.
+    integer? : OutputForm -> Boolean
+      ++ integer?(f) checks if f is an integer, this implies atom?(f)
+    integer : OutputForm -> Integer
+      ++ integer(f) gives integer corresponding to f.  Valid only
+      ++ when integer?(f) is true
+    symbol? : OutputForm -> Boolean
+      ++ symbol?(f) checks if f is a symbol, this implies atom?(f)
+    symbol : OutputForm -> Symbol
+      ++ symbol(f) gives symbol corresponding to f.  Valid only
+      ++ when symbol?(f) is true
+    string? : OutputForm -> Boolean
+      ++ string?(f) checks if f is a string, this implies atom?(f)
+    string : OutputForm -> String
+      ++ string(f) gives string corresponding to f.  Valid only
+      ++ when string?(f) is true
+    operator : OutputForm -> OutputForm
+      ++ operator(f) gives operator (head) of form f.  Valid only
+      ++ when atom?(f) is false
+    arguments : OutputForm -> List(OutputForm)
+      ++ arguments(f) gives arguments of form f.  Valid only
+      ++ when atom?(f) is false
+    has_op? : (OutputForm, Symbol) -> Boolean
+      ++ has_op?(f, s) returns true if f is a composite form
+      ++ with operator s, otherwise returns false
+    is_symbol? : (OutputForm, Symbol) -> Boolean
+      ++ is_symbol?(f, s) returns true if form is symbol s,
+      ++ otherwise returns false
+    construct : (OutputForm, List(OutputForm)) -> OutputForm
+      ++ construct(op, la) creates OutputForm with operator op
+      ++ and arguments la
+    precondition : OutputForm -> OutputForm
+      ++ precondition(f) prepares form for formatting.
+  == add
+
+    atom?(x) == ATOM(x)$Lisp
+
+    atom_to_string(x) ==
+        symbol?(x) => string(x pretend Symbol)
+        integer?(x) => string(x pretend Integer)
+        string?(x) => x pretend String
+        error "unrecognized kind of atom"
+
+    empty?(x) ==
+        atom?(x) or not(empty?(arguments(x))) => false
+        op := operator(x)
+        symbol?(op) and (op pretend Symbol) = 'NOTHING
+
+    integer?(x) == INTEGERP(x)$Lisp
+
+    integer(x) ==
+        integer?(x) => x pretend Integer
+        error "not an integer"
+
+    symbol?(x) == SYMBOLP(x)$Lisp
+
+    symbol(x) ==
+        symbol?(x) => x pretend Symbol
+        error "not a symbol"
+
+    string?(x) == STRINGP(x)$Lisp
+
+    string(x) ==
+        string?(x) => x pretend String
+        error "not a string"
+
+    operator(x) ==
+        atom?(x) => error "is an atom"
+        first(x pretend List(OutputForm))
+
+    arguments(x) ==
+        atom?(x) => error "is an atom"
+        rest(x pretend List(OutputForm))
+
+    has_op?(expr, op) ==
+        atom?(expr) => false
+        e1 := first(expr pretend List(OutputForm))
+        EQ(e1, op)$Lisp
+
+    is_symbol?(expr, op) ==
+        not(symbol?(expr)) => false
+        symbol(expr) = op
+
+    flaten_op(s : Symbol, l : List(OutputForm)) : List(OutputForm) ==
+        ll : List(List(OutputForm)) := [l]
+        res : List(OutputForm) := []
+        while not(empty?(ll)) repeat
+            l := first(ll)
+            ll := rest(ll)
+            while not(empty?(l)) repeat
+                t := first(l)
+                l := rest(l)
+                atom?(t) => res := cons(t, res)
+                t1 := operator(t)
+                is_symbol?(t1, s) =>
+                    ll := cons(l, ll)
+                    l := arguments(t)
+                res := cons(t, res)
+        reverse!(res)
+
+    construct(op, args) == cons(op, args) pretend OutputForm
+
+    import from OutputForm
+
+    precondition(x) ==
+        string?(x) => x
+        integer?(x) =>
+            xi := integer(x)
+            xi < 0 => construct(outputForm("-"::Symbol), [outputForm(-xi)])
+            x
+        atom?(x) => x
+        op := operator(x)
+        args := arguments(x)
+        if is_symbol?(op, '+) then
+            args := flaten_op('+, args)
+        if is_symbol?(op, '*) then
+            args := flaten_op('*, args)
+        args := [precondition(arg) for arg in args]
+        is_symbol?(op, 'construct) => bracket(args)
+        n := #args
+        is_symbol?(op, 'SEGMENT) and n > 0 and n <= 2 =>
+            a1 := first(args)
+            a1 :=
+                atom?(a1) => a1
+                paren(a1)
+            n = 2 =>
+                a2 := args(2)
+                a2 :=
+                    atom?(a2) => a2
+                    paren(a2)
+                SEGMENT(a1, a2)
+            SEGMENT(a1)
+        is_symbol?(op, '-) and n = 2 =>
+            a1 := first(args)
+            a2 := args(2)
+            not(atom?(a2)) and is_symbol?(operator(a2), '-)
+              and (#(args2 := arguments(a2)) = 1) =>
+                construct(outputForm('+), [a1, first(args2)])
+            a2 := construct(outputForm('-), [a2])
+            construct(outputForm('+), [a1, a2])
+        is_symbol?(op, '-) and n = 1 =>
+            a1 := first(args)
+            not(atom?(a1)) and is_symbol?(op1 := operator(a1), '-)
+              and (#(args1 := arguments(a1)) = 1) => first(args1)
+            construct(op, args)
+        is_symbol?(op, '+) =>
+            n = 1 => first(args)
+            construct(op, flaten_op('+, args))
+        is_symbol?(op, '*) =>
+            a1 := first(args)
+            n = 1 => a1
+            not(atom?(a1)) and is_symbol?(op1 := operator(a1), '-)
+              and (#(args1 := arguments(a1)) = 1) =>
+                a11 := first(args1)
+                nargs :=
+                    integer?(a11) and integer(a11) = 1 => rest(args)
+                    cons(a11, rest(args))
+                precondition(construct(op1, [construct(op, nargs)]))
+            construct(op, flaten_op('*, args))
+        is_symbol?(op, '/) =>
+            n ~= 2 => error "precondition: division must have two arguments"
+            a1 := first(args)
+            a2 := args(2)
+            _$fractionDisplayType $Lisp = 'horizontal =>
+                a1 :=
+                    atom?(a1) => a1
+                    paren(a1)
+                a2 :=
+                    atom?(a2) => a2
+                    paren(a2)
+                construct(outputForm('SLASH), [a1, a2])
+            op := outputForm('OVER)
+            not(atom?(a1)) and is_symbol?(op1 := operator(a1), '-)
+              and (#(args1 := arguments(a1)) = 1) =>
+                a11 := first(args1)
+                construct(op1, [construct(op, [a11, a2])])
+            construct(op, args)
+        construct(precondition(op), args)

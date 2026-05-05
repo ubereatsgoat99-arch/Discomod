@@ -1,0 +1,39 @@
+)set break resume
+)expose UnittestCount UnittestAux Unittest
+
+testsuite "bugs2022"
+
+testcase "leastAffineMultiple"
+
+pF := PrimeField(7)
+fP := FiniteFieldPolynomialPackage(pF)
+p := (5*x^5+4*x^4+x^3+6*x^2+6*x+4)::Polynomial(pF)
+pr := x^2401+x^343+6*x^7+6*x
+testEquals("leastAffineMultiple(p)$fP", "univariate(pr::Polynomial(pF))")
+
+testcase "parsing 2.. by 2"
+
+testEquals("2.. by 2", "(2..) by 2")
+
+testcase "resolve with AlgebraicNumber"
+
+testEquals("typeOf(x^2 + 1/2 - sqrt(-1))::OutputForm",
+           "Polynomial(AlgebraicNumber)::OutputForm")
+testEquals("typeOf((1/2)*1/(1+x)^2*sqrt(2))::OutputForm",
+           "Fraction(Polynomial(AlgebraicNumber))::OutputForm")
+testEquals("typeOf(x/(x^2 - 1/5 - 2*sqrt(-1)/5)/sqrt(x^3 - x))::OutputForm",
+           "Expression(Integer)::OutputForm")
+
+testcase "weierstrassPInverse"
+
+testEquals("D(weierstrassPInverse(0,4, x)::Expression(Complex(Integer)), x)",
+           "1/sqrt(4*x^3 - 4)")
+
+testcase "missing trivial factor"
+
+pf := (x^4 + (6*z + 2)*x^3 + (2*z + 1)*x^2 + 3*x)::POLY(PF(7))
+testEquals("#factorList(factor(pf))", "3")
+testEquals("#factorList(factor(univariate(pf, x)))", "3")
+testEquals("#factorList(factor(univariate(pf, z)))", "3")
+
+statistics()

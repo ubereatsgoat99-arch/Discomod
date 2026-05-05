@@ -1,0 +1,5 @@
+extern void ht2_input(void);
+extern char * strCopy(char * s);
+extern void print_paste_line(FILE * pfile, char * str);
+extern void get_spad_output(FILE * pfile, char * command, int com_type);
+extern void get_graph_output(char * command, char * pagename, int com_type);

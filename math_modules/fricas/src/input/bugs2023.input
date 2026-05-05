@@ -1,0 +1,123 @@
+)set break resume
+)expose UnittestCount UnittestAux Unittest
+
+testsuite "bugs2023"
+
+testcase "missing padic operations"
+
+pI := PAdicInteger(13)
+pR := PAdicRational(13)
+testEquals("retract(13::pR)", "13::pI")
+testEquals("numer(111::pR/13)", "111::pI")
+testEquals("denom(111::pR/13)", "13::pI")
+testEquals("wholePart(111::pR/13)", "8::pI")
+testEquals("fractionPart(111::pR/13)", "7::pR/13")
+
+testcase "solveUniquely"
+
+m := matrix([[2, 3], [3, -1]])
+x0 := vector([2,-3])
+y := m*x0
+lSMP := LinearSystemMatrixPackage2(Integer)
+xu := solveUniquely(m, y)$lSMP
+testTrue("xu case Vector(Integer)")
+testEquals("xu::Vector(Integer)", "x0")
+
+xu := solveUniquely(m, vector([1,1]))$lSMP
+testTrue("not(xu case Vector(Integer))")
+
+testcase "ALGSC over rings"
+
+-- Bug: accepted, but cause error later
+--   aL := ALGSC(Integer, 2, ['S, 'X], [[0, 1], [0, -1]])
+
+aL := ALGSC(Integer, 2, ['S, 'X], [[[0, 0], [0, 0]], [[0, 1],[-1, 0]]])
+
+testTrue("antiCommutative?()$aL")
+testTrue("jacobiIdentity?()$aL")
+testTrue("lieAdmissible?()$aL")
+testTrue("lieAlgebra?()$aL")
+testTrue("not(associative?()$aL)")
+
+bs := basis()$aL
+S := bs(1)
+X := bs(2)
+-- plain testEquals("S*S", "0") should be enough, but interpreter is
+-- too dumb to deduce this
+testEquals("S*S", "0$aL")
+testEquals("S*X", "X")
+testEquals("X*S", "-X")
+testEquals("X*X", "0$aL")
+
+-- FreeModule structure
+testTrue("aL has FreeModuleCategory(Integer, OVAR(['S, 'X]))")
+
+ae := 2*X + S
+lt := listOfTerms(ae)
+testEquals("first(lt).k", "'S")
+testEquals("first(lt).c", "1")
+testTrue("(ae = construct(lt)$aL)@Boolean")
+
+testcase "tagged unions"
+
+u := Union(a : Integer, b : Integer)
+testTrue("(vb := [b == 42]@u) case b")
+testTrue("(va := [a == 42]$u) case a")
+testTrue("not(va = vb)")
+testEquals("va.a", "42")
+
+testcase "hash in Product"
+
+p1 := construct(-1, 1)$Product(Integer, PositiveInteger)
+p2 := construct(-1, 2)$Product(Integer, PositiveInteger)
+testTrue("not(hash(p1) = hash(p2))")
+
+testcase "realLiouvillian"
+
+ee1 := integral((-1*x+1)^(b-1)*x^(a-1),x::Symbol)
+-- was infinite recursion
+testTrue("(realLiouvillian(ee1)$EFSTRUC(INT, EXPR(INT)); true)")
+
+testcase "polylog at 0"
+
+testEquals("polylog(3, 0)", "0")
+testEquals("polylog(s, 0)", "0")
+testEquals("limit(polylog(2, x), x = 0)", "0")
+testEquals("limit(polylog(2, x)/x, x = 0)", "1")
+testEquals("limit((polylog(2, x)/x - 1)/x, x = 0)", "1/4")
+testEquals("limit(polylog(3, x), x = 0)", "0")
+testEquals("limit(polylog(3, x)/x, x = 0)", "1")
+testEquals("limit((polylog(3, x)/x - 1)/x, x = 0)", "1/8")
+
+xx := series(x, x = 0);
+sl := series(-log(1 - x)/x, x = 0);
+s2 := integrate(sl);
+s3 := integrate(s2/xx);
+s3a := series(polylog(3, x), x = 0);
+testEquals("approximate(s3a, 5)", "approximate(s3, 5)")
+
+testcase "radicalSolve"
+
+testLibraryError("radicalSolve([x^2 - y])")
+
+testcase "derivatives of integrals"
+
+ee := integral(x^(a-1)*(1 - x)^(b-1), x = 0..t)
+testEquals("D(D(ee, a), t)", "D(D(ee, t), a)")
+testEquals("D(D(Beta(x, a, b), a), x)", "D(D(Beta(x, a, b), x), a)")
+
+testcase "polynomial roots"
+
+testEquals("rootSimp((4*a^6)^(1/4))", "a*sqrt(2*a)")
+
+testcase "initial coefficients of sparse univariate power series"
+
+testEquals("st:=[[n,n+42]@Record(k:INT,c:INT) for n in 0..];s:=series(st)$InnerSparseUnivariatePowerSeries(INT);coefficient(s,0)", "42")
+
+testcase "simplifyExp"
+
+testEquals("height simplifyExp sin(exp(a)*exp(-a))", "1")
+testEquals("simplifyExp((exp(a)*exp(b))^c)", "(exp(a+b))^c")
+testEquals("simplifyExp(exp(a-1)*exp(-a))", "exp(-1)")
+
+statistics()

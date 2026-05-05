@@ -1,0 +1,66 @@
+IN=	$(fricas_src_srcdir)/graph/Gdraws
+OUT=	$(fricas_target_libdir)
+PS=	$(fricas_target_libdir)/graph
+DOC=    $(fricas_target_docdir)/src/graph
+
+# local include files shared by graphics
+LINC=	$(fricas_src_srcdir)/graph/include
+
+# global include files shared by everyone
+GINC=	$(fricas_src_srcdir)/include
+
+# include files in Hyperdoc
+HINC=	$(fricas_src_srcdir)/hyper
+
+# bitmaps for cursors
+BIT=	$(fricas_src_srcdir)/graph/include/bitmaps
+
+# a .h file stuck in a really weird place
+DOTH=	$(fricas_src_srcdir)/graph/viewman
+
+# a .c file in the library subdirectory
+DOTC=	$(fricas_src_srcdir)/lib
+
+FRICAS_CFLAGS = ${CCF} -I${LINC} -I${GINC} -I$(srcdir) -I${HINC} \
+		$(fricas_includes) ${FRICAS_X11_CFLAGS}
+
+
+subdir = src/graph/Gdraws/
+
+HEADERS = ${IN}/Gdraws0.h ${LINC}/G.h     ${LINC}/Gfun.H1    \
+          ${GINC}/hash.h  ${GINC}/hash.H1 \
+		$(fricas_c_macros)
+
+PSFiles= ${PS}/colorpoly.ps ${PS}/colorwol.ps  ${PS}/draw.ps      \
+         ${PS}/drawIstr.ps  ${PS}/drawarc.ps   ${PS}/drawcolor.ps \
+         ${PS}/drawline.ps  ${PS}/drawlines.ps ${PS}/drawpoint.ps \
+         ${PS}/drawrect.ps  ${PS}/drawstr.ps   ${PS}/drwfilled.ps \
+         ${PS}/end.ps       ${PS}/fillarc.ps   ${PS}/fillpoly.ps  \
+         ${PS}/fillwol.ps   ${PS}/header.ps    ${PS}/setup.ps
+
+.SUFFIXES:
+.SUFFIXES: .c .o .h .ps
+
+.PHONY: all all-ax all-Gdraws
+all: all-ax
+all-ax all-Gdraws: stamp
+	@ echo finished making $(fricas_src_srcdir)/Gdraws
+
+.PHONY: PSfiles.post
+stamp:  Gfun.$(OBJEXT) $(PSFiles)
+	@-rm -f stamp
+	$(STAMP) stamp
+
+$(PS)/%.ps: $(srcdir)/ps_files/%.ps
+	cp $< $@
+
+Gfun.$(OBJEXT): $(srcdir)/Gfun.c ${HEADERS}
+	${CC} -c  $(CFLAGS) $(FRICAS_CFLAGS) -o $@ $<
+
+
+clean-local:
+	-rm -f Gfun.$(OBJEXT)
+	-rm -f stamp
+	-rm -f $(PSFiles)
+
+distclean-local: clean-local

@@ -1,0 +1,1244 @@
+)abbrev package GALUTIL GaloisGroupUtilities
+++ Author: Frederic Lehobey
+++ Date Created: 29 June 1994
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ \spadtype{GaloisGroupUtilities} provides several useful functions.
+
+GaloisGroupUtilities(R) : Exports == Implementation where
+  N ==> NonNegativeInteger
+  Z ==> Integer
+  R : Ring
+
+  Exports ==> with
+    pascalTriangle : (N, Z) -> R
+      ++ pascalTriangle(n, r) returns the binomial coefficient
+      ++ \spad{C(n, r)=n!/(r! (n-r)!)}
+      ++ and stores it in a table to prevent recomputation.
+    rangePascalTriangle : N -> N
+      ++ rangePascalTriangle(n) sets the maximal number of lines which
+      ++ are stored and returns the previous value.
+    rangePascalTriangle : () -> N
+      ++ rangePascalTriangle() returns the maximal number of lines stored.
+    sizePascalTriangle : () -> N
+      ++ sizePascalTriangle() returns the number of entries currently stored
+      ++ in the table.
+    fillPascalTriangle : () -> Void
+      ++ fillPascalTriangle() fills the stored table.
+
+    if R has FloatingPointSystem then
+      safeCeiling : R -> Z
+        ++ safeCeiling(x) returns the integer which is greater than any integer
+        ++ with the same floating point number representation.
+      safeFloor : R -> Z
+        ++ safeFloor(x) returns the integer which is lower or equal to the
+        ++ largest integer which has the same floating point number
+        ++ representation.
+      safetyMargin : N -> N
+        ++ safetyMargin(n) sets to n the number of low weight digits we do not
+        ++ trust in the floating point representation and returns the previous
+        ++ value (for use by \spadfun{safeCeiling}).
+      safetyMargin : () -> N
+        ++ safetyMargin() returns the number of low weight digits we do not
+        ++ trust in the floating point representation (used by
+        ++ \spadfun{safeCeiling}).
+
+  Implementation ==> add
+
+    if R has FloatingPointSystem then
+      safetymargin : N := 6
+
+      safeFloor(x : R) : Z ==
+        if (shift := order(x)-precision()$R+safetymargin) >= 0 then
+          x := x+float(1, shift)
+        retract(floor(x))@Z
+
+      safeCeiling(x : R) : Z ==
+        if (shift := order(x)-precision()$R+safetymargin) >= 0 then
+          x := x+float(1, shift)
+        retract(ceiling(x))@Z
+
+      safetyMargin(n : N) : N ==
+        (safetymargin, n) := (n, safetymargin)
+        n
+
+      safetyMargin() : N == safetymargin
+
+    pascaltriangle : FlexibleArray(R) := empty()
+    ncomputed : N := 3
+    rangepascaltriangle : N := 216
+
+    pascalTriangle(n : N, r : Z) : R ==
+      negative? r => 0
+      (d := n-r) < r => pascalTriangle(n, d)
+      zero? r => 1$R
+      (r = 1) => n :: R
+      n > rangepascaltriangle =>
+       binomial(n, r)$IntegerCombinatoricFunctions(Z) :: R
+      n <= ncomputed =>
+        m := divide(n-4, 2)
+        mq := m.quotient
+        pascaltriangle((mq+1)*(mq+m.remainder)+r-1)
+      -- compute the missing lines
+      for i in (ncomputed+1)..n repeat
+        for j in 2..(i quo 2) repeat
+          pascaltriangle := concat!(pascaltriangle, pascalTriangle((i-1)
+           :: N, j-1)+pascalTriangle((i-1) :: N, j))
+        ncomputed := i
+      pascalTriangle(n, r)
+
+    rangePascalTriangle(n : N) : N ==
+      if n<ncomputed then
+        if n<3 then
+          pascaltriangle := delete!(pascaltriangle, 1..#pascaltriangle)
+          ncomputed := 3
+        else
+          d := divide(n-3, 2)
+          dq := d.quotient
+          pascaltriangle := delete!(pascaltriangle, ((dq+1)*(dq+d.remainder)
+           +1)..#pascaltriangle)
+          ncomputed := n
+      (rangepascaltriangle, n) := (n, rangepascaltriangle)
+      n
+
+    rangePascalTriangle() : N == rangepascaltriangle
+
+    sizePascalTriangle() : N == #pascaltriangle
+
+    fillPascalTriangle() : Void == pascalTriangle(rangepascaltriangle, 2)
+
+
+)abbrev package GALPOLYU GaloisGroupPolynomialUtilities
+++ Author: Frederic Lehobey
+++ Date Created: 30 June 1994
+++ Basic Operations:
+++ Related Domains:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description: \spadtype{GaloisGroupPolynomialUtilities} provides useful
+++ functions for univariate polynomials which should be added to
+++ \spadtype{UnivariatePolynomialCategory} or to \spadtype{Factored}
+++ (July 1994).
+
+GaloisGroupPolynomialUtilities(R, UP) : Exports == Implementation where
+  R : Ring
+  UP : UnivariatePolynomialCategory R
+  N ==> NonNegativeInteger
+  P ==> PositiveInteger
+
+  Exports ==> with
+    monic? : UP -> Boolean
+      ++ monic?(p) tests if p is monic (i.e. leading coefficient equal to 1).
+    reverse : UP -> UP
+      ++ reverse(p) returns the reverse polynomial of p.
+    scaleRoots : (UP, R) -> UP
+      ++ scaleRoots(p, c) returns the polynomial which has c times the roots
+      ++ of p.
+    shiftRoots : (UP, R) -> UP
+      ++ shiftRoots(p, c) returns the polynomial which has for roots c added
+      ++ to the roots of p.
+    degreePartition : Factored UP -> Multiset N
+      ++ degreePartition(f) returns the degree partition (i.e. the multiset
+      ++ of the degrees of the irreducible factors) of
+      ++ the polynomial f.
+    factorOfDegree : (P, Factored UP) -> UP
+      ++ factorOfDegree(d, f) returns a factor of degree d of the factored
+      ++ polynomial f. Such a factor shall exist.
+    factorsOfDegree : (P, Factored UP) -> List UP
+      ++ factorsOfDegree(d, f) returns the factors of degree d of the factored
+      ++ polynomial f.
+
+  Implementation ==> add
+
+    import from Factored UP
+
+    factorsOfDegree(d : P, r : Factored UP) : List UP ==
+      lfact : List UP := empty()
+      for fr in factorList r | degree(fr.factor)=(d::N) repeat
+        for i in 1..fr.exponent repeat
+          lfact := cons(fr.factor, lfact)
+      lfact
+
+    factorOfDegree(d : P, r : Factored UP) : UP ==
+      factor : UP := 0
+      for i in factorList r repeat
+        factor := i.factor
+        if degree(factor)=(d::N) then return factor
+      error "factorOfDegree: Bad arguments"
+
+    degreePartition(r : Factored UP) : Multiset N ==
+      multiset([ degree(i.factor) for i in factorList r ])
+
+    monic?(p : UP) : Boolean == (leadingCoefficient p) = 1
+
+    reverse(p : UP) : UP ==
+      r : UP := 0
+      n := degree(p)
+      for i in 0..n repeat r := r + monomial(coefficient(p, (n-i)::N), i)
+      r
+
+    scaleRoots(p : UP, c : R) : UP ==
+      (c = 1) => p
+      n := degree p
+      zero? c => monomial(leadingCoefficient p, n)
+      r : UP := 0
+      mc : R := 1
+      for i in n..0 by -1 repeat
+        r := r + monomial(mc*coefficient(p, i), i)
+        mc := mc*c
+      r
+
+    import from UnivariatePolynomialCategoryFunctions2(R, UP, UP,
+     SparseUnivariatePolynomial UP)
+
+    shiftRoots(p : UP, c : R) : UP == elt(map(coerce, p), monomial(1, 1)$UP-c::UP)::UP
+
+
+)abbrev package GALFACTU GaloisGroupFactorizationUtilities
+++ Author: Frederic Lehobey
+++ Date Created: 30 June 1994
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ [1] Bernard Beauzamy, Products of polynomials and a priori estimates for
+++ coefficients in polynomial decompositions: a sharp result,
+++ J. Symbolic Computation (1992) 13, 463-472
+++ [2] David W. Boyd, Bounds for the Height of a Factor of a Polynomial in
+++ Terms of Bombieri's Norms: I. The Largest Factor,
+++ J. Symbolic Computation (1993) 16, 115-130
+++ [3] David W. Boyd, Bounds for the Height of a Factor of a Polynomial in
+++ Terms of Bombieri's Norms: II. The Smallest Factor,
+++ J. Symbolic Computation (1993) 16, 131-145
+++ [4] Maurice Mignotte, Some Useful Bounds,
+++ Computing, Suppl. 4, 259-263 (1982), Springer-Verlag
+++ [5] Donald E. Knuth, The Art of Computer Programming, Vol. 2, (Seminumerical
+++ Algorithms) 1st edition, 2nd printing, Addison-Wesley 1971, p. 397-398
+++ [6] Bernard Beauzamy, Vilmar Trevisan and Paul S. Wang, Polynomial
+++ Factorization: Sharp Bounds, Efficient Algorithms,
+++ J. Symbolic Computation (1993) 15, 393-413
+++ [7] Augustin-Louis Cauchy, Exercices de Math\'ematiques Quatri\`eme Ann\'ee.
+++ De Bure Fr\`eres, Paris 1829 (reprinted Oeuvres, II S\'erie, Tome IX,
+++ Gauthier-Villars, Paris, 1891).
+++ Description:
+++ \spadtype{GaloisGroupFactorizationUtilities} provides functions
+++ that will be used by the factorizer.
+
+GaloisGroupFactorizationUtilities(R, UP, F) : Exports == Implementation where
+  R : Ring
+  UP : UnivariatePolynomialCategory R
+  F : Join(FloatingPointSystem, RetractableTo(R), Field,
+   TranscendentalFunctionCategory, ElementaryFunctionCategory)
+  N ==> NonNegativeInteger
+  P ==> PositiveInteger
+  Z ==> Integer
+
+  Exports ==> with
+    beauzamyBound : UP -> Z -- See [1]
+      ++ beauzamyBound(p) returns a bound on the larger coefficient of any
+      ++ factor of p.
+    bombieriNorm : UP -> F -- See [1]
+      ++ bombieriNorm(p) returns quadratic Bombieri's norm of p.
+    bombieriNorm : (UP, P) -> F -- See [2] and [3]
+      ++ bombieriNorm(p, n) returns the nth Bombieri's norm of p.
+    rootBound : UP -> Z -- See [4] and [5]
+      ++ rootBound(p) returns a bound on the largest norm of the complex roots
+      ++ of p.
+    singleFactorBound : (UP, N) -> Z -- See [6]
+      ++ singleFactorBound(p, r) returns a bound on the infinite norm of
+      ++ the factor of p with smallest Bombieri's norm. r is a lower bound
+      ++ for the number of factors of p. p shall be of degree higher or equal
+      ++ to 2.
+    singleFactorBound : UP -> Z -- See [6]
+      ++ singleFactorBound(p) returns a bound on the infinite norm of
+      ++ the factor of p with smallest Bombieri's norm. p shall be of degree
+      ++ higher or equal to 2.
+    norm : (UP, P) -> F
+      ++ norm(f, p) returns the lp norm of the polynomial f.
+    quadraticNorm : UP -> F
+      ++ quadraticNorm(f) returns the l2 norm of the polynomial f.
+    infinityNorm : UP -> F
+      ++ infinityNorm(f) returns the maximal absolute value of the coefficients
+      ++ of the polynomial f.
+    height : UP -> F
+      ++ height(p) returns the maximal absolute value of the coefficients of
+      ++ the polynomial p.
+    length : UP -> F
+      ++ length(p) returns the sum of the absolute values of the coefficients
+      ++ of the polynomial p.
+
+  Implementation ==> add
+
+    import from GaloisGroupUtilities(F)
+
+    height(p : UP) : F == infinityNorm(p)
+
+    length(p : UP) : F == norm(p, 1)
+
+    norm(f : UP, p : P) : F ==
+      n : F := 0
+      for c in coefficients f repeat
+        n := n+abs(c::F)^p
+      nthRoot(n, p::N)
+
+    quadraticNorm(f : UP) : F == norm(f, 2)
+
+    infinityNorm(f : UP) : F ==
+      n : F := 0
+      for c in coefficients f repeat
+        n := max(n, abs(c::F))
+      n
+
+    singleFactorBound(p : UP, r : N) : Z == -- See [6]
+      n : N := degree p
+      r := max(2, r)
+      n < r => error "singleFactorBound: Bad arguments."
+      nf : F := n :: F
+      num : F := nthRoot(bombieriNorm(p), r)
+      if F has Gamma : F -> F then
+        num := num*nthRoot(Gamma(nf+1$F), 2*r)
+        den : F := Gamma(nf/((2*r)::F)+1$F)
+      else
+        num := num*(2::F)^(5/8+n/2)*exp(1$F/(4*nf))
+        den : F := (pi()$F*nf)^(3/8)
+      safeFloor( num/den )
+
+    singleFactorBound(p : UP) : Z == singleFactorBound(p, 2) -- See [6]
+
+    rootBound(p : UP) : Z == -- See [4] and [5]
+      n := degree p
+      zero? n => 0
+      lc := abs(leadingCoefficient(p)::F)
+      b1 : F := 0 -- Mignotte
+      b2 : F := 0 -- Knuth
+      b3 : F := 0 -- Zassenhaus in [5]
+      b4 : F := 0 -- Cauchy in [7]
+      c : F := 0
+      cl : F := 0
+      for i in 1..n repeat
+        c := abs(coefficient(p, (n-i)::N)::F)
+        b1 := max(b1, c)
+        cl := c/lc
+        b2 := max(b2, nthRoot(cl, i))
+        b3 := max(b3, nthRoot(cl/pascalTriangle(n, i), i))
+        b4 := max(b4, nthRoot(n*cl, i))
+      min(1+safeCeiling(b1/lc), min(safeCeiling(2*b2), min(safeCeiling(b3/
+       (nthRoot(2::F, n)-1)), safeCeiling(b4))))
+
+    beauzamyBound(f : UP) : Z == -- See [1]
+      d := degree f
+      zero? d => safeFloor bombieriNorm f
+      safeFloor( (bombieriNorm(f)*(3::F)^(3/4+d/2))/
+       (2*sqrt(pi()$F*(d::F))) )
+
+    bombieriNorm(f : UP, p : P) : F == -- See [2] and [3]
+      d := degree f
+      b := abs(coefficient(f, 0)::F)
+      if zero? d then return b
+       else b := b^p
+      b := b+abs(leadingCoefficient(f)::F)^p
+      dd := (d-1) quo 2
+      for i in 1..dd repeat
+        b := b+(abs(coefficient(f, i)::F)^p+abs(coefficient(f, (d-i)::N)::F)^p)
+         /pascalTriangle(d, i)
+      if even? d then
+        dd := dd+1
+        b := b+abs(coefficient(f, dd::N)::F)^p/pascalTriangle(d, dd)
+      nthRoot(b, p::N)
+
+    bombieriNorm(f : UP) : F == bombieriNorm(f, 2) -- See [1]
+
+
+)abbrev package GALFACS GaloisGroupFactorizerSeparate
+++ Description:
+++ A helper package for factorizer.
+GaloisGroupFactorizerSeparate(p, UP) : Exports == Implementation where
+  p : PositiveInteger
+  Z ==> Integer
+  pF ==> PrimeField(p)
+  PA ==> PrimitiveArray(pF)
+  UP : UnivariatePolynomialCategory(Z)
+  POLVECP ==> VectorPolynomialOperationsP(p)
+  Exports ==> with
+    separate_factors: (List(() -> List(PA)), Integer) -> List(UP)
+  Implementation ==> add
+    separate_factors(sfl : List(() -> List(PA)), c : Integer
+                    ) : List(UP) ==
+        res : List UP := []
+        for sf in sfl repeat
+            vl := sf()
+            for v in vl repeat
+                res := cons(unmakeSUP(pa_to_sup(v)$POLVECP)$UP, res)
+        cons(c::UP, res)
+
+
+)abbrev package GALFACT GaloisGroupFactorizer
+++ Author: Frederic Lehobey
+++ Date Created: 28 June 1994
+++ Basic Operations: factor
+++ Related Domains:
+++ Also See:
+++ AMS Classifications:
+++ Keywords: factorization
+++ Examples:
+++ References:
+++ [1] Bernard Beauzamy, Vilmar Trevisan and Paul S. Wang, Polynomial
+++ Factorization: Sharp Bounds, Efficient Algorithms,
+++ J. Symbolic Computation (1993) 15, 393-413
+++ [2] John Brillhart, Note on Irreducibility Testing,
+++ Mathematics of Computation, vol. 35, num. 35, Oct. 1980, 1379-1381
+++ [3] David R. Musser, On the Efficiency of a Polynomial Irreducibility Test,
+++ Journal of the ACM, Vol. 25, No. 2, April 1978, pp. 271-282
+++ Description: \spadtype{GaloisGroupFactorizer} provides functions
+++ to factor resolvents.
+-- improvements to do :
+--   + reformulate the lifting problem in completeFactor -- See [1] (hard)
+--   + implement algorithm RC -- See [1] (easy)
+--   + use Dedekind's criterion to prove sometimes irreducibility (easy)
+--     or even to improve early detection of true factors (hard)
+--   + replace Sets by Bits
+GaloisGroupFactorizer(UP) : Exports == Implementation where
+  Z ==> Integer
+  UP : UnivariatePolynomialCategory Z
+  N ==> NonNegativeInteger
+  P ==> PositiveInteger
+  CYC ==> CyclotomicUtilities()
+  SUPZ ==> SparseUnivariatePolynomial Z
+
+  ParFact ==> Record(irr : UP, pow : N)
+  FinalFact ==> Record(contp : Z, factors : List ParFact)
+  DDRecord ==> Record(factor : UP, degree : Z) -- a Distinct-Degree factor
+  DDList ==> List DDRecord
+  MFact ==> Record(prime : Z, factors : List UP) -- Modular Factors
+  LR ==> Record(left : UP, right : UP) -- Functional decomposition
+
+  Exports ==> with
+    makeFR : FinalFact -> Factored UP
+      ++ makeFR(flist) turns the final factorization of henselFact into a
+      ++ \spadtype{Factored} object.
+    degreePartition : DDList -> Multiset N
+      ++ degreePartition(ddfactorization) returns the degree partition of
+      ++ the polynomial f modulo p where ddfactorization is the distinct
+      ++ degree factorization of f computed by
+      ++ \spad{ddfact} from modular factorization package
+      ++ for some prime p.
+    musserTrials : () -> P
+      ++ musserTrials() returns the number of primes that are tried in
+      ++ \spadfun{modularFactor}.
+    musserTrials : P -> P
+      ++ musserTrials(n) sets to n the number of primes to be tried in
+      ++ \spadfun{modularFactor} and returns the previous value.
+    stopMusserTrials : () -> P
+      ++ stopMusserTrials() returns the bound on the number of factors for
+      ++ which \spadfun{modularFactor} stops to look for another prime. You
+      ++ will have to remember that the step of recombining the extraneous
+      ++ factors may take up to \spad{2^stopMusserTrials()} trials.
+    stopMusserTrials : P -> P
+      ++ stopMusserTrials(n) sets to n the bound on the number of factors for
+      ++ which \spadfun{modularFactor} stops to look for another prime. You
+      ++ will have to remember that the step of recombining the extraneous
+      ++ factors may take up to \spad{2^n} trials. Returns the previous
+      ++ value.
+    numberOfFactors : DDList -> N
+      ++ numberOfFactors(ddfactorization) returns the number of factors of
+      ++ the polynomial f modulo p where ddfactorization is the distinct
+      ++ degree factorization of f computed by modular factorization package
+      ++ for some prime p.
+    modularFactor : (UP, Set N) -> MFact
+      ++ modularFactor(f, d) chooses a "good" prime and returns the
+      ++ factorization of f modulo this prime in a form that may be used by
+      ++ \spadfunFrom{completeHensel}{GeneralHenselPackage}. If prime is zero
+      ++ it means that f has been proved to be irreducible over the integers
+      ++ or that f is a unit (i.e. 1 or -1).
+      ++ f shall be primitive (i.e. content(p)=1) and square free (i.e.
+      ++ without repeated factors).
+      ++ \spad{d} is set of possible degrees of factors.
+    useSingleFactorBound? : () -> Boolean
+      ++ useSingleFactorBound?() returns \spad{true} if algorithm with single
+      ++ factor bound is used for factorization, \spad{false} for algorithm
+      ++ with overall bound.
+    useSingleFactorBound : Boolean -> Boolean
+      ++ useSingleFactorBound(b) chooses the algorithm to be used by the
+      ++ factorizers: \spad{true} for algorithm with single
+      ++ factor bound, \spad{false} for algorithm with overall bound.
+      ++ Returns the previous value.
+    useEisensteinCriterion? : () -> Boolean
+      ++ useEisensteinCriterion?() returns \spad{true} if factorizers
+      ++ check Eisenstein's criterion before factoring.
+    useEisensteinCriterion : Boolean -> Boolean
+      ++ useEisensteinCriterion(b) chooses whether factorizers check
+      ++ Eisenstein's criterion before factoring: \spad{true} for
+      ++ using it, \spad{false} else. Returns the previous value.
+    eisensteinIrreducible? : UP -> Boolean
+      ++ eisensteinIrreducible?(p) returns \spad{true} if p can be
+      ++ shown to be irreducible by Eisenstein's criterion,
+      ++ \spad{false} is inconclusive.
+    tryFunctionalDecomposition? : () -> Boolean
+      ++ tryFunctionalDecomposition?() returns \spad{true} if
+      ++ factorizers try functional decomposition of polynomials before
+      ++ factoring them.
+    tryFunctionalDecomposition : Boolean -> Boolean
+      ++ tryFunctionalDecomposition(b) chooses whether factorizers have
+      ++ to look for functional decomposition of polynomials
+      ++ (\spad{true}) or not (\spad{false}). Returns the previous value.
+    factor : UP -> Factored UP
+      ++ factor(p) returns the factorization of p over the integers.
+    factor : (UP, N) -> Factored UP
+      ++ factor(p, r) factorizes the polynomial p using the single factor bound
+      ++ algorithm and knowing that p has at least r factors.
+    factor : (UP, List N) -> Factored UP
+      ++ factor(p, listOfDegrees) factorizes the polynomial p using the single
+      ++ factor bound algorithm and knowing that p has for possible
+      ++ splitting of its degree listOfDegrees.
+    factor : (UP, List N, N) -> Factored UP
+      ++ factor(p, listOfDegrees, r) factorizes the polynomial p using the single
+      ++ factor bound algorithm, knowing that p has for possible
+      ++ splitting of its degree listOfDegrees and that p has at least r
+      ++ factors.
+    factor : (UP, N, N) -> Factored UP
+      ++ factor(p, d, r) factorizes the polynomial p using the single
+      ++ factor bound algorithm, knowing that d divides the degree of all
+      ++ factors of p and that p has at least r factors.
+    factorSquareFree : UP -> Factored UP
+      ++ factorSquareFree(p) returns the factorization of p which is supposed
+      ++ not having any repeated factor (this is not checked).
+    factorSquareFree : (UP, N) -> Factored UP
+      ++ factorSquareFree(p, r) factorizes the polynomial p using the single
+      ++ factor bound algorithm and knowing that p has at least r factors.
+      ++ p is assumed to have no repeated factors (this is not checked).
+    factorSquareFree : (UP, List N) -> Factored UP
+      ++ factorSquareFree(p, listOfDegrees) factorizes the polynomial p using
+      ++ the single factor bound algorithm and knowing that p has for possible
+      ++ splitting of its degree listOfDegrees.
+      ++ p is assumed to have no repeated factors (this is not checked).
+    factorSquareFree : (UP, List N, N) -> Factored UP
+      ++ factorSquareFree(p, listOfDegrees, r) factorizes the polynomial p using
+      ++ the single factor bound algorithm, knowing that p has for possible
+      ++ splitting of its degree listOfDegrees and that p has at least r
+      ++ factors.
+      ++ p is assumed to have no repeated factors (this is not checked).
+    factorSquareFree : (UP, N, N) -> Factored UP
+      ++ factorSquareFree(p, d, r) factorizes the polynomial p using the single
+      ++ factor bound algorithm, knowing that d divides the degree of all
+      ++ factors of p and that p has at least r factors.
+      ++ p is assumed to have no repeated factors (this is not checked).
+    factorOfDegree : (P,UP) -> Union(UP,"failed")
+      ++ factorOfDegree(d, p) returns a factor of p of degree d.
+    factorOfDegree : (P,UP,N) -> Union(UP,"failed")
+      ++ factorOfDegree(d, p, r) returns a factor of p of degree
+      ++ d knowing that p has at least r factors.
+    factorOfDegree : (P,UP,List N) -> Union(UP,"failed")
+      ++ factorOfDegree(d, p, listOfDegrees) returns a factor
+      ++ of p of degree d knowing that p has for possible splitting of its
+      ++ degree listOfDegrees.
+    factorOfDegree : (P,UP,List N,N) -> Union(UP,"failed")
+      ++ factorOfDegree(d, p, listOfDegrees, r) returns a factor
+      ++ of p of degree d knowing that p has for possible splitting of its
+      ++ degree listOfDegrees, and that p has at least r factors.
+    factorOfDegree : (P,UP,List N,N,Boolean) -> Union(UP,"failed")
+      ++ factorOfDegree(d, p, listOfDegrees, r, sqf) returns a
+      ++ factor of p of degree d knowing that p has for possible splitting of
+      ++ its degree listOfDegrees, and that p has at least r factors.
+      ++ If \spad{sqf=true} the polynomial is assumed to be square free (i.e.
+      ++ without repeated factors).
+    henselFact : (UP, Boolean) -> FinalFact
+      ++ henselFact(p, sqf) returns the factorization of p, the result
+      ++ is a Record such that \spad{contp=}content p,
+      ++ \spad{factors=}List of irreducible factors of p with exponent.
+      ++ If \spad{sqf=true} the polynomial is assumed to be square free (i.e.
+      ++ without repeated factors).
+    btwFact : (UP, Boolean, Set N, N) -> FinalFact
+      ++ btwFact(p, sqf, pd, r) returns the factorization of p, the result
+      ++ is a Record such that \spad{contp=}content p,
+      ++ \spad{factors=}List of irreducible factors of p with exponent.
+      ++ If \spad{sqf=true} the polynomial is assumed to be square free (i.e.
+      ++ without repeated factors).
+      ++ pd is the \spadtype{Set} of possible degrees. r is a lower bound for
+      ++ the number of factors of p. Please do not use this function in your
+      ++ code because its design may change.
+
+  Implementation ==> add
+
+    fUnion ==> Union("nil", "sqfr", "irred", "prime")
+    FFE ==> Record(flag : fUnion, factor : UP, exponent : N)
+    HLR ==> Record(plist : List UP, modulo : Z) -- HenselLift Record
+
+    mussertrials : P := 5
+    stopmussertrials : P := 8
+    usesinglefactorbound : Boolean := true
+    tryfunctionaldecomposition : Boolean := true
+    useeisensteincriterion : Boolean := true
+
+    useEisensteinCriterion?() : Boolean == useeisensteincriterion
+
+    useEisensteinCriterion(b : Boolean) : Boolean ==
+      (useeisensteincriterion, b) := (b, useeisensteincriterion)
+      b
+
+    tryFunctionalDecomposition?() : Boolean == tryfunctionaldecomposition
+
+    tryFunctionalDecomposition(b : Boolean) : Boolean ==
+      (tryfunctionaldecomposition, b) := (b, tryfunctionaldecomposition)
+      b
+
+    useSingleFactorBound?() : Boolean == usesinglefactorbound
+
+    useSingleFactorBound(b : Boolean) : Boolean ==
+      (usesinglefactorbound, b) := (b, usesinglefactorbound)
+      b
+
+    stopMusserTrials() : P == stopmussertrials
+
+    stopMusserTrials(n : P) : P ==
+      (stopmussertrials, n) := (n, stopmussertrials)
+      n
+
+    musserTrials() : P == mussertrials
+
+    musserTrials(n : P) : P ==
+      (mussertrials, n) := (n, mussertrials)
+      n
+
+    import from GaloisGroupFactorizationUtilities(Z, UP, Float)
+
+    import from GaloisGroupPolynomialUtilities(Z, UP)
+
+    import from IntegerPrimesPackage(Z)
+    import from IntegerFactorizationPackage(Z)
+
+    eisensteinIrreducible?(f : UP) : Boolean ==
+      rf := reductum f
+      c : Z := content rf
+      zero? c => false
+      unit? c => false
+      lc := leadingCoefficient f
+      tc := lc
+      while not zero? rf repeat
+        tc := leadingCoefficient rf
+        rf := reductum rf
+      for p in factorList(factor c)$Factored(Z) repeat
+        if (p.exponent = 1) and (not zero? (lc rem p.factor)) and
+         (not zero? (tc rem ((p.factor)^2))) then return true
+      false
+
+    numberOfFactors(ddlist : DDList) : N ==
+      n : N := 0
+      d : Z := 0
+      for dd in ddlist repeat
+        n := n +
+          zero? (d := degree(dd.factor)::Z) => 1
+          (d quo dd.degree)::N
+      n
+
+    -- local function, returns the a Set of shifted elements
+    shiftSet(s : Set N, shift : N) : Set N == map(e +-> e + shift, s)
+
+    -- local function, returns the "reductum" of an Integer (as chain of bits)
+    reductum(n : Z) : Z == n-shift(1, length(n)-1)
+
+    -- local function, returns an integer with level lowest bits set to 1
+    seed(level : Z) : Z == shift(1, level)-1
+
+    -- local function, returns the next number (as a chain of bit) for
+    -- factor reconciliation of a given level (which is the number of
+    -- extraneous factors involved) or "End of level" if not any
+    nextRecNum(levels : N, level : Z, n : Z) : Union(Z, "End of level") ==
+      if (l := length n)<levels then return(n+shift(1, l-1))
+      (n = shift(seed(level),levels-level)) => "End of level"
+      b : Z := 1
+      while ((l-b) = (lr := length(n := reductum n)))@Boolean repeat b := b+1
+      reductum(n)+shift(seed(b+1), lr)
+
+    -- local function, returns the set of N, 0..n
+    fullSet(n : N) : Set N == set [ i for i in 0..n ]
+
+    POLYVEC ==> U32VectorPolynomialOperations
+
+    is_mod_coprime?(pol1 : UP, pol2 : UP, p : Integer, small : Boolean
+                   ) : Boolean ==
+        small =>
+            v1 := to_mod_pa(makeSUP pol1, p)$POLYVEC
+            v2 := to_mod_pa(makeSUP pol2, p)$POLYVEC
+            vg := gcd(v1, v2, p)$POLYVEC
+            degree(vg)$POLYVEC <= 0
+        pp := p::PositiveInteger
+        pF := PrimeField(pp)
+        pV := VectorPolynomialOperationsP(pp)
+        v1 := to_mod_pa(makeSUP(pol1))$pV
+        v2 := to_mod_pa(makeSUP(pol2))$pV
+        mD := [p, 1]$Record(i_mod : Integer, deg : Integer)
+        vg := gcd(v1, v2, mD)$ModularFactorizationTools3(pF)
+        degree(vg)$pV <= 0
+
+    DDres ==> Record(dd_list : List N, separate_factors : () -> List(UP))
+
+    add_degs(deg1 : N, deg2 : N, res : List N) : List N ==
+        deg2 = 0 => res
+        for i in 1..(deg1 quo deg2) repeat
+            res := cons(deg2, res)
+        res
+
+    do_separate(sfl : List(() -> List(U32Vector)), c : Integer) : List UP ==
+        res : List UP := []
+        for sf in sfl repeat
+            vl := sf()
+            for v in vl repeat
+                res := cons(unmakeSUP(pa_to_sup(v)$POLYVEC)$UP, res)
+        cons(c::UP, res)
+
+    do_ddfact(pol : UP, p : Integer, small : Boolean) : DDres ==
+        degs : List N := []
+        small =>
+            v := to_mod_pa(makeSUP pol, p)$POLYVEC
+            dpol := degree(v)$POLYVEC
+            c := v(dpol)
+            if c ~= 1 then
+                ci := invmod(c, p)
+                mul_by_scalar(v, dpol, ci, p)
+            ul1 := ddfact(v, p)$ModularFactorization
+            sfl : List(() -> List(U32Vector)) := []
+            for fr in ul1 repeat
+                degs := add_degs(degree(fr.poly)::N, fr.degree, degs)
+                sfl := cons(fr.separate_factors, sfl)
+            [degs, () +-> do_separate(sfl, c)]
+        pp := p::PositiveInteger
+        pF := PrimeField(pp)
+        pV := VectorPolynomialOperationsP(pp)
+        vv := to_mod_pa(makeSUP(pol))$pV
+        dpol := degree(vv)$pV
+        c := convert(vv(dpol))@Integer
+        if c ~= 1 then
+            ci := invmod(c, p)
+            cki := ci::pF
+            mul_by_scalar(vv, dpol, cki)$ModularFactorizationTools3(pF)
+        mD := [p, 1]$Record(i_mod : Integer, deg : Integer)
+        uul1 := ddfact(vv, mD)$ModularFactorizationK(pF)
+        ssfl : List(() -> List(PrimitiveArray(pF))) := []
+        for ffr in uul1 repeat
+            degs := add_degs(degree(ffr.poly)::N, ffr.degree, degs)
+            ssfl := cons(ffr.separate_factors, ssfl)
+        [degs, () +-> separate_factors(ssfl, c
+                      )$GaloisGroupFactorizerSeparate(pp, UP)]$DDres
+
+    modularFactor(p : UP, d : Set N) : MFact ==
+      not (abs(content(p)) = 1) =>
+       error "modularFactor: the polynomial is not primitive."
+      zero? (n := degree p) => [0, [p]]
+
+      -- declarations --
+      cprime : Z := 2
+      dirred : Set N := set [0, n]
+      s : Set N := empty()
+      ddlist : List N := []
+      degfact : N := 0
+      degp : N := degree(p)
+      nf : N := degp + stopmussertrials + 1
+      i : Z
+      dd_res : DDres
+      res_prime : Z
+
+      -- Musser, see [3] --
+      diffp := differentiate p
+      small : Boolean := true
+      for i in 1..mussertrials | nf>stopmussertrials repeat
+        if small and not(degp*cprime*cprime < 18446744073709551616) then
+            small := false
+        -- test 1: cprime divides leading coefficient
+        -- test 2: "bad" primes: (in future: use Dedekind's Criterion)
+        while (zero? ((leadingCoefficient p) rem cprime)) or
+          (not is_mod_coprime?(p, diffp, cprime, small)) repeat
+            cprime := nextPrime(cprime)
+        dd_res1 := do_ddfact(p, cprime, small)
+        ddlist := dd_res1.dd_list
+        -- degree compatibility: See [3] --
+        s := set [0]
+        for degfact in ddlist repeat
+            s := union(s, shiftSet(s, degfact))
+        d := intersect(d, s)
+        d = dirred => return [0, [p]] -- p is irreducible
+        nf1 := #ddlist
+        if nf1 < nf or (nf1 = nf) and (cprime > res_prime) then
+            nf := nf1
+            dd_res := dd_res1
+            res_prime := cprime
+        cprime := nextPrime(cprime)
+      fl : List(UP) := (dd_res.separate_factors)()
+      [res_prime, fl]
+
+    degreePartition(ddlist : DDList) : Multiset N ==
+      dp : Multiset N := empty()
+      d : N := 0
+      dd : N := 0
+      for f in ddlist repeat
+        zero? (d := degree(f.factor)) => dp := insert!(0, dp)
+        dd := f.degree::N
+        dp := insert!(dd, dp, d quo dd)
+      dp
+
+    import from GeneralHenselPackage(Z, UP)
+    import from UnivariatePolynomialDecompositionPackage(Z, UP)
+    import from BrillhartTests(UP) -- See [2]
+
+    divideSet : (Set N, N) -> Set N
+
+    sel_set(d : Set N, n : N, m : N) : Set N ==
+        n = 0 => set([0])
+        nm := n*m
+        select(x +-> x <= nm and x rem n = 0, d)
+
+    -- local function, finds the factors of f primitive, square-free, with
+    -- positive leading coefficient and non zero trailing coefficient,
+    -- using the overall bound technique. If pdecomp is true then look
+    -- for a functional decomposition of f.
+    henselfact(f : UP, pdecomp : Boolean, d : Set N) : List UP ==
+      if brillhartIrreducible? f or
+       (useeisensteincriterion => eisensteinIrreducible? f ; false)
+      then return [f]
+      cf : Union(LR, "failed")
+      if pdecomp and tryfunctionaldecomposition then
+        cf := monicDecomposeIfCan f
+      else
+        cf := "failed"
+      cf case "failed" =>
+        m := modularFactor(f, d)
+        zero? (cprime := m.prime) => m.factors
+        b : P := (2*leadingCoefficient(f)*beauzamyBound(f)) :: P
+        completeHensel(f, m.factors, cprime, b)
+      lrf := cf@LR
+      dh := degree(lrf.right)
+      d1 := divideSet(d, dh)
+      "append"/[ henselfact(g(lrf.right), false,
+                           sel_set(d, degree(g), dh)) for g in
+         henselfact(lrf.left, true, d1) ]
+
+    henselfact1(f : UP, pdecomp : Boolean) : List UP ==
+        henselfact(f, pdecomp, fullSet(degree(f)))
+
+    -- local function, returns the complete factorization of its arguments,
+    -- using the single-factor bound technique
+    completeFactor(f : UP, lf : List UP, cprime : Z, pk : P, r : N, d : Set N) : List UP ==
+      lc := leadingCoefficient f
+      f0 := coefficient(f, 0)
+      ltrue : List UP := empty()
+      found? := true
+      degf : N := 0
+      degg : N := 0
+      g0 : Z := 0
+      g : UP := 0
+      rg : N := 0
+      nb : Z := 0
+      lg : List UP := empty()
+      b : P := 1
+      dg : Set N := empty()
+      llg : HLR := [empty(), 0]
+      levels : N := #lf
+      level : Z := 1
+      ic : Union(Z,"End of level") := 0
+      i : Z := 0
+      while level<levels repeat
+        -- try all possible factors with degree in d
+        ic := seed(level)
+        while ((not found?) and (ic case Z)) repeat
+          i := ic::Z
+          degg := 0
+          g0 := 1 -- LC algorithm
+          for j in 1..levels repeat
+            if bit?(i, j-1) then
+              degg := degg+degree lf.j
+              g0 := g0*coefficient(lf.j, 0) -- LC algorithm
+          g0 := symmetricRemainder(lc*g0, pk) -- LC algorithm
+          if member?(degg, d) and (((lc*f0) exquo g0) case Z) then
+            --                       LC algorithm
+            g := lc::UP -- build the possible factor -- LC algorithm
+            for j in 1..levels repeat if bit?(i, j-1) then g := g*lf.j
+            g := primitivePart reduction(g, pk)
+            f1 := f exquo g
+            if f1 case UP then -- g is a true factor
+              found? := true
+              -- remove the factors of g from lf
+              nb := 1
+              for j in 1..levels repeat
+                if bit?(i, j-1) then
+                  swap!(lf, j, nb)
+                  nb := nb+1
+              lg := lf
+              lf := rest(lf, level::N)
+              setrest!(rest(lg, (level-1)::N), empty()$List(UP))
+              f := f1::UP
+              lc := leadingCoefficient f
+              f0 := coefficient(f, 0)
+              -- is g irreducible?
+              dg := select(x+->x<=degg, d)
+              if not(dg = set [0, degg]) then -- implies degg >= 2
+                rg := max(2, r+level-levels)::N
+                b := (2*leadingCoefficient(g)*singleFactorBound(g, rg)) :: P
+                if b>pk and (not brillhartIrreducible?(g)) and
+                  (useeisensteincriterion => not eisensteinIrreducible?(g) ;
+                  true)
+                then
+                  -- g may be reducible
+                  llg := HenselLift(g, lg, cprime, b)
+                  gpk : P := (llg.modulo)::P
+                  -- In case exact factorisation has been reached by
+                  -- HenselLift before coefficient bound.
+                  if gpk<b then
+                    lg := llg.plist
+                  else
+                    lg := completeFactor(g, llg.plist, cprime, gpk, rg, dg)
+                else lg := [ g ] -- g irreducible
+              else lg := [ g ] -- g irreducible
+              ltrue := append(ltrue, lg)
+              r := max(2, (r-#lg))::N
+              degf := degree f
+              d := select(x+->x<=degf, d)
+              if degf<=1 then -- lf exhausted
+                if (degf = 1) then
+                  ltrue := cons(f, ltrue)
+                return ltrue -- 1st exit, all factors found
+              else -- can we go on with the same pk?
+                b := (2*lc*singleFactorBound(f, r)) :: P
+                if b>pk then -- unlucky : no we can't
+                  llg := HenselLift(f, lf, cprime, b) -- I should reformulate
+                   -- the lifting problem, but hadn't time for that.
+                   -- In any case, such case should be quite exceptional.
+                  lf := llg.plist
+                  pk := (llg.modulo)::P
+                  -- In case exact factorisation has been reached by
+                  -- HenselLift before coefficient bound.
+                  if pk<b then return append(lf, ltrue) -- 2nd exit
+                  level := 1
+          ic := nextRecNum(levels, level, i)
+        if found? then
+          levels := #lf
+          found? := false
+        if not (ic case Z) then level := level+1
+      cons(f,ltrue) -- 3rd exit, the last factor was irreducible but not "true"
+
+    -- local function, returns the set of elements "divided" by an integer
+    divideSet(s : Set N, n : N) : Set N ==
+      l : List N := [ 0 ]
+      for e in parts s repeat
+        if (ee := (e exquo n)$N) case N then l := cons(ee@N, l)
+      set(l)
+
+    -- Beauzamy-Trevisan-Wang FACTOR, see [1] with some refinements
+    -- and some differences. f is assumed to be primitive, square-free
+    -- and with positive leading coefficient. If pdecomp is true then
+    -- look for a functional decomposition of f.
+    btwFactor(f : UP, d : Set N, r : N, pdecomp : Boolean) : List UP ==
+      df := degree f
+      not (max(d) = df) =>
+          error "btwFact: Bad arguments"
+      reverse? : Boolean := false
+      negativelc? : Boolean := false
+
+      (d = set [0, df]) => [ f ]
+      if abs(coefficient(f, 0))<abs(leadingCoefficient(f)) then
+        f := reverse f
+        reverse? := true
+      brillhartIrreducible? f or
+       (useeisensteincriterion => eisensteinIrreducible?(f) ; false) =>
+        if reverse? then [ reverse f ] else [ f ]
+      if leadingCoefficient(f)<0 then
+        f := -f
+        negativelc? := true
+      cf : Union(LR,"failed")
+      if pdecomp and tryfunctionaldecomposition then
+        cf := monicDecomposeIfCan f
+      else
+        cf := "failed"
+      if cf case "failed" then
+        m := modularFactor(f, d)
+        zero? (cprime := m.prime) =>
+          if reverse? then
+            if negativelc? then return [ -reverse f ]
+            else return [ reverse f ]
+          else if negativelc? then return [ -f ]
+               else return [ f ]
+        if noLinearFactor? f then d := remove(1, d)
+        lc := leadingCoefficient f
+        b : P := (2*lc*singleFactorBound(f, r)) :: P -- LC algorithm
+        lm := HenselLift(f, m.factors, cprime, b)
+        lf := lm.plist
+        pk : P := (lm.modulo)::P
+        if ground? first lf then lf := rest lf
+        -- in case exact factorisation has been reached by HenselLift
+        -- before coefficient bound
+        if not pk < b then lf := completeFactor(f, lf, cprime, pk, r, d)
+      else
+        lrf := cf@LR
+        dh := degree lrf.right
+        lg := btwFactor(lrf.left, divideSet(d, dh), 2, true)
+        lf : List UP := empty()
+        for i in 1..#lg repeat
+          g := lg.i
+          dg := degree g
+          dgh := dg*dh
+          df := subtractIfCan(df, dgh)::N
+          lfg := btwFactor(g(lrf.right),
+              sel_set(d, dg, dh), max(2, r-df)::N, false)
+          lf := append(lf, lfg)
+          r := max(2, r-#lfg)::N
+      if reverse? then lf := [ reverse(fact) for fact in lf ]
+      for i in 1..#lf repeat
+        if leadingCoefficient(lf.i)<0 then lf.i := -lf.i
+        -- because we assume f with positive leading coefficient
+      lf
+
+    makeFR(flist : FinalFact) : Factored UP ==
+      ctp := factor flist.contp
+      fflist : List FFE := empty()
+      for ff in flist.factors repeat
+        fflist := cons(["prime", ff.irr, ff.pow]$FFE, fflist)
+      for fc in factorList ctp repeat
+        fflist := cons([fc.flag, fc.factor::UP, fc.exponent]$FFE, fflist)
+      makeFR(unit(ctp)::UP, fflist)
+
+    import from IntegerRoots(Z)
+
+    -- local function, factorizes a quadratic polynomial
+    quadratic(p : UP) : List UP ==
+      a := leadingCoefficient p
+      b := coefficient(p, 1)
+      d := b^2-4*a*coefficient(p, 0)
+      r := perfectSqrt(d)
+      r case "failed" => [p]
+      b := b + r@Z
+      a := 2*a
+      d := gcd(a, b)
+      if not (d = 1) then
+        a := a quo d
+        b := b quo d
+      f : UP := monomial(a, 1)+monomial(b, 0)
+      cons(f, [(p exquo f)::UP])
+
+    isPowerOf2(n : Z) : Boolean ==
+       n = 1 => true
+       qr : Record(quotient : Z, remainder : Z) := divide(n, 2)
+       qr.remainder = 1 => false
+       isPowerOf2 qr.quotient
+
+    subMinusX(supPol : SUPZ) : UP ==
+       minusX : SUPZ := monomial(-1, 1)$SUPZ
+       unmakeSUP(elt(supPol, minusX)$SUPZ)
+
+    part_Fact ==> Record(f : UP, contp : Z, factors: List(ParFact))
+
+    gen_fact1(f : UP) : Union(part_Fact, FinalFact) ==
+      factorlist : List(ParFact) := empty()
+
+      -- make m primitive
+      c : Z := content f
+      f := (f exquo c)::UP
+
+      -- make the leading coefficient positive
+      if leadingCoefficient f < 0 then
+        c := -c
+        f := -f
+
+      -- is x^d factor of f
+      if (d := minimumDegree f) > 0 then
+        f := monicDivide(f, monomial(1, d)).quotient
+        factorlist := [[monomial(1, 1), d]$ParFact]
+
+      d := degree f
+
+      -- is f constant?
+      zero? d => [c, factorlist]$FinalFact
+
+      -- is f linear?
+      (d = 1) => [c, cons([f, 1]$ParFact, factorlist)]$FinalFact
+
+      lcPol : UP := leadingCoefficient(f) :: UP
+
+      -- is f cyclotomic (x^n - 1)?
+      -lcPol = reductum(f) =>    -- if true, both will = 1
+          cfl := cyclotomic_decomposition(d)$CYC
+          for fac in map(z+->unmakeSUP(z)$UP, cfl
+                        )$ListFunctions2(SUPZ, UP) repeat
+              factorlist := cons([fac, 1]$ParFact, factorlist)
+          [c, factorlist]$FinalFact
+
+      -- is f cocyclotomic (x^n + 1)?
+      (lcPol = reductum(f)) =>
+          cfl := cocyclotomic_decomposition(d)$CYC
+          for fac in map(z+->unmakeSUP(z)$UP, cfl
+                         )$ListFunctions2(SUPZ, UP) repeat
+              factorlist := cons([fac, 1]$ParFact, factorlist)
+          [c, factorlist]$FinalFact
+
+      -- other special cases to implement...
+      [f, c, factorlist]::part_Fact
+
+    henselFact(f : UP, sqf : Boolean) : FinalFact ==
+        ru := gen_fact1(f)
+        ru case FinalFact => ru
+        (f, c, factorlist) := ru@part_Fact
+        -- f is square-free :
+        sqf =>
+            fla := [[pf, 1]$ParFact for pf in henselfact1(f, true)]
+            [c, append(fla, factorlist)]$FinalFact
+
+        -- f is not square-free :
+        sqfflist := factorList(squareFree(f))
+        for sqfr in sqfflist repeat
+            mult := sqfr.exponent
+            sqff := sqfr.factor
+            d := degree sqff
+            (d = 1) => factorlist := cons([sqff, mult]$ParFact, factorlist)
+            fl1 :=
+                d = 2 => quadratic(sqff)
+                henselfact1(sqff, true)
+            fla := [[pf, mult]$ParFact for pf in fl1]
+            factorlist := append(fla, factorlist)
+        [c, factorlist]$FinalFact
+
+    btwFact(f : UP, sqf : Boolean, fd : Set N, r : N) : FinalFact ==
+        d := degree f
+        not(max(fd)=d) => error "btwFact: Bad arguments"
+        ru := gen_fact1(f)
+        ru case FinalFact => ru
+        (f, c, factorlist) := ru@part_Fact
+
+        if (d1 := degree(f)) < d then
+            del_d := d - d1
+            r := max(2, r - del_d)::N
+            d := d1
+            fd := select(x+-> x <= d, fd)
+
+        -- f is square-free :
+        sqf =>
+            fla := [[pf, 1]$ParFact for pf in btwFactor(f, fd, r, true)]
+            [c, append(fla, factorlist)]$FinalFact
+
+        -- f is not square-free :
+        sqfflist := factorList(squareFree(f))
+        if (#(sqfflist)) = 1 then -- indeed f was a power of a square-free
+            r := max(r quo ((first sqfflist).exponent), 2)::N
+        else
+            r := 2
+        for sqfr in sqfflist repeat
+            mult := sqfr.exponent
+            sqff := sqfr.factor
+            d := degree sqff
+            (d = 1) =>
+                factorlist := cons([sqff, mult]$ParFact, factorlist)
+                maxd := (max(fd) - mult)::N
+                fd := select(x +-> x <= maxd, fd)
+            fl1 :=
+                d = 2 => quadratic(sqff)
+                btwFactor(sqff, select(x +-> x <= d, fd), r, true)
+            fla := [[pf, mult]$ParFact for pf in fl1]
+            factorlist := append(fla, factorlist)
+            maxd := (max(fd) - d*mult)::N
+            fd := select(x +-> x <= maxd, fd)
+        [c, factorlist]$FinalFact
+
+    factor(f : UP) : Factored UP ==
+      makeFR
+        usesinglefactorbound => btwFact(f, false, fullSet(degree f), 2)
+        henselFact(f, false)
+
+    -- local function, returns true if the sum of the elements of the list
+    -- is not the degree.
+    errorsum?(d : N, ld : List N) : Boolean == not (d = +/ld)
+
+    -- local function, turns list of degrees into a Set
+    makeSet(ld : List N) : Set N ==
+      s := set [0]
+      for d in ld repeat s := union(s, shiftSet(s, d))
+      s
+
+    factor(f : UP, ld : List N, r : N) : Factored UP ==
+      errorsum?(degree f,ld) => error "factor: Bad arguments"
+      makeFR btwFact(f, false, makeSet(ld), r)
+
+    factor(f : UP, r : N) : Factored UP == makeFR btwFact(f, false, fullSet(degree f), r)
+
+    factor(f : UP, ld : List N) : Factored UP == factor(f, ld, 2)
+
+    factor(f : UP, d : N, r : N) : Factored UP ==
+      n := (degree f) exquo d
+      n case "failed" => error "factor: Bad arguments"
+      factor(f, new(n@N, d)$List(N), r)
+
+    factorSquareFree(f : UP) : Factored UP ==
+      makeFR
+        usesinglefactorbound => btwFact(f, true, fullSet(degree f), 2)
+        henselFact(f, true)
+
+    factorSquareFree(f : UP, ld : List(N), r : N) : Factored UP ==
+      errorsum?(degree f,ld) => error "factorSquareFree: Bad arguments"
+      makeFR btwFact(f, true, makeSet(ld), r)
+
+    factorSquareFree(f : UP, r : N) : Factored UP ==
+      makeFR btwFact(f, true, fullSet(degree f), r)
+
+    factorSquareFree(f : UP, ld : List N) : Factored UP == factorSquareFree(f, ld, 2)
+
+    factorSquareFree(f : UP, d : N, r : N) : Factored UP ==
+      n := (degree f) exquo d
+      n case "failed" => error "factorSquareFree: Bad arguments"
+      factorSquareFree(f, new(n@N, d)$List(N), r)
+
+    factorOfDegree(d:P,p:UP,ld:List N,r:N,sqf:Boolean):Union(UP,"failed") ==
+      dp := degree p
+      errorsum?(dp,ld) => error "factorOfDegree: Bad arguments"
+      ((d::N) = 1) and noLinearFactor?(p) => "failed"
+      lf := btwFact(p, sqf, makeSet(ld), r).factors
+      for f in lf repeat
+        degree(f.irr)=d => return f.irr
+      "failed"
+
+    factorOfDegree(d:P,p:UP,ld:List N,r:N):Union(UP,"failed") ==
+      factorOfDegree(d, p, ld, r, false)
+
+    factorOfDegree(d:P,p:UP,r:N):Union(UP,"failed") ==
+      factorOfDegree(d, p, new(degree p, 1)$List(N), r, false)
+
+    factorOfDegree(d:P,p:UP,ld:List N):Union(UP,"failed") ==
+      factorOfDegree(d, p, ld, 2, false)
+
+    factorOfDegree(d:P,p:UP):Union(UP,"failed") ==
+      factorOfDegree(d, p, new(degree p, 1)$List(N), 2, false)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

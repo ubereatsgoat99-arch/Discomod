@@ -1,0 +1,23 @@
+Function: ellcharpoly
+Section: elliptic_curves
+C-Name: ellcharpoly
+Prototype: GDG
+Help: ellcharpoly(E, {p}): given an elliptic curve E defined over
+ a finite field Fq, return the characteristic polynomial of the Frobenius
+ acting on the curve, for other fields of definition K, p must define a finite
+ residue field, (p prime for K = Qp or Q; p a maximal ideal for K a number
+ field), return the characteristic polynomial of the Frobenius acting on the
+ Picard group of the reduction of E.
+Doc:
+ Let \kbd{E} be an \kbd{ell} structure as output by \kbd{ellinit}, attached
+ to an elliptic curve $E/K$. If the field $K = \F_{q}$ is finite, return the
+ characteristic polynomial of the Frobenius acting on the curve.
+
+ For other fields of definition and $p$ defining a finite residue field
+ $\F_{q}$, return the characteristic polynomial of the Frobenius acting on the
+ Picard group of the reduction of $E$:
+ the argument $p$ is best left omitted if $K = \Q_{\ell}$
+ (else we must have $p = \ell$) and must be a prime number ($K = \Q$) or prime
+ ideal ($K$ a general number field) with residue field $\F_{q}$ otherwise. The
+ equation need not be minimal or even integral at $p$; of course, a minimal
+ model will be more efficient.

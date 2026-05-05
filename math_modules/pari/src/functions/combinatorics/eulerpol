@@ -1,0 +1,15 @@
+Function: eulerpol
+Section: combinatorics
+C-Name: eulerpol
+Prototype: LDn
+Help: eulerpol(n,{v='x}): Euler polynomial E_n, in variable v.
+Doc: \idx{Euler polynomial} $E_{n}$ in variable $v$ defined by
+ $$
+  \sum_{n=0}^{\infty} E_{n}(x)\dfrac{T^{n}}{n!} = \dfrac{2e^{xT}}{e^{T}+1}.
+ $$
+ \bprog
+ ? eulerpol(1)
+ %1 = x - 1/2
+ ? eulerpol(3)
+ %2 = x^3 - 3/2*x^2 + 1/4
+ @eprog

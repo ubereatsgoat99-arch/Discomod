@@ -1,0 +1,53 @@
+Function: theta
+Section: transcendental
+C-Name: theta
+Prototype: GGDGp
+Help: theta(a,b,{flag}): Jacobi theta-functions. If flag is omitted, let (q,z) =
+ (a,b) and return theta(q,z), the Jacobi sine theta function. Otherwise, let
+ (z, tau) = (a,b) and return one variable
+ Riemann-Jacobi theta functions depending on flag: theta_{0,0} = theta_3,
+ theta_{0,1} = theta_4, theta_{1,0} = theta_2, or theta_{1,1} = -theta_1.
+ If flag=0, return all four theta_{i,j} for 0<=i,j<=1.
+Doc: Jacobi theta-functions. The meaning of the complex
+ numbers $(a,b)$ depends on whether \fl\ is present or omitted.
+
+ If flag is omitted, we compute the Jacobi sine theta function.
+ Let $(q, z) = (a, b)$. We assume that $|q| < 1$, and return
+ $$\theta(q,z) = 2q^{1/4} \sum_{n\geq 0} (-1)^{n} q^{n(n+1)}
+   \sin((2n+1)z)\;.$$
+
+ \noindent Otherwise, we let $(z, \tau) = (a,b)$ and return the
+ one variable Riemann-Jacobi theta functions.
+ We assume $\Im \tau > 0$, set $u = \exp(2\pi iz)$ and $q = \exp(2\pi i\tau)$
+ and define
+ $$\theta_{0,0}(z,\tau) = \theta_3(z,\tau)
+ = \sum_{n\in\Z} u^n q^{n^2/2}
+ = 1 + 2q^{1/2} \cos(2\pi z) + \cdots\;,$$
+
+ $$\theta_{0,1}(z,\tau) = \theta_4(z,\tau)
+ = \sum_{n\in\Z} (-1)^{n} u^{n} q^{n^2/2}
+ = 1 - 2q^{1/2}\cos(2\pi z) + \cdots\;,$$
+
+ $$\theta_{1,0}(z,\tau) = \theta_2(z,\tau)
+ = \sum_{n\in\Z} u^{n+1/2} q^{(n+1/2)^2/2}
+ = 2q^{1/8}\cos(\pi z) + \cdots\;,$$
+
+ $$\theta_{1,1}(z,\tau) = -\theta_1(z,\tau)
+ = i \sum_{n\in\Z}(-1)^n u^{n+1/2} q^{(n+1/2)^2/2}
+ = -2q^{1/8}\sin(\pi z) + \cdots\;,$$
+
+ \item $\fl = 1$: returns $\theta_1(z, \tau)$.
+
+ \item $\fl = \kbd{[1,1]}$: returns $\theta_{1,1}(z, \tau) = -\theta_1(z,\tau)$.
+
+ \item $\fl = 2$ or \kbd{[1,0]}: returns $\theta_2(z, \tau)$.
+
+ \item $\fl = 3$ or \kbd{[0,0]}: returns $\theta_3(z, \tau)$.
+
+ \item $\fl = 4$ or \kbd{[0,1]}: returns $\theta_4(z, \tau)$.
+
+ \noindent Finally, $\fl = 0$ returns the vector
+ $$[\theta_{0,0}(z,\tau), \theta_{0,1}(z,\tau), \theta_{1,0}(z,\tau),
+ \theta_{1,1}(z,\tau)]\;.$$
+ The Thetanullwerte at $z = 0$ are also directly available
+ through \kbd{thetanull}.

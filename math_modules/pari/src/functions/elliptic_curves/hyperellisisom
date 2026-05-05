@@ -1,0 +1,12 @@
+Function: hyperellisisom
+Section: elliptic_curves
+C-Name: hyperellisisom
+Prototype: GGDG
+Help: hyperellisisom(C1, C2, {nf}): C1 and C2 being two hyperelliptic curve given by Weierstrass
+ equations, either over the rationals or over the number field nf if given,
+ return the list of isomorphisms from C1 to C2 as changes of coordinates of the
+ form [e, [a,b;c,d], H].
+Doc: $C1$ and $C2$ being two hyperelliptic curve given by Weierstrass
+ equations, either over the rationals or over the number field \var{nf} if given,
+ return the list of isomorphisms from $C1$ to $C2$ as changes of coordinates of the
+ form \kbd{[e, [a,b;c,d], H]}.

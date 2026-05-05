@@ -1,0 +1,357 @@
+)abbrev domain DLIST DataList
+++ Description: This domain provides some nice functions on lists.
+DataList(S : OrderedSet) : Exports == Implementation where
+  Exports == ListAggregate(S) with
+    coerce : List S -> %
+      ++ coerce(l) creates a datalist from l
+    coerce : % -> List S
+      ++ coerce(x) returns the list of elements in x
+    datalist : List S -> %
+      ++ datalist(l) creates a datalist from l
+    elt : (%,"unique") -> %
+      ++ \spad{l.unique} returns \spad{l} with duplicates removed.
+      ++ Note: \spad{l.unique = removeDuplicates(l)}.
+    elt : (%,"sort") -> %
+      ++ \spad{l.sort} returns \spad{l} with elements sorted.
+      ++ Note: \spad{l.sort = sort(l)}
+    elt : (%,"count") -> NonNegativeInteger
+      ++ \spad{l."count"} returns the number of elements in \spad{l}.
+  Implementation == List(S) add
+    elt(x,"unique") == removeDuplicates(x)
+    elt(x,"sort") == sort(x)
+    elt(x,"count") == #x
+    coerce(x : List S) == x pretend %
+    coerce(x : %) : List S == x pretend (List S)
+    coerce(x : %) : OutputForm == (x :: List S) :: OutputForm
+    datalist(x : List S) == x::%
+
+)abbrev domain ICARD IndexCard
+++ Description: This domain implements a container of information
+++ about the FriCAS library.
+IndexCard() : Exports == Implementation where
+  Exports == OrderedSet with
+    elt : (%, Symbol) -> String
+      ++ elt(ic, s) selects a particular field from \spad{ic}.  Valid fields
+      ++ are \spad{name, nargs, exposed, type, abbreviation, kind, origin,
+      ++ params, condition, doc}.
+    display : % -> Void
+      ++ display(ic) prints a summary of the information contained in \spad{ic}.
+    fullDisplay : % -> Void
+      ++ fullDisplay(ic) prints all of the information contained in \spad{ic}.
+  Implementation == add
+    SE ==> SExpression
+    SY ==> Symbol
+    BRI ==> BrowserInformation
+    Sig_doc ==> Record(signature : SE, condition : SE, origin : SE,
+                     documentation : String)
+    Rr ==> Record(name : SY, kind : SY, sd : Sig_doc)
+
+    Rep := Rr
+
+    get_db_info(x, y) ==> get_database(x, y)$Lisp
+
+    sig_to_string(sig : SE) : String ==
+        sl := cons(convert('Mapping), destruct(sig))
+        form2LispString(sl)$Lisp
+
+    get_origin_op(xr : Rep) : SY ==
+        symbol(car(xr.sd.origin))
+
+    get_abbreviation(xr : Rep) : String ==
+        xr.kind = 'o => ""
+        abbr : SE := get_db_info(xr.name, 'ABBREVIATION)
+        not(null?(abbr)) => string(symbol(abbr))
+        ""
+
+    get_condition(xr : Rep) : String ==
+        not(xr.kind = 'o) => ""
+        xr.sd.condition = (true pretend SE) => ""
+        form2LispString(xr.sd.condition)$Lisp
+
+    get_exposed1(c : SY) : String ==
+        exposed_constructor?(c)$BRI => "x"
+        "n"
+
+    get_exposed(xr : Rep) : String ==
+        not(xr.kind = 'o) => get_exposed1(xr.name)
+        get_exposed1(get_origin_op(xr))
+
+    get_kind(xr : Rep) : String ==
+        not(xr.kind = 'o) => string(xr.kind)
+        o_kind := constructor_kind(get_origin_op(xr))$BRI
+        o_kind = 'category => "c"
+        o_kind = 'domain => "d"
+        o_kind = 'package => "p"
+        error "get_kind: impossible"
+
+    get_origin(xr : Rep) : String ==
+        not(xr.kind = 'o) => ""
+        oe := xr.sd.origin
+        not(list?(oe)) => ""
+        os := car(oe)
+        symbol?(os) => string(symbol(os))
+        ""
+
+    convert_params(params : List(SE)) : String ==
+        empty?(params) => ""
+        rl : List(String) := ["("]
+        first := true
+        for a1 in params repeat
+            if not(first) then
+                rl := cons(", ", rl)
+            first := false
+            rl := cons(string(symbol(a1)), rl)
+        rl := cons(")", rl)
+        concat(reverse!(rl))
+
+    get_params(xr : Rep) : String ==
+        not(xr.kind = 'o) =>
+            xr.name = 'Union or xr.name = 'Record =>
+                "(a : A, b : B)"
+            convert_params(destruct(xr.sd.origin))
+        op := symbol(car(xr.sd.origin))
+        cf := constructor_form(op)$BRI
+        convert_params(rest(destruct(cf)))
+
+    short_oform(xr : Rep) : OutputForm ==
+        hconcat([xr.name::OutputForm, message(" : ")$OutputForm,
+                        message(sig_to_string(xr.sd.signature)
+                               )$OutputForm])$OutputForm
+
+    display(x) ==
+        xr : Rep := x
+        output(short_oform(xr))$OutputPackage
+
+    fullDisplay(x) ==
+        xr : Rep := x
+        of1 := short_oform(xr)
+        not(xr.kind = 'o) =>
+            output(of1)$OutputPackage
+        ef : OutputForm :=
+            get_exposed(xr) = "n" => message(" (unexposed)")
+            empty()
+        cf : OutputForm :=
+            cs := get_condition(xr)
+            cs = "" => empty()
+            hconcat(message(" if "), message(cs))
+        ef : OutputForm :=
+            get_exposed(xr) = "n" => message(" (unexposed)")
+            empty()
+        os : String := form2LispString(xr.sd.origin)$Lisp
+        ff : OutputForm := hconcat(message(" from "), message(os))
+        of2 : OutputForm := hconcat([ff, cf, ef])
+        output(hconcat(of1, of2))$OutputPackage
+
+    x = y ==
+        not(x < y) and not(y < x)
+
+    x < y ==
+        xr : Rep := x
+        yr : Rep := y
+        not(xr.kind = yr.kind) => xr.kind < yr.kind
+        not(xr.name = yr.name) => xr.name < yr.name
+        not((nx := #(xr.sd.signature)) = (ny := #(yr.sd.signature))) =>
+            nx < ny
+        not((xe := get_exposed(xr)) = (ye := get_exposed(yr))) =>
+            xe < ye
+        not((xs := sig_to_string(xr.sd.signature)) =
+            (ys := sig_to_string(yr.sd.signature))) => xs < ys
+        not((xo := get_origin(xr)) = (yo := get_origin(yr))) =>
+            xo < yo
+        not((xp := get_params(xr)) = (yp := get_params(yr))) =>
+            xp < yp
+        not((xc := get_condition(xr)) = (yc := get_condition(yr))) =>
+            xc < yc
+        xr.sd.documentation < yr.sd.documentation
+
+    coerce(x) : OutputForm ==
+        (x pretend Rr)::OutputForm
+
+    elt(x, s) ==
+        xr : Rep := x
+        s = 'abbreviation => get_abbreviation(xr)
+        s = 'condition => get_condition(xr)
+        s = 'exposed => get_exposed(xr)
+        s = 'doc => xr.sd.documentation
+        s = 'kind => get_kind(xr)
+        s = 'name => string(xr.name)
+        s = 'nargs => convert(#(xr.sd.signature) - 1)
+        s = 'origin => get_origin(xr)
+        s = 'params => get_params(xr)
+        s = 'type => sig_to_string(xr.sd.signature)
+
+)abbrev domain DBASE Database
+++ Description: This domain implements a simple view of a database
+++ whose fields are indexed by symbols.
+Database(S) : Exports == Implementation where
+  S : OrderedSet with
+    elt : (%, Symbol) -> String
+        ++ elt(x, s) returns an element of x indexed by s
+    display : % -> Void
+        ++ display(x) displays x in some form
+    fullDisplay : % -> Void
+        ++ fullDisplay(x) displays x in detail
+  Exports == SetCategory with
+    elt : (%, QueryEquation) -> %
+      ++ elt(db, q) returns all elements of \spad{db} which satisfy \spad{q}.
+    elt : (%, Symbol) -> DataList String
+      ++ elt(db, s) returns the \spad{s} field of each element of \spad{db}.
+    _+: (%, %) -> %
+      ++ db1+db2 returns the merge of databases db1 and db2
+    _-: (%, %) -> %
+      ++ db1-db2 returns the difference of databases db1 and db2 i.e. consisting
+      ++ of elements in db1 but not in db2
+    coerce : List S -> %
+      ++ coerce(l) makes a database out of a list
+    display : % -> Void
+      ++ display(db) prints a summary line for each entry in \spad{db}.
+    fullDisplay : % -> Void
+      ++ fullDisplay(db) prints full details of each entry in \spad{db}.
+    fullDisplay : (%, PositiveInteger, PositiveInteger) -> Void
+      ++ fullDisplay(db, start, end ) prints full details of entries in the range
+      ++ \spad{start..end} in \spad{db}.
+  Implementation == List S add
+    s : Symbol
+    Rep := List S
+    coerce(u : List S) : % == u@%
+    elt(data : %, s : Symbol) == [x.s for x in data] :: DataList(String)
+    elt(data : %, eq : QueryEquation) ==
+      field := variable eq
+      val := value eq
+      [x for x in data | stringMatches?(val, x.field)$Lisp]
+    x+y==removeDuplicates! merge(x, y)
+    x - y == mergeDifference(x::Rep, y::Rep)$MergeThing(S)
+    coerce(data) : OutputForm == (#data):: OutputForm
+    display(data) ==  for x in data repeat display x
+    fullDisplay(data) == for x in data repeat fullDisplay x
+    fullDisplay(data, n, m) == for x in data for i in 1..m repeat
+      if i >= n then fullDisplay x
+
+)abbrev domain QEQUAT QueryEquation
+++ Description: This domain implements simple database queries.
+QueryEquation() : Exports == Implementation where
+  Exports == CoercibleTo(OutputForm) with
+    equation : (Symbol, String) -> %
+      ++ equation(s,"a") creates a new equation.
+    variable : % -> Symbol
+      ++ variable(q) returns the variable (i.e. left hand side) of \spad{q}.
+    value : % -> String
+      ++ value(q) returns the value (i.e. right hand side) of \spad{q}.
+  Implementation == add
+    Rep := Record(var : Symbol, val : String)
+    coerce(u) == coerce(u.var)$Symbol = coerce(u.val)$String
+    equation(x, s) == [x, s]
+    variable q == q.var
+    value q == q.val
+
+)abbrev package MTHING MergeThing
+++ This package exports tools for merging lists
+MergeThing(S : OrderedSet) : Exports == Implementation where
+  Exports == with
+    mergeDifference : (List(S), List(S)) -> List(S)
+        ++ mergeDifference(l1, l2) returns a list of elements in l1 not
+        ++ present in l2.  Assumes lists are ordered.
+  Implementation == add
+
+    mergeDifference(x, y) ==
+        res : List(S) := []
+        while not(empty?(x) or empty?(y)) repeat
+            fx := first(x)
+            fy := first(y)
+            fx < fy =>
+                res := cons(fx, res)
+                x := rest(x)
+            y := rest(y)
+            if fy = fx then
+                x := rest(x)
+        for fx in x repeat
+            res := cons(fx, res)
+        reverse!(res)
+
+)abbrev package OPQUERY OperationsQuery
+++ This package exports tools to create FriCAS Library information databases.
+OperationsQuery() : Exports == Implementation where
+  Exports == with
+    getDatabase : String -> Database(IndexCard)
+      ++ getDatabase("char") returns a list of appropriate entries in the
+      ++ browser database.  The legal values for "char" are "o" (operations),
+      ++ "k" (constructors), "d" (domains), "c" (categories) or "p" (packages).
+  Implementation == add
+    BRI ==> BrowserInformation
+    SE ==> SExpression
+    SY ==> Symbol
+    Sig_doc ==> Record(signature : SE, condition : SE, origin : SE,
+                     documentation : String)
+    Rr ==> Record(name : SY, kind : SY, sd : Sig_doc)
+    Op_rec ==> Record(name : SY, sdl : List(Sig_doc))
+    Op_lst ==> List(Op_rec)
+
+    get_constructors(cl : List(SY), ck : SY, acc : List(Rr)) : List(Rr) ==
+        for c in cl repeat
+            cf := constructor_form(c)$BRI
+            cs := constructor_signature(c, rest(destruct(cf)))$BRI
+            doc := constructor_documentation(c)$BRI
+            sd := [cs, convert([]), cdr(cf), doc]$Sig_doc
+            acc := cons([c, ck, sd], acc)
+        acc
+
+    getDatabase1(s : String) : List(Rr) ==
+        res : List(Rr) := []
+        s = "o" =>
+            opl := ops_from_exports()$BRI
+            for opr in opl repeat
+                name := opr.name
+                for sd in opr.sdl repeat
+                    res := cons([name, 'o, sd], res)
+            reverse!(res)
+        cr := all_constructors()$BRI
+        s = "k" =>
+            res := get_constructors(cr.categories, 'c, res)
+            res := get_constructors(cr.domains, 'd, res)
+            res := get_constructors(cr.packages, 'p, res)
+            reverse!(res)
+        s = "c" =>
+            res := get_constructors(cr.categories, 'c, res)
+            reverse!(res)
+        s = "d" =>
+            res := get_constructors(cr.domains, 'd, res)
+            reverse!(res)
+        s = "p" =>
+            res := get_constructors(cr.packages, 'p, res)
+            reverse!(res)
+        error "getDatabase: wrong argument"
+
+    getDatabase(s) ==
+        db1 := getDatabase1(s) pretend List(IndexCard)
+        sort!(db1) pretend Database(IndexCard)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

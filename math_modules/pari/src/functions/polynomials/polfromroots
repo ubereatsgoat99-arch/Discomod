@@ -1,0 +1,15 @@
+Function: polfromroots
+Section: polynomials
+C-Name: polfromroots
+Prototype: GDn
+Help: polfromroots(a,{v=x}): returns the monic polynomial in variable v
+ whose roots are the components of the vector a with multiplicities.
+Doc: returns the monic polynomial in variable \kbd{v} whose roots are the
+ components of the vector $a$ with multiplicities, that is
+ $\prod_{i} (x - a_{i})$.
+ \bprog
+ ? polfromroots([1,2,3])
+ %1 = x^3 - 6*x^2 + 11*x - 6
+ ? polfromroots([z, -z], 'y)
+ %2 = y^2 - z^2
+ @eprog

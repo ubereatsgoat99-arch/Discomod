@@ -1,0 +1,58 @@
+fricas_c_runtime_extra = @fricas_c_runtime_extra@
+
+# local include files shared by graphics
+LINC=	$(fricas_src_srcdir)/graph/include
+
+# global include files shared by everyone
+GINC=	$(fricas_src_srcdir)/include
+
+build_libdir = $(abs_top_builddir)/src/lib
+
+bin_PROGRAMS = viewman$(EXEEXT)
+
+viewman_sources = cleanup.c fun2D.c fun3D.c make2D.c make3D.c \
+		makeGraph.c readView.c sselect.c viewman.c
+
+viewman_objects = $(viewman_sources:.c=.$(OBJEXT))
+
+viewman_headers = $(srcdir)/viewman.h \
+		$(addprefix $(fricas_src_srcdir)/graph/include/,\
+			component.h view2D.h view3D.h tube.h \
+			actions.h viewCommand.h) \
+		$(fricas_src_srcdir)/include/com.h
+
+
+viewman_DEPENDENCIES = $(build_libdir)/libspad.a
+viewman_LDFLAGS = -L$(build_libdir) -lspad $(fricas_c_runtime_extra)
+
+subdir = src/graph/viewman/
+
+FRICAS_CFLAGS = ${CCF} ${FRICAS_X11_CFLAGS} -I${LINC} -I${GINC} -I$(srcdir) \
+			$(fricas_includes)
+
+.PHONY: all all-ax all-viewman
+all: all-ax
+
+all-ax all-viewman: stamp
+	@ echo 30 finished $(srcdir)
+
+stamp: $(fricas_target_libdir)/viewman$(EXEEXT)
+	-rm -f stamp
+	$(STAMP) stamp
+
+
+.PRECIOUS: %.$(OBJEXT)
+
+%.$(OBJEXT): $(srcdir)/%.c $(fricas_c_macros) $(viewman_HEADERS)
+	$(CC) $(CFLAGS) $(FRICAS_CFLAGS) -c -o $@ $<
+
+$(fricas_target_libdir)/viewman$(EXEEXT): $(viewman_objects) $(viewman_DEPENDENCIES)
+	${CC} $(viewman_objects) -o $@ $(viewman_LDFLAGS) \
+		$(FRICAS_X11_LDFLAGS) $(LDFLAGS)
+
+clean-local:
+	-rm -f $(viewman_objects)
+	-rm -f stamp
+	-rm -f $(fricas_target_libdir)/viewman$(EXEEXT)
+
+distclean-local: clean-local

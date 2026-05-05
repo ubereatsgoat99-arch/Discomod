@@ -1,0 +1,31 @@
+This directory contains material to allow FriCAS to be extended
+via code written in the programming language Aldor.
+
+The original programs and Makefiles in this directory are due to
+Peter Broadbery. Without his initial work and his help I would not have
+been able to come so far.
+
+See http://wiki.fricas.org/AldorForFriCAS and especially
+http://lists.gnu.org/archive/html/axiom-developer/2008-01/msg00033.html.
+
+-------------------------------------------------------------------
+Compilation currently is supposed to work as follows:
+
+  git clone https://github.com/fricas/fricas.git
+  mkdir fricas-build
+  cd fricas-build
+  ../fricas/configure --enable-aldor --prefix=/path/to/installation/dir
+  make
+  make install
+
+After that you should be able to call FriCAS and say
+  )co somefile.as
+and use the content of that file in your FriCAS session.
+
+The interface to Aldor will only be built if 'configure' can find an
+aldor executable and certain aldor files.
+We require a newer version of aldor, more precisely one that allows
+`aldor --print-confvar datadir`.
+
+Ralf Hemmecke
+27-Jul-2013

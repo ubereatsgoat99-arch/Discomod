@@ -1,0 +1,215 @@
+This file highlights some of the novelties in PARI/GP 2.17 compared to
+latest stable branch 2.15.*. The detailed Changelog is in CHANGES.
+Incompatible changes are described in COMPAT.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% VERSION 2.17 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+[The GP language]
+  - A few default values have been changed to take into account modern hardware
+    (compared to the 1990s) and unified over 32bit and 64bit architectures:
+      default 'parisize' is now 8M on all architectures
+      default 'realprecision' is now 38 on all architectures
+      default 'realbitprecision' is now 128 on all architectures
+      default 'primelimit' is now 2^20 [instead of 500000]
+    Now support kB or KB, MB, GB and TB as units for memory sizes (2^10, 2^20,
+    2^30 and 2^40 bytes); in addition to the existing k or K, M, G and T (10^3,
+    10^6, 10^9, 10^12 bytes).
+
+  - New GP default 'factorlimit' (default value is 2^20, which is the default
+    primelimit), allowing fast trial division by all primes up to that bound.
+    See ??factorlimit for details and examples. Be careful with this one: it
+    involves a precomputation on startup, which is not noticeable for the
+    default value of 2^20, but requires 5 minutes when the value is increased
+    to 2^32.
+
+  - forvec: a new syntax is availabe to loop over representatives of
+    Z^n / v Z^n, where v is a vector of non-negative integers. This allows to
+    iterate over elements of an abelian group using its .cyc vector.
+
+  - New GP function mapapply, see ??mapapply for usecases
+
+  - New GP function parforstep
+
+[Lattices and Quadratic Forms]
+  - New GP function qfcvp for Closest Vector Problems (related to the existing
+    qfminim which handles Smallest Vector Problems)
+
+  - New GP function qfcholesky
+
+  - New recursive implementation of the qflll and qflllgram functions
+    using the FLATTER reduction algorithm of N. Heninger and K. Ryan.
+
+  - Allow qfsolve([Q, F]) where F is the factorization of disc(Q).
+
+  - Allow Qfb(a*x^2 + b*x + c) and Qfb([a,b0; b1,c]) to input t_QFB a binary
+    quadratic form.
+
+[Elementary Number Theory]
+  - forprimestep: allow arbitrary modulus (was limited to 2^64)
+
+  - Dirichlet characters: allow t_INTMOD Mod(m,N) as a Conrey label for the
+    character m mod N in all functions (expecting Dirichlet characters).
+
+[Elliptic Curves and Curves of Higher Genus]
+  - New GP function ellisisom: test whether two curves defined over the same
+    base field are isomorphic and if so return the change of coordinates. The
+    current implementation only supports number fields.
+
+  - New GP function elliscm: test whether an elliptic curve defined over
+    a number field has CM; if so, return the discriminant of its endomorphism
+    ring.
+
+  - New GP function ellsupersingularj(p): p being a prime number return a
+    random supersingular j-invariant defined over F_{p^2}; also allow p to
+    be a t_FFELT in which case the j-invariant is defined over the field of
+    definition of p. The random distribution is close to uniform except when
+    0 or 1728 are supersingular j-invariants (those are less likely).
+
+  - New GP function polisclass(P): P being a monic irreducible polynomial in
+    Z[X], return the discriminant D < 0 such that P = polclass(D) when P is
+    a class polynomial for the j-invariant. Otherwise return 0.
+
+  - New GP function ellmaninconstant, returns the Manin constant of a
+    rational elliptic curve or isogeny class (from ellisomat). The algorithm
+    is slow but unconditional.
+
+  - New GP function hyperellordinate(H, x) return the y-coordinates of all
+    affine points on the hyperelliptic curve H with x as x-coordinate.
+
+  - New GP function genus2igusa(H): return the Igusa invariants
+    [J2,J4,J6,J8,J10] of the hyperelliptic curve H of genus 2 (defined over a
+    field of characteristic different from 2). An optional flag
+    allows to compute a single invariant.
+
+  - ellisomat: when E/nf has CM by a quadratic order included in nf,
+    return the discriminant of the order instead of an error.
+
+[L-functions]
+  - dirpowerssum: allow functions with t_VEC output; add optional flag 'both'
+    to simultaneously compute sum f(n) n^s and sum \bar{f}(n) n^(-1-s).
+
+  - lfun for degree 1 L-functions (zeta and Dirichlet L-functions) at complex
+    s = c + I * t : use O(sqrt(|t|)) Riemann-Siegel formula instead
+    of O(t) Euler-Maclaurin. Values of |t| up to 10^16 or so become feasible
+    in about 1 minute, where Euler-Maclaurin ran out of stack after hours of
+    computation.
+
+    ? zeta(1/2 + 10^12*I) \\ a few hours before running out of stack in 2.15
+    time = 311 ms.
+    %1 = 2.87796... - 3.20677...*I
+
+    ? zeta(1/2+10^14*I)
+    time = 2,564 ms.
+    %2 = 7.33484... + 3.24237...*I
+
+    ? zeta(1/2+10^16*I)
+    time = 22,097 ms.
+    %3 = 0.404494... + 3.67403...*I
+
+    ? lfun(-4, 1/2+10^10*I) \\ Dirichlet L-function for quadratic char (-4/n)
+    time = 85 ms.
+    %4 = 0.0012889... + 0.006625758...*I
+
+    ? lfun(Mod(2,23), 1/2+10^10*I) \\ General character, Conrey notation
+    time = 197 ms.
+    %5 = 0.0327006... + 0.1640295...*I
+
+  Same for zetahurwitz and lerchzeta: use Tyagi's method when |t| is large
+
+  - allow lfuncreate([bnr, subg]) to (efficiently) describe Dedekind zeta for
+    an Abelian number field
+
+[Number Fields and Central Simple Algebras]
+  - faster qfbsolve when RHS is prime and disc < 0 (use qfbcornacchia whenever
+    possible).
+
+  - bnfisintnorm: allow returning the results in factored form which helps
+    a lot when fundamental units are huge, see example in ??bnfisintnorm
+
+  - nfnewprec: also support 'rnf' structures from rnfinit
+
+  - alginit: optional flag supports new values (was used to avoid computing
+    a maximal order; now also allows to use lazy factorization of
+    discriminants producing an order which is maximal at the known prime
+    factors)
+
+  - New GP function bnrstarkunit: returns the characteristic polynomial of
+    the (conjectural) Stark unit used in the bnrstark() function to construct
+    class fields of totally real bases.
+
+  - New GP function nfweilheight to compute the absolute logarithmic Weil
+    height of an element in P^n(K), where K is a number field.
+
+[Transcendental functions]
+  - allow erfc(t_SER).
+
+  - add an optional argument to psi() to compute derivatives and
+    allow psi(t_PADIC).
+
+  - allow hypergeom(N,D,t_PADIC).
+
+[Miscellaneous]
+  - allow n# for the primorial of n (product of primes <= n)
+
+  - allow vecmin and vecmax to handle t_LIST inputs
+
+  - allow abs(+oo), abs(-oo)  (= +oo)
+
+  - allow fromdigits(t_COL or t_VECSMALL, B)
+
+  - digits: also support negative bases (but stick with non-negative digits).
+
+  - New GP function polfromroots
+
+  - New GP function plotarc(w, x2, y2): draw an ellipse (possibly filled)
+    that fits in a box defined by current cursor position and point (x2,y2)
+
+[Kernel]
+  - new riscv64 assembly kernel.
+
+COMPATIBILITY ISSUES BETWEEN 2.15.* and 2.17.*
+============================================
+
+0) Obsoleted functions and interfaces:
+  - Qt4 graphing engine is no longer supported
+
+  - removed lfunabelianrelinit. Use lfunfinit([bnr, subgroup]) instead.
+
+  - [libpari] t_SER type: valser, evalvalser, setvalser need to be used instead
+    of valp, evalvalp, setvalp (which become specific to p-adic numbers)
+
+  - [libpari] the diffptr low level interface is gone (table of difference
+    of primes), replaced by a table of 32bit primes (pari_PRIMES).
+    The byteptr type and following functions / macros are gone: initprimes,
+    init_primepointer_geq, init_primepointer_gt, init_primepointer_leq,
+    init_primepointer_lt NEXT_PRIME_VIADIFF, PREC_PRIME_VIADIFF,
+    NEXT_PRIME_VIADIFF_CHECK.
+
+1) Output changes:
+  - specify how Vec(v, n) truncates v when #v > |n|. Changes previous
+    behaviour when n < 0: Vec([1,2,3], -2) -> [2,3]  (was [1,2])
+    Same for Vecrev, Vecsmall, Col, and Colrev.
+
+  - changed qfbred to use the same (standard) normalization as qfbredsl2 in
+    all cases (was different for real forms)
+
+  - binomial(negative t_INT, t_INT): use D. Loeb's definition which ensures
+    (a + b)^n = sum_{k >= 0} binomial(n, k) a^(n-k) b^k for all complex
+    numbers a, b, n with |b| < |a|. Beware that this extension is
+    incompatible with the other traditional extension binomial(n, k) := 0
+    if k < 0.
+
+  - printf: numerical conversions now also apply (recursively) to complex
+    numbers
+
+2) Input changes:
+  - [libpari] major change in libpari's handling of "transcendental"
+    functions: 'prec' arguments now represent a number of significant 'bits'
+    (instead of an 'lg' counting words). Programs written using the proper
+    interface (prec2nbits/nbits2prec macros and constants such as DEFAULTPREC)
+    should not need an update.
+
+    On the other hand, low-level code comparing directly 'lg' and 'prec'
+    operands or using hardcoded precision (such as '3' as in a [deprecated
+    for 20 years] cgetr(3) initialization) must be updated (a priori using new
+    macros prec2lg / lg2prec and proper symbolic constants).

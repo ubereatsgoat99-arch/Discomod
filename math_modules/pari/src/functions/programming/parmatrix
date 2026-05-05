@@ -1,0 +1,17 @@
+Function: parmatrix
+Section: programming/parallel
+C-Name: parmatrix
+Prototype: LLVVJ
+Description:
+  (small,small,,,closure):vec    parmatrix($1, $2, $5)
+Help: parmatrix(m,n,i,j,expr): as matrix(m,n,i,j,expr) but the evaluations of expr are
+ done in parallel.
+Doc: As \kbd{matrix(m,n,i,j,expr)} but the evaluations of \kbd{expr} are done in
+ parallel. The expression \kbd{expr} must not access global variables or
+ variables declared with \kbd{local()}, and must be free of side effects.
+
+Function: _parmatrix_worker
+Section: programming/internals
+C-Name: parmatrix_worker
+Prototype: GGG
+Help: _parmatrix_worker(i,j,C): evaluate the closure C on i,j

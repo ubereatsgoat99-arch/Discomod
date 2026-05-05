@@ -1,0 +1,80 @@
+
+-- Input for page SeriesArithmeticPage
+)clear all
+
+x := series x
+num := 3 + x
+den := 1 + 7 * x
+num / den
+base := 1 / (1 - x)
+expon := x * base
+base ^ expon
+
+-- Input for page SeriesConversionPage
+)clear all
+
+f := sin(a*x)
+series(f,x = 0)
+g := y / (exp(y) - 1)
+series(g)
+h := sin(3*x)
+series(h,x,x = %pi/12)
+series(sqrt(tan(a*x)),x = 0)
+series(sec(x) ^ 2,x = %pi/2)
+bern := t * exp(t*x) / (exp(t) - 1)
+series(bern,t = 0)
+series(exp(2 + tan(y)), y=0)
+
+-- Input for page LaplacePage
+)clear all
+
+f n == t^(n-1)*exp(-a*t)/factorial(n-1)
+laplace(f 2, t, s)
+laplace(f 5, t, s)
+laplace(2/t * (1 - cosh(a*t)), t, s)
+laplace(sin(a*t) - a*t*cos(a*t), t, s)
+laplace((cosh(a*t) - cos(a*t))/(2*a^2), t, s)
+
+-- Input for page SeriesCoefficientPage
+)clear all
+)set streams calculate 7
+
+x := series(x)
+y := exp(x) * sin(x)
+coefficient(y,6)
+coefficient(y,15)
+y
+
+
+-- Input for page SeriesFunctionPage
+)clear all
+
+x := series x
+rat := x^2 / (1 - 6*x + x^2)
+sin(rat)
+y : UTS(FRAC INT,y,0) := y
+exp(y)
+tan(y^2)
+cos(y + y^5)
+log(1 + sin(y))
+z : UTS(EXPR INT,z,0) := z
+exp(2 + tan(z))
+w := taylor w
+exp(2 + tan(w))
+
+-- Input for page SeriesBernoulliPage
+)clear all
+
+reduce(+,[m^4 for m in 1..10])
+sum4 := sum(m^4, m = 1..k)
+eval(sum4, k = 10)
+f := t*exp(x*t) / (exp(t) - 1)
+)set streams calculate 5
+ff := taylor(f,t = 0)
+factorial(6) * coefficient(ff,6)
+g := eval(f, x = x + 1) - f
+normalize(g)
+taylor(g,t = 0)
+B5 := factorial(5) * coefficient(ff,5)
+1/5 * (eval(B5, x = k + 1) - eval(B5, x = 1))
+sum4

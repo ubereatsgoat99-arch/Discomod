@@ -1,0 +1,16 @@
+Function: algeltfromnf
+Section: algebras
+C-Name: algeltfromnf
+Prototype: GG
+Help: algeltfromnf(al,x): returns x as an element of al, where x belongs to the
+ center of al, a number field.
+
+Doc: Given a central simple algebra \var{al} output by \tet{alginit}, and an
+ element \var{x} of its center, returns \var{x} as an element of \var{al}.
+ \bprog
+ ? A = alginit(nfinit(y^2-5),[2,y]);
+ ? z = algeltfromnf(A, 1+2*y)
+ % = [3, 4, 0, 0, 0, 0, 0, 0]~
+ ? algtrace(A,z)
+ % = Mod(4*y + 2, y^2 - 5)
+ @eprog

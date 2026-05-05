@@ -1,0 +1,35 @@
+Function: genus2igusa
+Section: elliptic_curves
+C-Name: genus2igusa
+Prototype: GD0,L,
+Help: genus2igusa(PQ,{k}): let PQ be a polynomial P, resp. a vector [P,Q] of
+ polynomials defined over a field F of characteristic != 2. Returns the Igusa
+ invariants of the hyperelliptic curve C/F of genus 2 defined by y^2 = P,
+ resp. y^2 + Q*y = P.
+Doc: Let $PQ$ be a polynomial $P$, resp. a vector $[P,Q]$ of polynomials
+ defined over a field $F$ of characteristic $\neq 2$.
+ Returns the Igusa invariants $[J_{2},J_{4},J_{6},J_{8},J_{10}]$ of the
+ hyperelliptic curve $C/F$, defined by the equation $y^{2} = P(x)$,
+ resp.  $y^{2} + Q(x)*y = P(x)$. If $k$ is given, only return the invariant
+ of degree $k$ ($k$ must be even between $2$ and $10$).
+
+ \bprog
+ ? genus2igusa(x^5+3*x^2-4)
+ %1 = [0, 9600, 20736, -23040000, 177926144]
+ ? genus2igusa([x^6+x^5-x^4+3*x^3+x^2-2*x+1,x^3-x^2+x-1])
+ %2 = [-788, 1958, 341220, -68178781, -662731520]
+ ? genus2igusa([x^6+x^5-x^4+3*x^3+x^2-2*x+1,x^3-x^2+x-1],4)
+ %3 = 1958
+ ? genus2igusa(x^5+3*Mod(a,a^2-3)*x^2-4) \\ @com{over $\Q(\sqrt{3})$}
+ %4 = [Mod(0, a^2 - 3), Mod(9600*a, a^2 - 3), Mod(186624, a^2 - 3),
+       Mod(-69120000, a^2 - 3), Mod(-241864704*a + 204800000, a^2 - 3)]
+ ? a = ffgen([3,4], 'a); \\ @com{over $\F_{3^{4}} = \F_{3}[a]$}
+ ? genus2igusa(x^6+a*x^5-a*x^4+2*x^3+a*x+a+1)
+ %6 = [2*a^2, a^3 + a^2 + a + 1, a^2 + a + 2, 2*a^3 + 2*a^2 + a + 1,
+       2*a^2 + 2]
+ ? a = ffgen([2,4], 'a); \\ @com{$\F_{2^{4}} = \F_{2}[a]$}
+ ? genus2igusa(x^6+a*x^5+a*x^4+a*x+a+1) \\ doesn't work in characteristic 2
+   ***   at top-level: genus2igusa(x^6+a*x^5+a*x^4+a*x+a+1)
+   ***                 ^------------------------------------
+   *** genus2igusa: impossible inverse in FF_mul2n: 2.
+ @eprog

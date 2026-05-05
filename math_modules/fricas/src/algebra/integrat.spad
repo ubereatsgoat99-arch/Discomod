@@ -1,0 +1,443 @@
+)abbrev package FSCINTA FunctionSpaceComplexIntegrationAux
+++ Top-level complex function integration
+++ Author: Manuel Bronstein
+++ Date Created: 4 February 1988
+++ Description:
+++   \spadtype{FunctionSpaceComplexIntegrationAux} provides functions for the
+++   indefinite integration of complex-valued functions.
+++ Keywords: function, integration.
+FunctionSpaceComplexIntegrationAux(G, FG) : Exports == Implementation where
+  G : Join(GcdDomain, Comparable, CharacteristicZero,
+           PolynomialFactorizationExplicit,
+           RetractableTo Integer, LinearlyExplicitOver Integer)
+  FG : Join(TranscendentalFunctionCategory,
+            AlgebraicallyClosedFunctionSpace G)
+
+  SY  ==> Symbol
+  IR  ==> IntegrationResult FG
+
+  Exports ==> with
+    internalIntegrate : (FG, SY) -> IR
+        ++ internalIntegrate(f, x) returns the integral of \spad{f(x)dx}
+        ++ where x is viewed as a complex variable.
+
+  Implementation ==> add
+    import from ElementaryIntegration(G, FG)
+    import from ElementaryFunctionStructurePackage(G, FG)
+    import from TrigonometricManipulationsAux(G, FG)
+
+    import from List(Kernel(FG))
+    import from List(SY)
+    import from BasicOperator
+
+    RTRIG := 'rtrig
+
+    internalIntegrate(f, x) ==
+      f := distribute(f, x::FG)
+      g := realElementary(f, x)
+      tg := tower(g)
+      lt := [k for k in tg | member?(x, variables(k::FG))]
+      h :=
+          any?(x1+->has?(operator x1, RTRIG), lt) =>
+               trigs2explogs(g, [k for k in tower f
+                         | is?(k, 'tan) or is?(k, 'cot)])
+          g
+      lfintegrate(rischNormalize(h, x).func, x)
+
+)abbrev package FSCINT FunctionSpaceComplexIntegration
+++ Top-level complex function integration
+++ Author: Manuel Bronstein
+++ Date Created: 4 February 1988
+++ Description:
+++   \spadtype{FunctionSpaceComplexIntegration} provides functions for the
+++   indefinite integration of complex-valued functions.
+++ Keywords: function, integration.
+FunctionSpaceComplexIntegration(R, F) : Exports == Implementation where
+  R : Join(GcdDomain, Comparable, CharacteristicZero,
+           PolynomialFactorizationExplicit,
+           RetractableTo Integer, LinearlyExplicitOver Integer)
+  F : Join(TranscendentalFunctionCategory,
+           AlgebraicallyClosedFunctionSpace R)
+
+  SY  ==> Symbol
+  G   ==> Complex R
+  FG  ==> Expression G
+  IR  ==> IntegrationResult F
+
+  Exports ==> with
+    internalIntegrate : (F, SY) -> IR
+        ++ internalIntegrate(f, x) returns the integral of \spad{f(x)dx}
+        ++ where x is viewed as a complex variable.
+    internalIntegrate0 : (F, SY) -> IR
+        ++ internalIntegrate0 should be a local function, but is conditional.
+    complexIntegrate  : (F, SY) -> F
+        ++ complexIntegrate(f, x) returns the integral of \spad{f(x)dx}
+        ++ where x is viewed as a complex variable.
+
+  Implementation ==> add
+    import from IntegrationTools(R, F)
+    import from ElementaryIntegration(R, F)
+    import from ElementaryIntegration(G, FG)
+    import from AlgebraicManipulations(R, F)
+    import from AlgebraicManipulations(G, FG)
+    import from TrigonometricManipulations(R, F)
+    import from IntegrationResultToFunction(R, F)
+    import from IntegrationResultFunctions2(FG, F)
+    import from ElementaryFunctionStructurePackage(R, F)
+    import from ElementaryFunctionStructurePackage(G, FG)
+    import from InnerTrigonometricManipulations(R, F, FG)
+
+    RTRIG := 'rtrig
+
+    K2KG : Kernel F -> Kernel FG
+
+    K2KG k                 == retract(tan F2FG first argument k)@Kernel(FG)
+
+    complexIntegrate(f, x) ==
+      removeConstantTerm(complexExpand internalIntegrate(f, x), x)
+
+    internalIntegrate0(f, x) == lfintegrate(f, x)
+
+    internalIntegrate(f, x) ==
+      f := distribute(f, x::F)
+      any?(x1+->has?(operator x1, RTRIG),
+       [k for k in tower(g := realElementary(f, x))
+        | member?(x, variables(k::F))]$List(Kernel F))$List(Kernel F) =>
+          h := trigs2explogs(F2FG g, [K2KG k for k in tower f
+                         | is?(k, 'tan) or is?(k, 'cot)])
+          real?(g := FG2F h) =>
+            internalIntegrate0(rischNormalize(g, x).func, x)
+          real?(g := FG2F(h := rischNormalize(h, x).func)) =>
+                                                       internalIntegrate0(g, x)
+          map(FG2F, lfintegrate(h, x))
+      internalIntegrate0(rischNormalize(g, x).func, x)
+
+)abbrev package FSINT FunctionSpaceIntegration
+++ Top-level real function integration
+++ Author: Manuel Bronstein
+++ Date Created: 4 February 1988
+++ Keywords: function, integration.
+++ Description:
+++   \spadtype{FunctionSpaceIntegration} provides functions for the
+++   indefinite integration of real-valued functions.
+FunctionSpaceIntegration(R, F) : Exports == Implementation where
+  R : Join(GcdDomain, Comparable, CharacteristicZero,
+           PolynomialFactorizationExplicit,
+           RetractableTo Integer, LinearlyExplicitOver Integer)
+  F : Join(TranscendentalFunctionCategory, PrimitiveFunctionCategory,
+           AlgebraicallyClosedFunctionSpace R)
+
+  B   ==> Boolean
+  G   ==> Complex R
+  K   ==> Kernel F
+  P   ==> SparseMultivariatePolynomial(R, K)
+  SY  ==> Symbol
+  IR  ==> IntegrationResult F
+  FG  ==> Expression G
+  TANTEMP ==> '%temptan
+
+  Exports ==> with
+    integrate : (F, SY) -> Union(F, List F)
+        ++ integrate(f, x) returns the integral of \spad{f(x)dx}
+        ++ where x is viewed as a real variable.
+
+  Implementation ==> add
+    import from IntegrationTools(R, F)
+    import from ElementaryIntegration(R, F)
+    import from ElementaryIntegration(G, FG)
+    import from AlgebraicManipulations(R, F)
+    import from TrigonometricManipulations(R, F)
+    import from IntegrationResultToFunction(R, F)
+    import from TranscendentalManipulations(R, F)
+    import from IntegrationResultFunctions2(FG, F)
+    import from FunctionSpaceComplexIntegration(R, F)
+    import from ElementaryFunctionStructurePackage(R, F)
+    import from InnerTrigonometricManipulations(R, F, FG)
+    import from PolynomialCategoryQuotientFunctions(IndexedExponents K,
+                      K, R, SparseMultivariatePolynomial(R, K), F)
+
+    RTRIG := 'rtrig
+    HTRIG := 'htrig
+    ELEM := 'elem
+    ALGOP := '%alg
+
+    K2KG      : K -> Kernel FG
+    postSubst : (F, List K, List F, List K, List K, List K, List F, SY) -> F
+    rinteg    : (IR, F, SY, B) -> List F
+    mkPrimh   : (F, SY, B) -> F
+    trans?    : F -> B
+    goComplex? : (B, List K, List K) -> B
+    halfangle : F -> F
+    Khalf     : K -> F
+    tan2temp  : K -> K
+
+    optemp : BasicOperator := operator(TANTEMP, 1)
+
+    K2KG k     == retract(tan F2FG first argument k)@Kernel(FG)
+    tan2temp k == kernel(optemp, argument k, height k)$K
+
+    trans? f ==
+      any?(x1+->is?(x1, 'log) or is?(x1, 'exp) or is?(x1, 'atan),
+           operators f)$List(BasicOperator)
+
+    mkPrimh(f, x, h) ==
+      g := mkPrim(f, x)
+      h and trans? g => htrigs g
+      g
+
+    rinteg(i, f, x, h) ==
+        not elem? i => [integral(f, x)$F]
+        [mkPrimh(f, x, h) for f in expand(i, x)]
+
+-- replace tan(a/2)^2 by (1-cos a)/(1+cos a) if tan(a/2) is in ltan
+    halfangle a ==
+      a := 2 * a
+      (1 - cos a) / (1 + cos a)
+
+    Khalf k ==
+      a := 2 * first argument k
+      sin(a) / (1 + cos a)
+
+    find_int(i : K, t : List K) : K ==
+        ail := argument(i)
+        k0 := #ail
+        ii := i::F
+        for k in t repeat
+           if is?(operator(k), '%iint) then
+               akl := argument(k)
+               #akl ~= k0 => iterate
+               normalize(ii - k::F) = 0 => return k
+        i
+
+    extend_tower(lk : List(K)) : List(K) ==
+        res : List(K) := []
+        for k in lk repeat
+            l1 := [k]
+            op := operator(k)
+            if name(op) = 'polylog then
+                args := argument(k)
+                iu := retractIfCan(first(args))@Union(Integer, "failed")
+                if iu case Integer then
+                    if (i := iu@Integer) > 0 and i < 10 then
+                        while i > 2 repeat
+                            i := i - 1
+                            ke := kernel(op, cons(i::R::F, rest(args)))
+                            l1 := cons(retract(ke)@K, l1)
+            for k1 in l1 repeat
+                member?(k1, res) => iterate
+                res := cons(k1, res)
+        reverse!(res)
+
+-- ltan = list of tangents in the integrand after real normalization
+    postSubst(f, otf, lv, lk, ltan, ekers, evals, x) ==
+      for v in lv for k in lk repeat
+        ((u := retractIfCan(v)@Union(K, "failed")) case K) =>
+           uk := u@K
+           if has?(operator(uk), ALGOP) then
+             f := univariate(f, uk, minPoly uk) (uk::F)
+           f := eval(f, [uk], [k::F])
+        if is?(k, 'nthRoot) then
+           vkl := [kk for kk in kernels(v) | is?(kk, 'nthRoot)]
+           if #vkl = 1 then
+               vk := vkl(1)
+               member?(vk, otf) => "skip"
+               vkf := vk::F
+               vc := v/vkf
+               member?(vk, kernels(vc)) => "skip"
+               vkv := (k::F)/vc
+               f := univariate(f, vk, minPoly vk) (vkf)
+               f := eval(f, [vk], [vkv])
+      for k in ekers for v in evals repeat
+          if is?(operator(k), '%iint) and
+              not(member?(k, (tf := tower f))) then
+               k := find_int(k, tf)
+          f := eval(f, [k], [v])
+      if not(empty? ltan) then
+        ltemp := [tan2temp k for k in ltan]
+        f := eval(f, ltan, [k::F for k in ltemp])
+        f := eval(f, TANTEMP, 2, halfangle)
+        f := eval(f, ltemp, [Khalf k for k in ltemp])
+      f := try_real(f, x)$RealNormalizationUtilities(R, F)
+      f := removeSinSq f
+      removeConstantTerm(f, x)
+
+    RTG_Rec ==> Record(ker : List Kernel(FG), val : List(FG))
+    RALG_Rec ==> Record(ker : List Kernel(F), val : List(F))
+
+    inv_lst(lt : List Kernel(FG), le : List(FG)) : RTG_Rec ==
+        resk : List Kernel(FG) := []
+        rese : List(FG) := []
+        im := complex(0, 1)$G
+        for k in lt for e in le repeat
+            ik : Kernel(FG)
+            ie : FG
+            not(is?(k, 'atan) or is?(k, 'tan)) => iterate
+            if is?(k, 'atan) then
+                ik := retract(-2*im*e)@Kernel(FG)
+                ie := -2*im*(k::FG)
+                resk := cons(ik, resk)
+                rese := cons(ie, rese)
+            if is?(k, 'tan) then
+                e1 := im*e
+                k1 := im*(k::FG)
+                -- hack alert: transcendental operatar applied
+                -- to constant argument may give algebraic
+                -- constant, in such case we are unable to
+                -- invert the transform
+                iku := retractIfCan(-(e1 + 1)/(e1 - 1)
+                                   )@Union(Kernel(FG), "failed")
+                iku case "failed" => iterate
+                ik := iku@Kernel(FG)
+                ie := -(k1 + 1)/(k1 - 1)
+                resk := cons(ik, resk)
+                rese := cons(ie, rese)
+        [reverse(resk), reverse(rese)]
+
+    inv_alg_lst(lt : List Kernel(F)) : RALG_Rec ==
+        resk : List Kernel(F) := []
+        rese :  List(F) := []
+        for k in lt repeat
+            not(is?(k, 'nthRoot)) => iterate
+            e1 := F2FG(k::F)
+            ckl := kernels(e1)
+            #ckl ~= 1 => iterate
+            ck := ckl(1)
+            ckf := ck::FG
+            e1 = ckf => iterate
+            e2 := FG2F(ckf)
+            ru1 := retractIfCan(e2)@Union(Kernel(F), "failed")
+            ru1 case "failed" => iterate
+            resk := cons(ru1@Kernel(F), resk)
+            rese := cons(k::F/FG2F(e1/ckf), rese)
+        [reverse! resk, reverse! rese]
+
+    to_real(fg : FG, rtg : RTG_Rec, ralg : RALG_Rec) : F ==
+        f := FG2F subst(fg, rtg.ker, rtg.val)
+        subst(f, ralg.ker, ralg.val)
+
+    -- go complex for trigs and inverse trigs
+    -- ltan is the list of all the tangents in l
+    goComplex?(rt, l, ltan) == not(empty? ltan) or rt
+
+    FSCINTA ==> FunctionSpaceComplexIntegrationAux(R, F)
+
+    integrate(f, x) ==
+      -- FIXME: we need better way to check if base ring is
+      -- real
+      R has imaginary : () -> % or R is AlgebraicNumber =>
+          ir := internalIntegrate(f, x)$FSCINTA
+          complexExpand(ir)
+      not real? f => complexIntegrate(f, x)
+      f   := distribute(f, x::F)
+      tf := extend_tower(tower(f))
+      ltf := select(x1+->is?(operator x1, 'tan), tf)
+      ht  := any?(x1+->has?(operator x1, HTRIG), tf)
+      etf := [realLiouvillian(k::F, x) for k in tf]
+      ekers : List K := []
+      evals : List F := []
+      for k in tf for v in etf repeat
+          s : F := 0
+          vk : K
+          if ((vu := retractIfCan(v)@Union(K, "failed")) case K) then
+              vk := vu@K
+              s := 1
+          else if ((vu := retractIfCan(-v)@Union(K, "failed")) case K) then
+              vk := vu@K
+              s := -1
+          if s ~= 0 then
+              kn := name(operator(vk))
+              if kn = '%iint or kn = 'atan then
+                  ekers := cons(vk, ekers)
+                  evals := cons(s*k::F, evals)
+      f1 := eval(f, tf, etf)
+      tf1 := tower(f1)
+      rec := rischNormalize(f1, x)
+      tf2 := tower(rec.func)
+      r_lst : List(K) := []
+      rv_lst : List(F) := []
+      nr_lst : List(K) := []
+      ir_lst : List(F) := []
+      for k in tf2 repeat
+          not(is?(k, 'nthRoot)) => iterate
+          akl := argument(k)
+          ak1 := eval(first(akl), r_lst, rv_lst)
+          ak2 := (retract(akl(2))@Integer)::NonNegativeInteger
+          pr := froot(ak1, ak2)$PolynomialRoots(IndexedExponents K, K, R, P, F)
+          nak := pr.radicand
+          rnumu := retractIfCan(numer(nak))@Union(R, "failed")
+          pr.exponent = ak2 and pr.coef = 1 and
+              rnumu case "failed" => iterate
+          r_lst := cons(k, r_lst)
+          nk : F
+          ec := eval(pr.coef, nr_lst, ir_lst)
+          if rnumu case R then
+              nk := kernel(operator(k), [1/nak, (pr.exponent)::F])
+              rv_lst := cons(pr.coef/nk, rv_lst)
+              ir_lst := cons(ec/k::F, ir_lst)
+          else
+              nk := kernel(operator(k), [nak, (pr.exponent)::F])
+              rv_lst := cons(pr.coef*nk, rv_lst)
+              ir_lst := cons(k::F/eval(pr.coef, nr_lst, ir_lst), ir_lst)
+          nr_lst := cons(retract(nk)@K, nr_lst)
+      g := subst(rec.func, r_lst, rv_lst)
+      tg0 := tower g
+      tg  := [k for k in tg0 | member?(x, variables(k::F))]$List(K)
+      ltg0 := select(x1+->is?(operator x1, 'tan), tg0)
+      ltg := select(x1+->is?(operator x1, 'tan), tg)
+      rtg := any?(x1+->has?(operator x1, RTRIG), tg)
+      el  := any?(x1+->has?(operator x1, ELEM), tg)
+      i : IR
+      if (goComplex?(rtg, tg, ltg)) then
+          ralg := inv_alg_lst(tg0)
+          gg0 := F2FG g
+          tgg0 := tower(gg0)
+          tgg1 := [trigs2explogs(k::FG, []) for k in tgg0]
+          rtg1 := inv_lst(tgg0, tgg1)
+          gg := eval(gg0, tgg0, tgg1)
+          -- FIXME: we should really rerun algebraic normalization
+          -- but currently we do nothing
+          -- rootSimp caused regression on arc trigonometric functions
+          -- gg := rootSimp(gg)$AlgebraicManipulations(G, FG)
+          i := map((fg : FG) : F +-> to_real(fg, rtg1, ralg),
+                 lfintegrate(gg, x))
+          i := rationalize_ir(i, retract(sqrt(-1))@Kernel(F)
+                             )$GenusZeroIntegration(R, F, F)
+      else i := lfintegrate(g, x)
+      i := map((ii :F) : F +-> eval(ii, nr_lst, ir_lst),
+               i)$IntegrationResultFunctions2(F, F)
+      ltg0 := setDifference(ltg0, ltf)   -- tan's added by normalization
+      rl := [postSubst(h, tf1, rec.vals, rec.kers, ltg0, ekers, evals,
+                 x) for h in rinteg(i, f, x, el and ht)]
+      empty? rest(rl) => first(rl)
+      rl
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

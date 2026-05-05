@@ -1,0 +1,255 @@
+)abbrev package UPDIVP UnivariatePolynomialDivisionPackage
+++ Author: Frederic Lehobey
+++ Date Created: 3 June 1997
+++ Basic Operations:
+++ Related Domains:
+++ Also See:
+++ AMS Classifications:
+++ Keyword:
+++ Examples:
+++ References:
+++ Description: UnivariatePolynomialDivisionPackage provides a
+++ division for non monic univariate polynomials with coefficients in
+++ an \spad{IntegralDomain}.
+UnivariatePolynomialDivisionPackage(R, UP) : Exports == Implementation where
+  R : IntegralDomain
+  UP : UnivariatePolynomialCategory(R)
+  N ==> NonNegativeInteger
+  QR ==> Record(quotient : UP, remainder : UP)
+
+  Exports ==> with
+
+    divideIfCan : (UP,UP) -> Union(QR,"failed")
+      ++ divideIfCan(f, g) returns quotient and remainder of the
+      ++ division of f by g or "failed" if it has not succeeded.
+
+  Implementation ==> add
+
+    divideIfCan(p1:UP,p2:UP):Union(QR,"failed") ==
+      zero? p2 => error "divideIfCan: division by zero"
+      ((lc := leadingCoefficient p2) = 1) => monicDivide(p1, p2)
+      q : UP := 0
+      while not ((e := subtractIfCan(degree(p1),degree(p2))) case "failed")
+       repeat
+        c := leadingCoefficient(p1) exquo lc
+        c case "failed" => return "failed"
+        ee := e::N
+        q := q+monomial(c@R, ee)
+        p1 := p1 - c*mapExponents(x +-> x + ee, p2)
+      [q, p1]
+
+)abbrev package UPDECOMP UnivariatePolynomialDecompositionPackage
+++ Author: Frederic Lehobey
+++ Date Created: 17 June 1996
+++ Basic Operations:
+++ Related Domains:
+++ Also See:
+++ AMS Classifications:
+++ Keyword:
+++ Examples:
+++ References:
+++ [1] Peter Henrici, Automatic Computations with Power Series,
+++ Journal of the Association for Computing Machinery, Volume 3, No. 1,
+++ January 1956, 10-15
+++ [2] Dexter Kozen and Susan Landau, Polynomial Decomposition
+++ Algorithms, Journal of Symbolic Computation (1989) 7, 445-456
+-- Decomposition would be speeded up (O(n log n) instead of O(n^2)) by
+-- implementing the algorithm described in [3] based on [4] and [5].
+++ [3] Joachim von zur Gathen, Functional Decomposition Polynomials:
+++ the Tame Case, Journal of Symbolic Computation (1990) 9, 281-299
+++ [4] R. P. Brent and H. T. Kung, Fast Algorithms for Manipulating
+++ Formal Power Series, Journal of the Association for Computing
+++ Machinery, Vol. 25, No. 4, October 1978, 581-595
+++ [5] R. P. Brent, Multiple-Precision Zero-Finding Methods and the
+++ Complexity of Elementary Function Evaluation, Analytic
+++ Computational Complexity, J. F. Traub, Ed., Academic Press,
+++ New York 1975, 151-176
+++ Description: UnivariatePolynomialDecompositionPackage implements
+++ functional decomposition of univariate polynomial with coefficients
+++ in an \spad{IntegralDomain} of \spad{CharacteristicZero}.
+UnivariatePolynomialDecompositionPackage(R, UP) : Exports == Implementation where
+  R : IntegralDomain
+  UP : UnivariatePolynomialCategory(R)
+  N ==> NonNegativeInteger
+  LR ==> Record(left : UP, right : UP)
+  QR ==> Record(quotient : UP, remainder : UP)
+
+
+  Exports ==> with
+
+    monicRightFactorIfCan : (UP,N) -> Union(UP,"failed")
+      ++ monicRightFactorIfCan(f, d) returns a candidate to be the
+      ++ monic right factor (h in f = g o h) of degree d of a
+      ++ functional decomposition of the polynomial f or
+      ++ \spad{"failed"} if no such candidate.
+    rightFactorIfCan : (UP,N,R) -> Union(UP,"failed")
+      ++ rightFactorIfCan(f, d, c) returns a candidate to be the
+      ++ right factor (h in f = g o h) of degree d with leading
+      ++ coefficient c of a functional decomposition of the
+      ++ polynomial f or \spad{"failed"} if no such candidate.
+    leftFactorIfCan : (UP,UP) -> Union(UP,"failed")
+      ++ leftFactorIfCan(f, h) returns the left factor (g in f = g o h)
+      ++ of the functional decomposition of the polynomial f with
+      ++ given h or \spad{"failed"} if g does not exist.
+    monicDecomposeIfCan : UP -> Union(LR,"failed")
+      ++ monicDecomposeIfCan(f) returns a functional decomposition
+      ++ of the monic polynomial f or "failed" if it has not found any.
+    monicCompleteDecompose : UP -> List UP
+      ++ monicCompleteDecompose(f) returns a list of factors of f for
+      ++ the functional decomposition of monic polynomial f.
+      ++ [f1, ..., fn] means f = f1 o ... o fn.
+    if R has Field then
+       decomposeIfCan : UP -> Union(LR,"failed")
+         ++ decomposeIfCan(f) returns a functional decomposition
+         ++ of the polynomial f or "failed" if it has not found any.
+       completeDecompose : UP -> List UP
+         ++ completeDecompose(f) returns a list of factors of f for
+         ++ the functional decomposition of f. [f1, ..., fn] means
+         ++ f = f1 o ... o fn.
+  Implementation ==> add
+
+    rightFactorIfCan0(p : UP, dq : N, n : N, lcq : R) : Union(UP,"failed") ==
+      dp := degree p
+      s := subtractIfCan(dq, 1)::N
+      lcp := leadingCoefficient p
+      q : UP := monomial(lcq, dq)
+      k : N
+      for k in 1..s repeat
+        c : R := 0
+        i : N
+        -- solves equation n*q1'*p1 - q1*p1' = 0 mod x^(k+1)
+        -- where q1 and p1 are p and q in reverse order
+        for i in 0..subtractIfCan(k, 1)::N repeat
+         c := c+(k::R-(n::R+1)*(i::R))*
+          coefficient(q, subtractIfCan(dq, i)::N)*
+           coefficient(p, subtractIfCan(dp+i, k)::N)
+        cquo := c exquo ((k*n)::R*lcp)
+        cquo case "failed" => return "failed"
+        q := q+monomial(cquo@R, subtractIfCan(dq, k)::N)
+      q
+
+    char_R : N := characteristic()$R
+
+    import from Integer
+
+    rightFactorIfCan(p, dq, lcq) ==
+        dp := degree p
+        zero? lcq =>
+            error "rightFactorIfCan: leading coefficient may not be zero"
+        (zero? dp) or (zero? dq) => "failed"
+        nc := dp exquo dq
+        nc case "failed" => "failed"
+        n := nc@N
+        char_R = 0 or n < char_R => rightFactorIfCan0(p, dq, n, lcq)
+        -- fail in wild case
+        (nr := n::R) = 0 => "failed"
+        q : UP := monomial(lcq, dq)
+        n1 := (n - 1)::N
+        qn1 := q^n1
+        qn := q*qn1
+        lcn := leadingCoefficient(qn)
+        lcn1 := nr*leadingCoefficient(qn1)
+        cc0u := leadingCoefficient(p) exquo lcn
+        cc0u case "failed" => "failed"
+        cc0 := cc0u@R
+        cc1 := cc0*nr
+        cc2 := cc0*lcn1
+        p1 := p - cc0*qn
+        k1 : N := 1
+        k : N := 2
+        qn1 : UP := 0
+        for i in 1..(dq - 1) repeat
+            if i = k then
+                qn1 := q^n1
+                qn := q*qn1
+                p1 := p - cc0*qn
+                k1 := k
+                k := 2*k
+            c := coefficient(p1, qcoerce(dp - i)@N)
+            for j in k1..(i - 1) repeat
+                c := c - cc1*coefficient(q, qcoerce(dq - j)@N)*
+                              coefficient(qn1, qcoerce(dp - dq - i + j)@N)
+            cu := c exquo cc2
+            cu case "failed" => return "failed"
+            q := q + monomial(cu@R, qcoerce(dq - i)@N)
+        q
+
+    monicRightFactorIfCan(p, dq) == rightFactorIfCan(p, dq, 1$R)
+
+    import from UnivariatePolynomialDivisionPackage(R, UP)
+
+    leftFactorIfCan(f, h) ==
+      g : UP := 0
+      zero? degree h => "failed"
+      for i in 0.. while not zero? f repeat
+        qrf := divideIfCan(f, h)
+        qrf case "failed" => return "failed"
+        qr := qrf@QR
+        r := qr.remainder
+        not ground? r => return "failed"
+        g := g+monomial(ground(r), i)
+        f := qr.quotient
+      g
+
+    monicDecomposeIfCan f ==
+      df := degree f
+      zero? df => "failed"
+      for dh in 2..subtractIfCan(df, 1)::N | zero?(df rem dh) repeat
+        h := monicRightFactorIfCan(f, dh)
+        h case UP =>
+         g := leftFactorIfCan(f, h@UP)
+         g case UP => return [g@UP, h@UP]
+      "failed"
+
+    monicCompleteDecompose f ==
+      cf := monicDecomposeIfCan f
+      cf case "failed" => [ f ]
+      lr := cf@LR
+      append(monicCompleteDecompose lr.left, [lr.right])
+
+    if R has Field then
+
+        decomposeIfCan f ==
+            lc := leadingCoefficient f
+            f  := f/lc
+            res1 := monicDecomposeIfCan(f)
+            res1 case "failed" => "failed"
+            lr := res1@LR
+            [lc*lr.left, lr.right]
+
+        completeDecompose(f) ==
+            lc := leadingCoefficient f
+            f  := f/lc
+            res1 := monicCompleteDecompose(f)
+            cons(lc*first(res1), rest(res1))
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

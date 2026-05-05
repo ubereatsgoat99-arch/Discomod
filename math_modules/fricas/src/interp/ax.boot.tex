@@ -1,0 +1,857 @@
+\documentclass{article}
+\usepackage{hyperref}
+\newtheorem{Example}{Example}
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\xAldor}{\textsc{Aldor}}
+\newcommand{\xFriCAS}{\textsc{FriCAS}}
+\usepackage{color}
+\definecolor{bgcode}{rgb}{1,1,0.7}
+\usepackage{listings}
+\lstnewenvironment{code}%
+  {\lstset{basicstyle=\scriptsize\ttfamily,backgroundcolor=\color{bgcode}}}%
+  {}
+
+\begin{document}
+\title{Comments on ax.boot}
+\author{Ralf Hemmecke}
+\date{19-Jun-2008}
+\maketitle
+\begin{abstract}
+  We give an overview of what \file{ax.boot} does and in particular
+  describe the function \verb'makeAxExportForm'.
+\end{abstract}
+\tableofcontents
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Overview}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+The most important function in \file{ax.boot} is the function
+\verb'makeAxExportForm'.
+%
+The function takes as input a filename and a list of constructors.
+Via LISP it would be called like
+\begin{code}
+(|makeAxExportForm| filename constructors)
+\end{code}
+where \verb'filename' is actually unused and could be removed and
+\verb'constructors' should be a list of constructor names, i.e., names
+of categories, domains, and packages in their unabbreviated form.
+
+For example, in the following way this function is called from within
+a fricas session.
+\begin{code}
+cd /path/to/fricas
+fricas -nosman
+)read src/interp/ax.boot
+)boot makeAxExportForm("unused", (list 'DirectProductCategory))
+\end{code}
+
+It returns a list that represents the \texttt{.ap} (parsed source)
+(see \verb'aldor -hall') form of the constructors. However, since the
+output is only needed for a construction of an \xAldor{} \xFriCAS{}
+interaction, \verb'makeAxExportForm' will only construct the category
+part of the constructor.
+
+The function is actually used in \file{src/aldor/gendepap.lsp} and is an
+auxiliary part in the construction of the interface for the
+interaction of the \xAldor{} compiler with \xFriCAS{}.
+
+
+
+The basic translation is easily demonstrated with a few examples. For
+better readability, we look at the corresponding SPAD form of the
+constructor (instead of its internal LISP representation).
+
+Let us first state what different situations we identified.
+\begin{enumerate}
+\item Ordinary domains. See Section~\ref{sec:Domain}.
+\item Ordinary categories. See Section~\ref{sec:Category}.
+\item Ordinary categories with default packages. See
+  Section~\ref{sec:Category+Default}.
+\item Ordinary categories with default packages that contain
+  conditional implementations. See
+  Section~\ref{sec:Category+ConditionalDefault}.
+\item Initial domains, i.e., domains that will be extended in the
+  course of building \file{libfricas.al}. These domains are listed in
+  the variable \verb'$extendedDomains'. %$
+
+  See Sections~\ref{sec:InitDomain} and
+  \ref{sec:ParametrizedInitDomain}. There is a subdivision for these
+  domains.
+  \begin{enumerate}
+  \item For domains that take no arguments, see
+    Section~\ref{sec:InitDomain}.
+  \item For domains that take arguments, see
+    Section~\ref{sec:ParametrizedInitDomain}.
+  \end{enumerate}
+\end{enumerate}
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Ordinary Domains}\label{sec:Domain}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+The domain \verb'Stack'.
+\begin{code}
+Stack(S:SetCategory): StackAggregate S with
+    stack: List S -> %
+  == add
+    Rep := Reference List S
+    ...
+\end{code}
+It is translated into \ldots
+\begin{code}
+(|Sequence| (|Import| NIL |FriCASLib|) (|Import| NIL |Boolean|)
+    (|Export|
+        (|Declare| |Stack|
+            (|Apply| -> (|Declare| |#1| |SetCategory|)
+                     (|With| NIL
+                             (|Sequence|
+                                 (|Apply| |StackAggregate| |#1|)
+                                 (|Declare| |stack|
+                                     (|Apply| ->
+                                      (|Comma| (|Apply| |List| |#1|))
+                                      %))))))
+        NIL NIL))
+\end{code}
+That is the parsed source of the Aldor code \ldots
+\begin{code}
+import from FriCASLib;
+import from Boolean;
+export Stack: (T: SetCategory) -> with {
+                                        StackAggregate T;
+                                        stack: List T -> %;
+                                  }
+\end{code}
+Note that nothing appears before the \verb'with'. No problem because
+that is equivalent to a \verb'Join' in Aldor.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Ordinary Categories}\label{sec:Category}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+The category \verb'SquareFreeNormalizedTriangularSetCategory' without
+a default package.
+\begin{code}
+SquareFreeNormalizedTriangularSetCategory(_
+        R: GcdDomain,_
+        E: OrderedAbelianMonoidSup,_
+        V: OrderedSet,_
+        P:RecursivePolynomialCategory(R, E, V)): Category ==
+    Join(_
+        SquareFreeRegularTriangularSetCategory(R,E,V,P),_
+         NormalizedTriangularSetCategory(R,E,V,P))
+\end{code}
+It is translated into \ldots
+\begin{code}
+(|Sequence| (|Import| NIL |FriCASLib|) (|Import| NIL |Boolean|)
+    (|Define|
+        (|Declare| |SquareFreeNormalizedTriangularSetCategory|
+            (|Apply| ->
+                     (|Comma| (|Declare| |#1| |GcdDomain|)
+                              (|Declare| |#2|
+                                  |OrderedAbelianMonoidSup|)
+                              (|Declare| |#3| |OrderedSet|)
+                              (|Declare| |#4|
+                                  (|Apply| |RecursivePolynomialCategory|
+                                           |#1| |#2| |#3|)))
+                     |Category|))
+        (|Lambda|
+            (|Comma| (|Declare| |#1| |GcdDomain|)
+                     (|Declare| |#2| |OrderedAbelianMonoidSup|)
+                     (|Declare| |#3| |OrderedSet|)
+                     (|Declare| |#4|
+                         (|Apply| |RecursivePolynomialCategory| |#1|
+                                  |#2| |#3|)))
+            |Category|
+            (|Label| |SquareFreeNormalizedTriangularSetCategory|
+                     (|With| NIL
+                             (|Sequence|
+                                 (|Apply| |SquareFreeRegularTriangularSetCategory|
+                                          |#1| |#2| |#3| |#4|)
+                                 (|Apply| |NormalizedTriangularSetCategory|
+                                          |#1| |#2| |#3| |#4|)))))))
+\end{code}
+That is the parsed source of the Aldor code \ldots
+\begin{code}
+import from FriCASLib;
+import from Boolean;
+SquareFreeNormalizedTriangularSetCategory: (
+        R: GcdDomain,
+        E: OrderedAbelianMonoidSup,
+        V: OrderedSet,
+        P: RecursivePolynomialCategory(R, E, V)
+) -> Category == (
+        R: GcdDomain,
+        E: OrderedAbelianMonoidSup,
+        V: OrderedSet,
+        P: RecursivePolynomialCategory(R, E, V)
+): Category +-> with {
+        SquareFreeRegularTriangularSetCategory(R, E, V, P),
+        NormalizedTriangularSetCategory(R, E, V, P)
+}
+\end{code}
+  Again, nothing appears in front of the \verb'with'. No problem
+  because that is equivalent to a \verb'Join' in Aldor.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Ordinary Categories with Default Packages}
+\label{sec:Category+Default}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+The category \verb'StringAggregate' with default package.
+\begin{code}
+StringAggregate: Category == OneDimensionalArrayAggregate Character with
+    lowerCase       : % -> %
+    lowerCase_!: % -> %
+    upperCase       : % -> %
+    ...
+    rightTrim: (%, CharacterClass) -> %
+    elt: (%, %) -> %
+ add
+   trim(s: %, c:  Character)      == leftTrim(rightTrim(s, c),  c)
+   trim(s: %, cc: CharacterClass) == leftTrim(rightTrim(s, cc), cc)
+   lowerCase s           == lowerCase_! copy s
+   upperCase s           == upperCase_! copy s
+   prefix?(s, t)         == substring?(s, t, minIndex t)
+   coerce(c:Character):% == new(1, c)
+   elt(s:%, t:%): %      == concat(s,t)$%
+\end{code}
+It is translated into \ldots
+\begin{code}
+(|Sequence| (|Import| NIL |FriCASLib|) (|Import| NIL |Boolean|)
+    (|Foreign| (|Declare| |dummyDefault| |Exit|) |Lisp|)
+    (|Define| (|Declare| |StringAggregate| |Category|)
+        (|With| NIL
+                (|Sequence|
+                    (|Apply| |OneDimensionalArrayAggregate|
+                             |Character|)
+                    (|Declare| |lowerCase| (|Apply| -> (|Comma| %) %))
+                    (|Declare| |lowerCase!| (|Apply| -> (|Comma| %) %))
+                    (|Declare| |upperCase| (|Apply| -> (|Comma| %) %))
+                    ...
+                    (|Declare| |rightTrim|
+                        (|Apply| -> (|Comma| % |CharacterClass|) %))
+                    (|Declare| |apply| (|Apply| -> (|Comma| % %) %))
+                    (|Default|
+                        (|Sequence|
+                            (|Define|
+                                (|Declare| |coerce|
+                                    (|Apply| -> (|Comma| |Character|)
+                                     %))
+                                (|Lambda|
+                                    (|Comma|
+                                     (|Declare| |t#1| |Character|))
+                                    %
+                                    (|Label| |coerce| |dummyDefault|)))
+                            (|Define|
+                                (|Declare| |apply|
+                                    (|Apply| -> (|Comma| % %) %))
+                                (|Lambda|
+                                    (|Comma| (|Declare| |t#1| %)
+                                     (|Declare| |t#2| %))
+                                    % (|Label| |apply| |dummyDefault|)))
+                            (|Define|
+                                (|Declare| |lowerCase|
+                                    (|Apply| -> (|Comma| %) %))
+                                (|Lambda| (|Comma| (|Declare| |t#1| %))
+                                    %
+                                    (|Label| |lowerCase|
+                                     |dummyDefault|)))
+                            ...
+                            ))))))
+\end{code}
+That is the parsed source of the Aldor code \ldots
+\begin{code}
+import from FriCASLib;
+import from Boolean;
+import dummyDefault: Exit from Foreign Lisp;
+StringAggregate: Category == with {
+    OneDimensionalArrayAggregate Character;
+    lowerCase: % -> %;
+    lowerCase!: % -> %;
+    upperCase: % -> %;
+    ...
+    rightTrim: (%, CharacterClass) -> %;
+    apply: (%, %) -> %
+ default {
+   coerce: Character -> % == (t: Character): % +-> dummyDefault;
+   apply: (%, %) -> %     == (t1: %, t2: %): % +-> dummyDefault;
+   lowerCase: % -> %      == (t: %): %         +-> dummyDefault;
+   ...
+}
+\end{code}
+It is important to note that the actual default functions are given by
+a dummy implementation that is imported from LISP.
+
+And again, nothing appears in front of the \verb'with'. No problem
+because that is equivalent to a \verb'Join' in Aldor.
+
+Note that the \verb'elt' function is translated into \verb'apply'.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Ordinary Categories with Conditional Default Packages}
+\label{sec:Category+ConditionalDefault}.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The category \verb'DirectProductCategory' with default conditional
+exports and conditional default implementations.
+
+
+
+\begin{code}
+DirectProductCategory(dim : NonNegativeInteger, R : Type) : Category ==
+  Join(IndexedAggregate(Integer, R), CoercibleTo Vector R, _
+           AbelianProductCategory(R), finiteAggregate) with
+           -- attribute to indicate an aggregate of finite size
+         directProduct : Vector R -> %
+           ++ directProduct(v) converts the vector v to
+           ++ a direct product. Error: if the length of v is
+           ++ different from dim.
+         if R has SetCategory then FullyRetractableTo R
+         if R has Ring then
+           DifferentialExtension R
+           FullyLinearlyExplicitOver R
+         if R has AbelianMonoid and R has Monoid then
+           unitVector : PositiveInteger -> %
+             ++ unitVector(n) produces a vector with 1 in position n and
+             ++ zero elsewhere.
+         if R has SemiRng then
+           SemiRng
+           BiModule(R, R)
+           if R has AbelianMonoid then
+             dot : (%, %) -> R
+               ++ dot(x, y) computes the inner product of the vectors x and y.
+         if R has Monoid then Monoid
+         if R has SemiGroup then
+           SemiGroup
+           _* : (R, %) -> %
+             ++ r * y multiplies the element r times each component of the
+             ++ vector y.
+           _* : (%, R) -> %
+             ++ y * r multiplies each component of the vector y by the element r.
+         if R has Finite then Finite
+         if R has CommutativeRing then
+           Algebra R
+           CommutativeRing
+         if R has unitsKnown then unitsKnown
+         if R has OrderedSet then OrderedSet
+         if R has OrderedAbelianMonoidSup then OrderedAbelianMonoidSup
+         if R has Field then VectorSpace R
+ add
+      if R has Ring then
+        equation2R : Vector % -> Matrix R
+
+        coerce(n : Integer) : %          == n::R::%
+        characteristic()             == characteristic()$R
+        differentiate(z : %, d : R -> R) == map(d, z)
+
+        equation2R v ==
+          ans : Matrix(R) := new(dim, #v, 0)
+          for i in minRowIndex ans .. maxRowIndex ans repeat
+            for j in minColIndex ans .. maxColIndex ans repeat
+              qsetelt!(ans, i, j, qelt(qelt(v, j), i))
+          ans
+
+        reducedSystem(m : Matrix %) : Matrix(R) ==
+          empty? m => new(dim*nrows(m), ncols(m), 0)
+          reduce(vertConcat, [equation2R row(m, i)
+                 for i in minRowIndex m .. maxRowIndex m])$List(Matrix R)
+
+        reducedSystem(m : Matrix %, v : Vector %):
+          Record(mat : Matrix R, vec : Vector R) ==
+            vh : Vector(R) :=
+              empty? v => empty()
+              rh := reducedSystem(v::Matrix %)@Matrix(R)
+              column(rh, minColIndex rh)
+            [reducedSystem(m)@Matrix(R), vh]
+
+      if R has Field then
+        x / b       == x * inv b
+        dimension() == dim::CardinalNumber
+
+      if R has Finite then
+          size() == size()$R ^ dim
+
+          index n ==
+              s := size()$R
+              r := new(dim, index(1)$R)$Vector(R)
+              n0 : Integer := n-1
+              for i in 1..dim repeat
+                  d := divide(n0, s)
+                  r.i := index((1+d.remainder)::PositiveInteger)$R
+                  n0 := d.quotient
+
+              directProduct r
+
+          lookup v ==
+              s := size()$R
+              pow : NonNegativeInteger := 1
+              res : Integer := 1
+              for i in 1..dim repeat
+                  res := res + (lookup(v.i)$R - 1)*pow
+                  pow := pow * s
+
+              res::PositiveInteger
+\end{code}
+
+It is translated into \ldots
+\begin{code}
+(|Sequence| (|Import| NIL |AxiomLib|) (|Import| NIL |Boolean|)
+  (|Foreign| (|Declare| |dummyDefault| |Exit|) |Lisp|)
+  (|Define|
+   (|Declare| |DirectProductCategory|
+    (|Apply| ->
+     (|Comma|
+      . #1=((|Declare| |#1| |NonNegativeInteger|)
+            (|Declare| |#2| |Type|)))
+     |Category|))
+   (|Lambda| (|Comma| . #1#) |Category|
+             (|Label| |DirectProductCategory|
+              (|With| NIL
+               (|Sequence|
+                (|Apply| |IndexedAggregate| |Integer| |#2|)
+                (|Apply| |CoercibleTo| (|Apply| |Vector| |#2|))
+                (|Apply| |AbelianProductCategory| |#2|)
+                |finiteAggregate|
+                (|Declare| |directProduct|
+                 (|Apply| ->
+                  (|Comma| (|Apply| |Vector| |#2|)) %))
+                (|If| (|Test| (|Has| |#2| |SetCategory|))
+                 (|Apply| |FullyRetractableTo|
+                  (|PretendTo| |#2| |SetCategory|))
+                 NIL)
+                (|If| (|Test| (|Has| |#2| |Ring|))
+                 (|Sequence|
+                  (|Apply| |DifferentialExtension|
+                   (|PretendTo| |#2| |Ring|))
+                  (|Apply| |FullyLinearlyExplicitOver|
+                   (|PretendTo| |#2| |Ring|)))
+                 NIL)
+                (|If| (|Test| (|Has| |#2| |AbelianMonoid|))
+                 (|If| (|Test| (|Has| |#2| |Monoid|))
+                  (|Declare| |unitVector|
+                   (|Apply| -> (|Comma| |PositiveInteger|)
+                    %))
+                  NIL)
+                 NIL)
+                (|If| (|Test| (|Has| |#2| |SemiRng|))
+                 (|Sequence| |SemiRng|
+                             (|Apply| |BiModule|
+                              (|PretendTo| |#2| |SemiRng|)
+                              (|PretendTo| |#2| |SemiRng|))
+                             (|If|
+                              (|Test|
+                               (|Has| |#2| |AbelianMonoid|))
+                              (|Declare| |dot|
+                               (|Apply| -> (|Comma| % %)
+                                |#2|))
+                              NIL))
+                 NIL)
+                (|If| (|Test| (|Has| |#2| |Monoid|)) |Monoid|
+                 NIL)
+                (|If| (|Test| (|Has| |#2| |SemiGroup|))
+                 (|Sequence| |SemiGroup|
+                             (|Declare| *
+                              (|Apply| -> (|Comma| |#2| %)
+                               %))
+                             (|Declare| *
+                              (|Apply| -> (|Comma| % |#2|)
+                               %)))
+                 NIL)
+                (|If| (|Test| (|Has| |#2| |Finite|)) |Finite|
+                 NIL)
+                (|If| (|Test| (|Has| |#2| |CommutativeRing|))
+                 (|Sequence|
+                  (|Apply| |Algebra|
+                   (|PretendTo| |#2| |CommutativeRing|))
+                  |CommutativeRing|)
+                 NIL)
+                (|If| (|Test| (|Has| |#2| |unitsKnown|))
+                 |unitsKnown| NIL)
+                (|If| (|Test| (|Has| |#2| |OrderedSet|))
+                 |OrderedSet| NIL)
+                (|If|
+                 (|Test|
+                  (|Has| |#2| |OrderedAbelianMonoidSup|))
+                 |OrderedAbelianMonoidSup| NIL)
+                (|If| (|Test| (|Has| |#2| |Field|))
+                 (|Apply| |VectorSpace|
+                  (|PretendTo| |#2| |Field|))
+                 NIL)
+                (|Default|
+                 (|Sequence|
+                  (|Define|
+                   (|Declare| /
+                    (|Apply| -> (|Comma| % |#2|) %))
+                   (|Lambda|
+                    (|Comma| (|Declare| |t#1| %)
+                     (|Declare| |t#2| |#2|))
+                    % (|Label| / |dummyDefault|)))
+                  (|Define|
+                   (|Declare| |characteristic|
+                    (|Apply| -> (|Comma|)
+                     |NonNegativeInteger|))
+                   (|Lambda| (|Comma|) |NonNegativeInteger|
+                             (|Label| |characteristic|
+                              |dummyDefault|)))
+                  (|Define|
+                   (|Declare| |coerce|
+                    (|Apply| -> (|Comma| |Integer|) %))
+                   (|Lambda|
+                    (|Comma| (|Declare| |t#1| |Integer|)) %
+                    (|Label| |coerce| |dummyDefault|)))
+                  (|Define|
+                   (|Declare| |differentiate|
+                    (|Apply| ->
+                     (|Comma| %
+                      #2=(|Apply| -> (|Comma| |#2|) |#2|))
+                     %))
+                   (|Lambda|
+                    (|Comma| (|Declare| |t#1| %)
+                     (|Declare| |t#2| #2#))
+                    %
+                    (|Label| |differentiate|
+                     |dummyDefault|)))
+                  (|Define|
+                   (|Declare| |dimension|
+                    (|Apply| -> (|Comma|) |CardinalNumber|))
+                   (|Lambda| (|Comma|) |CardinalNumber|
+                             (|Label| |dimension|
+                              |dummyDefault|)))
+                  (|Define|
+                   (|Declare| |index|
+                    (|Apply| -> (|Comma| |PositiveInteger|)
+                     %))
+                   (|Lambda|
+                    (|Comma|
+                     (|Declare| |t#1| |PositiveInteger|))
+                    % (|Label| |index| |dummyDefault|)))
+                  (|Define|
+                   (|Declare| |lookup|
+                    (|Apply| -> (|Comma| %)
+                     |PositiveInteger|))
+                   (|Lambda| (|Comma| (|Declare| |t#1| %))
+                             |PositiveInteger|
+                             (|Label| |lookup|
+                              |dummyDefault|)))
+                  (|Define|
+                   (|Declare| |reducedSystem|
+                    (|Apply| ->
+                     (|Comma|
+                      #3=(|Apply| |Matrix|
+                          (|PretendTo| % |AbelianMonoid|)))
+                     #4=(|Apply| |Matrix|
+                         (|PretendTo| |#2|
+                          |AbelianMonoid|))))
+                   (|Lambda| (|Comma| (|Declare| |t#1| #3#))
+                             #4#
+                             (|Label| |reducedSystem|
+                              |dummyDefault|)))
+                  (|Define|
+                   (|Declare| |reducedSystem|
+                    (|Apply| ->
+                     (|Comma|
+                      #5=(|Apply| |Matrix|
+                          (|PretendTo| % |AbelianMonoid|))
+                      #6=(|Apply| |Vector|
+                          (|PretendTo| % |Type|)))
+                     #7=(|Apply| |Record|
+                         (|Declare| |mat|
+                          (|Apply| |Matrix|
+                           (|PretendTo| |#2|
+                            |AbelianMonoid|)))
+                         (|Declare| |vec|
+                          (|Apply| |Vector|
+                           (|PretendTo| |#2| |Type|))))))
+                   (|Lambda|
+                    (|Comma| (|Declare| |t#1| #5#)
+                     (|Declare| |t#2| #6#))
+                    #7#
+                    (|Label| |reducedSystem|
+                     |dummyDefault|)))
+                  (|Define|
+                   (|Declare| |size|
+                    (|Apply| -> (|Comma|)
+                     |NonNegativeInteger|))
+                   (|Lambda| (|Comma|) |NonNegativeInteger|
+                             (|Label| |size|
+                              |dummyDefault|)))))))))))
+\end{code}
+That is the parsed source of the Aldor code \ldots
+\begin{code}
+import from AxiomLib;
+import from Boolean;
+import dummyDefault: Exit from Foreign Lisp;
+\end{code}
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Initial Domains without Arguments}
+\label{sec:InitDomain}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{code}
+SingleInteger(): Join(IntegerNumberSystem,Logic,OpenMath) with
+   canonical
+   canonicalsClosed
+   noetherian
+   max      : () -> %
+   min      : () -> %
+   "not":   % -> %
+   "~"  :   % -> %
+   "/\": (%, %) -> %
+   "\/" : (%, %) -> %
+   "xor": (%, %) -> %
+   Not  : % -> %
+   And  : (%,%) -> %
+   Or   : (%,%) -> %
+ == add
+   ...
+\end{code}
+It is translated into \ldots
+\begin{code}
+(|Sequence| (|Import| NIL |FriCASLib|) (|Import| NIL |Boolean|)
+    (|Extend|
+        (|Define|
+            (|Declare| |SingleInteger|
+                (|With| NIL
+                        (|Sequence| |IntegerNumberSystem| |Logic|
+                            |OpenMath|
+                            (|RestrictTo| |canonical| |Category|)
+                            (|RestrictTo| |canonicalsClosed|
+                                |Category|)
+                            (|RestrictTo| |noetherian| |Category|)
+                            (|Declare| |max| (|Apply| -> (|Comma|) %))
+                            (|Declare| |min| (|Apply| -> (|Comma|) %))
+                            (|Declare| |not|
+                                (|Apply| -> (|Comma| %) %))
+                            (|Declare| ~ (|Apply| -> (|Comma| %) %))
+                            (|Declare| |/\\|
+                                (|Apply| -> (|Comma| % %) %))
+                            (|Declare| |\\/|
+                                (|Apply| -> (|Comma| % %) %))
+                            (|Declare| |xor|
+                                (|Apply| -> (|Comma| % %) %))
+                            (|Declare| |Not|
+                                (|Apply| -> (|Comma| %) %))
+                            (|Declare| |And|
+                                (|Apply| -> (|Comma| % %) %))
+                            (|Declare| |Or|
+                                (|Apply| -> (|Comma| % %) %)))))
+            (|Add| (|PretendTo| (|Add| NIL NIL)
+                       (|With| NIL
+                               (|Sequence| |IntegerNumberSystem|
+                                   |Logic| |OpenMath|
+                                   (|RestrictTo| |canonical|
+                                    |Category|)
+                                   (|RestrictTo| |canonicalsClosed|
+                                    |Category|)
+                                   (|RestrictTo| |noetherian|
+                                    |Category|)
+                                   (|Declare| |max|
+                                    (|Apply| -> (|Comma|) %))
+                                   (|Declare| |min|
+                                    (|Apply| -> (|Comma|) %))
+                                   (|Declare| |not|
+                                    (|Apply| -> (|Comma| %) %))
+                                   (|Declare| ~
+                                    (|Apply| -> (|Comma| %) %))
+                                   (|Declare| |/\\|
+                                    (|Apply| -> (|Comma| % %) %))
+                                   (|Declare| |\\/|
+                                    (|Apply| -> (|Comma| % %) %))
+                                   (|Declare| |xor|
+                                    (|Apply| -> (|Comma| % %) %))
+                                   (|Declare| |Not|
+                                    (|Apply| -> (|Comma| %) %))
+                                   (|Declare| |And|
+                                    (|Apply| -> (|Comma| % %) %))
+                                   (|Declare| |Or|
+                                    (|Apply| -> (|Comma| % %) %)))))
+                   NIL))))
+\end{code}
+That is the parsed source of the Aldor code \ldots
+\begin{code}
+import from FriCASLib;
+import from Boolean;
+extend SingleInteger: with {
+        IntegerNumberSystem;
+        Logic;
+        OpenMath;
+        canonical @ Category;
+        canonicalsClosed @ Category;
+        noetherian @ Category;
+        max: () -> %;
+        min: () -> %;
+        _not: % -> %;
+        ~:   % -> %;
+        /\:  (%, %) -> %;
+        \/:  (%, %) -> %;
+        xor: (%, %) -> %;
+        Not: % -> %;
+        And: (%,%) -> %;
+        Or : (%,%) -> %;
+}
+ == (add pretend with {
+        IntegerNumberSystem;
+        Logic;
+        OpenMath;
+        canonical @ Category;
+        canonicalsClosed @ Category;
+        noetherian @ Category;
+        max: () -> %;
+        min: () -> %;
+        _not: % -> %;
+        ~:   % -> %;
+        /\:  (%, %) -> %;
+        \/:  (%, %) -> %;
+        xor: (%, %) -> %;
+        Not: % -> %;
+        And: (%,%) -> %;
+        Or : (%,%) -> %;
+}) add;
+\end{code}
+
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Initial Domains with Arguments}
+\label{sec:ParametrizedInitDomain}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{code}
+SegmentBinding(S:Type): Type with
+  equation: (Symbol, Segment S) -> %
+  variable: % -> Symbol
+  segment : % -> Segment S
+  if S has SetCategory then SetCategory
+ == add
+  Rep := Record(var:Symbol, seg:Segment S)
+  ...
+\end{code}
+It is translated into \ldots
+\begin{code}
+(|Sequence| (|Import| NIL |FriCASLib|) (|Import| NIL |Boolean|)
+    (|Sequence|
+        (|Define|
+            (|Declare| |SegmentBindingExtendCategory|
+                (|Apply| -> (|Declare| |#1| |Type|) |Category|))
+            (|Lambda| (|Comma| (|Declare| |#1| |Type|)) |Category|
+                (|Label| |SegmentBindingExtendCategory|
+                         (|With| NIL
+                                 (|Sequence|
+                                     (|Declare| |equation|
+                                      (|Apply| ->
+                                       (|Comma| |Symbol|
+                                        (|Apply| |Segment| |#1|))
+                                       %))
+                                     (|Declare| |variable|
+                                      (|Apply| -> (|Comma| %) |Symbol|))
+                                     (|Declare| |segment|
+                                      (|Apply| -> (|Comma| %)
+                                       (|Apply| |Segment| |#1|)))
+                                     (|If|
+                                      (|Test|
+                                       (|Has| |#1| |SetCategory|))
+                                      |SetCategory| NIL))))))
+        (|Extend|
+            (|Define|
+                (|Declare| |SegmentBinding|
+                    (|Apply| -> (|Declare| |#1| |Type|)
+                             (|Apply| |SegmentBindingExtendCategory|
+                                      |#1|)))
+                (|Lambda| (|Comma| (|Declare| |#1| |Type|))
+                    (|Apply| |SegmentBindingExtendCategory| |#1|)
+                    (|Label| |SegmentBinding|
+                             (|Add| (|PretendTo| (|Add| NIL NIL)
+                                     (|Apply|
+                                      |SegmentBindingExtendCategory|
+                                      |#1|))
+                                    NIL)))))))
+\end{code}
+That is the parsed source of the Aldor code \ldots
+\begin{code}
+import from FriCASLib;
+import from Boolean;
+SegmentBindingExtendCategory: (S: Type) -> Category ==
+  (T: Type): Category +-> with {
+  equation: (Symbol, Segment S) -> %;
+  variable: % -> Symbol;
+  segment : % -> Segment S;
+  if S has SetCategory then SetCategory;
+}
+extend SegmentBinding: (S: Type) -> SegmentBindingExtendCategory S ==
+  (S: Type): SegmentBindingExtendCategory S +->
+    (add pretend SegmentBindingExtendCategory S) add;
+\end{code}
+The last lines are actually equivalent to
+\begin{code}
+extend SegmentBinding(S: Type): SegmentBindingExtendCategory S ==
+    (add pretend SegmentBindingExtendCategory S) add;
+\end{code}
+\end{document}

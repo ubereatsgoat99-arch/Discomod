@@ -1,0 +1,78 @@
+1:169:1
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+2:196:4
+3:249:1/4
+4:249:1
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+5:256:2
+6:277:1
+7:277:9
+8:294:16
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+9:294:16
+10:295:49
+11:295:1
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+12:324:3
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+13:336:1152
+14:349:1
+15:353:1
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+16:360:8
+17:363:1/4
+18:363:1
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+19:388:3
+20:389:1
+21:389:1
+22:394:4
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+23:394:4
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+24:400:36
+25:427:1
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+26:448:4
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+27:448:16
+28:450:16
+29:450:8
+30:461:1
+31:461:49
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+32:464:32
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+33:464:4
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+34:464:4
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+35:472:2
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+36:472:8
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+37:476:12
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+38:484:3
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+39:504:16
+40:523:25
+41:523:1
+42:529:1
+43:555:1/4
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+44:574:10
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+45:576:4
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+46:576:128
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+47:578:12
+48:587:0
+  *** lfungenus2: Warning: unknown valuation of conductor at 2.
+49:588:32
+50:597:1
+  ***   at top-level: hyperellperiods(x,0)
+  ***                 ^--------------------
+  *** hyperellperiods: domain error in hyperellperiods: genus = 0
+Total time spent: 2779

@@ -1,0 +1,76 @@
+Function: ellfromeqn
+Section: elliptic_curves
+C-Name: ellfromeqn0
+Prototype: GDG
+Help: ellfromeqn(f,{P}): given a genus 1 plane curve, defined by the affine
+ equation f(x,y) = 0, return the coefficients [a1,a2,a3,a4,a6] of a
+ Weierstrass equation for its Jacobian.
+ This allows to recover a Weierstrass model for an elliptic curve given by a
+ general plane cubic or by a binary quartic or biquadratic model.
+
+ If a binary quartic or biquadratic model is given, and if a point P is given,
+ also return the image of P by the map from the curve to its Jacobian.
+Doc:
+ Given a genus $1$ plane curve, defined by the affine equation $f(x,y) = 0$,
+ return the coefficients $[a_{1},a_{2},a_{3},a_{4},a_{6}]$ of a Weierstrass
+ equation for its Jacobian. This allows to recover a Weierstrass model for an
+ elliptic curve given by a general plane cubic or by a binary quartic or
+ biquadratic model. The function implements the $f \mapsto f^{*}$ formulae of
+ Artin, Tate and Villegas (Advances in Math. 198 (2005), pp. 366--382).
+
+ If a binary quartic or biquadratic model is given, and if a point $P$ is
+ given, also return the image of $P$ by the map from the curve to its Jacobian.
+
+ In the example below, the function is used to convert between twisted Edwards
+ coordinates and Weierstrass coordinates.
+ \bprog
+ ? e = ellfromeqn(a*x^2+y^2 - (1+d*x^2*y^2))
+ %1 = [0, -a - d, 0, -4*d*a, 4*d*a^2 + 4*d^2*a]
+ ? E = ellinit(ellfromeqn(y^2-x^2 - 1 +(121665/121666*x^2*y^2)),2^255-19);
+ ? isprime(ellcard(E) / 8)
+ %3 = 1
+ @eprog
+
+ The elliptic curve attached to the sum of two cubes is given by
+ \bprog
+ ? ellfromeqn(x^3+y^3 - a)
+ %1 = [0, 0, -9*a, 0, -27*a^2]
+ @eprog
+
+ \misctitle{Congruent number problem}
+ Let $n$ be an integer, if $a^{2}+b^{2}=c^{2}$ and $a\*b=2\*n$,
+ then by substituting $b$ by $2\*n/a$ in the first equation,
+ we get $((a^{2}+(2\*n/a)^{2})-c^{2})\*a^{2} = 0$.
+ We set $x=a$, $y=a\*c$.
+ \bprog
+ ? Cn = (x^2 + (2*n/x)^2 - (y/x)^2)*x^2;
+ ? [En, Mn] = ellfromeqn(Cn, [x,y]);
+ ? En
+ %3 = [0, 0, 0, -16*n^2, 0]
+ ? Mn
+ %4 = [-16*n^2/y^2*x^2,-16*n^2/y^3*x^5+64*n^4/y^3*x]
+ ? ellisoncurve(ellinit(En), Mod(Mn, Cn)) \\ Mn maps to a point on En
+ %5 = 1
+ @eprog\noindent
+ We now check that $23$ is congruent since the curve $E_{23}$ has a point of
+ infinite order, namely:
+ \bprog
+ ? [C,E,M] = subst([Cn,En,Mn], n, 23); E = ellinit(E);
+ ? H = ellheegner(E)
+ %7 = [-406847/6084,245194145/474552]
+ @eprog\noindent
+ Using $M$, we can recover the point on the original curve.
+ \bprog
+ ? T = elltors(E).gen
+ %8 = [[-92,0],[0,0]]
+ ? P = elladd(E, T[2], ellmul(E,H,2));
+ ? U = numerator(M[1] - P[1]);
+ ? S = [[x,y]| y<-nfroots(,polresultant(U*y^2,C)) \
+             ; x<-nfroots(,subst(C,'y,y))]; #S
+ %12 = 8
+ ? S[1]
+ %13 = [-41496/3485,-1810283234/12145225]
+ ? S[3]
+ %14 = [-80155/20748,-20818257191/430479504]
+ @eprog
+Variant: Also available is \fun{GEN}{ellfromeqn}{GEN f} when $P$ is omitted.

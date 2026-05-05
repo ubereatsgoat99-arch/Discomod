@@ -1,0 +1,918 @@
+)abbrev domain POLY Polynomial
+++ Author: Dave Barton, Barry Trager
+++ Basic Functions: Ring, degree, eval, coefficient, monomial, differentiate,
+++ resultant, gcd
+++ Related Constructors: SparseMultivariatePolynomial, MultivariatePolynomial
+++ Also See:
+++ AMS Classifications:
+++ Keywords: polynomial, multivariate
+++ References:
+++ Description:
+++ This type is the basic representation of sparse recursive multivariate
+++ polynomials whose variables are arbitrary symbols. The ordering
+++ is alphabetic determined by the Symbol type.
+++ The coefficient ring may be non commutative,
+++ but the variables are assumed to commute.
+
+Polynomial(R : Ring):
+  PolynomialCategory(R, IndexedExponents Symbol, Symbol) with
+   if R has Algebra Fraction Integer then
+     integrate : (%, Symbol) -> %
+       ++ integrate(p, x) computes the integral of \spad{p*dx}, i.e.
+       ++ integrates the polynomial p with respect to the variable x.
+   if R has Canonical then Canonical
+ == SparseMultivariatePolynomial(R, Symbol) add
+
+    import from UserDefinedPartialOrdering(Symbol)
+
+    coerce(p : %) : OutputForm ==
+      (r := retractIfCan(p)@Union(R,"failed")) case R => r@R::OutputForm
+      a :=
+        userOrdered?() => largest variables p
+        mainVariable(p)::Symbol
+      outputForm(univariate(p, a), a::OutputForm)
+
+    if R has Algebra Fraction Integer then
+      integrate(p, x) == (integrate univariate(p, x)) (x::%)
+
+)abbrev package POLY2 PolynomialFunctions2
+++ Author:
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This package takes a mapping between coefficient rings, and lifts
+++ it to a mapping between polynomials over those rings.
+
+PolynomialFunctions2(R : Ring, S : Ring) : with
+  map : (R -> S, Polynomial R) -> Polynomial S
+    ++ map(f, p) produces a new polynomial as a result of applying
+    ++ the function f to every coefficient of the polynomial p.
+ == add
+  map(f, p) == map(x1+->x1::Polynomial(S), x2+->f(x2)::Polynomial(S),
+                   p)$PolynomialCategoryLifting(IndexedExponents Symbol,
+                                   Symbol, R, Polynomial R, Polynomial S)
+
+
+)abbrev domain MPOLY MultivariatePolynomial
+++ Author: Dave Barton, Barry Trager
+++ Basic Functions: Ring, degree, eval, coefficient, monomial, differentiate,
+++ resultant, gcd
+++ Related Constructors: SparseMultivariatePolynomial, Polynomial
+++ Also See:
+++ AMS Classifications:
+++ Keywords: polynomial, multivariate
+++ References:
+++ Description:
+++ This type is the basic representation of sparse recursive multivariate
+++ polynomials whose variables are from a user specified list of symbols.
+++ The ordering is specified by the position of the variable in the list.
+++ The coefficient ring may be non commutative,
+++ but the variables are assumed to commute.
+
+MultivariatePolynomial(vl : List Symbol, R : Ring)
+   ==  SparseMultivariatePolynomial(--SparseUnivariatePolynomial,
+           R, OrderedVariableList vl)
+
+)abbrev domain SMP SparseMultivariatePolynomial
+++ Author: Dave Barton, Barry Trager
+++ 30 Nov 94: added gcdPolynomial for float-type coefficients
+++ Basic Functions: Ring, degree, eval, coefficient, monomial, differentiate,
+++ resultant, gcd
+++ Related Constructors: Polynomial, MultivariatePolynomial
+++ Also See:
+++ AMS Classifications:
+++ Keywords: polynomial, multivariate
+++ References:
+++ Description:
+++ This type is the basic representation of sparse recursive multivariate
+++ polynomials. It is parameterized by the coefficient ring and the
+++ variable set which may be infinite. The variable ordering is determined
+++ by the variable set parameter. The coefficient ring may be non-commutative,
+++ but the variables are assumed to commute.
+
+SparseMultivariatePolynomial(R : Join(SemiRng, AbelianMonoid),
+                             VarSet : OrderedSet) : C == T where
+  pgcd ==> PolynomialGcdPackage(IndexedExponents VarSet, VarSet, R, %)
+  C == PolynomialCategory(R, IndexedExponents(VarSet), VarSet)
+  SUP ==> SparseUnivariatePolynomial
+  T == add
+    --constants
+    --D := F(%) replaced by next line until compiler support completed
+
+    --representations
+    -- Used in SparsePolynomialCoercionHelpers and InnerModularHermitePade
+    -- (search for SmpRep)
+      D := SparseUnivariatePolynomial(%)
+      VPoly :=  Record(v : VarSet, ts : D)
+      Rep :=  Union(R, VPoly)
+
+    --local function
+
+
+    --declarations
+      fn : R -> R
+      n : Integer
+      k : NonNegativeInteger
+      kp : PositiveInteger
+      k1 : NonNegativeInteger
+      c : R
+      mvar : VarSet
+      val : R
+      var : VarSet
+      up : D
+      p, p1, p2, pval : %
+      Lval : List(R)
+      Lpval : List(%)
+      Lvar : List(VarSet)
+
+    --define
+      0  == 0$R::%
+
+      if R has SemiRing then
+
+          1 == 1$R::%
+
+      -- Ugly, but we want to avoid conditional exports or testing
+      -- in inner loops
+      m_one : R :=
+          R has SemiRing => 1
+          0
+
+      zero? p == p case R and zero?(p)$R
+      if R has SemiRing then
+          one? p == p case R and (p = 1)$R
+    -- a local function
+      red(p : %) : % ==
+         p case R => 0
+         if ground?(reductum p.ts) then leadingCoefficient(reductum p.ts) else [p.v, reductum p.ts]$VPoly
+
+      numberOfMonomials(p) : NonNegativeInteger ==
+        p case R =>
+          zero?(p)$R => 0
+          1
+        +/[numberOfMonomials q for q in coefficients(p.ts)]
+
+      if R has SemiRing then
+          coerce(mvar) : % == [mvar, monomial(1, 1)$D]$VPoly
+
+      monomial1?(p : %) : Boolean ==
+        p case R => true
+        sup : D := p.ts
+        not(monomial?(sup)) => false
+        monomial1?(leadingCoefficient(sup)$D)
+
+      monomial?(p) ==
+          p = 0 => false
+          monomial1?(p)
+
+--    local
+      moreThanOneVariable? : % -> Boolean
+
+      moreThanOneVariable? p ==
+         p case R => false
+         q := p.ts
+         any?(x1+->not ground? x1 , coefficients q) => true
+         false
+
+      -- if we already know we use this (slightly) faster function
+      univariateKnown : % -> SparseUnivariatePolynomial R
+
+      univariateKnown p ==
+        p case R => (leadingCoefficient p) :: SparseUnivariatePolynomial(R)
+        monomial( leadingCoefficient p, degree p.ts)+ univariateKnown(red p)
+
+      univariate p ==
+        p case R =>(leadingCoefficient p) :: SparseUnivariatePolynomial(R)
+        moreThanOneVariable?  p => error "not univariate"
+        map(leadingCoefficient, p.ts
+           )$UnivariatePolynomialCategoryFunctions2(
+             %, D, R, SparseUnivariatePolynomial(R))
+
+      multivariate (u : SparseUnivariatePolynomial(R), var : VarSet) ==
+        ground? u => (leadingCoefficient u) ::%
+        [var, monomial(leadingCoefficient u, degree u)$D]$VPoly +
+           multivariate(reductum u, var)
+
+      -- computes p*monomial(1, var, n).  Assumes main variable
+      -- of p is smaller than v.
+      mon_mul(p : %, var : VarSet, n : NonNegativeInteger) : % ==
+          pt := monomial(p, n)$D
+          [var, pt]$VPoly
+
+      univariate(p : %, mvar : VarSet) : SparseUnivariatePolynomial(%) ==
+        p case R or p.v < mvar  => monomial(p, 0)$D
+        pt := p.ts
+        mvar = p.v => pt
+        ulc0 := univariate(leadingCoefficient pt, mvar)
+        ulc := map(c +-> mon_mul(c, p.v, degree pt), ulc0)$D
+        ulc + univariate(red p, mvar)
+
+--  a local function, used in next definition
+      unlikeUnivReconstruct(u : SparseUnivariatePolynomial(%), mvar : VarSet) : % ==
+        zero? (d := degree u) => coefficient(u, 0)
+        monomial(leadingCoefficient u, mvar, d) +$%
+            unlikeUnivReconstruct(reductum u, mvar)
+
+      multivariate(u : SparseUnivariatePolynomial(%), mvar : VarSet) : % ==
+        ground? u => coefficient(u, 0)
+        uu := u
+        while not zero? uu repeat
+          cc := leadingCoefficient uu
+          cc case R or mvar > cc.v => uu := reductum uu
+          return unlikeUnivReconstruct(u, mvar)
+        [mvar, u]$VPoly
+
+      construct(lt) ==
+          res : % := 0
+          for t in lt repeat
+              res := res + monomial(t.c, t.k)
+          res
+
+      constructOrdered(lt) == construct(lt)
+
+      leadingSupport(p) == degree(p)
+
+      leadingTerm(p) == [degree(p), leadingCoefficient(p)]
+
+      linearExtend(f, p) ==
+          res : % := 0
+          while not(zero?(p)) repeat
+              res := leadingCoefficient(p)*f(degree(p)) + res
+              p := reductum(p)
+          res
+
+      listOfTerms(p) ==
+          res : List(Record(k : IndexedExponents(VarSet), c : R)) := []
+          while not(zero?(p)) repeat
+              res := cons(leadingTerm(p), res)
+              p := reductum(p)
+          reverse!(res)
+
+      support(p) ==
+          res : List(IndexedExponents(VarSet)) := []
+          while not(zero?(p)) repeat
+              res := cons(degree(p), res)
+              p := reductum(p)
+          reverse!(res)
+
+      ground?(p : %) : Boolean ==
+        p case R => true
+        false
+
+
+      monomial(p, mvar, k1) ==
+        zero? k1 or zero? p => p
+        p case R or mvar>p.v => [mvar, monomial(p, k1)$D]$VPoly
+        pt := p.ts
+        pt1 : D :=
+            mvar < p.v => map(c +-> monomial(c, mvar, k1), pt)$D
+            shiftLeft(pt, k1)$D
+        [p.v, pt1]$VPoly
+
+      monomial(c : R, e : IndexedExponents(VarSet)) : % ==
+          zero? e => (c::%)
+          p1 : % := monomial(c, reductum e)
+          m1 := monomial(p1, leadingCoefficient e)$D
+          [leadingSupport e, m1]$VPoly
+
+      coefficient(p : %, e : IndexedExponents(VarSet)) : R ==
+        zero? e =>
+          p case R  => p
+          coefficient(coefficient(p.ts, 0), e)
+        p case R => 0
+        ve := leadingSupport e
+        vp := p.v
+        ve < vp =>
+          coefficient(coefficient(p.ts, 0), e)
+        ve > vp => 0
+        coefficient(coefficient(p.ts, leadingCoefficient e), reductum e)
+
+--    coerce(e: IndexedExponents(VarSet)) : % ==
+--      e = 0 => 1
+--      monomial(1, leadingSupport e, leadingCoefficient e) *
+--          (reductum e)::%
+
+--    retract(p: %): IndexedExponents(VarSet) ==
+--      q : Union(IndexedExponents(VarSet), "failed") := retractIfCan p
+--      q :: IndexedExponents(VarSet)
+
+--    retractIfCan(p:%):Union(IndexedExponents(VarSet),"failed") ==
+--      p = 0 => degree p
+--      reductum(p)=0 and leadingCoefficient(p)=1 => degree p
+--      "failed"
+
+      if R has Ring then
+
+          coerce(n) == n::R::%
+          characteristic == characteristic$R
+
+      coerce(c) == c::%
+
+      if R has SemiRing then
+
+          recip(p) ==
+              p case R =>
+                  uu := recip(p::R)
+                  uu case "failed" => "failed"
+                  uu::%
+              "failed"
+
+      if R has Ring then
+
+          - p ==
+              p case R => -$R p
+              [p.v, - p.ts]$VPoly
+
+          n * p  ==
+              p case R => n * p::R
+              mvar := p.v
+              up := n*p.ts
+              if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+
+      c * p  ==
+          c = 0 => 0
+          c = m_one => p
+          p case R => c * p::R
+          mvar := p.v
+          up := c*p.ts
+          if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+      p1 + p2  ==
+         p1 case R and p2 case R => p1 +$R p2
+         p1 case R => [p2.v, p1::D + p2.ts]$VPoly
+         p2 case R => [p1.v, p1.ts + p2::D]$VPoly
+         p1.v = p2.v =>
+              mvar := p1.v
+              up := p1.ts+p2.ts
+              if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+         p1.v < p2.v =>
+              [p2.v, p1::D + p2.ts]$VPoly
+         [p1.v, p1.ts + p2::D]$VPoly
+
+      if R has Ring then
+           p1 - p2  ==
+               p1 case R and p2 case R => p1 -$R p2
+               p1 case R => [p2.v, p1::D - p2.ts]$VPoly
+               p2 case R => [p1.v, p1.ts - p2::D]$VPoly
+               p1.v = p2.v =>
+                   mvar := p1.v
+                   up := p1.ts-p2.ts
+                   if ground? up then leadingCoefficient(up)
+                     else [mvar, up]$VPoly
+               p1.v < p2.v =>
+                   [p2.v, p1::D - p2.ts]$VPoly
+               [p1.v, p1.ts - p2::D]$VPoly
+
+      p1 = p2  ==
+         p1 case R =>
+             p2 case R => p1 =$R p2
+             false
+         p2 case R => false
+         p1.v = p2.v => p1.ts = p2.ts
+         false
+
+      p1 * p2  ==
+         p1 case R => p1::R * p2
+         p2 case R =>
+            mvar := p1.v
+            up := p1.ts*p2
+            if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+         p1.v = p2.v =>
+            mvar := p1.v
+            up := p1.ts*p2.ts
+            if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+         p1.v > p2.v =>
+            mvar := p1.v
+            up := p1.ts*p2
+            if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+            --- p1.v < p2.v
+         mvar := p2.v
+         up := p1*p2.ts
+         if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+
+      pow_aux(p : %, k : NonNegativeInteger) : % ==
+         k = 0 => m_one
+         kp := qcoerce(k)@PositiveInteger
+         p case R => p@R ^$R kp
+         -- univariate special case
+         not moreThanOneVariable? p =>
+             multivariate( (univariateKnown p) ^ kp , p.v)
+         mvar := p.v
+         up := p.ts ^ kp
+         if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+
+      p ^ k == pow_aux(p, k)
+
+      p ^ kp == pow_aux(p, kp)
+
+      if R has Hashable and VarSet has Hashable then
+
+          hashUpdate!(s : HashState, p : %) : HashState ==
+              p case R => hashUpdate!(s, p::R)
+              s := hashUpdate!(s, p.v)
+              hashUpdate!(s, p.ts)
+
+      if R has Comparable then
+
+          triage(p : %, q : %) : SingleInteger ==
+              p case R =>
+                  q case R =>
+                      p =$R q => 0
+                      smaller?(p, q)$R => 1
+                      -1
+                  smaller?(0$R, leadingCoefficient(q))$R => 1
+                  -1
+              q case R =>
+                  smaller?(leadingCoefficient(p), 0$R)$R => 1
+                  -1
+              pv := p@VPoly
+              qv := q@VPoly
+              pv.v < qv.v =>
+                  smaller?(0$R, leadingCoefficient(q))$R => 1
+                  -1
+              not(pv.v = qv.v) =>
+                  smaller?(leadingCoefficient(p), 0$R)$R => 1
+                  -1
+              -- pv.v = qv.v
+              pu := pv.ts
+              qu := qv.ts
+              repeat
+                  (dp := degree(pu)) < (dq := degree(qu)) => return
+                      lcq := leadingCoefficient(qu)
+                      smaller?(0$R, leadingCoefficient(lcq))$R => 1
+                      -1
+                  dq < dp => return
+                      lcp := leadingCoefficient(pu)
+                      smaller?(leadingCoefficient(lcp), 0$R)$R => 1
+                      -1
+                  lcp := leadingCoefficient(pu)
+                  lcq := leadingCoefficient(qu)
+                  tr1 := triage(lcp, lcq)
+                  not(tr1 = 0) or dp = 0 => return tr1
+                  pu := reductum(pu)
+                  qu := reductum(qu)
+
+          smaller?(p : %, q : %) : Boolean ==
+              triage(p, q) = 1
+
+
+      if R has IntegralDomain then
+         UnitCorrAssoc ==> Record(unit : %, canonical : %, associate : %)
+         unitNormal(p) ==
+            u, c, a : R
+            p case R =>
+              (u, c, a) := unitNormal(p@R)$R
+              [u::%, c::%, a::%]$UnitCorrAssoc
+            (u, c, a) := unitNormal(leadingCoefficient(p))$R
+            [u::%, (a*p)::%, a::%]$UnitCorrAssoc
+         unitCanonical(p) ==
+            p case R => unitCanonical(p@R)$R
+            (u, c, a) := unitNormal(leadingCoefficient(p))$R
+            a*p
+         unit? p ==
+            p case R => unit?(p@R)$R
+            false
+         associates?(p1, p2) ==
+            p1 case R => p2 case R and associates?(p1, p2)$R
+            p2 case VPoly and p1.v = p2.v and associates?(p1.ts, p2.ts)
+
+         if R has Approximate then
+           p1  exquo  p2  ==
+              p1 case R and p2 case R =>
+                a := (p1::R  exquo  p2::R)
+                if a case "failed" then "failed" else a::%
+              zero? p1 => p1
+              (p2 = 1) => p1
+              p1 case R or p2 case VPoly and p1.v < p2.v => "failed"
+              p2 case R or p1.v > p2.v =>
+                 a := (p1.ts  exquo  p2::D)
+                 a case "failed" => "failed"
+                 [p1.v, a]$VPoly::%
+              -- The next test is useful in the case that R has inexact
+              -- arithmetic (in particular when it is Interval(...)).
+              -- In the case where the test succeeds, empirical evidence
+              -- suggests that it can speed up the computation several times,
+              -- but in other cases where there are a lot of variables
+              -- and p1 and p2 differ only in the low order terms (e.g. p1=p2+1)
+              -- it slows exquo down by about 15-20%.
+              p1 = p2 => 1
+              a := p1.ts  exquo  p2.ts
+              a case "failed" => "failed"
+              mvar := p1.v
+              up : SUP % := a
+              if ground? (up) then leadingCoefficient(up) else [mvar, up]$VPoly::%
+         else
+           p1  exquo  p2  ==
+              p1 case R and p2 case R =>
+                a := (p1::R  exquo  p2::R)
+                if a case "failed" then "failed" else a::%
+              zero? p1 => p1
+              (p2 = 1) => p1
+              p1 case R or p2 case VPoly and p1.v < p2.v => "failed"
+              p2 case R or p1.v > p2.v =>
+                 a := (p1.ts  exquo  p2::D)
+                 a case "failed" => "failed"
+                 [p1.v, a]$VPoly::%
+              a := p1.ts  exquo  p2.ts
+              a case "failed" => "failed"
+              mvar := p1.v
+              up : SUP % := a
+              if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly::%
+
+      map(fn, p) ==
+         p case R => fn(p)
+         mvar := p.v
+         up := map(x1+->map(fn, x1), p.ts)
+         if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+
+      if R has Field then
+        (p : %) / (r : R) == inv(r) *$% p
+
+      if R has GcdDomain then
+        content(p) ==
+           p case R => p
+           c : R := 0
+           up := p.ts
+           while not(zero? up) and not(c = 1) repeat
+               c := gcd(c, content leadingCoefficient(up))
+               up := reductum up
+           c
+
+      if R has EuclideanDomain and R has CharacteristicZero and not(R has FloatingPointSystem)  then
+        content(p, mvar) ==
+          p case R => p
+          gcd(coefficients univariate(p, mvar))$pgcd
+
+        gcd(p1, p2) ==  gcd(p1, p2)$pgcd
+
+        gcd(lp : List %) ==  gcd(lp)$pgcd
+
+        gcdPolynomial(a : SUP %, b : SUP %) : SUP % == gcd(a, b)$pgcd
+
+      else if R has GcdDomain then
+        content(p, mvar) ==
+          p case R => p
+          content univariate(p, mvar)
+
+        gcd(p1, p2) ==
+           p1 case R =>
+              p2 case R => gcd(p1, p2)$R::%
+              zero? p1 => p2
+              gcd(p1, content(p2.ts))
+           p2 case R =>
+              zero? p2 => p1
+              gcd(p2, content(p1.ts))
+           p1.v < p2.v => gcd(p1, content(p2.ts))
+           p1.v > p2.v => gcd(content(p1.ts), p2)
+           mvar := p1.v
+           up := gcd(p1.ts, p2.ts)
+           if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+
+        if R has FloatingPointSystem then
+           -- eventually need a better notion of gcd's over floats
+           -- this essentially computes the gcds of the monomial contents
+           gcdPolynomial(a : SUP %, b : SUP %) : SUP % ==
+              ground? (a) =>
+                  zero? a => b
+                  gcd(leadingCoefficient a, content b)::SUP %
+              ground?(b) =>
+                  zero? b => b
+                  gcd(leadingCoefficient b, content a)::SUP %
+              conta := content a
+              mona : SUP % := monomial(conta, minimumDegree a)
+              if mona ~= 1 then
+                   a := (a exquo mona)::SUP %
+              contb := content b
+              monb : SUP % := monomial(contb, minimumDegree b)
+              if monb ~= 1 then
+                   b := (b exquo monb)::SUP %
+              mong : SUP %  := monomial(gcd(conta, contb),
+                                      min(degree mona, degree monb))
+              degree(a) >= degree b =>
+                   not((a exquo b) case "failed") =>
+                        mong * b
+                   mong
+              not((b exquo a) case "failed") => mong * a
+              mong
+
+      coerce(p) : OutputForm ==
+        p case R => (p@R)::OutputForm
+        outputForm(p.ts, p.v::OutputForm)
+
+      coefficients p ==
+        p case R => list(p@R)$List(R)
+        "append"/[coefficients(p1)$% for p1 in coefficients(p.ts)]
+
+      retract(p : %) : R ==
+        p case R => p@R
+        error "cannot retract nonconstant polynomial"
+
+      retractIfCan(p:%):Union(R, "failed") ==
+        p case R => p@R
+        "failed"
+
+--      leadingCoefficientRecursive(p: %): % ==
+--         p case R => p
+--         leadingCoefficient p.ts
+
+      mymerge : (List VarSet, List VarSet) ->List VarSet
+      mymerge(l : List VarSet, m : List VarSet) : List VarSet  ==
+         empty? l => m
+         empty? m => l
+         first l = first m =>
+            empty? rest l =>
+                 setrest!(l, rest m)
+                 l
+            empty? rest m => l
+            setrest!(l, mymerge(rest l, rest m))
+            l
+         first l > first m =>
+            empty? rest l =>
+                setrest!(l, m)
+                l
+            setrest!(l, mymerge(rest l, m))
+            l
+         empty? rest m =>
+             setrest!(m, l)
+             m
+         setrest!(m, mymerge(l, rest m))
+         m
+
+      variables p ==
+         p case R => empty()
+         lv : List VarSet := empty()
+         q := p.ts
+         while not zero? q repeat
+           lv := mymerge(lv, variables leadingCoefficient q)
+           q := reductum q
+         cons(p.v, lv)
+
+      mainVariable p ==
+         p case R => "failed"
+         p.v
+
+      eval(p, mvar, pval) == univariate(p, mvar)(pval)
+      eval(p, mvar, val) ==  univariate(p, mvar)(val)
+
+      evalSortedVarlist(p, Lvar, Lpval) : % ==
+        p case R => p
+        empty? Lvar or empty? Lpval => p
+        mvar := Lvar.first
+        mvar > p.v => evalSortedVarlist(p, Lvar.rest, Lpval.rest)
+        pval := Lpval.first
+        pts := map(x1+->evalSortedVarlist(x1, Lvar, Lpval), p.ts)
+        mvar = p.v =>
+             pval case R => pts (pval::R)
+             pts pval
+        multivariate(pts, p.v)
+
+      eval(p, Lvar, Lpval) ==
+        empty? rest Lvar => evalSortedVarlist(p, Lvar, Lpval)
+        sorted?((x1, x2)+->(x1 > x2), Lvar) => evalSortedVarlist(p, Lvar, Lpval)
+        nlvar := sort((x1, x2)+->(x1 > x2), Lvar)
+        nlpval :=
+           Lvar = nlvar => Lpval
+           nlpval := [Lpval.position(mvar, Lvar) for mvar in nlvar]
+        evalSortedVarlist(p, nlvar, nlpval)
+
+      eval(p, Lvar, Lval) ==
+        eval(p, Lvar, [val::% for val in Lval]$(List %)) -- kill?
+
+      degree(p, mvar) ==
+        p case R => 0
+        mvar= p.v => degree p.ts
+        mvar > p.v => 0    -- might as well take advantage of the order
+        max(degree(leadingCoefficient p.ts, mvar), degree(red p, mvar))
+
+      degree(p, Lvar)  == [degree(p, mvar)  for mvar in Lvar]
+
+      degree p ==
+        p case R => 0
+        degree(leadingCoefficient(p.ts)) + monomial(degree(p.ts), p.v)
+
+      minimumDegree p ==
+        p case R => 0
+        md := minimumDegree p.ts
+        minimumDegree(coefficient(p.ts, md)) + monomial(md, p.v)
+
+      minimumDegree(p, mvar) ==
+        p case R => 0
+        mvar = p.v => minimumDegree p.ts
+        md := minimumDegree(leadingCoefficient p.ts, mvar)
+        p1 : % := red p
+        zero?(p1) => md
+        min(md, minimumDegree(p1, mvar))
+
+      minimumDegree(p, Lvar) ==
+        [minimumDegree(p, mvar) for mvar in Lvar]
+
+      if R has CommutativeRing then
+        differentiate(p, mvar) ==
+          p case R => 0
+          mvar = p.v =>
+             up := differentiate p.ts
+             if ground? up then leadingCoefficient(up) else [mvar, up]$VPoly
+          up := map(x1+->differentiate(x1, mvar), p.ts)
+          if ground? up then leadingCoefficient(up) else [p.v, up]$VPoly
+
+      leadingCoefficient(p) ==
+         p case R => p
+         leadingCoefficient(leadingCoefficient(p.ts))
+
+--      trailingCoef(p) ==
+--        p case R => p
+--        coef(p.ts, 0) case R => coef(p.ts, 0)
+--        trailingCoef(red p)
+--      TrailingCoef(p) == trailingCoef(p)
+
+      leadingMonomial p ==
+          p case R => p
+          monomial(leadingMonomial leadingCoefficient(p.ts),
+                   p.v, degree(p.ts))
+
+      reductum(p) ==
+          p case R => 0
+          rlc := reductum(leadingCoefficient(p.ts))
+          ptr := monomial(rlc, degree(p.ts))$D + reductum(p.ts)
+          degree(ptr) = 0 => ground(ptr)
+          [p.v, ptr]$VPoly
+
+      SmpTerm ==> Record(k : NonNegativeInteger, c : %)
+
+      monomials1(p : VPoly, vars : List VarSet,
+                 degs : List NonNegativeInteger, res : List(%)) : List(%) ==
+          tl := p.ts pretend List SmpTerm
+          v1 := p.v
+          for t in tl repeat
+              p1 := t.c
+              k1 := t.k
+              if p1 case R then
+                  mon : % :=
+                      k1 > 0 => [v1, [t] pretend D]$VPoly
+                      p1
+                  for var in vars for deg in degs repeat
+                      mon1 := [deg, mon]$SmpTerm
+                      mon := [var, [mon1] pretend D]$VPoly
+                  res := cons(mon, res)
+              else
+                  vars1 :=
+                      k1 > 0 => cons(v1, vars)
+                      vars
+                  degs1 :=
+                      k1 > 0 => cons(k1, degs)
+                      degs
+                  res := monomials1(p1, vars1, degs1, res)
+          res
+
+      monomials(p) ==
+          p = 0 => []
+          p case R => [p]
+          reverse!(monomials1(p, [], [], []))
+
+
+)abbrev package SMPCOER SparsePolynomialCoercionHelpers
+++ Author: Waldek Hebisch
+++ Description: This package contains a function which speeds up
+++ coercion in an important special case.
+
+SparsePolynomialCoercionHelpers(R : Ring, VarSet1 : OrderedSet,
+                                VarSet2 : OrderedSet) : _
+  with
+    remap_variables : (SparseMultivariatePolynomial(R, VarSet1), List VarSet1, _
+              List VarSet2) -> _
+             SparseMultivariatePolynomial(R, VarSet2)
+       ++ remap_variables(p, lv1, lv2) replaces corresponding variables
+       ++ from l1 by variables from lv2.  Assumes that
+       ++ lv1 and lv2 have the same length and that p has
+       ++ variables in lv1.
+  == add
+
+    MP1 ==> SparseMultivariatePolynomial(R, VarSet1)
+    MP2 ==> SparseMultivariatePolynomial(R, VarSet2)
+
+    SmpTerm1 ==> Record(k : NonNegativeInteger, c : MP1)
+    VPoly1 ==>  Record(v : VarSet1, ts : List SmpTerm1)
+    SmpRep1 ==>  Union(R, VPoly1)
+
+    SmpTerm2 ==> Record(k : NonNegativeInteger, c : MP2)
+    VPoly2 ==>  Record(v : VarSet2, ts : List SmpTerm2)
+    SmpRep2 ==>  Union(R, VPoly2)
+
+    LV1 ==> List VarSet1
+    LV2 ==> List VarSet2
+
+    convert_sorted(p1 : SmpRep1, lv1 : LV1, lv2 : LV2) : SmpRep2 ==
+        p1 case R => (p1@R)
+        empty?(lv1) => error "p has variable not in lv1"
+        v1 : VarSet1 := p1.v
+        v2 := first(lv2)
+        lv2 := rest(lv2)
+        v1 ~= first(lv1) => return convert_sorted(p1, rest(lv1), lv2)
+        lv1 := rest(lv1)
+        pu1 : List SmpTerm1 := p1.ts
+        pu2 : List SmpTerm2 := []
+        p2 : SmpRep2
+        for t0 in pu1 repeat
+            t1 := t0.c pretend SmpRep1
+            p2 :=
+                t1 case R => t1
+                convert_sorted(t1, lv1, lv2)
+            pu2 := cons([t0.k, p2 pretend MP2], pu2)
+        [v2, reverse!(pu2)]
+
+    LIFT ==> PolynomialCategoryLifting(IndexedExponents VarSet1, _
+               VarSet1, R, MP1, MP2)
+
+    PLR ==> Record(elt1 : VarSet1, elt2 : VarSet2)
+    LPLR ==> List PLR
+
+    PLR2 ==> Record(elt1 : VarSet1, elt2 : MP2)
+    LPLR2 ==> List PLR2
+
+    find_var(x : VarSet1, pl : LPLR2) : MP2 ==
+       for y in pl repeat
+           if x = y.elt1 then return y.elt2
+       error "Impossible"
+
+    remap_variables(p, lv1, lv2) ==
+        n := #lv1
+        n ~= #lv2 => error "lv1 and lv2 have different lengths"
+        if not(sorted?(lv1)) then
+            pl : LPLR :=
+               [[el1, el2] for el1 in lv1 for el2 in lv2]
+            pl := sort((x : PLR, y : PLR) _
+                           : Boolean +-> x.elt1 < y.elt1, pl)
+            lv1 := [x.elt1 for x in pl]
+            lv2 := [x.elt2 for x in pl]
+        not(sorted?(lv2)) =>
+            -- Must use slow general case
+            pl2 : LPLR2 := [[el1, monomial(1, el2, 1)$MP2] _
+                              for el1 in lv1 for el2 in lv2]
+            map(z +-> find_var(z, pl2), x +-> x::MP2, p)$LIFT
+        lv1 := reverse(lv1)
+        lv2 := reverse(lv2)
+        convert_sorted(p pretend SmpRep1, lv1, lv2) pretend MP2
+
+
+)abbrev domain INDE IndexedExponents
+++ Author: James Davenport
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ IndexedExponents of an ordered set of variables gives a representation
+++ for the degree of polynomials in commuting variables. It gives an ordered
+++ pairing of non negative integer exponents with variables
+
+IndexedExponents(Varset : OrderedSet) : C == T where
+  C == Join(OrderedAbelianMonoidSup,
+            IndexedDirectProductCategory(NonNegativeInteger, Varset))
+  T == IndexedDirectProductObject(NonNegativeInteger, Varset) add
+      Term :=  Record(k : Varset, c : NonNegativeInteger)
+      Rep :=  List Term
+      x : %
+      t : Term
+      coerceOF(t) : OutputForm ==     --++ converts term to OutputForm
+         t.c = 1 => (t.k)::OutputForm
+         (t.k)::OutputForm ^ (t.c)::OutputForm
+      coerce(x) : OutputForm == --++ converts entire exponents to OutputForm
+         empty?(x) => 1::Integer::OutputForm
+         empty?(rest(x)) => coerceOF(first(x))
+         reduce("*",[coerceOF t for t in x])
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

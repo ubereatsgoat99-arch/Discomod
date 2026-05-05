@@ -1,0 +1,353 @@
+)abbrev package IR2F IntegrationResultToFunction
+++ Conversion of integration results to top-level expressions
+++ Author: Manuel Bronstein
+++ Date Created: 4 February 1988
+++ Description:
+++   This package allows a sum of logs over the roots of a polynomial
+++   to be expressed as explicit logarithms and arc tangents, provided
+++   that the indexing polynomial can be factored into quadratics.
+++ Keywords: integration, expansion, function.
+IntegrationResultToFunction(R, F) : Exports == Implementation where
+  R : Join(GcdDomain, RetractableTo Integer, Comparable,
+          LinearlyExplicitOver Integer)
+  F : Join(AlgebraicallyClosedFunctionSpace R,
+          TranscendentalFunctionCategory)
+
+  N   ==> NonNegativeInteger
+  Z   ==> Integer
+  Q   ==> Fraction Z
+  K   ==> Kernel F
+  P   ==> SparseMultivariatePolynomial(R, K)
+  UP  ==> SparseUnivariatePolynomial F
+  IR  ==> IntegrationResult F
+  REC ==> Record(ans1 : F, ans2 : F)
+  LOG ==> Record(scalar : Q, coeff : UP, logand : UP)
+
+  Exports ==> with
+    split        : IR -> IR
+       ++ split(u(x) + sum_{P(a)=0} Q(a, x)) returns
+       ++ \spad{u(x) + sum_{P1(a)=0} Q(a, x) + ... + sum_{Pn(a)=0} Q(a, x)}
+       ++ where P1, ..., Pn are the factors of P.
+    expand       : (IR, Symbol) -> List F
+       ++ expand(i, x) returns the list of possible real functions
+       ++ of x corresponding to i.
+    complexExpand : IR -> F
+       ++ complexExpand(i) returns the expanded complex function
+       ++ corresponding to i.
+
+  Implementation ==> add
+    import from AlgebraicManipulations(R, F)
+    import from ElementaryFunctionSign(R, F)
+
+    IR2F       : IR -> F
+    insqrt     : F  -> Record(sqrt : REC, sgn : Z)
+    pairsum    : (List F, List F) -> List F
+    pairprod   : (F, List F) -> List F
+    quadeval   : (UP, F, F, F) -> REC
+    linear     : (UP, UP) -> F
+    tantrick   : (F, F) -> F
+    ilog       : (F, F, Symbol) -> F
+    ilog0      : (F, F, UP, UP, F) -> F
+    nlogs      : LOG -> List LOG
+    lg2func    : (LOG, Symbol) -> List F
+    quadratic  : (UP, UP, Symbol) -> List F
+    mkRealFunc : (List LOG, Symbol) -> List F
+    lg2cfunc   : LOG -> F
+    loglist    : (Q, UP, UP) -> List LOG
+    cmplex     : (F, UP) -> F
+    evenRoots  : F -> List F
+    compatible? : (List F, List F) -> Boolean
+
+    cmplex(alpha, p) == alpha * log p alpha
+    IR2F i           == retract mkAnswer(ratpart i, empty(), notelem i)
+    pairprod(x, l)   == [x * y for y in l]
+
+    evenRoots x ==
+      [first argument k for k in tower x |
+       is?(k, 'nthRoot) and even?(retract(second argument k)@Z)
+         and (not empty? variables first argument k)]
+
+    expand(i, x) ==
+      j := split i
+      pairsum([IR2F j], mkRealFunc(logpart(j), x))
+
+    split i ==
+      mkAnswer(ratpart i, concat [nlogs l for l in logpart i], notelem i)
+
+    complexExpand i ==
+      j := split i
+      IR2F j + +/[lg.scalar::F * lg2cfunc lg for lg in logpart j]
+
+-- p = a t^2 + b t + p0
+-- Expands sum_{p(t) = 0} t log(lg(t))
+    quadratic(p, lg, x) ==
+      zero?(delta := (b := coefficient(p, 1))^2 - 4 *
+       (a := coefficient(p, 2)) * (p0 := coefficient(p, 0))) =>
+         [linear(monomial(1, 1) + (b / a)::UP, lg)]
+      e := (q := quadeval(lg, c := - b * (d := inv(2*a)), d, delta)).ans1
+      lgp  := c * log(nrm := (e^2 - delta * (f := q.ans2)^2))
+      s    := (sqr := insqrt delta).sqrt
+      pp := nn := 0$F
+      if sqr.sgn >= 0 then
+        sqrp := s.ans1 * rootSimp sqrt(s.ans2)
+        pp := lgp + d * sqrp * log(((2 * e * f) / nrm) * sqrp
+                                          + (e^2 + delta * f^2) / nrm)
+      if sqr.sgn <= 0 then
+        sqrn := s.ans1 * rootSimp sqrt(-s.ans2)
+        nn := lgp + d * sqrn * ilog(e, f * sqrn, x)
+      sqr.sgn > 0 => [pp]
+      sqr.sgn < 0 => [nn]
+      [pp, nn]
+
+-- returns 2 atan(a/b) or 2 atan(-b/a) whichever looks better
+-- they differ by a constant so it's ok to do it from an IR
+    tantrick(a, b) ==
+      f := a/b
+      a := numerator f
+      b := denominator f
+      retractIfCan(a)@Union(Q, "failed") case Q => 2 * atan(-b/a)
+      sb := sign b
+      if sb case Z then return 2 * atan(a/b)
+      sa := sign a
+      if sa case Z then return 2 * atan(-b/a)
+      -- print("potentially noncontinuous"::OutputForm)
+      2 * atan(a/b)
+
+    var_kers(p : P, x : Symbol) : List(K) ==
+        [k for k in variables(p) | D(k::F, x) ~= 0]
+
+    -- transforms i log((a + i b) / (a - i b)) into a sum of real
+    -- arc-tangents using Rioboo's algorithm
+    -- We only apply transform if we hope for improvement
+    ilog(a, b, x) ==
+      b = 0 => 0
+      not(empty?(var_kers(denom a, x))) or
+        not(empty?(var_kers(denom b, x))) => tantrick(a, b)
+      l := setUnion(var_kers(numer a, x), var_kers(numer b, x))
+      #l ~= 1 => tantrick(a, b)
+      k := first(l)
+      opk := operator(k)
+      is?(opk, 'tan) or has?(opk, '%alg) => tantrick(a, b)
+      ilog0(a, b, numer univariate(a, k), numer univariate(b, k), k::F)
+
+-- transforms i log((a + i b) / (a - i b)) into a sum of real
+-- arc-tangents using Rioboo's algorithm
+-- the arc-tangents will not have k in the denominator
+-- we always keep upa(k) = a  and upb(k) = b
+    ilog0(a, b, upa, upb, k) ==
+      if degree(upa) < degree(upb) then
+        (upa, upb) := (-upb, upa)
+        (a, b) := (-b, a)
+      zero? degree upb => tantrick(a, b)
+      r := extendedEuclidean(upa, upb)
+      (g:= retractIfCan(r.generator)@Union(F,"failed")) case "failed" =>
+        tantrick(a, b)
+      if degree(r.coef1) >= degree upb then
+        qr := divide(r.coef1, upb)
+        r.coef1 := qr.remainder
+        r.coef2 := r.coef2 + qr.quotient * upa
+      aa := (r.coef2) k
+      bb := -(r.coef1) k
+      tantrick(aa * a + bb * b, g) + ilog0(aa, bb, r.coef2, -r.coef1, k)
+
+    -- Computes (a + b*%i)log(lg(a + b*%i)) + (a - b*%i)log(lg(a - b*%i))
+    -- using Rioboo transformation.
+    root_pair(lg : UP, a : F, b : F, x : Symbol) : F ==
+        lge := quadeval(lg, a, b, -1)
+        f := lge.ans1
+        g := lge.ans2
+        a*log(f*f + g*g) + b*ilog(f, g, x)
+
+    lg2cfunc2 : (UP, UP) -> F
+
+    C_rec ==> Record(real : F, imag : F)
+    r_rec ==> Record(reals : List(F), complexes : List(C_rec))
+
+    do_rr(rr : r_rec, lg : UP, x : Symbol) : List(F) ==
+        rl := rr.reals
+        cl := rr.complexes
+        res := 0$F
+        for r1 in rl repeat
+            res := res + cmplex(r1, lg)
+        for cp1 in cl repeat
+            res := res + root_pair(lg, cp1.real, cp1.imag, x)
+        [res]
+
+    quartic(p : UP, lg : UP, x : Symbol) : List(F) ==
+        rru := complex_roots(p)$RootUtilities(R, F)
+        (rru case "failed") => [lg2cfunc2(p, lg)]
+        do_rr(rru, lg, x)
+
+    lg2func(lg, x) ==
+      zero?(d := degree(p := lg.coeff)) => error "poly has degree 0"
+      (d = 1) => [linear(p, lg.logand)]
+      d = 2  => quadratic(p, lg.logand, x)
+      d = 4 => quartic(p, lg.logand, x)
+      odd? d and
+        ((r := retractIfCan(reductum p)@Union(F, "failed")) case F) =>
+            sn := sign(r)
+            if sn case Integer and (sn::Integer) > 0 then
+                alpha := - rootSimp nthRoot(r, d)
+            else
+                alpha := rootSimp zeroOf p
+            pairsum([cmplex(alpha, lg.logand)],
+                    lg2func([lg.scalar,
+                     (p exquo (monomial(1, 1)$UP - alpha::UP))::UP,
+                      lg.logand], x))
+      [lg2cfunc lg]
+
+    lg2cfunc(lg) == lg2cfunc2(lg.coeff, lg.logand)
+
+    lg2cfunc2(p : UP, lg : UP) ==
+        +/[cmplex(alpha, lg) for alpha in zerosOf(p)]
+
+    mkRealFunc(l, x) ==
+      ans := empty()$List(F)
+      for lg in l repeat
+        ans := pairsum(ans, pairprod(lg.scalar::F, lg2func(lg, x)))
+      ans
+
+-- returns a log(b)
+    linear(p, lg) ==
+      alpha := - coefficient(p, 0) / coefficient(p, 1)
+      alpha * log lg alpha
+
+-- returns (c, d) s.t. p(a + b t) = c + d t, where t^2 = delta
+    quadeval(p, a, b, delta) ==
+      zero? p => [0, 0]
+      bi := c := d := 0$F
+      ai := 1$F
+      v  := vectorise(p, 1 + degree p)
+      for i in minIndex v .. maxIndex v repeat
+        c    := c + qelt(v, i) * ai
+        d    := d + qelt(v, i) * bi
+        temp := a * ai + b * bi * delta
+        bi   := a * bi + b * ai
+        ai   := temp
+      [c, d]
+
+    compatible?(lx, ly) ==
+      empty? ly => true
+      for x in lx repeat
+        for y in ly repeat
+          ((s := sign(x*y)) case Z) and (s@Z < 0) => return false
+      true
+
+    pairsum(lx, ly) ==
+      empty? lx => ly
+      empty? ly => lx
+      l := empty()$List(F)
+      for x in lx repeat
+        ls := evenRoots x
+        if not empty?(ln :=
+          [x + y for y in ly | compatible?(ls, evenRoots y)])$List(F) then
+            l := removeDuplicates concat(l, ln)
+      empty?(l) => [first(lx) + first(ly)]
+      l
+
+-- returns [[a, b], s] where sqrt(y) = a sqrt(b) and
+-- s = 1 if b > 0, -1 if b < 0, 0 if the sign of b cannot be determined
+    insqrt y ==
+      rec := froot(y, 2)$PolynomialRoots(IndexedExponents K, K, R, P, F)
+      ((rec.exponent) = 1) => [[rec.coef * rec.radicand, 1], 1]
+      rec.exponent ~= 2 => error "Should not happen"
+      [[rec.coef, rec.radicand],
+          ((s := sign(rec.radicand)) case "failed" => 0; s@Z)]
+
+    nlogs lg ==
+      [[f.exponent * lg.scalar, f.factor, lg.logand] for f in factorList
+         factorPolynomial(primitivePart(lg.coeff)
+                    )$ExpressionFactorPolynomial(R, F)]
+
+)abbrev package IRRF2F IntegrationResultRFToFunction
+++ Conversion of integration results to top-level expressions
+++ Author: Manuel Bronstein
+++ Description:
+++   This package allows a sum of logs over the roots of a polynomial
+++   to be expressed as explicit logarithms and arc tangents, provided
+++   that the indexing polynomial can be factored into quadratics.
+++ Date Created: 21 August 1988
+IntegrationResultRFToFunction(R) : Exports == Implementation where
+  R : Join(GcdDomain, RetractableTo Integer, Comparable,
+           LinearlyExplicitOver Integer)
+
+  RF  ==> Fraction Polynomial R
+  F   ==> Expression R
+  IR  ==> IntegrationResult RF
+
+  Exports ==> with
+    split           : IR -> IR
+       ++ split(u(x) + sum_{P(a)=0} Q(a, x)) returns
+       ++ \spad{u(x) + sum_{P1(a)=0} Q(a, x) + ... + sum_{Pn(a)=0} Q(a, x)}
+       ++ where P1, ..., Pn are the factors of P.
+    expand          : (IR, Symbol) -> List F
+       ++ expand(i, x) returns the list of possible real functions
+       ++ of x corresponding to i.
+    complexExpand   : IR -> F
+       ++ complexExpand(i) returns the expanded complex function
+       ++ corresponding to i.
+    if R has CharacteristicZero then
+      integrate       : (RF, Symbol) -> Union(F, List F)
+        ++ integrate(f, x) returns the integral of \spad{f(x)dx}
+        ++ where x is viewed as a real variable.
+      complexIntegrate : (RF, Symbol) -> F
+        ++ complexIntegrate(f, x) returns the integral of \spad{f(x)dx}
+        ++ where x is viewed as a complex variable.
+
+  Implementation ==> add
+    import from IntegrationTools(R, F)
+    import from TrigonometricManipulations(R, F)
+    import from IntegrationResultToFunction(R, F)
+
+    toEF : IR -> IntegrationResult F
+
+    toEF i          == map(z1 +-> z1::F, i)$IntegrationResultFunctions2(RF, F)
+    expand(i, x)    == expand(toEF(i), x)
+    complexExpand i == complexExpand toEF i
+
+    split i ==
+      map(retract, split toEF i)$IntegrationResultFunctions2(F, RF)
+
+    if R has CharacteristicZero then
+      import from RationalFunctionIntegration(R)
+
+      complexIntegrate(f, x) == complexExpand internalIntegrate(f, x)
+
+-- do not use real integration if R is complex
+      if R has imaginary : () -> R then integrate(f, x) == complexIntegrate(f, x)
+      else
+        integrate(f, x) ==
+          l := [mkPrim(g, x) for g in expand(internalIntegrate(f, x), x)]
+          empty? rest l => first l
+          l
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

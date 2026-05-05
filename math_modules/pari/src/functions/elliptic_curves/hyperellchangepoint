@@ -1,0 +1,22 @@
+Function: hyperellchangepoint
+Section: elliptic_curves
+C-Name: hyperellchangepoint
+Prototype: GGG
+Help: hyperellchangepoint(C,P,m): C being a hyperelliptic curve given by a
+ Weierstrass equation, apply the change of coordinate given by m to the point P
+ of C. C can be given either by a squarefree polynomial P such that
+ C:y^2=P(x) or by a vector [P,Q] such that C:y^2+Q(x)*y=P(x) and Q^2+4P is
+ squarefree.
+Doc:
+ $C$ being a hyperelliptic curve given by a Weierstrass equation,
+ apply the change of coordinate given by $m = [e, [a,b;c,d], H]$
+ to the point $p$ of $C$.
+
+ $C$ can be given either by a squarefree polynomial $P$ such that
+ $C: y^{2} = P(x)$ or by a vector $[P,Q]$ such that
+ $C: y^{2} + Q(x)\*y = P(x)$ and $Q^{2}+4\*P$ is squarefree.
+
+ $p$ can be given either in weighted projective coordinate, \kbd{[x,y,z]} standing for $[x:y:z]$,
+ where $[x:y:z] = [\lambda\*x:\lambda^{g+1}\*y:\lambda\*z]$ for any $\lambda$,
+ or in affine coordinate, where \kbd{[x,y]} stands for $[x:y:1]$ and \kbd{[y]} stands for $[1,y,0]$.
+ This function preserves the choice of the system of coordinate.

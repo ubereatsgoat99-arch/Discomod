@@ -1,0 +1,52 @@
+Function: bnfisintnorm
+Section: number_fields
+C-Name: bnfisintnorm0
+Prototype: GGD0,L,
+Help: bnfisintnorm(bnf,b,{flag=0}): computes a complete system of solutions (modulo
+ units of positive norm) of the absolute norm equation N(a)=b, where a
+ belongs to the maximal order of big number field bnf (if bnf is not
+ certified, this depends on GRH). If (optional) flag is set, allows returning
+ solutions in factored form.
+Doc: computes a complete system of
+ solutions (modulo units of positive norm) of the absolute norm equation
+ $\Norm(a)=b$,
+ where $a$ is an integer in $\var{bnf}$. If $\var{bnf}$ has not been certified,
+ the correctness of the result depends on the validity of \idx{GRH}.
+ If (optional) flag is set, allows returning solutions in factored form, which
+ helps a lot when the fundamental units are large (equivalently, when
+ \kbd{bnf.reg} is large); having an exact algebraic $\var{bnf}$ from
+ \kbd{bnfinit(,1)} is necessary in this case, else setting the flag will
+ mostly be a no-op.
+
+ \bprog
+ ? bnf = bnfinit(x^4-2, 1);
+ ? bnfisintnorm(bnf,7)
+ %2 = [-x^2 + x - 1, x^2 + x + 1]
+ ? bnfisintnorm(bnf,-7)
+ %3 = [-x^3 - 1, x^3 + 2*x^2 + 2*x + 1]
+
+ ? bnf = bnfinit(x^2-2305843005992468481, 1); b = 2305843008139952128;
+ ? bnf.reg \\ fundamental unit is huge
+ %5 = 14054016.227457155120413774802385952043
+
+ ? v = bnfisintnorm(bnf, b, 1); #v
+ %7 = 31   \\ succeeds instantly
+ ? s = v[1]; [type(s), matsize(s)]
+ %8 = ["t_MAT", [162, 2]]   \\ solution 1 is a product of 162 factors
+ ? exponent(s[,2])
+ %9 = 22
+ @eprog\noindent The \emph{exponents} have $22$ bits, so there is little
+ hope of writing down the solutions in expanded form. And indeed,
+ \kbd{bnfisintnorm(bnr,b)} produces a stack overflow with 100GB
+ \kbd{parisize}. Note that the number of solutions is well defined
+ but the precise form of the result depends on the random seed: the factored
+ form is highly non-unique.
+
+ See also \tet{bnfisnorm}.
+Variant: The function \fun{GEN}{bnfisintnormabs0}{GEN bnf, GEN a, long flag},
+ where \kbd{bnf} is a true \var{bnf} structure,
+ returns a complete system of solutions modulo units of the absolute norm
+ equation $|\Norm(x)| = |a|$. As fast as \kbd{bnfisintnorm}, but solves
+ the two equations $\Norm(x) = \pm a$ simultaneously. The functions
+ \fun{GEN}{bnfisintnormabs}{GEN bnf, GEN a},
+ \fun{GEN}{bnfisintnorm}{GEN bnf, GEN a} correspond to $\fl = 0$.

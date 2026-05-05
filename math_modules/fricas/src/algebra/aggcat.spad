@@ -1,0 +1,2690 @@
+)abbrev category AGG Aggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ The notion of aggregate serves to model any data structure aggregate,
+++ designating any collection of objects,
+++ with heterogeneous or homogeneous members,
+++ with a finite or infinite number
+++ of members, explicitly or implicitly represented.
+++ An aggregate can in principle
+++ represent everything from a string of characters to abstract sets such
+++ as "the set of x satisfying relation {\em r(x)}".
+++ An attribute \spadtype{finiteAggregate} is used to assert that a domain
+++ has a finite number of elements.
+Aggregate : Category == Type with
+   eq? : (%, %) -> Boolean
+     ++ eq?(u, v) tests if u and v are same objects.
+   copy : % -> %
+     ++ copy(u) returns a top-level (non-recursive) copy of u.
+     ++ Note: for collections, \spad{copy(u) = [x for x in u]}.
+   empty : () -> %
+     ++ empty()$D creates an aggregate of type D with 0 elements.
+     ++ Note: The {\em $D} can be dropped if understood by context,
+     ++ e.g. \spad{u: D := empty()}.
+   empty? : % -> Boolean
+     ++ empty?(u) tests if u has 0 elements.
+   less? : (%, NonNegativeInteger) -> Boolean
+     ++ less?(u, n) tests if u has less than n elements.
+   more? : (%, NonNegativeInteger) -> Boolean
+     ++ more?(u, n) tests if u has more than n elements.
+   size? : (%, NonNegativeInteger) -> Boolean
+     ++ size?(u, n) tests if u has exactly n elements.
+   sample : constant -> %
+     ++ sample yields a value of type %
+   if % has finiteAggregate then
+     "#" : % -> NonNegativeInteger
+       ++ #(u) returns the number of elements in u.
+ add
+  eq?(a, b) == EQ(a, b)$Lisp
+  sample() == empty()
+  if % has finiteAggregate then
+
+      import from Integer
+
+      empty? a == #a = 0
+      less?(a, n) == #a < n
+      more?(a, n) == #a > n
+      size?(a, n) == #a = n
+
+)abbrev category HOAGG HomogeneousAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A homogeneous aggregate is an aggregate of elements all of the
+++ same type.
+++ In the current system, all aggregates are homogeneous.
+++ Two attributes characterize classes of aggregates.
+++ Aggregates from domains with attribute \spadtype{finiteAggregate}
+++ have a finite number of members. Of course, such a domain may have an
+++ infinite number of elements, like, for example \spadtype{List}.
+++ Those domains with attribute \spadtype{shallowlyMutable} allow an element
+++ to be modified or updated without changing its overall value.
+-- It would probably make sense to make [[HOAGG S]] export [[Finite]],
+-- when this is the case.  The following modifications would be necessary:
+--
+-- 1) we need another attribute, say, [[constantSizeAggregate]], that
+--    says that each aggregate has the same number of members.
+-- 2) we need a way to construct an aggregate given a list of its parts,
+--    i.e., construct : List R -> %
+--
+-- Then, the exports of [[Finite]] could be implemented similar to
+-- [[RectangularMatrixCategory]].
+
+HomogeneousAggregate(S : Type) : Category == Aggregate with
+   if S has CoercibleTo(OutputForm) then CoercibleTo(OutputForm)
+   if S has SetCategory then SetCategory
+   if S has SetCategory then
+      if S has Evalable S then Evalable S
+   map : (S -> S, %) -> %
+     ++ map(f, u) returns a copy of u with each element x replaced by f(x).
+     ++ For collections, \spad{map(f, u) = [f(x) for x in u]}.
+   if % has shallowlyMutable then
+      map! : (S -> S, %) -> %
+        ++ map!(f, u) destructively replaces each element x of u by \spad{f(x)}.
+   if % has finiteAggregate then
+      if S has BasicType then BasicType
+      any? : (S -> Boolean, %) -> Boolean
+        ++ any?(p, u) tests if \spad{p(x)} is true for any element x of u.
+        ++ Note: for collections,
+        ++ \spad{any?(p, u) = reduce(or, map(p, u), false, true)}.
+        ++ However, \spad{any?(p, u)} returns as soon as it finds an element
+        ++ for which \spad{p} gives true.
+      every? : (S -> Boolean, %) -> Boolean
+        ++ every?(p, u) tests if p(x) is true for all elements x of u.
+        ++ Note: for collections,
+        ++ \spad{every?(p, u) = reduce(and, map(p, u), true, false)}.
+        ++ However, \spad{every?(p, u)} returns as soon as it finds an element
+        ++ for which \spad{p} gives false.
+      count : (S -> Boolean, %) -> NonNegativeInteger
+        ++ count(p, u) returns the number of elements x in u
+        ++ such that \spad{p(x)} is true. For collections,
+        ++ \spad{count(p, u) = reduce(+, [1 for x in u | p(x)], 0)}.
+      parts : % -> List S
+        ++ parts(u) returns a list of the consecutive elements of u.
+        ++ For finite collections, \spad{construct(parts(u)) = u}.
+      members : % -> List S
+        ++ members(u) returns a list of the consecutive elements of u.
+        ++ For multisets \spadfun{members} gives result with no repetition.
+        ++ See also \spadfun{parts}.
+      max : ((S, S) -> Boolean, %) -> S
+        ++ max(p, u) returns maximal element of u with respect to total
+        ++ ordering predicate p.  Error if u is empty.
+      if S has OrderedSet then
+        min : % -> S
+          ++ min(u) returns minimal element of u.  Error if u is empty.
+        max : % -> S
+          ++ max(u) returns maximal element of u.  Error if u is empty.
+      if S has BasicType then
+        count : (S, %) -> NonNegativeInteger
+          ++ count(x, u) returns the number of occurrences of x in u.
+          ++ For collections, \spad{count(x, u) = reduce(+, [1 for y in u | x = y], 0)}.
+        member? : (S, %) -> Boolean
+          ++ member?(x, u) tests if x is a member of u.
+          ++ For collections,
+          ++ \spad{member?(x, u) = reduce(or, [x=y for y in u], false)}.
+          ++ However, \spad{member?(x, u)} returns as soon as it finds a
+          ++ member.
+
+  add
+   if S has Evalable S then
+       eval(u : %, l : List Equation S) : % == map(x +-> eval(x, l), u)
+   if % has finiteAggregate then
+
+       import from List(S)
+
+       #c == # parts c
+       any?(f, c) ==
+           for x in parts c | f x repeat return true
+           false
+       every?(f, c) ==
+           for x in parts c | not f x repeat return false
+           true
+       count(f : S -> Boolean, c : %) == _+/[1 for x in parts c | f x]
+       members x == parts x
+
+       max(p : (S, S) -> Boolean, u : %) : S ==
+           empty?(u) => error "empty aggregate"
+           l := parts(u)
+           r := first(l)
+           for x in rest(l) repeat
+               if p(r, x) then r := x
+           r
+
+       if S has OrderedSet then
+           min(u : %) : S == max((x, y) +-> (y < x), u)
+           max(u : %) : S == max((x, y) +-> (x < y), u)
+
+       if S has BasicType then
+           count(e : S, c : %) == count(x +-> e = x, c)
+           member?(e, c) == any?(x +-> e = x, c)
+           x = y ==
+               not size?(x, #y) => false
+               for a in parts x for b in parts y | a ~= b repeat return false
+               true
+       if S has CoercibleTo(OutputForm) then
+           coerce(x : %) : OutputForm ==
+               bracket [a::OutputForm for a in parts x]$List(OutputForm)
+
+
+)abbrev category CLAGG Collection
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A collection is a homogeneous aggregate which can be built from a
+++ list of members. The operation used to build the aggregate is
+++ generically named \spadfun{construct}. However, each collection
+++ provides its own special function with the same name as the
+++ data type, except with an initial lower case letter, e.g.
+++ \spadfun{list} for \spadtype{List},
+++ \spadfun{flexibleArray} for \spadtype{FlexibleArray}, and so on.
+Collection(S : Type) : Category == HomogeneousAggregate(S) with
+   construct : List S -> %
+     ++ \spad{construct([x, y, ..., z])} returns the collection of elements \spad{x, y, ..., z}
+     ++ ordered as given. Equivalently written as \spad{[x, y, ..., z]$D}, where
+     ++ D is the domain. D may be omitted for those of type List.
+   find : (S -> Boolean, %) -> Union(S, "failed")
+     ++ find(p, u) returns the first x in u such that \spad{p(x)} is true, and
+     ++ "failed" otherwise.
+   if % has finiteAggregate then
+      reduce : ((S, S) -> S, %) -> S
+        ++ reduce(f, u) reduces the binary operation f across u. For example,
+        ++ if u is \spad{[x, y, ..., z]} then \spad{reduce(f, u)} returns \spad{f(..f(f(x, y), ...), z)}.
+        ++ Note: if u has one element x, \spad{reduce(f, u)} returns x.
+        ++ Error: if u is empty.
+      reduce : ((S, S) -> S, %, S) -> S
+        ++ reduce(f, u, x) reduces the binary operation f across u, where x is
+        ++ the identity operation of f.
+        ++ Same as \spad{reduce(f, u)} if u has 2 or more elements.
+        ++ Returns \spad{f(y, x)} if u has one element y.
+        ++ Returns x if u is empty.
+        ++ For example, \spad{reduce(+, u, 0)} returns the
+        ++ sum of the elements of u.
+      remove : (S -> Boolean, %) -> %
+        ++ remove(p, u) returns a copy of u removing all elements x such that
+        ++ \spad{p(x)} is true.
+        ++ Note: \spad{remove(p, u) = [x for x in u | not p(x)]}.
+      select : (S -> Boolean, %) -> %
+        ++ select(p, u) returns a copy of u containing only those elements such
+        ++ \spad{p(x)} is true.
+        ++ Note: \spad{select(p, u) = [x for x in u | p(x)]}.
+      if S has BasicType then
+        reduce : ((S, S) -> S, %, S, S) -> S
+          ++ reduce(f, u, x, z) reduces the binary operation f across u, stopping
+          ++ when an "absorbing element" z is encountered.
+          ++ As for \spad{reduce(f, u, x)}, x is the identity element of f.
+          ++ Same as \spad{reduce(f, u, x)} when u contains no element z.
+          ++ Thus the third argument x is returned when u is empty.
+        remove : (S, %) -> %
+          ++ remove(x, u) returns a copy of u with all
+          ++ elements equal to x removed.
+          ++ Note: \spad{remove(x, u) = [y for y in u | y ~= x]}.
+        removeDuplicates : % -> %
+          ++ removeDuplicates(u) returns a copy of u with all duplicates removed.
+   if S has ConvertibleTo InputForm then ConvertibleTo InputForm
+ add
+   if % has finiteAggregate then
+
+       import from List(S)
+
+       find(f : S -> Boolean, c : %) == find(f, parts c)
+       reduce(f : (S, S) -> S, x : %) == reduce(f, parts x)
+       reduce(f : (S, S) -> S, x : %, s : S) == reduce(f, parts x, s)
+       remove(f : S -> Boolean, x : %) ==
+           construct remove(f, parts x)
+       select(f : S -> Boolean, x : %) ==
+           construct select(f, parts x)
+
+       if S has BasicType then
+           remove(s : S, x : %) == remove(y +-> y = s, x)
+           reduce(f : (S, S) -> S, x : %, s1 : S, s2 : S) ==
+               reduce(f, parts x, s1, s2)
+           removeDuplicates(x) == construct removeDuplicates parts x
+
+       if S has ConvertibleTo InputForm then
+
+           convert(x : %) : InputForm ==
+               p_form : List(InputForm) :=
+                   [convert(el)@InputForm for el in parts(x)]
+               l_form := cons(convert('construct)@InputForm, p_form)
+               a_form := convert(l_form)@InputForm
+               packageCall('construct, [a_form])$InputFormFunctions1(%)
+
+
+)abbrev category BGAGG BagAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A bag aggregate is an aggregate for which one can insert and extract objects,
+++ and where the order in which objects are inserted determines the order
+++ of extraction.
+++ Examples of bags are stacks, queues, and dequeues.
+BagAggregate(S : Type) : Category == Join(Collection S, shallowlyMutable) with
+   extract! : % -> S
+     ++ extract!(u) destructively removes a (random) item from bag u.
+   insert! : (S, %) -> %
+     ++ insert!(x, u) inserts item x into bag u.
+   inspect : % -> S
+     ++ inspect(u) returns an (random) element from a bag.
+ add
+   construct(l) ==
+       x := empty()
+       for s in l repeat x := insert!(s, x)
+       x
+
+)abbrev category SKAGG StackAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A stack is a bag where the last item inserted is the first item extracted.
+StackAggregate(S : Type) : Category == Join(BagAggregate S, finiteAggregate) with
+   push! : (S, %) -> S
+     ++ push!(x, s) pushes x onto stack s, i.e. destructively changing s
+     ++ so as to have a new first (top) element x.
+     ++ Afterwards, pop!(s) produces x and pop!(s) produces the original s.
+   pop! : % -> S
+     ++ pop!(s) returns the top element x, destructively removing x from s.
+     ++ Note: Use \spad{top(s)} to obtain x without removing it from s.
+     ++ Error: if s is empty.
+   top : % -> S
+     ++ top(s) returns the top element x from s; s remains unchanged.
+     ++ Note: Use \spad{pop!(s)} to obtain x and remove it from s.
+   if S has Hashable then Hashable
+
+
+)abbrev category QUAGG QueueAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A queue is a bag where the first item inserted is the first item extracted.
+QueueAggregate(S : Type) : Category == Join(BagAggregate S, finiteAggregate) with
+   enqueue! : (S, %) -> S
+     ++ enqueue!(x, q) inserts x into the queue q at the back end.
+   dequeue! : % -> S
+     ++ dequeue!(q) destructively extracts the first (top) element
+     ++ from queue q. The element previously second in the queue
+     ++ becomes the first element.
+     ++ Error: if q is empty.
+   rotate! : % -> %
+     ++ rotate!(q) rotates queue q so that the element at the front of
+     ++ the queue goes to the back of the queue.
+     ++ Note: rotate!(q) is equivalent to enqueue!(dequeue!(q)).
+   front : % -> S
+     ++ front(q) returns the element at the front of the queue.
+     ++ The queue q is unchanged by this operation.
+     ++ Error: if q is empty.
+   back : % -> S
+     ++ back(q) returns the element at the back of the queue.
+     ++ The queue q is unchanged by this operation.
+     ++ Error: if q is empty.
+   if S has Hashable then Hashable
+
+)abbrev category DQAGG DequeueAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A dequeue is a doubly ended stack, that is, a bag where first items
+++ inserted are the first items extracted, at either the front or the back end
+++ of the data structure.
+DequeueAggregate(S : Type):
+ Category == Join(StackAggregate S, QueueAggregate S) with
+   bottom : % -> S
+     ++ bottom(d) returns the element at the bottom (back) of the dequeue.
+   insertTop! : (S, %) -> S
+     ++ insertTop!(x, d) destructively inserts x into the dequeue d, that is,
+     ++ at the top (front) of the dequeue.
+     ++ The element previously at the top of the dequeue becomes the
+     ++ second in the dequeue, and so on.
+   insertBottom! : (S, %) -> S
+     ++ insertBottom!(x, d) destructively inserts x into the dequeue d
+     ++ at the bottom (back) of the dequeue.
+   extractTop! : % -> S
+     ++ extractTop!(d) destructively extracts the top (front) element
+     ++ from the dequeue d.
+     ++ Error: if d is empty.
+   extractBottom! : % -> S
+     ++ extractBottom!(d) destructively extracts the bottom (back) element
+     ++ from the dequeue d.
+     ++ Error: if d is empty.
+   reverse! : % -> %
+     ++ reverse!(d) destructively replaces d by its reverse dequeue, i.e.
+     ++ the top (front) element is now the bottom (back) element, and so on.
+
+)abbrev category PRQAGG PriorityQueueAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A priority queue is a bag of items from an ordered set where the item
+++ extracted is always the maximum element.
+PriorityQueueAggregate(S : OrderedSet) : Category == Join(BagAggregate S,
+     finiteAggregate) with
+   max : % -> S
+     ++ max(q) returns the maximum element of priority queue q.
+   merge : (%, %) -> %
+     ++ merge(q1, q2) combines priority queues q1 and q2 to return
+     ++ a single priority queue q.
+   merge! : (%, %) -> %
+     ++ merge!(q, q1) destructively changes priority queue q to include the
+     ++ values from priority queue q1.
+
+)abbrev category DIOPS DictionaryOperations
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This category is a collection of operations common to both
+++ categories \spadtype{Dictionary} and \spadtype{MultiDictionary}
+DictionaryOperations(S : Type) : Category == BagAggregate S with
+   dictionary : () -> %
+     ++ dictionary()$D creates an empty dictionary of type D.
+   dictionary : List S -> %
+     ++ dictionary([x, y, ..., z]) creates a dictionary consisting of
+     ++ entries \spad{x, y, ..., z}.
+   if % has finiteAggregate then
+     if S has BasicType then
+       remove! : (S, %) -> %
+         ++ remove!(x, d) destructively changes dictionary d by removing
+         ++ all entries y such that \spad{y = x}.
+     remove! : (S -> Boolean, %) -> %
+       ++ remove!(p, d) destructively changes dictionary d by removing
+       ++ all entries x such that \spad{p(x)} is true.
+     select! : (S -> Boolean, %) -> %
+       ++ select!(p, d) destructively changes dictionary d by removing
+       ++ all entries x such that \spad{p(x)} is not true.
+ add
+   construct l == dictionary l
+   dictionary() == empty()
+   if % has finiteAggregate then
+       copy d == dictionary parts d
+       if S has CoercibleTo(OutputForm) then
+           coerce(s : %) : OutputForm ==
+               prefix("dictionary"@String :: OutputForm,
+                                      [x::OutputForm for x in parts s])
+
+)abbrev category DIAGG Dictionary
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A dictionary is an aggregate in which entries can be inserted,
+++ searched for and removed. Duplicates are thrown away on insertion.
+++ This category models the usual notion of dictionary which involves
+++ large amounts of data where copying is impractical.
+++ Principal operations are thus destructive (non-copying) ones.
+Dictionary(S : Type) : Category ==
+ DictionaryOperations S add
+
+   import from Integer
+   import from List(S)
+
+   dictionary l ==
+       d := dictionary()
+       for x in l repeat d := insert!(x, d)
+       d
+
+   if % has finiteAggregate then
+       -- remove(f: S->Boolean, t: %)  == remove!(f, copy t)
+       -- select(f, t)        == select!(f, copy t)
+       select!(f, t) == remove!((x : S) : Boolean +-> not f(x), t)
+
+       --extract! d ==
+       --  empty? d => error "empty dictionary"
+       --  remove!(x := first parts d, d, 1)
+       --  x
+
+       if S has BasicType then
+           s = t ==
+               eq?(s, t) => true
+               #s ~= #t => false
+               every?((x : S) : Boolean +-> member?(x, t), parts s)
+
+           remove!(f : S->Boolean, t : %) ==
+               for m in parts t repeat if f m then t := remove!(m, t)
+               t
+
+)abbrev category MDAGG MultiDictionary
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A multi-dictionary is a dictionary which may contain duplicates.
+++ As for any dictionary, its size is assumed large so that
+++ copying (non-destructive) operations are generally to be avoided.
+MultiDictionary(S : SetCategory) : Category == DictionaryOperations S with
+-- count: (S, %) -> NonNegativeInteger                  ++ multiplicity count
+   insert! : (S, %, NonNegativeInteger) -> %
+     ++ insert!(x, d, n) destructively inserts n copies of x into dictionary d.
+-- remove!: (S, %, NonNegativeInteger) -> %
+--   ++ remove!(x, d, n) destructively removes (up to) n copies of x from
+--   ++ dictionary d.
+   removeDuplicates! : % -> %
+     ++ removeDuplicates!(d) destructively removes any duplicate values
+     ++ in dictionary d.
+   duplicates : % -> List Record(entry : S, count : NonNegativeInteger)
+     ++ duplicates(d) returns a list of values which have duplicates in d
+--   ++ duplicates(d) returns a list of              ++ duplicates iterator
+-- to become duplicates: % -> Iterator(D, D)
+
+)abbrev category SETAGG SetAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A set category lists a collection of set-theoretic operations
+++ useful for both finite sets and multisets.
+++ Note however that finite sets are distinct from multisets.
+++ Although the operations defined for set categories are
+++ common to both, the relationship between the two cannot
+++ be described by inclusion or inheritance.
+SetAggregate(S : SetCategory):
+  Category == Join(SetCategory, Collection(S), PartialOrder) with
+   set : () -> %
+     ++ set()$D creates an empty set aggregate of type D.
+   set : List S -> %
+     ++ set([x, y, ..., z]) creates a set aggregate containing items x, y, ..., z.
+   intersect : (%, %) -> %
+     ++ intersect(u, v) returns the set aggregate w consisting of
+     ++ elements common to both set aggregates u and v.
+     ++ Note: equivalent to the notation (not currently supported)
+     ++ [x for x in u | member?(x, v)].
+   difference : (%, %) -> %
+     ++ difference(u, v) returns the set aggregate w consisting of
+     ++ elements in set aggregate u but not in set aggregate v.
+     ++ If u and v have no elements in common, \spad{difference(u, v)}
+     ++ returns a copy of u.
+     ++ Note: equivalent to the notation (not currently supported)
+     ++ \spad{[x for x in u | not member?(x, v)]}.
+   difference : (%, S) -> %
+     ++ difference(u, x) returns the set aggregate u with element x removed.
+     ++ If u does not contain x, a copy of u is returned.
+     ++ Note: \spad{difference(s, x) = difference(s, set [x])}.
+   symmetricDifference : (%, %) -> %
+     ++ symmetricDifference(u, v) returns the set aggregate of elements x which
+     ++ are members of set aggregate u or set aggregate v but not both.
+     ++ If u and v have no elements in common, \spad{symmetricDifference(u, v)}
+     ++ returns a copy of u.
+     ++ Note: \spad{symmetricDifference(u, v) = union(difference(u, v), difference(v, u))}
+   subset? : (%, %) -> Boolean
+     ++ subset?(u, v) tests if u is a subset of v.
+     ++ Note: equivalent to
+     ++ \spad{reduce(and, [member?(x, v) for x in members(u)], true, false)}.
+   union : (%, %) -> %
+     ++ union(u, v) returns the set aggregate of elements which are members
+     ++ of either set aggregate u or v.
+   union : (%, S) -> %
+     ++ union(u, x) returns the set aggregate u with the element x added.
+     ++ If u already contains x, \spad{union(u, x)} returns a copy of u.
+   union : (S, %) -> %
+     ++ union(x, u) returns the set aggregate u with the element x added.
+     ++ If u already contains x, \spad{union(x, u)} returns a copy of u.
+ add
+  symmetricDifference(x, y) == union(difference(x, y), difference(y, x))
+  union(s : %, x : S) == union(s, set([x]))
+  union(x : S, s : %) == union(s, set([x]))
+  difference(s : %, x : S) == difference(s, set([x]))
+
+
+)abbrev category FSAGG FiniteSetAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A finite-set aggregate models the notion of a finite set, that is,
+++ a collection of elements characterized by membership, but not
+++ by order or multiplicity.
+++ See \spadtype{Set} for an example.
+FiniteSetAggregate(S : SetCategory) : Category ==
+  Join(Dictionary S, SetAggregate S, finiteAggregate) with
+    cardinality : % -> NonNegativeInteger
+      ++ cardinality(u) returns the number of elements of u.
+      ++ Note: \spad{cardinality(u) = #u}.
+    if S has Finite then
+      Finite
+      complement : % -> %
+        ++ complement(u) returns the complement of the set u,
+        ++ i.e. the set of all values not in u.
+      universe : () -> %
+        ++ universe()$D returns the universal set for finite set aggregate D.
+    if S has Comparable then Comparable
+
+ add
+
+   import from NonNegativeInteger
+   import from List(S)
+
+   s <= t          == s = intersect(s, t)
+   s < t           == #s < #t and s <= t
+   s = t           == #s = #t and empty? difference(s, t)
+   set   l         == construct l
+   cardinality s   == #s
+   construct l     == (s := set(); for x in l repeat s := insert!(x, s); s)
+   count(x : S, s : %) == (member?(x, s) => 1; 0)
+   subset?(s, t)   ==
+       #s <= #t and every?((x : S) : Boolean +-> member?(x, t), parts s)
+
+   coerce(s : %) : OutputForm ==
+       brace [x::OutputForm for x in parts s]$List(OutputForm)
+
+   intersect(s, t) ==
+       i := set()
+       for x in parts s | member?(x, t) repeat i := insert!(x, i)
+       i
+
+   difference(s : %, t : %) ==
+       m := copy s
+       for x in parts t repeat m := remove!(x, m)
+       m
+
+   symmetricDifference(s, t) ==
+       d := copy s
+       for x in parts t repeat
+           if member?(x, s) then d := remove!(x, d) else d := insert!(x, d)
+       d
+
+   union(s : %, t : %) ==
+       u := copy s
+       for x in parts t repeat u := insert!(x, u)
+       u
+
+   if S has Finite then
+       universe()   == set([index(i::PositiveInteger) for i in 1..size()$S])
+       complement s == difference(universe(), s )
+       size()       == 2 ^ size()$S
+       index i     ==
+           (l := length(i-1)) > size()$S => error "index out of bound"
+           set([index(j::PositiveInteger)$S for j in 1..l
+                | bit?(i-1, j-1)])
+
+       lookup s ==
+           n : PositiveInteger := 1
+           for x in parts s repeat
+               n := n + 2 ^ ((lookup(x) - 1)::NonNegativeInteger)
+           n
+
+   if S has OrderedSet then
+       max s ==
+           empty?(l := parts s) => error "Empty set"
+           reduce("max", l)
+
+       min s ==
+           empty?(l := parts s) => error "Empty set"
+           reduce("min", l)
+
+   if S has Comparable then
+
+       smaller?(s1, s2) ==
+           ls1 := sort(smaller?$S, parts s1)$List(S)
+           ls2 := sort(smaller?$S, parts s2)$List(S)
+           smaller?(ls1, ls2)$List(S)
+
+)abbrev category MSETAGG MultisetAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A multi-set aggregate is a set which keeps track of the multiplicity
+++ of its elements.
+MultisetAggregate(S : SetCategory):
+ Category == Join(MultiDictionary S, SetAggregate S)
+
+)abbrev category OMSAGG OrderedMultisetAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ An ordered-multiset aggregate is a multiset built over an ordered set S
+++ so that the relative sizes of its entries can be assessed.
+++ These aggregates serve as models for priority queues.
+OrderedMultisetAggregate(S : OrderedSet) : Category ==
+   Join(MultisetAggregate S, PriorityQueueAggregate S) with
+      min : % -> S
+        ++ min(u) returns the smallest entry in the multiset aggregate u.
+
+)abbrev category KDAGG KeyedDictionary
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A keyed dictionary is a dictionary of key-entry pairs for which there is
+++ a unique entry for each key.
+KeyedDictionary(Key : Type, Entry : Type) : Category ==
+  Dictionary Record(key : Key, entry : Entry) with
+   key? : (Key, %) -> Boolean
+     ++ key?(k, t) tests if k is a key in table t.
+   keys : % -> List Key
+     ++ keys(t) returns the list of keys in table t.
+   -- to become keys: % -> Key* and keys: % -> Iterator(Entry, Entry)
+   remove! : (Key, %) -> Union(Entry,"failed")
+     ++ remove!(k, t) searches the table t for the key k removing
+     ++ (and return) the entry if there.
+     ++ If t has no such key, \spad{remove!(k,t)} returns "failed".
+   search : (Key, %) -> Union(Entry,"failed")
+     ++ search(k, t) searches the table t for the key k,
+     ++ returning the entry stored in t for key k.
+     ++ If t has no such key, \spad{search(k,t)} returns "failed".
+ add
+   key?(k, t) == search(k, t) case Entry
+
+   member?(p, t) ==
+       r := search(p.key, t)
+       r case Entry and r@Entry = p.entry
+
+   if % has finiteAggregate then
+       keys t == [x.key for x in parts t]
+
+)abbrev category ELTAB Eltable
+++ Author: Michael Monagan; revised by Manuel Bronstein and Manuel Bronstein
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ An eltable over domains D and I is a structure which can be viewed
+++ as a function from D to I.
+++ Examples of eltable structures range from data structures, e.g. those
+++ of type \spadtype{List}, to algebraic structures, e.g. \spadtype{Polynomial}.
+Eltable(D : Type, I : Type) : Category == with
+  elt : (%, D) -> I
+     ++ elt(u, i) (also written: u.i) returns the element of u indexed by i.
+     ++ Error: if i is not an index of u.
+
+)abbrev category ELTAGG EltableAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ An eltable aggregate is one which can be viewed as a function.
+++ For example, the list \spad{[1, 7, 4]} can be applied to 1, 2, and 3
+++ respectively and will return the integers 1, 7, and 4; thus this
+++ list may be viewed as mapping 1 to 1, 2 to 7 and 3 to 4. In general,
+++ an aggregate can map members of a domain {\em Dom} to an image
+++ domain {\em Im}.
+EltableAggregate(Dom : Type, Im : Type) : Category ==
+-- This is separated from Eltable
+-- and series won't have to support qelt's and setelt's.
+  Eltable(Dom, Im) with
+    elt : (%, Dom, Im) -> Im
+       ++ elt(u, x, y) applies u to x if x is in the domain of u,
+       ++ and returns y otherwise.
+    qelt : (%, Dom) -> Im
+       ++ qelt(u, x) applies \spad{u} to \spad{x} without checking whether
+       ++ \spad{x} is in the domain of \spad{u}.  If \spad{x} is not in the
+       ++ domain of \spad{u} a memory-access violation may occur.  If a check
+       ++ on whether \spad{x} is in the domain of \spad{u} is required, use
+       ++ the function \spad{elt}.
+    if % has shallowlyMutable then
+       setelt! : (%, Dom, Im) -> Im
+           ++ setelt!(u, x, y) sets the image of x to be y under u,
+           ++ if x is in the domain of u.
+           ++ Error: if x is not in the domain of u.
+       qsetelt! : (%, Dom, Im) -> Im
+           ++ qsetelt!(u, x, y) sets the image of \spad{x} to be \spad{y} under
+           ++ \spad{u}, without checking that \spad{x} is in the domain of
+           ++ \spad{u}.
+           ++ If such a check is required use the function \spad{setelt!}.
+ add
+  qelt(a, x) == elt(a, x)
+  if % has shallowlyMutable then
+      qsetelt!(a, x, y) == (a.x := y)
+
+)abbrev category IXAGG IndexedAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ An indexed aggregate is a many-to-one mapping of indices to entries.
+++ For example, a one-dimensional-array is an indexed aggregate where
+++ the index is an integer.  Also, a table is an indexed aggregate
+++ where the indices and entries may have any type.
+IndexedAggregate(Index : Type, Entry : Type) : Category ==
+  Join(HomogeneousAggregate(Entry), EltableAggregate(Index, Entry)) with
+   entries : % -> List Entry
+      ++ entries(u) returns a list of all the entries of aggregate u
+      ++ in no assumed order.
+      -- to become entries: % -> Entry* and entries: % -> Iterator(Entry, Entry)
+   index? : (Index, %) -> Boolean
+      ++ index?(i, u) tests if i is an index of aggregate u.
+   indices : % -> List Index
+      ++ indices(u) returns a list of indices of aggregate u in no
+      ++ particular order.
+      -- to become indices: % -> Index* and indices: % -> Iterator(Index, Index).
+-- map: ((Entry, Entry)->Entry, %, %, Entry) -> %
+--    ++ exists c = map(f, a, b, x), i: Index where
+--    ++    c.i = f(a(i, x), b(i, x)) | index?(i, a) or index?(i, b)
+   if Entry has BasicType and % has finiteAggregate then
+      entry? : (Entry, %) -> Boolean
+        ++ entry?(x, u) tests if x equals \spad{u . i} for some index i.
+   if Index has OrderedSet then
+      maxIndex : % -> Index
+        ++ maxIndex(u) returns the maximum index i of aggregate u.
+        ++ Note: in general,
+        ++ \spad{maxIndex(u) = reduce(max, indices u)};
+        ++ for List, \spad{maxIndex(u) = #u}.
+      minIndex : % -> Index
+        ++ minIndex(u) returns the minimum index i of aggregate u.
+        ++ Note: in general,
+        ++ \spad{minIndex(a) = reduce(min, indices a)};
+        ++ for List, \spad{minIndex(a) = 1}.
+      first : % -> Entry
+        ++ first(u) returns the first element x of u.
+        ++ Note: for collections, \spad{first([x, y, ..., z]) = x}.
+        ++ Error: if u is empty.
+
+   if % has shallowlyMutable then
+      fill! : (%, Entry) -> %
+        ++ fill!(u, x) replaces each entry in aggregate u by x.
+        ++ The modified u is returned as value.
+      swap! : (%, Index, Index) -> Void
+        ++ swap!(u, i, j) interchanges elements i and j of aggregate u.
+        ++ No meaningful value is returned.
+ add
+  elt(a, i, x) == (index?(i, a) => qelt(a, i); x)
+
+  if % has finiteAggregate then
+      entries x == parts x
+      if Entry has BasicType then
+          entry?(x, a) == member?(x, a)
+
+  if Index has OrderedSet then
+      maxIndex a == "max"/indices(a)
+      minIndex a == "min"/indices(a)
+      first a    == a minIndex a
+
+  if % has shallowlyMutable then
+      map(f : Entry -> Entry, a : %) : % == map!(f, copy a)
+
+      map!(f, a) ==
+          for i in indices a repeat qsetelt!(a, i, f qelt(a, i))
+          a
+
+      fill!(a, x) ==
+          for i in indices a repeat qsetelt!(a, i, x)
+          a
+
+      swap!(a, i, j) ==
+          t := a.i
+          qsetelt!(a, i, a.j)
+          qsetelt!(a, j, t)
+
+)abbrev category TBAGG TableAggregate
+++ Author: Michael Monagan, Stephen Watt; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A table aggregate is a model of a table, i.e. a discrete many-to-one
+++ mapping from keys to entries.
+TableAggregate(Key : Type, Entry : Type) : Category ==
+  Join(KeyedDictionary(Key, Entry), IndexedAggregate(Key, Entry)) with
+   setelt! : (%, Key, Entry) -> Entry
+     ++ setelt!(t, k, e) (also written \spad{t.k := e}) is equivalent
+     ++ to \spad{(insert!([k, e], t); e)}.
+   table : () -> %
+     ++ table()$T creates an empty table of type T.
+   table : List Record(key : Key, entry : Entry) -> %
+     ++ table([x, y, ..., z]) creates a table consisting of entries
+     ++ \spad{x, y, ..., z}.
+   -- to become table: Record(key: Key, entry: Entry)* -> %
+   map : ((Entry, Entry) -> Entry, %, %) -> %
+     ++ map(fn, t1, t2) creates a new table t from given tables t1 and t2 with
+     ++ elements fn(x, y) where x and y are corresponding elements from t1
+     ++ and t2 respectively.
+ add
+
+   import from Integer
+
+   table()             == empty()
+   table l             == dictionary l
+
+   insert!(p, t)      == (t(p.key) := p.entry; t)
+   indices t           == keys t
+
+   if Key has CoercibleTo(OutputForm) and Entry has CoercibleTo(OutputForm)
+   then
+       coerce(t : %) : OutputForm ==
+           prefix(message("table")$OutputForm,
+                    [k::OutputForm = (t.k)::OutputForm for k in keys t])
+
+   elt(t, k) ==
+       (r := search(k, t)) case Entry => r
+       error "key not in table"
+
+   elt(t, k, e) ==
+       (r := search(k, t)) case Entry => r
+       e
+
+   map!(f : Entry -> Entry, t) ==
+       for k in keys t repeat t.k := f t.k
+       t
+
+   map(f : (Entry, Entry) -> Entry, s : %, t : %) ==
+       z := table()
+       for k in keys s | key?(k, t) repeat z.k := f(s.k, t.k)
+       z
+
+-- map(f, s, t, x) ==
+--    z := table()
+--    for k in keys s repeat z.k := f(s.k, t(k, x))
+--    for k in keys t | not key?(k, s) repeat z.k := f(t.k, x)
+--    z
+
+   if % has finiteAggregate then
+       parts(t : %) : List Record(key : Key, entry : Entry) ==
+             [[k, t.k] for k in keys t]
+       parts(t : %) : List Entry   == [t.k for k in keys t]
+       entries(t : %) : List Entry == parts(t)
+
+       if Entry has BasicType then
+
+           s : % = t : % ==
+               eq?(s, t) => true
+               #s ~= #t => false
+               for k in keys s repeat
+                   (e := search(k, t)) case "failed" or (e@Entry) ~= s.k =>
+                       return false
+               true
+
+       map(f : Record(key : Key, entry : Entry) ->
+                 Record(key : Key, entry : Entry), t : %) : % ==
+           z := table()
+           for k in keys t repeat
+               ke : Record(key : Key, entry : Entry) := f [k, t.k]
+               z ke.key := ke.entry
+           z
+
+       if Entry has BasicType then
+
+           map!(f : Record(key : Key, entry : Entry) ->
+                Record(key : Key, entry : Entry), t : %) : % ==
+               lke : List Record(key : Key, entry : Entry) := []
+               for k in keys t repeat
+                   lke := cons(f [k, remove!(k, t)::Entry], lke)
+               for ke in lke repeat
+                   t ke.key := ke.entry
+               t
+
+       inspect(t : %) : Record(key : Key, entry : Entry) ==
+           ks := keys t
+           empty? ks => error "Cannot extract from an empty aggregate"
+           [first ks, t first ks]
+
+       find(f : Record(key : Key, entry : Entry) -> Boolean, t : %)
+         : Union(Record(key : Key, entry : Entry), "failed") ==
+           for ke in parts(t)@List(Record(key : Key, entry : Entry)) repeat
+               if f(ke) then return ke
+           "failed"
+
+       index?(k : Key, t : %) : Boolean ==
+           search(k, t) case Entry
+
+       if Entry has BasicType then
+           remove!(x : Record(key : Key, entry : Entry), t : %) ==
+               if member?(x, t) then remove!(x.key, t)
+               t
+
+       extract!(t : %) : Record(key : Key, entry : Entry) ==
+           k : Record(key : Key, entry : Entry) := inspect t
+           remove!(k.key, t)
+           k
+
+       any?(f : Entry -> Boolean, t : %) : Boolean ==
+           for k in keys t | f t k repeat return true
+           false
+       every?(f : Entry -> Boolean, t : %) : Boolean ==
+           for k in keys t | not f t k repeat return false
+           true
+       count(f : Entry -> Boolean, t : %) : NonNegativeInteger ==
+           tally : NonNegativeInteger := 0
+           for k in keys t | f t k repeat tally := tally + 1
+           tally
+
+)abbrev category RCAGG RecursiveAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A recursive aggregate over a type S is a model for
+++ a directed graph containing values of type S.
+++ Recursively, a recursive aggregate is either empty or a {\em node}
+++ consisting of a \spadfun{value} from S and 0 or more \spadfun{children}
+++ which are also nodes.
+++ A node with no children is called a \spadfun{leaf} node.
+++ A recursive aggregate may be cyclic for which some operations as noted
+++ may go into an infinite loop.
+RecursiveAggregate(S : Type) : Category == HomogeneousAggregate(S) with
+   children : % -> List %
+     ++ children(u) returns a list of the children of aggregate u.
+     ++ Error: if u is empty.
+   -- should be % -> %* and also needs children: % -> Iterator(S, S)
+   nodes : % -> List %
+     ++ nodes(u) returns a list of all of the nodes of aggregate u.
+   -- to become % -> %* and also nodes: % -> Iterator(S, S)
+   leaf? : % -> Boolean
+     ++ leaf?(u) tests if u is a terminal node.
+   value : % -> S
+     ++ value(u) returns the value of the node u.
+   elt : (%, "value") -> S
+     ++ elt(u, "value") (also written: \spad{u.value}) is
+     ++ equivalent to \spad{value(u)}.
+   cyclic? : % -> Boolean
+     ++ cyclic?(u) tests if u has a cycle.
+   leaves : % -> List S
+     ++ leaves(u) returns the list of leaves in aggregate \spad{u}.
+   distance : (%, %) -> Integer
+     ++ distance(u, v) returns the path length (an integer) from node u to v.
+   if S has BasicType then
+      child? : (%, %) -> Boolean
+        ++ child?(u, v) tests if node u is a child of node v.
+      node? : (%, %) -> Boolean
+        ++ node?(u, v) tests if node u is contained in node v
+        ++ (either as a child, a child of a child, etc.).
+   if % has shallowlyMutable then
+      setchildren! : (%, List %) -> %
+        ++ setchildren!(u, v) replaces the current children of node u
+        ++ with the members of v in left-to-right order.
+      setelt! : (%, "value", S) -> S
+        ++ setelt!(u, "value", x) (also written \spad{u.value := x})
+        ++ is equivalent to \spad{setvalue!(u, x)}
+      setvalue! : (%, S) -> S
+        ++ setvalue!(u, x) sets the value of node u to x.
+ add
+
+   import from List(%)
+
+   elt(x,"value") == value x
+
+   leaf? x ==
+       empty? x => false
+       empty? children x
+
+   nodes x ==
+       empty? x => empty()
+       concat(x, concat [nodes y for y in children x])
+
+   leaves x ==
+       empty? x => empty()
+       leaf? x => [value x]
+       concat [leaves y for y in children x]
+
+   if % has shallowlyMutable then
+       setelt!(x, "value", y) == setvalue!(x,y)
+   if % has BasicType and S has BasicType then
+       child?(x, l) ==
+           empty? l => false
+           member?(x, children(l))
+
+   if % has finiteAggregate then
+       parts(x) == [value(i) for i in nodes(x)]
+
+)abbrev category BRAGG BinaryRecursiveAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A binary-recursive aggregate has 0, 1 or 2 children and
+++ serves as a model for a binary tree or a doubly-linked aggregate structure
+BinaryRecursiveAggregate(S : Type) : Category == RecursiveAggregate S with
+   -- needs preorder, inorder and postorder iterators
+   left : % -> %
+     ++ left(a) returns the left child.
+   elt : (%, "left") -> %
+     ++ elt(a, "left") (also written: \spad{a.left}) is
+     ++ equivalent to \spad{left(a)}.
+   right : % -> %
+     ++ right(a) returns the right child.
+   elt : (%, "right") -> %
+     ++ elt(a, "right") (also written: \spad{a.right})
+     ++ is equivalent to \spad{right(a)}.
+   if % has shallowlyMutable then
+      setelt! : (%, "left", %) -> %
+        ++ setelt!(a, "left", b) (also written \spad{a.left := b})
+        ++ is equivalent to \spad{setleft!(a, b)}.
+      setleft! : (%, %) -> %
+         ++ setleft!(a, b) sets the left child of \spad{a} to be b.
+      setelt! : (%, "right", %) -> %
+         ++ setelt!(a, "right", b) (also written \spad{a.right := b})
+         ++ is equivalent to \spad{setright!(a, b)}.
+      setright! : (%, %) -> %
+         ++ setright!(a, b) sets the right child of \spad{a} to be b.
+ add
+   cycleMax ==> 1000
+
+   elt(x,"left")  == left x
+   elt(x,"right") == right x
+   leaf? x ==
+       empty? x => false
+       empty? left x and empty? right x
+
+   leaves t ==
+       empty? t => empty()$List(S)
+       leaf? t => [value t]
+       concat(leaves left t, leaves right t)
+
+   nodes x ==
+       empty? x => empty()
+       concat(nodes left x, concat(x, nodes right x))
+
+   children x ==
+       empty? x => error "children: argument is empty"
+       empty? left x =>
+           empty? right x => empty()
+           [right x]
+       empty? right x => [left x]
+       [left x, right x]
+
+   if % has finiteAggregate then
+       aggCount : (%, NonNegativeInteger) -> NonNegativeInteger
+       #x == aggCount(x, 0)
+       aggCount(x, k) ==
+           empty? x => 0
+           k := k + 1
+           k = cycleMax and cyclic? x => error "cyclic tree"
+           for y in children x repeat k := aggCount(y, k)
+           k
+
+       if S has BasicType then
+           node?(u, v) ==
+               empty? v => false
+               u = v => true
+               node?(u, left v) or node?(u, right v) => return true
+               false
+
+           x = y ==
+               empty?(x) => empty?(y)
+               empty?(y) => false
+               value x = value y and left x = left y and right x = right y
+
+           member?(x, u) ==
+               empty? u => false
+               x = value u => true
+               member?(x, left u) or member?(x, right u)
+
+       if S has CoercibleTo OutputForm then
+           coerce(t : %) : OutputForm ==
+               empty? t => message("[]")$OutputForm
+               v := value(t)::OutputForm
+               empty? left t =>
+                   empty? right t => v
+                   r := coerce(right t)@OutputForm
+                   bracket [message(".")$OutputForm, v, r]
+               l := coerce(left t)@OutputForm
+               r :=
+                   empty? right t => message(".")$OutputForm
+                   coerce(right t)@OutputForm
+               bracket [l, v, r]
+
+   isCycle? :  (%, List %) -> Boolean
+   eqMember? : (%, List %) -> Boolean
+   cyclic? x     == not empty? x and isCycle?(x, empty()$(List %))
+
+   -- XXX bogus, acc is unused!
+   isCycle?(x, acc) ==
+       empty? x => false
+       eqMember?(x, acc) => true
+       for y in children x | not empty? y repeat
+           isCycle?(y, acc) => return true
+       false
+
+   eqMember?(y, l) ==
+       for x in l repeat eq?(x, y) => return true
+       false
+
+   if % has shallowlyMutable then
+       setelt!(x, "left", b)  == setleft!(x, b)
+       setelt!(x, "right", b) == setright!(x, b)
+
+       setchildren!(x, ls) ==
+           not(#ls =$NonNegativeInteger 2) =>
+               error "a binary tree needs 2 children"
+           setleft!(x, ls(1))
+           setright!(x, ls(2))
+           x
+
+)abbrev category DLAGG DoublyLinkedAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A doubly-linked aggregate serves as a model for a doubly-linked
+++ list, that is, a list which has links to both next and previous
+++ nodes and thus can be efficiently traversed in both directions.
+DoublyLinkedAggregate(S : Type) : Category == RecursiveAggregate S with
+   last : % -> S
+     ++ last(l) returns the last element of a doubly-linked aggregate l.
+     ++ Error: if l is empty.
+   head : % -> %
+     ++ head(l) returns the first element of a doubly-linked aggregate l.
+     ++ Error: if l is empty.
+   tail : % -> %
+     ++ tail(l) returns the doubly-linked aggregate l starting at
+     ++ its second element.
+     ++ Error: if l is empty.
+   previous : % -> %
+     ++ previous(l) returns the doubly-link list beginning with its previous
+     ++ element.
+     ++ Error: if l has no previous element.
+     ++ Note: \spad{next(previous(l)) = l}.
+   next : % -> %
+     ++ next(l) returns the doubly-linked aggregate beginning with its next
+     ++ element.
+     ++ Error: if l has no next element.
+     ++ Note: \spad{next(l) = rest(l)} and \spad{previous(next(l)) = l}.
+   if % has shallowlyMutable then
+      concat! : (%, %) -> %
+        ++ concat!(u, v) destructively concatenates doubly-linked aggregate v
+        ++ to the end of doubly-linked aggregate u.
+      setprevious! : (%, %) -> %
+        ++ setprevious!(u, v) destructively sets the previous node of
+        ++ doubly-linked aggregate u to v, returning v.
+      setnext! : (%, %) -> %
+        ++ setnext!(u, v) destructively sets the next node of doubly-linked
+        ++ aggregate u to v, returning v.
+
+)abbrev category URAGG UnaryRecursiveAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A unary-recursive aggregate is an aggregate where nodes may have either
+++ 0 or 1 children.
+++ This aggregate models, though not precisely, a linked
+++ list possibly with a single cycle.
+++ A node with one child models a non-empty list, with the
+++ \spadfun{value} of the list designating the head, or \spadfun{first}, of the
+++ list, and the child designating the tail, or \spadfun{rest}, of the list.
+++ Since these aggregates are recursive aggregates, they may be cyclic.
+UnaryRecursiveAggregate(S : Type) : Category == RecursiveAggregate S with
+   concat : (%, %) -> %
+      ++ concat(u, v) returns an aggregate w consisting of the elements of u
+      ++ followed by the elements of v.
+      ++ Note: \spad{v = rest(w, #u)}.
+   concat : (S, %) -> %
+      ++ concat(x, u) returns aggregate consisting of x followed by
+      ++ the elements of u.
+      ++ Note: if \spad{v = concat(x, u)} then \spad{x = first v}
+      ++ and \spad{u = rest v}.
+   first : % -> S
+      ++ first(u) returns the first element of u
+      ++ (equivalently, the value at the current node).
+   elt : (%, "first") -> S
+      ++ elt(u, "first") (also written: \spad{u.first}) is
+      ++ equivalent to first(u).
+   first : (%, NonNegativeInteger) -> %
+      ++ first(u, n) returns a copy of the first n elements of u.
+   rest : % -> %
+      ++ rest(u) returns an aggregate consisting of all but the first
+      ++ element of u (equivalently, the next node of u).
+   elt : (%, "rest") -> %
+      ++ elt(u, "rest") (also written: \spad{u.rest}) is
+      ++ equivalent to \spad{rest u}.
+   rest : (%, NonNegativeInteger) -> %
+      ++ rest(u, n) returns the \spad{n}th node of u.
+      ++ Note: \spad{rest(u, 0) = u}.
+   last : % -> S
+      ++ last(u) returns the last element of u.
+      ++ Note: for lists, \spad{last(u) = u.(maxIndex u)}.
+   elt : (%, "last") -> S
+      ++ elt(u, "last") (also written: \spad{u.last}) is equivalent to last(u).
+   last : (%, NonNegativeInteger) -> %
+      ++ last(u, n) returns a copy of the last n nodes of u.
+      ++ Note: \spad{last(u, n)} is a list of n elements.
+   tail : % -> %
+      ++ tail(u) returns the last node of u.
+      ++ Error if u is empty.
+   second : % -> S
+      ++ second(u) returns the second element of u.
+      ++ Note: \spad{second(u) = first(rest(u))}.
+   third : % -> S
+      ++ third(u) returns the third element of u.
+      ++ Note: \spad{third(u) = first(rest(rest(u)))}.
+   cycleEntry : % -> %
+      ++ cycleEntry(u) returns the head of a top-level cycle contained in
+      ++ aggregate u, or \spad{empty()} if none exists.
+   cycleLength : % -> NonNegativeInteger
+      ++ cycleLength(u) returns the length of a top-level cycle
+      ++ contained in aggregate u, or 0 if u has no such cycle.
+   cycleTail : % -> %
+      ++ cycleTail(u) returns the last node in the cycle, or
+      ++ empty() if none exists.
+   if % has shallowlyMutable then
+      concat! : (%, %) -> %
+        ++ concat!(u, v) destructively concatenates v to the end of u.
+      concat! : (%, S) -> %
+        ++ concat!(u, x) destructively adds element x to the end of u.
+        ++ Note: \spad{concat!(a, x) = concat!(a, [x])}.
+      concat! : List % -> %
+        ++ concat!(lu), where \spad{lu} is a list of aggregates
+        ++ \spad{[a, b, ..., c]}, returns a single aggregate consisting
+        ++ of the elements of \spad{a} followed by those of \spad{b}
+        ++ followed ... by the elements of \spad{c}.  This function may
+        ++ destructively modify the aggregates in \spad{lu}.
+      cycleSplit! : % -> %
+        ++ cycleSplit!(u) splits the aggregate by dropping off the cycle.
+        ++ The value returned is the cycle entry, or empty() if none exists.
+        ++ For example, if \spad{w = concat(u, v)} is the cyclic list where v is
+        ++ the head of the cycle, \spad{cycleSplit!(w)} will drop v off w thus
+        ++ destructively changing w to u, and returning v.
+      setfirst! : (%, S) -> S
+        ++ setfirst!(u, x) destructively changes the first element of u to x.
+        ++ Error if u is empty.
+      qsetfirst! : (%, S) -> S
+        ++ qsetfirst!(u, x) destructively changes the first element of u to x
+        ++ without checking for errors.
+      setelt! : (%, "first", S) -> S
+        ++ setelt!(u, "first", x) (also written: \spad{u.first := x}) is
+        ++ equivalent to \spad{setfirst!(u, x)}.
+      setrest! : (%, %) -> %
+        ++ setrest!(u, v) destructively changes the rest of u to v.
+        ++ Error if u is empty.
+      qsetrest! : (%, %) -> %
+        ++ qsetrest!(u, v) destructively changes the rest of u to v
+        ++ without checking for errors.
+      setelt! : (%, "rest", %) -> %
+        ++ setelt!(u, "rest", v) (also written: \spad{u.rest := v})
+        ++ is equivalent to \spad{setrest!(u, v)}.
+      setlast! : (%, S) -> S
+        ++ setlast!(u, x) destructively changes the last element of u to x.
+        ++ Error if u is empty.
+      setelt! : (%, "last", S) -> S
+        ++ setelt!(u, "last", x) (also written: \spad{u.last := x})
+        ++ is equivalent to \spad{setlast!(u, x)}.
+      split! : (%, NonNegativeInteger) -> %
+         ++ split!(u, n) splits u into two aggregates: \spad{v = rest(u, n)}
+         ++ and \spad{w = first(u, n)}, returning \spad{v} and
+         ++ setting \spad{u} to \spad{w}.
+         ++ If n is 0, split! currently only works for Stream and
+         ++ gives error for List.
+         ++ Note: afterwards \spad{rest(u, n)} returns \spad{empty()}.
+ add
+
+  import from Integer
+
+  cycleMax ==> 1000
+
+  findCycle : % -> %
+
+  elt(x, "first") == first x
+  elt(x,  "last") == last x
+  elt(x,  "rest") == rest x
+  second x        == first rest x
+  third x         == first rest rest x
+  cyclic? x       == not empty? x and not empty? findCycle x
+  last x          == first tail x
+
+  first(x, n) ==
+      l : List S := []
+      for i in 1..n repeat
+          empty? x => error "Index out of range"
+          l := concat(first x, l)
+          x := rest x
+      res : % := empty()
+      while not empty? l repeat
+          res := concat(first l, res)
+          l := rest l
+      res
+
+  nodes x ==
+      l := empty()$List(%)
+      while not empty? x repeat
+          l := concat(x, l)
+          x := rest x
+      reverse! l
+
+  children x ==
+      empty? x => error "children: argument is empty"
+      empty? rest x => empty()
+      [rest x]
+
+  leaves x ==
+      empty? x => empty()
+      [last x]
+
+  leaf? x ==
+      empty? x => false
+      empty? rest x
+
+  value x ==
+      empty? x => error "value of empty object"
+      first x
+
+  less?(l, n) ==
+      i := n::Integer
+      while i > 0 and not empty? l repeat (l := rest l; i := i - 1)
+      i > 0
+
+  more?(l, n) ==
+      i := n::Integer
+      while i > 0 and not empty? l repeat (l := rest l; i := i - 1)
+      zero?(i) and not empty? l
+
+  size?(l, n) ==
+      i := n::Integer
+      while not empty? l and i > 0 repeat (l := rest l; i := i - 1)
+      empty? l and zero? i
+
+  tail x ==
+      empty? x => error "empty list"
+      y := rest x
+      for k in 0.. while not empty? y repeat
+          k = cycleMax and cyclic? x => error "cyclic list"
+          y := rest(x := y)
+      x
+
+  findCycle x ==
+      y := rest x
+      while not empty? y repeat
+          if eq?(x, y) then return x
+          x := rest x
+          y := rest y
+          if empty? y then return y
+          if eq?(x, y) then return y
+          y := rest y
+      y
+
+  cycleTail x ==
+      empty?(y := x := cycleEntry x) => x
+      z := rest x
+      while not eq?(x, z) repeat (y := z; z := rest z)
+      y
+
+  cycleEntry x ==
+      empty? x => x
+      empty?(y := findCycle x) => y
+      z := rest y
+      for l in 1.. while not eq?(y, z) repeat z := rest z
+      y := x
+      for k in 1..l repeat y := rest y
+      while not eq?(x, y) repeat (x := rest x; y := rest y)
+      x
+
+  cycleLength x ==
+      empty? x => 0
+      empty?(x := findCycle x) => 0
+      y := rest x
+      for k in 1.. while not eq?(x, y) repeat y := rest y
+      k
+
+  rest(x, n) ==
+      for i in 1..n repeat
+          empty? x => error "Index out of range"
+          x := rest x
+      x
+
+  if % has finiteAggregate then
+      # x ==
+          for k in 0.. while not empty? x repeat
+              k = cycleMax and cyclic? x => error "cyclic list"
+              x := rest x
+          k
+
+      last(x, n) ==
+          xn := x
+          for i in 1..n repeat
+              empty? xn => error "index out of range"
+              xn := rest xn
+          -- xn is n nodes ahead of x
+          while not empty? xn repeat
+              xn := rest xn
+              x := rest x
+          copy x
+
+  if % has finiteAggregate and S has BasicType then
+      x = y ==
+          eq?(x, y) => true
+          for k in 0.. while not empty? x and not empty? y repeat
+              k = cycleMax and cyclic? x => error "cyclic list"
+              first x ~= first y => return false
+              x := rest x
+              y := rest y
+          empty? x and empty? y
+
+      node?(u, v) ==
+          empty? v => false
+          for k in 0.. while not empty? v repeat
+              u = v => return true
+              k = cycleMax and cyclic? v => error "cyclic list"
+              v := rest v
+          u = v
+
+  if % has shallowlyMutable then
+      setelt!(x, "first", a) == setfirst!(x, a)
+      setelt!(x,  "last", a) == setlast!(x, a)
+      setelt!(x,  "rest", a) == setrest!(x, a)
+      concat(x : %, y : %) == concat!(copy x, y)
+
+      concat!(lu : List %) ==
+          while not empty? lu and empty? first lu repeat lu := rest lu
+          empty? lu => empty()
+          res := first lu
+          t := tail res
+          for u in rest lu repeat
+              if not empty? u then
+                  setrest!(t, u)
+                  t := tail t
+          res
+
+      -- The qxxx variants are for speed.  If we do not care about
+      -- speed the regular ones will do.
+
+      qsetfirst!(x, a) == setfirst!(x, a)
+      qsetrest!(x, a) == setrest!(x, a)
+
+      setlast!(x, s) ==
+          empty? x => error "setlast: empty list"
+          setfirst!(tail x, s)
+          s
+
+      setchildren!(u, lv) ==
+          #lv = 1 => setrest!(u, first lv)
+          error "wrong number of children specified"
+
+      setvalue!(u, s) == setfirst!(u, s)
+
+      split!(p, n) ==
+          n < 1 => error "index out of range"
+          p := rest(p, (n - 1)::NonNegativeInteger)
+          q := rest p
+          setrest!(p, empty())
+          q
+
+      cycleSplit! x ==
+          empty?(y := cycleEntry x) or eq?(x, y) => y
+          z := rest x
+          while not eq?(z, y) repeat (x := z; z := rest z)
+          setrest!(x, empty())
+          y
+
+      map!(f, l) ==
+          y := l
+          while not empty? l repeat
+              setfirst!(l, f first l)
+              l := rest l
+          y
+
+
+)abbrev category STAGG StreamAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A stream aggregate is a linear aggregate which possibly has an infinite
+++ number of elements. A basic domain constructor which builds stream
+++ aggregates is \spadtype{Stream}. From streams, a number of infinite
+++ structures such as power series can be built.
+StreamAggregate(S : Type) : Category ==
+   Join(UnaryRecursiveAggregate S, LinearAggregate S) with
+      explicitlyFinite? : % -> Boolean
+        ++ explicitlyFinite?(s) tests if the stream has a finite
+        ++ number of elements, and false otherwise.
+        ++ Note: for many datatypes, \spad{explicitlyFinite?(s) = not possiblyInfinite?(s)}.
+      possiblyInfinite? : % -> Boolean
+        ++ possiblyInfinite?(s) tests if the stream s could possibly
+        ++ have an infinite number of elements.
+        ++ Note: for many datatypes, \spad{possiblyInfinite?(s) = not explicitlyFinite?(s)}.
+ add
+
+   import from Integer
+
+   explicitlyFinite? x == not cyclic? x
+   possiblyInfinite? x == cyclic? x
+
+   elt(x : %, i : Integer) ==
+       i := i - minIndex x
+       (i < 0) or empty?(x := rest(x, i::NonNegativeInteger)) =>
+           error "index out of range"
+       first x
+
+   if % has shallowlyMutable then
+
+       concat(x : %, y : %) == concat!(copy x, y)
+
+       concat l ==
+           empty? l => empty()
+           l1 := reverse l
+           res := empty()
+           for x in l1 repeat
+               res := concat!(copy x, res)
+           res
+
+       fill!(x, s) ==
+           y := x
+           while not empty? y repeat (setfirst!(y, s); y := rest y)
+           x
+
+       setelt!(x : %, i : Integer, s : S) ==
+           i := i - minIndex x
+           (i < 0) or empty?(x := rest(x,i::NonNegativeInteger)) =>
+               error "index out of range"
+           setfirst!(x, s)
+
+       setelt!(x : %, i : UniversalSegment(Integer), s : S) ==
+           (l := low(i) - minIndex x) < 0 => error "index out of range"
+           h := if hasHi i then high(i) - minIndex x else maxIndex x
+           h < l => s
+           y := rest(x, l::NonNegativeInteger)
+           z := rest(y, (h - l + 1)::NonNegativeInteger)
+           while not eq?(y, z) repeat (setfirst!(y, s); y := rest y)
+           s
+
+       concat!(x : %, y : %) ==
+           empty? x => y
+           setrest!(tail x, y)
+           x
+
+
+)abbrev category LNAGG LinearAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A linear aggregate is an aggregate whose elements are indexed by integers.
+++ Examples of linear aggregates are strings, lists, and arrays.
+++ Most of the exported operations for linear aggregates are non-destructive
+++ but are not always efficient for a particular aggregate.
+++ For example, \spadfun{concat} of two lists needs only to copy its first
+++ argument, whereas \spadfun{concat} of two arrays needs to copy both arguments.
+++ Most of the operations exported here apply to infinite objects (e.g. streams)
+++ as well to finite ones.
+++ If the aggregate is a finite aggregate then it has several additional
+++ exports such as
+++ \spadfun{reverse}, \spadfun{sort}, and so on.
+LinearAggregate(S : Type) : Category ==
+  Join(IndexedAggregate(Integer, S), Collection(S),
+       Eltable(UniversalSegment Integer, %)) with
+   new : (NonNegativeInteger, S) -> %
+     ++ new(n, x) returns a new aggregate of size n all of whose
+     ++ entries are x.
+   concat : (%, S) -> %
+     ++ concat(u, x) returns aggregate u with additional element x at the end.
+     ++ Note: for lists, \spad{concat(u, x) = concat(u, [x])}.
+   concat : (S, %) -> %
+     ++ concat(x, u) returns aggregate u with additional element x at the front.
+     ++ Note: for lists: \spad{concat(x, u) = concat([x], u)}.
+   concat : (%, %) -> %
+      ++ concat(u, v) returns an aggregate consisting of the elements of u
+      ++ followed by the elements of v.
+      ++ Note: if \spad{w = concat(u, v)} then
+      ++ \spad{w.i = u.i for i in indices u}
+      ++ and \spad{w.(j + maxIndex u) = v.j for j in indices v}.
+   concat : List % -> %
+      ++ concat(u), where u is a list of aggregates \spad{[a, b, ..., c]},
+      ++ returns a single aggregate consisting of the elements of \spad{a}
+      ++ followed by those
+      ++ of b followed ... by the elements of c.
+      ++ Note: \spad{concat([a, b, ..., c]) = concat(a, concat([b, ..., c]))}.
+   map : ((S, S) -> S, %, %) -> %
+     ++ map(f, u, v) returns a new aggregate w with elements
+     ++ \spad{z = f(x, y)} for corresponding elements x and y from u and v.
+     ++ Note: \spad{w.i = f(u.i, v.i)}.
+   delete : (%, Integer) -> %
+      ++ delete(u, i) returns a copy of u with the \spad{i}th element deleted.
+      ++ Note:
+      ++ \spad{delete(u, i) = concat(u(minIndex(u)..i - 1), u(i + 1..))}.
+   delete : (%, UniversalSegment(Integer)) -> %
+      ++ delete(u, i..j) returns a copy of u with the \spad{i}th through
+      ++ \spad{j}th element deleted.
+      ++ Note: \spad{delete(u, i..j) = concat(u(minIndex(u)..i-1), u(j+1..))}.
+   first : (%, NonNegativeInteger) -> %
+      ++ first(u, n) returns a copy of the first n
+      ++ elements of u.  Error: if u has less than n elements.
+   insert : (S, %, Integer) -> %
+      ++ insert(x, u, i) returns a copy of u having x as its \spad{i}th
+      ++ element.
+      ++ Note:
+      ++ \spad{insert(x, u, i) = concat(u(minIndex(u)..i-1), concat(x, u(i..)))}.
+   insert : (%, %, Integer) -> %
+      ++ insert(v, u, i) returns a copy of u having v inserted beginning at the
+      ++ \spad{i}th element.
+      ++ Note:
+      ++ \spad{insert(v, u, i) = concat(u(minIndex(u)..i-1), concat(v, u(i..)))}.
+   if % has shallowlyMutable then
+      setelt! : (%, UniversalSegment(Integer), S) -> S
+       ++ setelt!(u, i..j, x) (also written: \spad{u(i..j) := x}) destructively
+       ++ replaces each element in the segment \spad{u(i..j)} by x.
+       ++ The value x is returned.
+       ++ Note: u is destructively changed so
+       ++ that \spad{u.k := x for k in i..j};
+       ++ its length remains unchanged.
+   if % has finiteAggregate then
+      merge : ((S, S) -> Boolean, %, %) -> %
+       ++ merge(p, a, b) returns an aggregate c which merges \spad{a} and b.
+       ++ The result is produced by examining each element x of \spad{a} and y
+       ++ of b successively. If \spad{p(x, y)} is true, then x is inserted into
+       ++ the result; otherwise y is inserted. If x is chosen, the next element
+       ++ of \spad{a} is examined, and so on. When all the elements of one
+       ++ aggregate are examined, the remaining elements of the other
+       ++ are appended.
+       ++ For example, \spad{merge(<, [1, 3], [2, 7, 5])} returns
+       ++ \spad{[1, 2, 3, 7, 5]}.
+      reverse : % -> %
+       ++ reverse(a) returns a copy of \spad{a} with elements in reverse order.
+      sort : ((S, S) -> Boolean, %) -> %
+       ++ sort(p, a) returns a copy of \spad{a} sorted using total ordering
+       ++ predicate p.
+      sorted? : ((S, S) -> Boolean, %) -> Boolean
+       ++ sorted?(p, a) tests if \spad{a} is sorted according to predicate p.
+      position : (S -> Boolean, %) -> Integer
+       ++ position(p, a) returns the index i of the first x in \spad{a}
+       ++ such that \spad{p(x)} is true, and \spad{minIndex(a) - 1} if
+       ++ there is no such x.
+      if S has BasicType then
+         position : (S, %) -> Integer
+          ++ position(x, a) returns the index i of the first occurrence
+          ++ of x in a, and \spad{minIndex(a) - 1} if there is no such x.
+         position : (S, %, Integer) -> Integer
+          ++ position(x, a, n) returns the index i of the first occurrence
+          ++ of x in \spad{a} where \spad{i >= n}, and \spad{minIndex(a) - 1}
+          ++ if no such x is found.
+         leftTrim : (%, S) -> %
+          ++ leftTrim(u, x) returns a copy of u with all leading x deleted.
+          ++ For example, \spad{leftTrim("  abc  ", char " ")} returns
+          ++ \spad{"abc  "}.
+         rightTrim : (%, S) -> %
+          ++ rightTrim(u, x) returns a copy of u with all trailing occurrences
+          ++ of x deleted.  For example, \spad{rightTrim("  abc  ", char " ")}
+          ++ returns \spad{"  abc"}.
+         trim : (%, S) -> %
+          ++ trim(u, x) returns a copy of u with all occurrences of x deleted
+          ++ from right and left ends.
+          ++ For example, \spad{trim(" abc ", char " ")} returns \spad{"abc"}.
+      if S has Hashable then Hashable
+      if S has Comparable then Comparable
+      if S has OrderedSet then
+         OrderedSet
+         merge : (%, %) -> %
+          ++ merge(u, v) merges u and v in ascending order.
+          ++ Note: \spad{merge(u, v) = merge(<=, u, v)}.
+         sort : % -> %
+          ++ sort(u) returns a copy of u with elements in ascending order.
+          ++ Note: \spad{sort(u) = sort(<, u)}.
+         sorted? : % -> Boolean
+          ++ sorted?(u) tests if the elements of u are in ascending order.
+      if % has shallowlyMutable then
+         copyInto! : (%, %, Integer) -> %
+          ++ copyInto!(u, v, i) returns aggregate u containing a copy of
+          ++ v inserted at element i.
+         reverse! : % -> %
+          ++ reverse!(u) returns u with its elements in reverse order.
+         sort! : ((S, S) -> Boolean, %) -> %
+          ++ sort!(p, u) returns u with its elements ordered by p.
+         if S has OrderedSet then sort! : % -> %
+          ++ sort!(u) returns u with its elements in ascending order.
+ add
+  indices a      == [i for i in minIndex a .. maxIndex a]
+  index?(i, a)   == i >= minIndex a and i <= maxIndex a
+  concat(a : %, x : S)      == concat(a, new(1, x))
+  concat(x : S, y : %)      == concat(new(1, x), y)
+  insert(x : S, a : %, i : Integer) == insert(new(1, x), a, i)
+  first(x, n) == x(minIndex(x)+(0..(n-1)))
+
+  if % has finiteAggregate then
+
+    maxIndex l == #l - 1 + minIndex l
+
+    if S has BasicType then
+        position(x : S, t : %) == position(x, t, minIndex t)
+
+        leftTrim(u, x) ==
+            n := maxIndex u
+            for i in minIndex u .. n while u.i = x repeat 0
+            u(i..n)
+
+        rightTrim(u, x) ==
+            mn := minIndex u
+            for j in maxIndex u .. mn by -1 while u.j = x repeat 0
+            u(mn..j)
+
+        trim(u, x) ==
+            n := maxIndex u
+            mn := minIndex u
+            for i in mn .. n while u.i = x repeat 0
+            for j in n .. i by -1 while u.j = x repeat 0
+            u(i..j)
+
+    if S has Hashable then
+        hashUpdate!(s : HashState, x : %) : HashState ==
+            for i in minIndex x..maxIndex x repeat
+                s := hashUpdate!(s, qelt(x, i))$S
+            s
+
+    if S has OrderedSet then
+        sorted? l   == sorted?(_<_=$S, l)
+        merge(x, y) == merge(_<$S, x, y)
+        sort l      == sort(_<$S, l)
+
+    if % has shallowlyMutable then
+        reverse x  == reverse! copy x
+        sort(f, l) == sort!(f, copy l)
+
+        if S has OrderedSet then
+            sort! l == sort!(_<$S, l)
+
+)abbrev category FLAGG FiniteLinearAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A finite linear aggregate is a linear aggregate of finite length.
+FiniteLinearAggregate(S : Type) : Category == Join(LinearAggregate S,
+     finiteAggregate)
+
+)abbrev category A1AGG OneDimensionalArrayAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ One-dimensional-array aggregates serves as models for one-dimensional arrays.
+++ Categorically, these aggregates are finite linear aggregates
+++ with the \spadtype{shallowlyMutable} property, that is, any component of
+++ the array may be changed without affecting the
+++ identity of the overall array.
+++ Array data structures are typically represented by a fixed area in storage and
+++ therefore cannot efficiently grow or shrink on demand as can list structures
+++ (see however \spadtype{FlexibleArray} for a data structure which
+++ is a cross between a list and an array).
+++ Iteration over, and access to, elements of arrays is extremely fast
+++ (and often can be optimized to open-code).
+++ Insertion and deletion however is generally slow since an entirely new
+++ data structure must be created for the result.
+OneDimensionalArrayAggregate(S : Type) : Category ==
+    Join(FiniteLinearAggregate S, shallowlyMutable)
+  add
+
+    import from Integer
+
+    parts x == [qelt(x, i) for i in minIndex x .. maxIndex x]
+    sort!(f, a) == quickSort(f, a)$FiniteLinearAggregateSort(S, %)
+
+    any?(f, a) ==
+        for i in minIndex a .. maxIndex a repeat
+            f qelt(a, i) => return true
+        false
+
+    every?(f, a) ==
+        for i in minIndex a .. maxIndex a repeat
+            not(f qelt(a, i)) => return false
+        true
+
+    position(f : S -> Boolean, a : %) ==
+        for i in minIndex a .. maxIndex a repeat
+            f qelt(a, i) => return i
+        minIndex(a) - 1
+
+    find(f, a) ==
+        for i in minIndex a .. maxIndex a repeat
+            f qelt(a, i) => return qelt(a, i)
+        "failed"
+
+    count(f : S -> Boolean, a : %) ==
+        n : NonNegativeInteger := 0
+        for i in minIndex a .. maxIndex a repeat
+            if f(qelt(a, i)) then n := n+1
+        n
+
+    map!(f, a) ==
+        for i in minIndex a .. maxIndex a repeat
+            qsetelt!(a, i, f qelt(a, i))
+        a
+
+    setelt!(a : %, s : UniversalSegment(Integer), x : S) ==
+        l := low(s); h := if hasHi s then high(s) else maxIndex a
+        l < minIndex a or h > maxIndex a => error "index out of range"
+        for k in l..h repeat qsetelt!(a, k, x)
+        x
+
+    reduce(f, a) ==
+        empty? a => error "cannot reduce an empty aggregate"
+        r := qelt(a, m := minIndex a)
+        for k in m+1 .. maxIndex a repeat r := f(r, qelt(a, k))
+        r
+
+    reduce(f, a, identity) ==
+        for k in minIndex a .. maxIndex a repeat
+            identity := f(identity, qelt(a, k))
+        identity
+
+    if S has BasicType then
+
+        reduce(f, a, identity, absorber) ==
+            for k in minIndex a .. maxIndex a while identity ~= absorber
+                repeat identity := f(identity, qelt(a, k))
+            identity
+
+-- this is necessary since new has disappeared.
+    stupidnew : (NonNegativeInteger, %, %) -> %
+    stupidget : List % -> S
+
+-- a and b are not both empty if n > 0
+    stupidnew(n, a, b) ==
+        zero? n => empty()
+        new(n, (empty? a => qelt(b, minIndex b); qelt(a, minIndex a)))
+
+-- at least one element of l must be non-empty
+    stupidget l ==
+        for a in l repeat
+            not empty? a => return first a
+        error "Should not happen"
+
+    map(f, a, b) ==
+        m := max(minIndex a, minIndex b)
+        n := min(maxIndex a, maxIndex b)
+        l := max(0, n - m + 1)::NonNegativeInteger
+        c := stupidnew(l, a, b)
+        for i in minIndex(c).. for j in m..n repeat
+            qsetelt!(c, i, f(qelt(a, j), qelt(b, j)))
+        c
+
+--  map(f, a, b, x) ==
+--    m := min(minIndex a, minIndex b)
+--    n := max(maxIndex a, maxIndex b)
+--    l := (n - m + 1)::NonNegativeInteger
+--    c := new l
+--    for i in minIndex(c).. for j in m..n repeat
+--      qsetelt!(c, i, f(a(j, x), b(j, x)))
+--    c
+
+    merge(f, a, b) ==
+        r := stupidnew(#a + #b, a, b)
+        i := minIndex a
+        m := maxIndex a
+        j := minIndex b
+        n := maxIndex b
+        for k in minIndex(r).. while i <= m and j <= n repeat
+            if f(qelt(a, i), qelt(b, j)) then
+                qsetelt!(r, k, qelt(a, i))
+                i := i+1
+            else
+                qsetelt!(r, k, qelt(b, j))
+                j := j+1
+        for k in k.. for i in i..m repeat qsetelt!(r, k, elt(a, i))
+        for k in k.. for j in j..n repeat qsetelt!(r, k, elt(b, j))
+        r
+
+    elt(x : %, seg : UniversalSegment(Integer)) ==
+        step := incr seg
+        zero? step => error "zero step size"
+        mn := minIndex x
+        mx := maxIndex x
+        lo := low seg
+        bound := if step < 0 then mn else mx
+        hi := if hasHi seg then high seg else bound
+        -- Compute the number of entries.
+        n: Integer := sign(step)*(hi-lo)
+        n < 0 => empty()
+        n := 1 + (n quo abs(step))
+        if step > 0 then
+            (if lo < mn or lo + (n - 1)*step > mx then
+                error "index out of range")
+        else
+            if lo > mx or lo + (n-1)*step < mn then
+                error "index out of range"
+        z: % := new(n::NonNegativeInteger, qelt(x, mn))
+        for i in lo .. hi by step for j in mn .. repeat
+            qsetelt!(z, j, qelt(x, i))
+        z
+
+    insert(a : %, b : %, i : Integer) ==
+        m := minIndex b
+        n := maxIndex b
+        i < m or i > n => error "index out of range"
+        y := stupidnew(#a + #b, a, b)
+        for k in minIndex y.. for j in m..i-1 repeat
+            qsetelt!(y, k, qelt(b, j))
+        for k in k.. for j in minIndex a .. maxIndex a repeat
+            qsetelt!(y, k, qelt(a, j))
+        for k in k.. for j in i..n repeat qsetelt!(y, k, qelt(b, j))
+        y
+
+    copy x ==
+        y := stupidnew(#x, x, x)
+        for i in minIndex x .. maxIndex x for j in minIndex y .. repeat
+            qsetelt!(y, j, qelt(x, i))
+        y
+
+    copyInto!(y, x, s) ==
+        s < minIndex y or s + #x > maxIndex y + 1 =>
+            error "index out of range"
+        for i in minIndex x .. maxIndex x for j in s.. repeat
+            qsetelt!(y, j, qelt(x, i))
+        y
+
+    construct l ==
+        empty? l => empty()
+        a := new(#l, first l)
+        for i in minIndex(a).. for x in l repeat qsetelt!(a, i, x)
+        a
+
+    delete(a : %, s : UniversalSegment(Integer)) ==
+        l := low(s); h := if hasHi s then high(s) else maxIndex a
+        l < minIndex a or h > maxIndex a => error "index out of range"
+        h < l => copy a
+        r := stupidnew((#a - h + l - 1)::NonNegativeInteger, a, a)
+        for k in minIndex(r).. for i in minIndex a..l-1 repeat
+            qsetelt!(r, k, qelt(a, i))
+        for k in k.. for i in h+1 .. maxIndex a repeat
+            qsetelt!(r, k, qelt(a, i))
+        r
+
+    delete(x : %, i : Integer) ==
+        i < minIndex x or i > maxIndex x => error "index out of range"
+        y := stupidnew((#x - 1)::NonNegativeInteger, x, x)
+        for i in minIndex(y).. for j in minIndex x..i-1 repeat
+            qsetelt!(y, i, qelt(x, j))
+        for i in i .. for j in i+1 .. maxIndex x repeat
+            qsetelt!(y, i, qelt(x, j))
+        y
+
+    reverse! x ==
+        m := minIndex x
+        n := maxIndex x
+        for i in 0..((n-m) quo 2) repeat swap!(x, m+i, n-i)
+        x
+
+    concat l ==
+        empty? l => empty()
+        n := _+/[#a for a in l]
+        n = 0 => empty()
+        i := minIndex(r := new(n, stupidget l))
+        for a in l repeat
+            copyInto!(r, a, i)
+            i := i + #a
+        r
+
+    sorted?(f, a) ==
+        for i in minIndex(a)..maxIndex(a)-1 repeat
+            not f(qelt(a, i), qelt(a, i + 1)) => return false
+        true
+
+    concat(x : %, y : %) ==
+        z := stupidnew(#x + #y, x, y)
+        copyInto!(z, x, i := minIndex z)
+        copyInto!(z, y, i + #x)
+        z
+
+    if S has CoercibleTo(OutputForm) then
+        coerce(r : %) : OutputForm ==
+            bracket [qelt(r, k)::OutputForm for k in minIndex r .. maxIndex r]
+
+    if S has BasicType then
+
+        x = y ==
+            #x ~= #y => false
+            for i in minIndex x .. maxIndex x repeat
+                not(qelt(x, i) = qelt(y, i)) => return false
+            true
+
+        position(x : S, t : %, s : Integer) ==
+            n := maxIndex t
+            s < minIndex t or s > n => error "index out of range"
+            for k in s..n repeat
+                qelt(t, k) = x => return k
+            minIndex(t) - 1
+
+    if S has OrderedSet then
+
+        a < b ==
+            for i in minIndex a .. maxIndex a
+                for j in minIndex b .. maxIndex b repeat
+                    qelt(a, i) ~= qelt(b, j) => return a.i < b.j
+            #a < #b
+
+    if S has Comparable then
+
+        smaller?(a, b) ==
+            for i in minIndex a .. maxIndex a
+                for j in minIndex b .. maxIndex b repeat
+                    qelt(a, i) ~= qelt(b, j) =>
+                        return smaller?(qelt(a, i), qelt(b, j))
+            #a < #b
+
+
+)abbrev category ELAGG ExtensibleLinearAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ An extensible aggregate is one which allows insertion and deletion of entries.
+++ These aggregates are models of lists which are represented
+++ by linked structures so as to make insertion, deletion, and
+++ concatenation efficient. However, access to elements of these
+++ extensible aggregates is generally slow since access is made from the end.
+++ See \spadtype{FlexibleArray} for an exception.
+ExtensibleLinearAggregate(S : Type) : Category == Join(LinearAggregate S, _
+     shallowlyMutable) with
+   concat! : (%, S) -> %
+     ++ concat!(u, x) destructively adds element x to the end of u.
+   concat! : (%, %) -> %
+     ++ concat!(u, v) destructively appends v to the end of u.
+     ++ v is unchanged
+   delete! : (%, Integer) -> %
+     ++ delete!(u, i) destructively deletes the \spad{i}th element of u.
+   delete! : (%, UniversalSegment(Integer)) -> %
+     ++ delete!(u, i..j) destructively deletes elements u.i through u.j.
+   remove! : (S -> Boolean, %) -> %
+     ++ remove!(p, u) destructively removes all elements x of
+     ++ u such that \spad{p(x)} is true.
+   insert! : (S, %, Integer) -> %
+     ++ insert!(x, u, i) destructively inserts x into u at position i.
+   insert! : (%, %, Integer) -> %
+     ++ insert!(v, u, i) destructively inserts aggregate v into u at position i.
+   merge! : ((S, S) -> Boolean, %, %) -> %
+     ++ merge!(p, u, v) destructively merges u and v using predicate p.
+   select! : (S->Boolean, %) -> %
+     ++ select!(p, u) destructively changes u by keeping only values x such that
+     ++ \spad{p(x)}.
+   if S has BasicType then
+     remove! : (S, %) -> %
+       ++ remove!(x, u) destructively removes all values x from u.
+     removeDuplicates! : % -> %
+       ++ removeDuplicates!(u) destructively removes duplicates from u.
+   if S has OrderedSet then merge! : (%, %) -> %
+       ++ merge!(u, v) destructively merges u and v in ascending order.
+ add
+   delete(x : %, i : Integer) == delete!(copy x, i)
+   delete(x : %, i : UniversalSegment(Integer)) == delete!(copy x, i)
+   remove(f : S -> Boolean, x : %) == remove!(f, copy x)
+   insert(s : S, x : %, i : Integer) == insert!(s, copy x, i)
+   insert(w : %, x : %, i : Integer) == insert!(copy w, copy x, i)
+   select(f, x) == select!(f, copy x)
+   concat(x : %, y : %) == concat!(copy x, y)
+   concat(x : %, y : S) == concat!(copy x, new(1, y))
+   concat!(x : %, y : S) == concat!(x, new(1, y))
+   if S has BasicType then
+       remove(s : S, x : %) == remove!(s, copy x)
+       remove!(s : S, x : %)  == remove!(y +-> y = s, x)
+       removeDuplicates(x : %) == removeDuplicates!(copy x)
+
+   if S has OrderedSet then
+       merge!(x, y) == merge!(_<$S, x, y)
+
+)abbrev category LSAGG ListAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A list aggregate is a model for a linked list data structure.
+++ A linked list is a versatile
+++ data structure. Insertion and deletion are efficient and
+++ searching is a linear operation.
+ListAggregate(S : Type) : Category == Join(StreamAggregate S,
+   FiniteLinearAggregate S, ExtensibleLinearAggregate S) with
+      list : S -> %
+        ++ list(x) returns the list of one element x.
+ add
+   cycleMax ==> 1000
+
+   mergeSort : ((S, S) -> Boolean, %, Integer) -> %
+
+   sort!(f, l) == mergeSort(f, l, #l)
+   list x == concat(x, empty())
+   reduce(f, x) ==
+       empty? x =>
+           error "reducing over an empty list needs the 3 argument form"
+       reduce(f, rest x, first x)
+   merge(f, p, q) == merge!(f, copy p, copy q)
+
+   select!(f, x) ==
+       while not empty? x and not f first x repeat x := rest x
+       empty? x => x
+       y := x
+       z := rest y
+       while not empty? z repeat
+           if f first z then (y := z; z := rest z)
+                        else (z := rest z; setrest!(y, z))
+       x
+
+   merge!(f, p, q) ==
+       empty? p => q
+       empty? q => p
+       eq?(p, q) => error "cannot merge a list into itself"
+       if f(first p, first q)
+           then (r := t := p; p := rest p)
+           else (r := t := q; q := rest q)
+       while not empty? p and not empty? q repeat
+           if f(first p, first q)
+               then (setrest!(t, p); t := p; p := rest p)
+               else (setrest!(t, q); t := q; q := rest q)
+       setrest!(t, if empty? p then q else p)
+       r
+
+   insert!(s : S, x : %, i : Integer) ==
+       i < (m := minIndex x) => error "index out of range"
+       i = m => concat(s, x)
+       y := rest(x, (i - 1 - m)::NonNegativeInteger)
+       z := rest y
+       setrest!(y, concat(s, z))
+       x
+
+   insert!(w : %, x : %, i : Integer) ==
+       i < (m := minIndex x) => error "index out of range"
+       i = m => concat!(w, x)
+       y := rest(x, (i - 1 - m)::NonNegativeInteger)
+       z := rest y
+       setrest!(y, w)
+       concat!(y, z)
+       x
+
+   remove!(f : S -> Boolean, x : %) ==
+       while not empty? x and f first x repeat x := rest x
+       empty? x => x
+       p := x
+       q := rest x
+       while not empty? q repeat
+           if f first q then q := setrest!(p, rest q)
+                        else (p := q; q := rest q)
+       x
+
+   delete!(x : %, i : Integer) ==
+       i < (m := minIndex x) => error "index out of range"
+       i = m => rest x
+       y := rest(x, (i - 1 - m)::NonNegativeInteger)
+       setrest!(y, rest(y, 2))
+       x
+
+   delete!(x : %, i : UniversalSegment(Integer)) ==
+       (l := low(i)) < (m := minIndex x) => error "index out of range"
+       h := if hasHi i then high(i) else maxIndex x
+       h < l => x
+       l = m => rest(x, (h + 1 - m)::NonNegativeInteger)
+       t := rest(x, (l - 1 - m)::NonNegativeInteger)
+       setrest!(t, rest(t, (h - l + 2)::NonNegativeInteger))
+       x
+
+   find(f, x) ==
+       while not empty? x and not f first x repeat x := rest x
+       empty? x => "failed"
+       first x
+
+   position(f : S -> Boolean, x : %) ==
+       for k in minIndex(x).. while not empty? x and not f first x repeat
+           x := rest x
+       empty? x => minIndex(x) - 1
+       k
+
+   mergeSort(f, p, n) ==
+       if n = 2 and f(first rest p, first p) then p := reverse! p
+       n < 3 => p
+       l := (n quo 2)::NonNegativeInteger
+       q := split!(p, l)
+       p := mergeSort(f, p, l)
+       q := mergeSort(f, q, n - l)
+       merge!(f, p, q)
+
+   sorted?(f, l) ==
+       empty? l => true
+       p := rest l
+       while not empty? p repeat
+           not f(first l, first p) => return false
+           p := rest(l := p)
+       true
+
+   reduce(f, x, i) ==
+       r := i
+       while not empty? x repeat (r := f(r, first x); x := rest x)
+       r
+
+   elt(x : %, seg : UniversalSegment(Integer)) ==
+       step := incr seg
+       zero? step => error "zero step size"
+       mn := minIndex x
+       mx := maxIndex x
+       neg?: Boolean := step < 0
+       if neg? then
+           step := - step
+           lo := if hasHi seg then high seg else mn
+           hi := low seg
+           lo > hi => return empty()
+           hi > mx => error "index out of range"
+           lo := hi - step*((hi-lo) quo step) -- adapt to exact bounds
+           lo < mn => error "index out of range"
+         else
+           hi := if hasHi seg then high seg else mx
+           lo := low seg
+           lo > hi => return empty()
+           lo < mn or lo > mx => error "index out of range"
+           hi := lo + step*((hi-lo) quo step) -- adapt to exact bounds
+           hi > mx => error "index out of range"
+       l: % := empty()
+       z := rest(x, (lo-mn) :: NonNegativeInteger)
+       while lo < hi repeat
+           l := concat(first z, l)
+           z := rest(z, step :: NonNegativeInteger)
+           lo := lo + step
+       l := concat(first z, l)
+       neg? => l
+       reverse! l
+
+   if S has BasicType then
+       reduce(f, x, i, a) ==
+           r := i
+           while not empty? x and r ~= a repeat
+               r := f(r, first x)
+               x := rest x
+           r
+
+   new(n, s) ==
+       l := empty()
+       for k in 1..n repeat l := concat(s, l)
+       l
+
+   map(f, x, y) ==
+       z := empty()
+       while not empty? x and not empty? y repeat
+           z := concat(f(first x, first y), z)
+           x := rest x
+           y := rest y
+       reverse! z
+
+-- map(f, x, y, d) ==
+--   z := empty()
+--   while not empty? x and not empty? y repeat
+--     z := concat(f(first x, first y), z)
+--     x := rest x
+--     y := rest y
+--   z := reverseInPlace z
+--   if not empty? x then
+--      z := concat!(z, map(f(#1, d), x))
+--   if not empty? y then
+--      z := concat!(z, map(f(d, #1), y))
+--   z
+
+   reverse! x ==
+       empty? x => x
+       empty?(y := rest x) => x
+       setrest!(x, empty())
+       while not empty? y repeat
+           z := rest y
+           setrest!(y, x)
+           x := y
+           y := z
+       x
+
+   copy x ==
+       y := empty()
+       for k in 0.. while not empty? x repeat
+           k = cycleMax and cyclic? x => error "cyclic list"
+           y := concat(first x, y)
+           x := rest x
+       reverse! y
+
+   copyInto!(y, x, s) ==
+       s < (m := minIndex y) => error "index out of range"
+       z := rest(y, (s - m)::NonNegativeInteger)
+       while not empty? z and not empty? x repeat
+           setfirst!(z, first x)
+           x := rest x
+           z := rest z
+       y
+
+   if S has BasicType then
+
+       position(w, x, s) ==
+           s < (m := minIndex x) => error "index out of range"
+           x := rest(x, (s - m)::NonNegativeInteger)
+           for k in s.. while not empty? x and w ~= first x repeat
+               x := rest x
+           empty? x => minIndex x - 1
+           k
+
+       removeDuplicates! l ==
+           p := l
+           while not empty? p repeat
+               p := setrest!(p, remove!(first p, rest p))
+           l
+
+   if S has OrderedSet then
+       x < y ==
+            while not empty? x and not empty? y repeat
+                first x ~= first y => return(first x < first y)
+                x := rest x
+                y := rest y
+            empty? x => not empty? y
+            false
+
+   if S has Comparable then
+       smaller?(x, y) ==
+           while not empty? x and not empty? y repeat
+               first x ~= first y => return smaller?(first x, first y)
+               x := rest x
+               y := rest y
+           empty? x => not empty? y
+           false
+
+
+)abbrev category ALAGG AssociationListAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ An association list is a list of key entry pairs which may be viewed
+++ as a table.  It is a poor mans version of a table:
+++ searching for a key is a linear operation.
+AssociationListAggregate(Key : SetCategory, Entry : Type) : Category ==
+   Join(TableAggregate(Key, Entry), ListAggregate Record(key : Key, entry : Entry)) with
+      assoc : (Key, %) -> Union(Record(key:Key,entry:Entry), "failed")
+        ++ assoc(k, u) returns the element x in association list u stored
+        ++ with key k, or "failed" if u has no key k.
+
+    add
+        Rec ==> Record(key : Key, entry : Entry)
+        O ==> OutputForm
+        if Entry has CoercibleTo OutputForm then
+            coerce(u : %) : OutputForm ==
+                l := [(r.key)::O = (r.entry)::O for r in parts(u)@List Rec]
+                prefix(message("table")$O, l)
+
+)abbrev category SRAGG StringAggregate
+++ Author: Stephen Watt and Michael Monagan. revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A string aggregate is a category for strings, that is,
+++ one dimensional arrays of characters.
+StringAggregate : Category == OneDimensionalArrayAggregate Character with
+    lowerCase : % -> %
+      ++ lowerCase(s) returns the string with all characters in lower case.
+    lowerCase! : % -> %
+      ++ lowerCase!(s) destructively replaces the alphabetic characters
+      ++ in s by lower case.
+    upperCase : % -> %
+      ++ upperCase(s) returns the string with all characters in upper case.
+    upperCase! : % -> %
+      ++ upperCase!(s) destructively replaces the alphabetic characters
+      ++ in s by corresponding upper case characters.
+    prefix? : (%, %) -> Boolean
+      ++ prefix?(s, t) tests if the string s is the initial substring of t.
+      ++ Note: \spad{prefix?(s, t) = reduce(and, [s.i = t.i for i in indices s])}.
+    suffix? : (%, %) -> Boolean
+      ++ suffix?(s, t) tests if the string s is the final substring of t.
+      ++ Note: \spad{suffix?(s, t) = reduce(and, [s.i = t.(n - m + i) for i indices s])}
+      ++ where m and n denote the maxIndex of s and t respectively.
+    substring? : (%, %, Integer) -> Boolean
+      ++ substring?(s, t, i) tests if s is a substring of t beginning at
+      ++ index i.
+      ++ Note: \spad{substring?(s, t, 0) = prefix?(s, t)}.
+    match? : (%, %, Character) -> Boolean
+      ++ match?(s, t, c) tests if s matches t except perhaps for
+      ++ multiple and consecutive occurrences of character c.
+      ++ Typically c is the blank character.
+    replace : (%, UniversalSegment(Integer), %) -> %
+      ++ replace(s, i..j, t) replaces the substring \spad{s(i..j)} of s by string t.
+    position : (%, %, Integer) -> Integer
+      ++ position(s, t, i) returns the position j of the substring s in
+      ++ string t, beginning at index i.
+      ++ Returns \spad{minIndex(s) - 1} if there is no such j.
+    position : (CharacterClass, %, Integer) -> Integer
+      ++ position(cc, t, i) returns the position j in string t of
+      ++ the first character belonging to cc, beginning at index i.
+      ++ Returns \spad{minIndex(t) - 1} if there is no such j.
+    coerce : Character -> %
+      ++ coerce(c) returns c as a string s with the character c.
+
+    split : (%, Character) -> List %
+      ++ split(s, c) returns a list of substrings delimited by character c.
+    split : (%, CharacterClass) -> List %
+      ++ split(s, cc) returns a list of substrings delimited by characters in cc.
+
+    trim : (%, CharacterClass) -> %
+      ++ trim(s, cc) returns s with all characters in cc deleted from right
+      ++ and left ends.
+      ++ For example, \spad{trim("(abc)", charClass "()")} returns \spad{"abc"}.
+    leftTrim : (%, CharacterClass) -> %
+      ++ leftTrim(s, cc) returns s with all leading characters in cc deleted.
+      ++ For example, \spad{leftTrim("(abc)", charClass "()")} returns \spad{"abc)"}.
+    rightTrim : (%, CharacterClass) -> %
+      ++ rightTrim(s, cc) returns s with all trailing occurrences of
+      ++ characters in cc deleted.
+      ++ For example, \spad{rightTrim("(abc)", charClass "()")} returns \spad{"(abc"}.
+    elt : (%, %) -> %
+      ++ elt(s, t) returns the concatenation of s and t. It is provided to
+      ++ allow juxtaposition of strings to work as concatenation.
+      ++ For example, \spad{"smoo" "shed"} returns \spad{"smooshed"}.
+    join: (%, List %) -> %
+      ++ join(sep,ls) returns an element that is the concatenation
+      ++ of all strings in ls but separated by sep, for example,
+      ++ join("/",["a","b","c"]) returns "a/b/c".
+ add
+   trim(s : %, cc : CharacterClass) == leftTrim(rightTrim(s, cc), cc)
+
+   lowerCase s == lowerCase! copy s
+   upperCase s == upperCase! copy s
+   prefix?(s, t) == substring?(s, t, minIndex t)
+   coerce(c : Character) : % == new(1, c)
+   elt(s : %, t : %) : % == concat(s, t)$%
+
+)abbrev category BTAGG BitAggregate
+++ Author: Michael Monagan; revised by Manuel Bronstein and Richard Jenks
+++ Date Created: August 87 through August 88
+++ Basic Operations:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ The bit aggregate category models aggregates representing large
+++ quantities of Boolean data.
+BitAggregate() : Category ==
+  Join(OrderedSet, Logic, OneDimensionalArrayAggregate Boolean) with
+    "not": % -> %
+      ++ not(b) returns the logical {\em not} of bit aggregate
+      ++ \spad{b}.
+    nand : (%, %) -> %
+      ++ nand(a, b) returns the logical {\em nand} of bit aggregates \spad{a}
+      ++ and \spad{b}.
+    nor  : (%, %) -> %
+      ++ nor(a, b) returns the logical {\em nor} of bit aggregates \spad{a} and
+      ++ \spad{b}.
+    _and : (%, %) -> %
+      ++ a and b returns the logical {\em and} of bit aggregates \spad{a} and
+      ++ \spad{b}.
+    _or  : (%, %) -> %
+      ++ a or b returns the logical {\em or} of bit aggregates \spad{a} and
+      ++ \spad{b}.
+    xor  : (%, %) -> %
+      ++ xor(a, b) returns the logical {\em exclusive-or} of bit aggregates
+      ++ \spad{a} and \spad{b}.
+
+ add
+   not v      == map(_not, v)
+   _~(v)      == map(_~, v)
+   _/_\(v, u) == map(_/_\, v, u)
+   _\_/(v, u) == map(_\_/, v, u)
+   nand(v, u) == map(nand, v, u)
+   nor(v, u)  == map(nor, v, u)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

@@ -1,0 +1,9 @@
+Function: elljacobi
+Section: transcendental
+C-Name: elljacobi
+Prototype: GGp
+Help: elljacobi(z,k): returns the vector of the three Jacobi elliptic functions
+ [sn(z,k),cn(z,k),dn(z,k)].
+Doc: returns $[\text{sn}(z,k), \text{cn}(z,k), \text{dn}(z,k)]$,
+ where \text{sn}, \text{cn} and \text{dn} are the three Jacobi elliptic
+ functions.

@@ -1,0 +1,31 @@
+Function: bitset
+C-Name: bitset
+Section: conversions
+Prototype: vWL
+Help: bitset(~x,n): set bit n of x in place, assuming x >= 2^n.
+Doc:
+ Set \emph{in place} the $n^{\text{th}}$ bit of the integer $x \geq 2^{n}$
+ starting from the right, i.e.~the coefficient of $2^{n}$ in the binary
+ expansion of $x$. To set a higher bit, use \kbd{x = bitor(x, 1<<n)}.
+
+ This function is used to work with bit vectors when speed is of the
+ essence, by initializing $x$ to a sufficiently large power of $2$.
+ This slightly awkward specification ensures the
+ highest bit of $x$ remains set, in particular \kbd{exponent}$(x)$ and the
+ total number of bits in the binary expansion remain constant.
+ \bprog
+ ? n = 100;  V = 1<<n; \\@com initialize V for n bits (0 to n-1)
+ ? forprime(p = 0, n-1, bitset(~V, p));
+ ? for (i=0, n-1, if (bittest(V,i), print1(i," ")));
+ 2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97
+ ? vecextract([0..n-1], bitnegimply(V, 1<<n))
+ %5 = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97]
+ @eprog\noindent The above is about 4 times faster than the natural
+ construction using a vector \kbd{V = vector(n)}. This bit vector construction
+ also uses less memory than a \typ{VEC} of integers, saving a factor 192
+ on a standard 64-bit machine. Note the technical complication of having to
+ set a sentinel highest bit: this ensures the length of the implied bit vector
+ remains constant, since the highest bit remains set throughout. The sentinel
+ bit is unset in the \kbd{vecextract} call using \kbd{bitnegimply} since we
+ can't use \kbd{bitclear} to clear a highest bit.
+ See \kbd{bitclear} for another example.

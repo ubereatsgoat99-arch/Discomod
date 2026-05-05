@@ -1,0 +1,10 @@
+Function: algtensor
+Section: algebras
+C-Name: algtensor
+Prototype: GGD3,L,
+Help: algtensor(al1,al2,{flag=3}): tensor product of al1 and al2.
+Doc: Given two algebras \var{al1} and \var{al2}, computes their tensor
+ product. $\fl$ has the same meaning as in \kbd{alginit}.
+
+ Currently only implemented for cyclic algebras of coprime degree over the same
+ center~$K$, and the tensor product is over~$K$.

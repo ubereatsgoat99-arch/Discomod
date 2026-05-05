@@ -1,0 +1,35 @@
+Function: algmodprlift
+Section: algebras
+C-Name: algmodprlift
+Prototype: GGG
+Help: algmodprlift(al,x,modP): a preimage of x under the reduction map stored in
+ modP, cf algmodprinit.
+Doc: Given a central simple algebra \var{al} output by \tet{alginit}, a
+ matrix~\var{x} and the output~\var{modP} of \tet{algmodprinit}, computes a
+ preimage of~\var{x} under the corresponding map.
+ \bprog
+ ? nf = nfinit(y^2+2);
+ ? alg = alginit(nf,[-1,-3]);
+ ? pr = idealprimedec(nf,5)[1];
+ ? modP = algmodprinit(alg,pr,'z);
+ ? m = [1,2;3,4];
+ ? li = algmodprlift(alg,m,modP)
+ % = [0, 3, 2, 3, 0, 0, 4, 0]~
+ ? algmodpr(alg,li,modP)
+ % =
+ [1 2]
+
+ [3 4]
+ ? m = [0,z;1,0];
+ ? li = algmodprlift(alg,m,modP)
+ % = [4, 0, 4, 0, 1, 2, 3, 2]~
+ ? algmodpr(alg,li,modP)
+ % =
+ [0 z]
+
+ [1 0]
+ @eprog
+
+ Also accepts a matrix whose number of rows and columns are multiples of~$k$,
+ where the codomain of the map is~$M_k(\F_q)$; if they are not both equal
+ to~$k$, returns a matrix with coefficients in~\var{al}.

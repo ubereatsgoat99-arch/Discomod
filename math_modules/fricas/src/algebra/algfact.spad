@@ -1,0 +1,271 @@
+)abbrev package IALGFACT InnerAlgFactor
+++ Factorisation in a simple algebraic extension
+++ Author: Patrizia Gianni
+++ Description:
+++ Factorization of univariate polynomials with coefficients in an
+++ algebraic extension of a field over which we can factor UP's;
+++ Keywords: factorization, algebraic extension, univariate polynomial
+++ References: B. M. Trager, Algebraic factoring and rational
+++   function integration. In: Proceedings SYMSAC '76, Yorktown Heights,
+++   August 10--12, 1976, ACM Press, New York, pp.~219--226.
+
+InnerAlgFactor(F, UP, AlExt, AlPol) : Exports == Implementation where
+  F    : Field
+  UP   : UnivariatePolynomialCategory F
+  AlPol : UnivariatePolynomialCategory AlExt
+  AlExt : Join(Field, CharacteristicZero, MonogenicAlgebra(F, UP))
+  NUP   ==> SparseUnivariatePolynomial UP
+  N     ==> NonNegativeInteger
+  Z     ==> Integer
+  FR    ==> Factored UP
+  UPCF2 ==> UnivariatePolynomialCategoryFunctions2
+
+
+  Exports ==> with
+    factor : (AlPol, UP -> FR)  ->  Factored AlPol
+      ++ factor(p, f) returns a prime factorisation of p;
+      ++ f is a factorisation map for elements of UP;
+
+  Implementation ==> add
+    pnorm        : AlPol -> UP
+    convrt       : AlPol -> NUP
+    change       : UP    -> AlPol
+    perturbfactor : (AlPol, Z, UP -> FR) -> List AlPol
+    irrfactor    : (AlPol, Z, UP -> FR) -> List AlPol
+
+
+    perturbfactor(f, k, fact) ==
+      pol   := monomial(1$AlExt, 1)-
+               monomial(reduce monomial(k::F, 1)$UP , 0)
+      newf  := elt(f, pol)
+      lsols := irrfactor(newf, k, fact)
+      pol   := monomial(1, 1) +
+               monomial(reduce monomial(k::F, 1)$UP, 0)
+      [elt(pp, pol) for pp in lsols]
+
+    ---  factorize the square-free parts of f  ---
+    irrfactor(f, k, fact) ==
+      degree(f) =$N 1 => [f]
+      newf := f
+      nn   := pnorm f
+      --newval: RN := 1
+      --pert := false
+      --if not SqFr? nn then
+      --  pert := true
+      --  newterm := perturb(f)
+      --  newf := newterm.ppol
+      --  newval := newterm.pval
+      --  nn := newterm.nnorm
+      listfact := factorList fact nn
+      #listfact =$N 1 =>
+        first(listfact).exponent =$Z 1 => [f]
+        perturbfactor(f, k + 1, fact)
+      listerm : List(AlPol) := []
+      for pelt in listfact repeat
+        g    := gcd(change(pelt.factor), newf)
+        newf := (newf exquo g)::AlPol
+        listerm :=
+          pelt.exponent =$Z 1 => cons(g, listerm)
+          append(perturbfactor(g, k + 1, fact), listerm)
+      listerm
+
+    fUnion ==> Union("nil", "sqfr", "irred", "prime")
+    fFr ==> Record(flag : fUnion, factor : AlPol,
+                   exponent : NonNegativeInteger)
+
+    factor(f, fact) ==
+        sqf := squareFree f
+        fl : List(fFr) := []
+        for sq1 in factorList(sqf) repeat
+            e1 := sq1.exponent
+            for f1 in irrfactor(sq1.factor, 0, fact) repeat
+                fl := cons(["prime", f1, e1]$fFr, fl)
+        makeFR(unit(sqf), fl)
+
+    p := definingPolynomial()$AlExt
+    newp : NUP := map(x +-> x::UP, p)$UPCF2(F, UP, UP, NUP)
+
+    pnorm  q == resultant(convrt q, newp)
+    change q == map(coerce, q)$UPCF2(F, UP, AlExt, AlPol)
+
+    convrt q ==
+      swap(map(lift, q)$UPCF2(AlExt, AlPol,
+           UP, NUP))$CommuteUnivariatePolynomialCategory(F, UP, NUP)
+
+
+)abbrev package RFFACT RationalFunctionFactor
+++ Factorisation in UP FRAC POLY INT
+++ Author: Patrizia Gianni
+++ Description:
+++ Factorization of univariate polynomials with coefficients which
+++ are rational functions with integer coefficients.
+
+RationalFunctionFactor(UP) : Exports == Implementation where
+  UP : UnivariatePolynomialCategory Fraction Polynomial Integer
+
+  SY ==> Symbol
+  P  ==> Polynomial Integer
+  RF ==> Fraction P
+  UPCF2 ==> UnivariatePolynomialCategoryFunctions2
+
+  Exports ==> with
+    factor : UP -> Factored UP
+      ++ factor(p) returns a prime factorisation of p.
+
+  Implementation ==> add
+    likuniv : (P, SY, P) -> UP
+
+    dummy := new()$SY
+
+    likuniv(p, x, d) ==
+      map(y +-> y/d, univariate(p, x))$UPCF2(P, SparseUnivariatePolynomial P,
+                                          RF, UP)
+
+    factor p ==
+      d  := denom(q := elt(p, dummy::P :: RF))
+      map(x +-> likuniv(x, dummy, d),
+          factor(numer q)$MultivariateFactorize(SY,
+               IndexedExponents SY, Integer, P))$FactoredFunctions2(P, UP)
+
+
+)abbrev package ALGFACT AlgFactor
+++ Factorization of UP AN;
+++ Author: Manuel Bronstein
+++ Description:
+++ Factorization of univariate polynomials with coefficients in
+++ \spadtype{AlgebraicNumber}.
+
+AlgFactor(UP) : Exports == Implementation where
+  UP : UnivariatePolynomialCategory AlgebraicNumber
+
+  N   ==> NonNegativeInteger
+  Z   ==> Integer
+  Q   ==> Fraction Integer
+  AN  ==> AlgebraicNumber
+  UPQ ==> SparseUnivariatePolynomial Q
+  SUP ==> SparseUnivariatePolynomial AN
+  FR  ==> Factored UP
+
+  Exports ==> with
+    factor : (UP, List AN) -> FR
+      ++ factor(p, [a1, ..., an]) returns a prime factorisation of p
+      ++ over the field generated by its coefficients and a1, ..., an.
+    factor : UP            -> FR
+      ++ factor(p) returns a prime factorisation of p
+      ++ over the field generated by its coefficients.
+    split : UP            -> FR
+      ++ split(p) returns a prime factorisation of p
+      ++ over its splitting field.
+    doublyTransitive? : UP -> Boolean
+      ++ doublyTransitive?(p) is true if p is irreducible over
+      ++ the field K generated by its coefficients, and
+      ++ if \spad{p(X) / (X - a)} is irreducible over
+      ++ \spad{K(a)} where \spad{p(a) = 0}.
+
+  Implementation ==> add
+
+    EI ==> Expression(Integer)
+    K ==> Kernel(EI)
+
+    import from PolynomialCategoryQuotientFunctions(IndexedExponents K,
+                           K, Z, SparseMultivariatePolynomial(Z, K), EI)
+    import from Integer
+
+    UPCF2 ==> UnivariatePolynomialCategoryFunctions2
+
+    fact    : (UP,  List K) -> FR
+    ifactor : (SUP, List K) -> Factored SUP
+    extend  : (UP, N) -> FR
+    downpoly : UP  -> UPQ
+    liftpoly : UPQ -> UP
+    irred?  : UP  -> Boolean
+
+    import from List(AN)
+    import from Factored(UP)
+
+    ker_lst(la : List(AN)) : List(K) ==
+        tower([c::EI for c in la]$List(EI))
+
+    liftpoly p   == map(x +-> x::AN,  p)$UPCF2(Q, UPQ, AN, UP)
+    downpoly p   == map(x +-> retract(x)@Q, p)$UPCF2(AN, UP , Q, UPQ)
+    ifactor(p, l) == (fact(p pretend UP, l)) pretend Factored(SUP)
+    factor p     == fact(p, ker_lst(coefficients(p)))
+
+    factor(p, l) ==
+      fact(p, ker_lst(removeDuplicates(concat(l, coefficients p))))
+
+    split p ==
+      fp := factor p
+      unit(fp) *
+            _*/[extend(fc.factor, fc.exponent) for fc in factorList fp]
+
+    extend(p, n) ==
+      (degree p = 1) => primeFactor(p, n)
+      q := monomial(1, 1)$UP - zeroOf(p pretend SUP)::UP
+      primeFactor(q, n) * split((p exquo q)::UP) ^ n
+
+    doublyTransitive? p ==
+      irred? p and irred?((p exquo
+        (monomial(1, 1)$UP - zeroOf(p pretend SUP)::UP))::UP)
+
+    irred? p ==
+      fp := factorList factor p
+      size?(fp, 1) and first(fp).exponent = 1
+
+    SUPEI_to_SUP(pe : SparseUnivariatePolynomial(EI)) : SUP ==
+        map(retract, pe)$SparseUnivariatePolynomialFunctions2(EI, AN)
+
+    red_AN(x : AN, alpha : K, q : SparseUnivariatePolynomial(EI)) : SUP ==
+        SUPEI_to_SUP(univariate(x::EI, alpha, q))
+
+    fact(p, l) ==
+      (degree p = 1) => primeFactor(p, 1)
+      empty? l =>
+        dr := factor(downpoly p)$RationalFactorize(UPQ)
+        (liftpoly unit dr) *
+          _*/[primeFactor(liftpoly dc.factor, dc.exponent)
+            for dc in factorList dr]
+      q   := SUPEI_to_SUP(qe := minPoly(alpha := "max"/l)$EI)
+      newl  := remove((x : K) : Boolean +-> alpha = x, l)
+      sae := SimpleAlgebraicExtension(AN, SUP, q)
+      ups := SparseUnivariatePolynomial sae
+      fr  := factor(map(x +-> reduce(red_AN(x, alpha, qe)),
+                     p)$UPCF2(AN, UP, sae, ups),
+                    x +-> ifactor(x, newl))$InnerAlgFactor(AN, SUP, sae, ups)
+      newalpha := retract((alpha::EI))@AN
+      map((x : sae) : AN +-> (lift(x)$sae) newalpha, unit fr)$UPCF2(sae,
+                                ups, AN, UP) *
+            _*/[primeFactor(map((x : sae) : AN +-> (lift(x)$sae) newalpha,
+                      fc.factor)$UPCF2(sae, ups, AN, UP),
+                                 fc.exponent) for fc in factorList fr]
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

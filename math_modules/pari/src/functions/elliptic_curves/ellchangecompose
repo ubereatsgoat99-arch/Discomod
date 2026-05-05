@@ -1,0 +1,20 @@
+Function: ellchangecompose
+Section: elliptic_curves
+C-Name: ellchangecompose
+Prototype: GGG
+Help: ellchangecompose(E,v,w): composes the transformations given
+ by v=[u,r,s,t] and w=[U,R,S,T].
+Doc:
+ Compose the transformations given by \kbd{v=[u,r,s,t]} and \kbd{w=[U,R,S,T]}
+ and return \kbd{[u*U,r+R*u\^{}2,s+S*u,t+T*u\^{}3+R*s*u\^{}2]}.
+ \bprog
+ ? E = ellinit([a1,a2,a3,a4,a6]);
+ ? v = [u,r,s,t]; w = [U,R,S,T]; P = [x,y];
+ ? vw = ellchangecompose(E,v,w)
+ %3 = [U*u,R*u^2+r,S*u+s,T*u^3+R*s*u^2+t]
+ ? ellchangepoint(ellchangepoint(E,P,v),w) == ellchangepoint(E,P,vw)
+ %4 = 1
+ @eprog\noindent Note that the elliptic curve $E$ is not needed in itself,
+ it indicates the domain over which the transformation is defined. This
+ is required when $E$ and the transformation are defined over a number field,
+ in order to support number field elements given in column form.

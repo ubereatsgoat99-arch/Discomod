@@ -1,0 +1,155 @@
+# The purpose of this Makefile is to create a fresh Lisp image,
+# $(OUT)/lisp, augmented with a useful routines defined in
+# fricas-lisp file.  This effectively creates our own dialect
+# of Lisp, which is used during the rest of build process
+
+fricas_quiet_flags = @fricas_quiet_flags@
+lisp_flavor=@fricas_lisp_flavor@
+fricas_gcl_rsym_hack = @fricas_gcl_rsym_hack@
+fricas_c_runtime_extra = @fricas_c_runtime_extra@
+fricas_algebra_optimization = @fricas_algebra_optimization@
+fricas_has_directory_operations = @fricas_has_directory_operations@
+GMP_WRAP_SO_TARGET = @GMP_WRAP_SO_TARGET@
+GMP_LIBDIR = @GMP_LIBDIR@
+GMP_EXT = @GMP_EXT@
+LISP_CMD = $(FRICAS_LISP) $(fricas_quiet_flags)
+
+## Create a fresh image for building interpsys and FRICASsys
+OUT = $(fricas_build_bindir)
+
+subdir = src/lisp/
+
+build_libdir = $(abs_top_builddir)/src/lib
+
+lisp_DEPENDENCIES = $(build_libdir)/cfuns-c.o \
+		    $(build_libdir)/sockio-c.o \
+		    $(build_libdir)/libspad.a
+
+ifeq ($(lisp_flavor),sbcl)
+NUM_GMP = num_gmpx.lisp
+else
+ifeq ($(lisp_flavor),openmcl)
+NUM_GMP = num_gmpx.lisp
+else
+NUM_GMP =
+endif
+endif
+
+.PHONY: all all-lisp
+all: all-ax all-lisp
+
+all-ax all-lisp: $(OUT)/lisp$(EXEEXT)
+
+## Create a fresh image for building interpsys and FRICASsys
+## These objects files are the C runtime support
+## and must be compiled into the Lisp image,
+## as they must be present in the final interpreter
+## and image.
+lisp_c_objects = \
+		../lib/bsdsignal.o \
+		../lib/cfuns-c.o \
+		../lib/sockio-c.o
+
+$(OUT)/lisp$(EXEEXT): do_it.$(lisp_flavor)
+
+do_it.gcl: fricas-lisp.lisp fricas-package.lisp fricas-config.lisp \
+           primitives.lisp $(srcdir)/../lib/bsdsignal.c \
+           $(srcdir)/../lib/cfuns-c.c $(srcdir)/../lib/sockio-c.c
+	$(fricas_gcl_rsym_hack)
+	echo '(setq si::*optimize-maximum-pages* nil)' \
+	     '(load "fricas-package.lisp") (load "fricas-config.lisp")' \
+	     '(load "fricas-lisp.lisp")' \
+	     '(setq compiler::*default-system-p* t)' \
+	     '(let ((compiler::*cc* (concatenate (quote string) ' \
+	         'compiler::*cc* " -I../../config -I$(srcdir)/../include ' \
+	         '-I$(srcdir)/../lib"))) ' \
+	            '(load (compile-file "fricas-lisp.lisp")))' \
+	     '(load (compile-file "primitives.lisp"))' \
+	     '(progn (setq si::*code-block-reserve* "") (si::gbc t) ' \
+	          '(setq si::*code-block-reserve* ' \
+	               '(make-array 10000000 ' \
+	                     ':element-type (quote character) ' \
+	                     ':static t) ' \
+	                'si::*optimize-maximum-pages* t))' \
+	     '(in-package "FRICAS-LISP") ' \
+	     '(save-core "$(OUT)/lisp$(EXEEXT)")' | GCL_ANSI=t $(FRICAS_LISP)
+	$(STAMP) $@
+
+fricas-lisp.lisp: $(srcdir)/fricas-lisp.lisp
+	cp $< $@
+
+fricas-package.lisp: $(srcdir)/fricas-package.lisp
+	cp $< $@
+
+primitives.lisp : $(srcdir)/primitives.lisp
+	cp $< $@
+
+num_gmpx.lisp: $(srcdir)/num_gmp.lisp
+	if [ x$(GMP_WRAP_SO_TARGET) != x ] ; then \
+	    sed -e "s|libgmp.so|$(GMP_LIBDIR)libgmp.$(GMP_EXT)|" $< > $@ ; \
+	else \
+	    (echo '(in-package "FRICAS-LISP")' ; \
+	     echo '(defun init-gmp(x) nil)' ; \
+	     echo '(defun uninstall-gmp-multiplication() nil)') > $@ ; \
+	fi
+
+fricas-config.lisp:
+	echo '(in-package "FRICAS-LISP")' > $@
+	echo '(defparameter algebra-optimization' \
+	     '(quote $(fricas_algebra_optimization)))' >> $@
+	if [ x$(fricas_has_directory_operations) = xyes ] ; then \
+	    echo '(if (not (member :fricas_has_remove_directory' \
+                          ' *features*)) ' \
+	             '(push :fricas_has_remove_directory *features*))' \
+	       >> $@ ; \
+	fi
+
+do_it.ecl: fricas-lisp.lisp fricas-package.lisp fricas-config.lisp \
+           primitives.lisp
+	echo "(in-package \"FRICAS-LISP\")" > fricas-ecl.lisp
+	echo "(defvar *fricas-extra-c-files* (quote (" \
+	     $(patsubst %, "\"%\"", $(lisp_c_objects)) \
+	     ")))" >> fricas-ecl.lisp
+	echo "(defvar *fricas-initial-lisp-objects* (quote (" \
+	      $(patsubst %, "\"../lisp/%\"", \
+	          fricas-package.o fricas-config.o fricas-ecl.o \
+		  fricas-lisp.o primitives.o) ")))" \
+	            >> fricas-ecl.lisp
+	echo "(defvar *fricas-initial-lisp-forms* nil)" >> fricas-ecl.lisp
+	echo '(load "fricas-package.lisp")' \
+	     '(load "fricas-config.lisp")' \
+	     '(load "fricas-ecl.lisp")' \
+	     '(load "fricas-lisp.lisp")' \
+	     '(in-package "FRICAS-LISP")' \
+	     '(|fricas_compile_file| "fricas-package.lisp"' \
+                              ' "fricas-package.$(LISPOBJEXT)")' \
+	     '(|fricas_compile_file| "fricas-config.lisp"' \
+                              ' "fricas-config.$(LISPOBJEXT)")' \
+	     '(|fricas_compile_file| "fricas-ecl.lisp"' \
+                              ' "fricas-ecl.$(LISPOBJEXT)")' \
+	     '(|fricas_compile_file| "fricas-lisp.lisp"' \
+                              ' "fricas-lisp.$(LISPOBJEXT)")' \
+	     '(|fricas_compile_file| "primitives.lisp"' \
+                              ' "primitives.$(LISPOBJEXT)")' \
+	     '(make-program "${OUT}/lisp$(EXEEXT)" nil)' | $(FRICAS_LISP)
+	$(STAMP) $@
+
+do_it.sbcl do_it.clisp do_it.openmcl do_it.lispworks do_it.cmucl: \
+   fricas-lisp.lisp fricas-package.lisp fricas-config.lisp $(NUM_GMP) \
+   primitives.lisp
+	echo '(load "fricas-package.lisp")' \
+	    '(load "fricas-config.lisp")' \
+            '#+(or :sbcl :openmcl) (load (compile-file "num_gmpx.lisp"))' \
+	    '(load (compile-file "fricas-lisp.lisp"))' \
+	    '(load (compile-file "primitives.lisp"))' \
+            '(in-package "FRICAS-LISP") (save-core "${OUT}/lisp$(EXEEXT)")' \
+         | $(LISP_CMD)
+	 $(STAMP) $@
+
+clean-local:
+	-rm -f $(OUT)/lisp$(EXEEXT) prelisp$(EXEEXT) do_it.$(lisp_flavor)
+	-rm -f *.$(LISPOBJEXT) fricas-ecl.lisp fricas-config.lisp $(NUM_GMP)
+	-rm -f *.fn *.data *.lib raw_prelisp_map
+
+distclean-local: clean-local
+	-rm -f Makefile

@@ -1,0 +1,3 @@
+extern XImage * HTReadBitmapFile(Display * display, int screen,
+                                 char * filename, int * width, int * height);
+extern ImageStruct * insert_image_struct(char * filename);

@@ -1,0 +1,426 @@
+default(parisize,"64M");
+
+qamt(a,b) =
+{
+  my(m_i,m_j,m_k);
+  m_i = [0,a,0,0;
+         1,0,0,0;
+         0,0,0,a;
+         0,0,1,0];
+  m_j = [0, 0,b, 0;
+         0, 0,0,-b;
+         1, 0,0, 0;
+         0,-1,0, 0];
+  m_k = [0, 0,0,-a*b;
+         0, 0,b,   0;
+         0,-a,0,   0;
+         1, 0,0,   0];
+  [matid(4), m_i, m_j, m_k]
+};
+
+testalgeltfromnf(A) =
+{
+  my(nf,n,x,a,pol,y,b,c,d);
+  nf = algcenter(A);
+  n = poldegree(nf.pol);
+  x = vectorv(n,i,random(-10));
+  a = algeltfromnf(A,x);
+  pol = minpoly(nfbasistoalg(nf,x));
+  y = vectorv(n,i,random(-10));
+  b = algeltfromnf(A,y);
+  c = algeltfromnf(A,nfeltmul(nf,x,y));
+  d = algeltfromnf(A,x+y);
+  [algpoleval(A,pol,a) == 0, \\image vanishes on minpoly
+   c == algmul(A,a,b), \\map is multiplicative
+   d == algadd(A,a,b)] \\map is additive
+};
+
+vec2mat(d,n,V,g) =
+{
+  my(M = matrix(d,d), c);
+  for(i=0,d^2*n-1,
+    c = V[i+1];
+    M[i\(n*d) + 1, (i\n)%d + 1] += c*g^(i%n)
+  );
+  M
+};
+
+testalgmodpr(A) =
+{
+  my(map,mapi,nf,dec,pr,N,x,y,xy,fx,fy,fxy,d,n,L,M1,M2,g,pr2,ffone,tau,km,modP);
+  L = List();
+  nf = algcenter(A);
+  forprime(p=1,10,
+    dec = idealprimedec(nf,p);
+    pr = dec[#dec];
+    if(algtype(A)==2,
+      if(algdisc(A)%p==0, next);
+    ,\\else
+      if(algisramified(A,pr), next);
+    );
+    d = algdegree(A);
+    n = pr.f;
+    modP = algmodprinit(A,pr);
+    [pr2,km,ffone,map,mapi,tau] = modP;
+    listput(~L, pr2 == pr && km[1]==d && km[2]==n);
+    listput(~L, matsize(mapi)[2] == n*d^2);
+    N = algdim(A,1);
+    x = vectorv(N,i,random(-10));
+    y = vectorv(N,i,random(-10));
+    fx = algmodpr(A,x,modP);
+    fy = algmodpr(A,y,modP);
+    listput(~L, fx == algmodpr(A,algbasistoalg(A,x),modP)); \\works on alg form
+    xy = algmul(A,x,y);
+    fxy = algmodpr(A,xy,modP);
+    listput(~L, fxy == fx*fy); \\map is multiplicative
+    x = vectorv(d^2*n,i,random(p));
+    g = ffgen(ffone);
+    M2 = vec2mat(d,n,x,g);
+    M1 = algmodpr(A,algmodprlift(A,M2,modP),modP);
+    listput(~L, M1 == M2); \\maps are inverse of each other
+    x = idealhnf(nf,pr)*vectorv(poldegree(nf.pol),i,random(p));
+    listput(~L,algmodpr(A, algeltfromnf(A,x), modP) == 0); \\pr maps to 0
+  );
+  Vec(L);
+};
+
+eichlerprimepower(al,pr,k) = algeichlerbasis(al,Mat([pr,k]));
+
+diag(M) = vector(#M~,i,M[i,i]);
+
+testeichlerprimepower(A) =
+{
+  my(L,nf,dec,pr,n,ord,lat,N,d,Ap,mt,B,Bi,P,AP,comm,Pk,maxp,maxk);
+  L = List();
+  nf = algcenter(A);
+  N = algdim(A,1);
+  d = algdegree(A);
+  if(N>20,
+    maxp = 3;
+    maxk = 1;
+  ,\\else
+    maxp = 20;
+    maxk = 5;
+  );
+  forprime(p=1,maxp,
+    dec = idealprimedec(nf,p);
+    pr = dec[#dec];
+    n = pr.f;
+    if(algtype(A)==2,
+      if(algdisc(A)%p==0, next);
+    ,\\else
+      if(algisramified(A,pr), next);
+    );
+    for(k=1,maxk,
+      ord = eichlerprimepower(A,pr,k);
+      listput(~L, ord[,1]==1); \\contains 1
+      listput(~L, denominator(ord)==1); \\contained in maxord
+      lat = [ord,1];
+      listput(~L, vecprod(diag(ord)) == idealnorm(nf,pr)^(k*(d-1))); \\index
+      B = matimagemod(ord,p);
+      Bi = lift(Mod(B,p)^(-1));
+      mt = [Bi*algtomatrix(A,b,1)*B | b <- Vec(B)];
+      listput(~L, denominator(mt)==1); \\stable under mult
+      Ap = algtableinit(mt,p);
+      P = matimagemod(algtomatrix(A,algeltfromnf(A,pr.gen[2]),1),p); \\pr*maxord
+      P = lift(Bi*matintersect(Mod(B,p),Mod(P,p)));
+      AP = algquotient(Ap,P);
+      listput(~L, algdim(AP) == n*(d^2-(d-1))); \\dim ord/pr*maxord
+      my([J,ssdec] = algsimpledec(AP));
+      listput(~L, (d==1 && J==0) || matsize(J)[2] == (d-1)*n); \\dim radical
+      listput(~L, d==1 || (#ssdec == 2 \\2 semisimple factors
+        && algdim(ssdec[1])==n \\first is residue field
+        && #algcenter(ssdec[2])==n)); \\second is M_{d-1}(residue field)
+      Pk = algeltfromnf(A,idealtwoelt(nf,idealpow(nf,pr,k))[2]);
+      Pk = mathnfmodid(algtomatrix(A,Pk,1),p^k);
+      listput(~L, alglatsubset(A,alglathnf(A,Pk),lat)); \\contains pr^k*maxord
+      comm = matimagemod(Mat([algmul(A,b1,b2)-algmul(A,b2,b1) | b1 <- Vec(ord); b2 <- Vec(ord)]),p^k);
+      comm = mathnfmodid(concat(comm,Pk),p^k);
+      listput(~L, vecprod(diag(comm)) == idealnorm(nf,pr)^(k*if(d==1,1,d+1))); \\index commutator
+    );
+  );
+  Vec(L);
+};
+
+testeichlerbasis(A) =
+{
+  my(nf,L,Lpr,Lm,m=0,B,ind,d,lat);
+  L = List();
+  nf = algcenter(A);
+  d = algdegree(A);
+  Lpr = List();
+  Lm = List();
+  ind = 1;
+  forprime(p=1,20,
+    my(dec);
+    if(algtype(A)==2 && algdisc(A)%p==0, next);
+    dec = idealprimedec(nf,p);
+    foreach(dec,pr,
+      if(algtype(A)==3 && algisramified(A,pr), next);
+      m = (m+1)%5;
+      if(m,
+        listput(~Lpr,pr);
+        listput(~Lm,m);
+        ind *= pr.p^(pr.f*(d-1)*m);
+      );
+    );
+  );
+  N = Mat([Col(Lpr),Col(Lm)]);
+  B = algeichlerbasis(A,N);
+  listput(~L, matdet(B) == ind);
+  lat = [matid(algdim(A,1)),1];
+  \\intersection of pr-parts
+  for(i=1,#Lpr,
+    my(latpr,prm);
+    prm = idealpow(nf,Lpr[i],Lm[i]);
+    prm = idealtwoelt(nf,prm);
+    prm = mathnfmodid(algtomatrix(A,algeltfromnf(A,prm[2]),1),prm[1]);
+    prm = alglathnf(A,prm);
+    latpr = alglatadd(A,[B,1],prm);
+    lat = alglatinter(A,lat,latpr);
+  );
+  listput(~L,lat[1]==B);
+  Vec(L);
+};
+
+alltests(A) =
+{
+  print1("eltfromnf: "); print(testalgeltfromnf(A));
+  print1("modpr: "); print(testalgmodpr(A));
+  print1("eichlerprimepower: "); print(testeichlerprimepower(A));
+  print1("eichlerbasis: "); print(testeichlerbasis(A));
+};
+
+nf = nfinit(y);
+A = alginit(nf,1);
+print("trivial algebra");
+alltests(A);
+
+A = alginit(nf,[-1,-1]);
+print("quatalg/Q");
+alltests(A);
+
+A = alginit(nf,algmultable(A));
+print("table quatalg/Q");
+alltests(A);
+
+pr1 = idealprimedec(nf,3)[1];
+pr2 = idealprimedec(nf,5)[1];
+A = alginit(nf, [3,[[pr1,pr2],[1/3,-1/3]],[0]]);
+print("degree 3 alg/Q");
+alltests(A);
+
+A = alginit(nf, [5,[[pr1,pr2],[1/5,-1/5]],[0]]);
+print("degree 5 alg/Q");
+alltests(A);
+
+nf = nfinit(y^2+3);
+A = alginit(nf,1);
+print("degree 1 alg/IQF");
+alltests(A);
+
+A = alginit(nf,[y,7+9*y]);
+print("quatalg/IQF");
+alltests(A);
+
+A = alginit(nf,qamt(y,3+5*y)); \\ramified at pr2 and pr7
+print("table quatalg/IQF");
+alltests(A);
+
+pr1 = idealprimedec(nf,3)[1];
+pr2 = idealprimedec(nf,7)[1];
+A = alginit(nf, [3,[[pr1,pr2],[1/3,-1/3]],[]]);
+print("degree 3 alg/IQF");
+alltests(A);
+
+A = alginit(nf, [5,[[pr1,pr2],[1/5,-1/5]],[]],,1);
+print("degree 5 alg/IQF");
+alltests(A);
+
+
+print("algmodpr");
+setrand(1);
+nf = nfinit(y^2+7);
+alg = alginit(nf,[-1,-1]);
+[pr1,pr2] = idealprimedec(nf,2);
+g1 = pr1.gen[2];
+g2 = pr2.gen[2];
+modP = algmodprinit(alg,pr1);
+a = algrandom(alg,20);
+b = algmul(alg,algeltfromnf(alg,g1),a);
+c = algdivl(alg,algeltfromnf(alg,g2),b);
+m = algmodpr(alg,b,modP);
+m == 0
+type(m[1,1]) == "t_FFELT"
+m = algmodpr(alg,c,modP);
+m == 0
+type(m[1,1]) == "t_FFELT"
+pr = idealprimedec(nf,3)[1];
+modP = algmodprinit(alg,pr); \\tau == 1
+algmodpr(alg,a/3,modP);
+
+print("algmodpr for matrices");
+nf = nfinit(y^3-3*y-1);
+alg = alginit(nf, [-1,-3]);
+pr1 = idealprimedec(nf,3)[1];
+pr2 = idealprimedec(nf,5)[1];
+modP1 = algmodprinit(alg,pr1);
+modP2 = algmodprinit(alg,pr2);
+M = matrix(4,5,i,j,algrandom(alg,10));
+matsize(M)
+modP1[2]
+matsize(algmodpr(alg,M,modP1))
+modP2[2]
+m = algmodpr(alg,M,modP2);
+matsize(m)
+Mod(algmodprlift(alg,m,modP2)-M,5) == 0
+algmodprlift(alg,[;],modP1)
+algmodprlift(alg,matrix(0,5),modP1)
+m = matrix(2,3,i,j,random(modP1[3]));
+matsize(m)
+M = algmodprlift(alg,m,modP1);
+matsize(M)
+algmodpr(alg,M,modP1) == m
+m = matrix(14,4,i,j,random(modP2[3]));
+matsize(m)
+M = algmodprlift(alg,m,modP2);
+matsize(M)
+algmodpr(alg,M,modP2) == m
+
+print("algeichlerbasis");
+nf = nfinit(y);
+alg = alginit(nf,[-1,-1]);
+pr3 = idealprimedec(nf,3)[1];
+pr5 = idealprimedec(nf,5)[1];
+algeichlerbasis(alg,Mat(1)) == matid(4)
+ord3 = algeichlerbasis(alg,pr3);
+matdet(ord3) == 3
+ord5 = algeichlerbasis(alg,pr5);
+matdet(ord5) == 5
+ord9 = algeichlerbasis(alg,Mat([pr3,2]));
+matdet(ord9) == 3^2
+ord15 = algeichlerbasis(alg,[pr3,1;pr5,1]);
+matdet(ord15) == 3*5
+nf = nfinit(y^2+11);
+alg = alginit(nf,[-1,3]); \\ramified at primes above 3
+pr1 = idealprimedec(nf,5)[1];
+pr2 = idealprimedec(nf,5)[2];
+ord = algeichlerbasis(alg,[pr1,2;pr2,3]);
+matdet(ord) == 5^5
+pr7 = idealprimedec(nf,7)[1];
+ord = algeichlerbasis(alg,[pr1,1;pr7,3;pr2,2]);
+matdet(ord) == 5^3 * 7^6
+
+
+print("doc algmodprinit");
+nf = nfinit(y^2-5);
+al = alginit(nf, [-1,-1]); \\quaternion algebra unramified at all primes
+pr = idealprimedec(nf, 3)[1]; pr.f
+modP = algmodprinit(al, pr, 'a);
+modP[2] \\image in M_2(F_{3^2})
+type(modP[3])
+m = algmodpr(al,algrandom(al,3),modP);
+matsize(m)
+type(m[1,1])
+m[1,1].p
+m[1,1].mod
+nf = nfinit(y); \\ Q
+al = alginit(nf, [-1,-1]); \\ quaternion algebra ramified at 2 and oo
+pr = idealprimedec(nf, 2)[1];
+modP = algmodprinit(al, pr, 'a);
+modP[2] \\ image in M_1(F_{2^2})
+m = algmodpr(al,algrandom(al,10),modP);
+matsize(m)
+type(m[1,1])
+m[1,1].p
+m[1,1].mod
+
+print("doc algmodpr");
+nf = nfinit(y^2-2);
+alg = alginit(nf, [-1,-1]);
+pr = idealprimedec(nf,7)[1];
+modP = algmodprinit(alg,pr);
+a = algrandom(alg,10);
+algmodpr(alg,a,modP)^2 == algmodpr(alg,algsqr(alg,a),modP)
+algmodpr(alg,a/3,modP) == algmodpr(alg,a,modP)/3
+algmodpr(alg,a/7,modP) \\should fail
+pr2 = idealprimedec(nf,7)[2];
+c = algeltfromnf(alg,pr2.gen[2]);
+b = algdivl(alg, c, a);
+denominator(b) % 7 == 0
+algmodpr(alg,c,modP)*algmodpr(alg,b,modP) == algmodpr(alg,a,modP)
+algmodpr(alg,algmul(alg,a,algeltfromnf(alg,pr.gen[2])),modP)==0
+
+print("doc algmodprlift");
+z='z;
+nf = nfinit(y^2+2);
+alg = alginit(nf,[-1,-3]);
+pr = idealprimedec(nf,5)[1];
+modP = algmodprinit(alg,pr,'z);
+m = [1,2;3,4];
+li = algmodprlift(alg,m,modP);
+algmodpr(alg,li,modP) == m
+m = [0,z;1,0];
+li = algmodprlift(alg,m,modP);
+algmodpr(alg,li,modP) == subst(m,'z,ffgen(modP[3]))
+m = ['z,1;2,1+'z];
+li = algmodprlift(alg,m,modP);
+algmodpr(alg,li,modP) == subst(m,'z,ffgen(modP[3]))
+pr = idealprimedec(nf,2)[1];
+modP = algmodprinit(alg,pr,'z);
+m = [1,0;1,0];
+li = algmodprlift(alg,m,modP);
+algmodpr(alg,li,modP) == m
+
+print("doc algeichlerbasis");
+nf = nfinit(y);
+al = alginit(nf, [-1,-1]);
+B = algeichlerbasis(al, 3^27);
+matdet(B) == 3^27 \\ B has the expected index
+alt = algtableinit(algmultable(al),3); \\ maximal order mod 3
+alB = algsubalg(alt, matimage(Mod(B,3)))[1]; \\ image of Eichler order
+algdim(alB)
+[J,dec] = algsimpledec(alB);
+#J \\ 1-dimensional radical
+#dec \\ semisimplification F3 x F3
+
+
+\\bad inputs
+algeltfromnf([], [1]~);
+nf = nfinit(y^2-5);
+A = alginit(nf,[-1,y]);
+pr2 = idealprimedec(nf,2)[1];
+pr3 = idealprimedec(nf,3)[1];
+algeltfromnf(A, [1,2,3]~);
+algmodprinit([], pr2);
+tA = algtableinit(algmultable(A),0);
+rA = alginit(0.,1/2);
+algmodprinit(tA, pr2);
+algmodprinit(rA, pr2);
+algmodprinit(A,[]);
+modP = algmodprinit(A,pr3);
+a = algrandom(A,10);
+algmodpr([],a,modP)
+algmodpr(tA,a,modP)
+algmodpr(rA,a,modP)
+algmodpr(A,[]~,modP)
+algmodpr(A,a,[1..10])
+algmodpr(A,a,[1..7])
+algmodpr(A,a,[modP[1],2,3,4,5,6,7])
+algmodpr(A,a,concat([modP[1..2],[3..7]]))
+algmodpr(A,a,concat([modP[1..3],[4..7]]))
+algmodpr(A,a,concat([modP[1..4],[5..7]]))
+algmodpr(A,a,concat([modP[1..5],[6..7]]))
+algmodpr(A,a,concat([modP[1..6],[7..7]]))
+m = algmodpr(A,a,modP);
+algmodprlift([],m,modP)
+algmodprlift(A,[],modP)
+algmodprlift(A,[1,2,3;1,2,3],modP)
+algmodprlift(A,[1,2;1,2;1,2],modP)
+algmodprlift(A,['a,'b;'c,'d],modP)
+algmodprlift(A,m,[])
+algeichlerbasis([],pr2);
+algeichlerbasis(tA,pr2);
+algeichlerbasis(rA,pr2);
+algeichlerbasis(A,[]);
+algeichlerbasis(A,O(5));

@@ -1,0 +1,777 @@
+)if false
+\documentclass{article}
+\usepackage{axiom}
+\newcommand{\FriCAS}{{\tt FriCAS}}
+\begin{document}
+\title{unittest.spad}
+\author{Martin Rubey}
+\maketitle
+\begin{abstract}
+  The packages defined in this file enable us to write unit tests for {\FriCAS}
+  library.
+\end{abstract}
+\tableofcontents
+\section{Usage}
+To make writing tests and checking them as easy as possible, we provide the
+following functions:
+\begin{description}
+\item[\spadfun{testsuite}] introduces a new testsuite, which is composed of
+  several testcases,
+\item[\spadfun{testcase}] introduces a new testcase, which is composed of
+  several tests,
+\item[\spadfun{testEquals}] checks equality of two elements and steps an
+  appropriate counter, depending on whether equality holds or not,
+\item[\spadfun{testNotEquals}] checks inequality of two elements and
+\item[\spadfun{testTrue}] checks whether a statement is true.
+\item[\spadfun{testLibraryError}] asserts that an error should be raised.
+\item[\spadfun{testRealEquals}, \spadfun{testComplexEquals}] assert equality up
+  to rounding error.
+\item[\spadfun{xftestEquals}] asserts that a failure is expected, similarly for
+  the other operations.
+\item[\spadfun{statistics}] outputs for each testcase the number of tests and
+  the number and indices of failed (or fatal) tests and tests that pass
+  unexpectedly.
+\end{description}
+
+To be able to detect fatal errors, we have to pass the arguments to
+\spadfun{testEquals}, \spadfun{testNotEquals} and \spadfun{testTrue} as
+strings.  For example:
+\begin{verbatim}
+    f := (x+a)/(x*(x^3+(b+c)*x^2+b*c*x))
+    testEquals("numberOfFractionalTerms partialFraction(f, x)", "3")
+    s1 := "ab"; s2 := concat("a", "b");
+    testEquals("s1", "s2")
+\end{verbatim}
+would be valid tests.  If you want strings inside arguments
+escape string quotes like:
+\begin{verbatim}
+    testEquals("concat(_"a_", _"b_")", "_"ab_"")
+\end{verbatim}
+
+The system command \verb|)clear completely| resets all the statistics counters,
+while \verb|)clear all| leaves them untouched.  Introducing a new testsuite or
+a new testcase calls \verb|)clear all|, so it should not be necessary to call
+it manually.  We provide a second function \spadfun{testcaseNoClear} that does
+not clear the environment.
+
+The packages defined in this file are meant to be used as regression test
+facility.  Therefore, we do not expose them automatically.  Rather, they should
+be exposed using
+\begin{verbatim}
+)expose UnittestCount UnittestAux Unittest
+\end{verbatim}
+at the very beginning of the regression testing.
+)endif
+
+)abbrev package TESTCNT UnittestCount
+++ Author: Martin Rubey
+++ Description:
+++  UnittestCount is a package that keeps track of statistics
+++  collected during testing.  It is separate from
+++  \spadtype{UnittestAux} because the latter takes an argument,
+++  and we want the state to be common for all arguments.
+UnittestCount() : with
+
+     testsuite : String -> Void
+       ++ testsuite s starts a new testsuite with s as title. It also calls
+       ++ \spad{clear all}.  A testsuite is composed of several testcases.
+
+     testsuiteNoClear : String -> Void
+       ++ testsuiteNoClear s starts a new testsuite with s as title, without
+       ++ calling \spad{clear all}.  A testsuite is composed of several
+       ++ testcases.
+
+     testcase : String -> Void
+       ++ testcase s starts a new testcase with s as title.  It also calls
+       ++ \spad{clear all}.  A testcase is composed of several tests.
+
+     testcaseNoClear : String -> Void
+       ++ testcaseNoClear s, starts a new testcase with s as title, without
+       ++ calling \spad{clear all}.  A testcase is composed of several tests.
+
+     statistics : () -> Void
+       ++ statistics() prints out a summary of the outcome of the testcases so
+       ++ far. Use \spad{clear completely} to reset the statistics.
+
+     incTest : () -> Void
+       ++ incTest is an internal function that steps the test number.
+
+     incPass : () -> Void
+       ++ incPass is an internal function that steps the number of passed
+       ++ tests.
+
+     incFail : (String, List OutputForm) -> Void
+       ++ incFail(s, o) is an internal function that steps the number of
+       ++ failed tests and records in- and output.
+
+     incXfPass : (String, List OutputForm) -> Void
+       ++ incXfPass(s, o) is an internal function that steps the number
+       ++ of tests that passed but were expected to fail and records
+       ++ in- and output.
+
+     incXfFail : () -> Void
+       ++ incXfFail() is an internal function that steps the number
+       ++ expected failures.
+
+     incLibraryError : (String, List OutputForm) -> Void
+       ++ incLibraryError is an internal function that steps the number of
+       ++ failed tests, but not the number of tests.
+
+     incXfLibraryError : (String, List OutputForm) -> Void
+       ++ incXfLibraryError is like incLibraryError, but using expected
+       ++ failures.
+
+     incFatal : String -> Void
+       ++ incFatal s is an internal function that steps the number of fatal
+       ++ tests and records input.
+
+     incXfFatal : String -> Void
+       ++ incXfFatal is like incFatal, but for expected failures.
+
+     addWarning : OutputForm -> Void
+       ++ addWarning s is an internal function that adds s, together with an
+       ++ indication of the current testcase and the current testsuite to the
+       ++ list of warnings.
+
+  == add
+
+     O ==> OutputForm
+     P ==> OutputPackage
+
+     maxWidth : NonNegativeInteger := 77
+
+     FAILED    ==> Record(index : Integer,
+                          input : String,
+                          output : List OutputForm)
+
+     FATAL     ==> Record(index : Integer,
+                          input : String)
+
+     TESTCASE  ==> Record(total : Integer,
+                          fail : Integer,
+                          xfail : Integer,
+                          xfpass : Integer,
+                          fatalities : List FATAL,
+                          xfpassed : List FAILED,
+                          failed : List FAILED)
+
+     TESTSUITE ==> AssociationList(String, TESTCASE)
+
+     tests : AssociationList(String, TESTSUITE) := empty()
+     warnings : List O := []
+
+     currentTestcase : String := ""
+     currentTestsuite : String := ""
+
+     testsuite s ==
+         systemCommand("clear all")$MoreSystemCommands
+         testsuiteNoClear s
+
+     testsuiteNoClear s ==
+         if #s > 15
+         then messagePrint("WARNING: string for testsuite should have less than "
+                           "15 characters!")$OutputForm
+
+         currentTestsuite := s
+         insert!([currentTestsuite, empty()$TESTSUITE]_
+                 $Record(key : String, entry : TESTSUITE), _
+                 tests)
+
+     testcaseNoClear s ==
+         -- if #s > maxWidth - # "  Testcase: " then
+         --  messagePrint("WARNING: string for testcase should have less than "
+         --                  string(maxWidth - # "  Testcase: ") _
+         --                  " characters!")$OutputForm
+
+         currentTestcase := s
+         insert!([currentTestcase, _
+                  [0, 0, 0, 0, [], [], []]$TESTCASE]$Record(key : String, entry : TESTCASE), _
+                 tests.currentTestsuite)
+
+     testcase s ==
+         systemCommand("clear all")$MoreSystemCommands
+         testcaseNoClear s
+
+     incTest() ==
+         cur := tests.currentTestsuite.currentTestcase
+         cur.total := cur.total + 1
+
+     incPass() == void()
+
+     incLibraryError(inp, out) ==
+         cur := tests.currentTestsuite.currentTestcase
+         cur.fail := cur.fail + 1
+         cur.failed := cons([cur.total, inp, out]$FAILED, cur.failed)
+
+     incXfLibraryError(inp, out) ==
+         cur := tests.currentTestsuite.currentTestcase
+         cur.xfail := cur.xfail + 1
+
+     incXfFail() ==
+         cur := tests.currentTestsuite.currentTestcase
+         cur.xfail := cur.xfail + 1
+
+     incFail(inp, out) ==
+         cur := tests.currentTestsuite.currentTestcase
+         cur.fail := cur.fail + 1
+         cur.failed := cons([cur.total, inp, out]$FAILED, cur.failed)
+
+     incXfPass(inp, out) ==
+         cur := tests.currentTestsuite.currentTestcase
+         cur.xfpass := cur.xfpass + 1
+         cur.xfpassed := cons([cur.total, inp, out]$FAILED,
+                                  cur.xfpassed)
+
+     incFatal inp ==
+         cur := tests.currentTestsuite.currentTestcase
+         cur.fail := cur.fail + 1
+         cur.fatalities := cons([cur.total, inp]$FATAL, cur.fatalities)
+
+     incXfFatal inp ==
+         cur := tests.currentTestsuite.currentTestcase
+         cur.xfail := cur.xfail + 1
+
+     addWarning s ==
+         idx := tests.currentTestsuite.currentTestcase.total
+         warnings := cons(pile([message("Testsuite: " currentTestsuite)$O,
+                                message("Testcase: " currentTestcase)$O,
+                                message("test: " string(idx))$O,
+                                s])$O, warnings)
+
+     statistics() ==
+         messagePrint(new(maxWidth, char "=")$String)$O
+         messagePrint("General WARNINGS:")$O
+         messagePrint("* do not use ')clear completely' before having used "_
+                      "'statistics()'")$O
+         messagePrint("  It clears the statistics without warning!")$O
+         messagePrint("* do not forget to pass the arguments of the testXxxx "_
+                      "functions as Strings!")$O
+         messagePrint("  Otherwise, the test will fail and statistics() will "_
+                      "not notice!")$O
+
+         if # warnings > 0 then
+             messagePrint(new(maxWidth, char "=")$String)$O
+             messagePrint("WARNINGS:")$O
+             for w in reverse warnings repeat
+                 output(w)$P
+
+         output("")$P
+
+         totalTests : Integer := 0
+         failedTests : Integer := 0
+         xfailedTests : Integer := 0
+         xfpassedTests : Integer := 0
+
+         for tstsuite in reverse parts(tests)_
+                             @List Record(key : String, entry : TESTSUITE) repeat
+
+             failedCases : Integer := 0
+             xfpassedCases : Integer := 0
+             totalCases : Integer := 0
+
+             for tstcase in reverse parts(tstsuite.entry)_
+                              @List Record(key : String, entry : TESTCASE) repeat
+                 totalCases := totalCases + 1
+                 if tstcase.entry.fail > 0 then failedCases := failedCases + 1
+                 if tstcase.entry.xfpass > 0 then xfpassedCases := xfpassedCases + 1
+
+                 totalTests := totalTests + tstcase.entry.total
+                 failedTests := failedTests + tstcase.entry.fail
+                 xfailedTests := xfailedTests + tstcase.entry.xfail
+                 xfpassedTests := xfpassedTests + tstcase.entry.xfpass
+
+             messagePrint(new(maxWidth, char "=")$String)$O
+             messagePrint("Testsuite: " tstsuite.key)$O
+             messagePrint("  failed (total): " _
+                          string(failedCases) " (" _
+                          string(totalCases) ")")$O
+             if failedCases > 0 then
+                 output("")$P
+                 messagePrint("  failed testcases were:")$O
+                 for tstcase in reverse parts(tstsuite.entry)_
+                              @List Record(key : String, entry : TESTCASE) _
+                     | tstcase.entry.fail > 0 repeat
+                     messagePrint("  " new((maxWidth-2)::NonNegativeInteger, _
+                                           char "-")$String)$O
+                     messagePrint("  Testcase: " tstcase.key)$O
+                     messagePrint("    failed (total): " _
+                          string(tstcase.entry.fail) _
+                          " (" string(tstcase.entry.total) ")")$O
+
+                     if not empty?(tstcase.entry.failed) then
+                         output("")$P
+                         messagePrint("    failed tests were:")$O
+                         for f in reverse(tstcase.entry.failed) repeat
+                             output("")$P
+                             messagePrint("      " string(f.index) ": " f.input)$O
+                             for o in f.output for i in 1..#(f.output) repeat
+                                 outstring := "      Output" string(i) ": "
+                                 output(hconcat(message outstring, o)$O)$P
+
+                     if not empty?(tstcase.entry.fatalities) then
+                         output("")$P
+                         messagePrint("  fatal tests were:")$O
+                         for f in reverse(tstcase.entry.fatalities) repeat
+                             output("")$P
+                             messagePrint("      " string(f.index) ": " f.input)$O
+
+             if xfpassedCases > 0 then
+                 output("")$P
+                 messagePrint("  testcases with unexpected passed tests were:")$O
+                 for tstcase in reverse parts(tstsuite.entry)_
+                              @List Record(key : String, entry : TESTCASE) _
+                     |  tstcase.entry.xfpass > 0 repeat
+                     messagePrint("  " new((maxWidth-2)::NonNegativeInteger, _
+                                           char "-")$String)$O
+                     messagePrint("  Testcase: " tstcase.key)$O
+
+                     if not empty?(tstcase.entry.xfpassed) then
+                         output("")$P
+                         messagePrint("  unexpected passed tests were:")$O
+                         for f in reverse(tstcase.entry.xfpassed) repeat
+                             output("")$P
+                             messagePrint("      " string(f.index) ": " f.input)$O
+
+
+         output("")$P
+         messagePrint(new(maxWidth, char "=")$String)$O
+         messagePrint("testsuite | testcases: failed (total) | tests: failed (total)")$O
+         for tstsuite in reverse parts(tests)_
+                             @List Record(key : String, entry : TESTSUITE) repeat
+
+             failedCases : Integer := 0
+             totalCases : Integer := 0
+
+             tsfailedTests : Integer := 0
+             tstotalTests : Integer := 0
+
+             for tstcase in reverse parts(tstsuite.entry)_
+                              @List Record(key : String, entry : TESTCASE) repeat
+                 totalCases := totalCases + 1
+                 if tstcase.entry.fail > 0 then failedCases := failedCases + 1
+                 tstotalTests := tstotalTests + tstcase.entry.total
+                 tsfailedTests := tsfailedTests + tstcase.entry.fail
+
+             sfailedCases := string failedCases
+             stotalCases := string totalCases
+             sfailedTests := string tsfailedTests
+             stotalTests := string tstotalTests
+             messagePrint(tstsuite.key _
+                          new(max(24-#(tstsuite.key), 0)::NonNegativeInteger, _
+                              char " ") _
+                          new(max(5-#sfailedCases, 0)::NonNegativeInteger, _
+                              char " ") sfailedCases _
+                          new(max(6-#stotalCases, 0)::NonNegativeInteger, _
+                              char " ") "(" stotalCases ")" _
+                          new(max(16-#sfailedTests, 0)::NonNegativeInteger, _
+                              char " ") sfailedTests _
+                          new(max(6-#stotalTests, 0)::NonNegativeInteger, _
+                              char " ") "(" stotalTests ")")$O
+         messagePrint(new(maxWidth, char "=")$String)$O
+         messagePrint("File summary.")$O
+         messagePrint("unexpected failures: " string failedTests)$O
+         messagePrint("expected failures: " string xfailedTests)$O
+         messagePrint("unexpected passes: " string xfpassedTests)$O
+         messagePrint("total tests: " string totalTests)$O
+
+
+)abbrev package TESTAUX UnittestAux
+++ Author: Martin Rubey
+++ Description: UnittestAux is an auxiliary package to Unittest, that
+++ performs checking of tests, dealing also with fatal errors.
+UnittestAux(R : BasicType) : with
+
+     testEqualsAux : (String, R, R) -> Void
+       ++ testEqualsAux(inp, ex1, ex2) states that ex1 and ex2 should be equal.
+       ++ To sidestep the possibility that the equality function of the domain
+       ++ R performs some simplifications, we convert ex1 and ex2 to
+       ++ \spad{InputForm}, if possible.
+
+     xftestEqualsAux : (String, R, R) -> Void
+       ++ xftestEqualsAux is like testEquals, but expects failure.
+
+     testNotEqualsAux : (String, R, R) -> Void
+       ++ testNotEqualsAux(inp, ex1, ex2) states that ex1 and ex2 should be
+       ++ different.
+
+     xftestNotEqualsAux : (String, R, R) -> Void
+       ++ xftestNotEqualsAux is like testEquals, but expects failure.
+
+     testTrueAux : (String, R) -> Void
+       ++ testTrueAux(inp, ex) states that ex should be true.
+
+     xftestTrueAux : (String, R) -> Void
+       ++ xftestTrueAux is like testTrueAux, but expects failure.
+
+     testLibraryErrorAux : (String, R) -> Void
+       ++ testLibraryErrorAux(inp, ex) states that ex should throw an
+       ++ error. Such a test will never count as a fatal error.
+
+     xftestLibraryErrorAux : (String, R) -> Void
+       ++ xftestLibraryErrorAux like testLibraryErrorAux, but expects
+       ++ failure (that is no error).
+
+     testEqualsAuxCmp : (R, R) -> Boolean
+       ++ testEqualsAuxCmp should be local but is conditional
+
+     if R has RealNumberSystem then
+         testRealEqualsAux : (String, R, R) -> Void
+           ++ testRealEqualsAux(inp, ex1, ex2) states that ex1 and ex2 should
+           ++ be approximately equal as real numbers, taking into account
+           ++ \spadfun{testAbsolutePrecision} and
+           ++ \spadfun{testRelativePrecision}.
+
+         xftestRealEqualsAux : (String, R, R) -> Void
+           ++ xftestRealEqualsAux is like testRealEqualsAux, but expects
+           ++ failure.
+
+         testComplexEqualsAux : (String, Complex R, Complex R) -> Void
+           ++ testComplexEqualsAux(inp ex1, ex2) states that ex1 and ex2 should
+           ++ be approximately equal as complex numbers, taking into account
+           ++ \spadfun{testAbsolutePrecision} and
+           ++ \spadfun{testRelativePrecision}.
+
+         xftestComplexEqualsAux : (String, Complex R, Complex R) -> Void
+           ++ xftestComplexEqualsAux is like testComplexEqualsAux, but
+           ++ expects failure.
+
+         testAbsolutePrecision : R -> R
+           ++ testAbsolutePrecision(eps) returns the current absolute precision
+           ++ used for floating point comparison, and then sets it to eps.  The
+           ++ default value is 1.0e-15.
+
+         testRelativePrecision : R -> R
+           ++ testRelativePrecision(eps) returns the current absolute precision
+           ++ used for floating point comparison, and then sets it to eps.  The
+           ++ default value is 1.0e-15.
+
+  == add
+
+     O ==> OutputForm
+     U ==> UnittestCount
+
+     REPF ==> (String, List OutputForm) -> Void
+
+     nPassInc : REPF
+     nPassInc(s, o) == incPass()$U
+
+     nFailInc : REPF
+     nFailInc(s, o) == incFail(s, o)$U
+
+     xPassInc : REPF
+     xPassInc(s, o) == incXfPass(s, o)$U
+
+     xFailInc : REPF
+     xFailInc(s, o) == incXfFail()$U
+
+     testEqualsAux0 : (String, R, R, REPF, REPF) -> Void
+     -- testEqualsAuxCmp: (R, R) -> Boolean
+
+     if R has ConvertibleTo InputForm then
+
+         testEqualsAuxCmp(ex1, ex2) ==
+             (convert(ex1)@InputForm = convert(ex2)@InputForm)@Boolean
+
+     else if R is InputForm then
+
+         testEqualsAuxCmp(ex1, ex2) ==
+             (ex1 = ex2)@Boolean
+
+     else
+
+         testEqualsAuxCmp(ex1, ex2) ==
+             addWarning(message("testing in a domain without InputForm!")$O)$U
+             (ex1 = ex2)@Boolean
+
+     testEqualsAux0(inp, ex1, ex2, prep, frep) ==
+             if testEqualsAuxCmp(ex1, ex2) then
+                 if R has CoercibleTo O then
+                     prep(inp, [ex1::O, ex2::O])
+                 else
+                     prep(inp, [])
+             else
+                 if R has CoercibleTo O then
+                     frep(inp, [ex1::O, ex2::O])
+                 else
+                     prep(inp, [])
+
+     testEqualsAux(inp, ex1, ex2) ==
+         testEqualsAux0(inp, ex1, ex2, nPassInc, nFailInc)
+
+     xftestEqualsAux(inp, ex1, ex2) ==
+         testEqualsAux0(inp, ex1, ex2, xPassInc, xFailInc)
+
+     if R has RealNumberSystem then
+
+         epsilonRelative := 10::R^(-15)
+         epsilonAbsolute := 10::R^(-15)
+
+         testRelativePrecision eps ==
+             old := epsilonRelative
+             epsilonRelative := eps
+             old
+
+         testAbsolutePrecision eps ==
+             old := epsilonAbsolute
+             epsilonAbsolute := eps
+             old
+
+         testRealEqualsAux0 : (String, R, R, REPF, REPF) -> Void
+
+         testRealEqualsAux0(inp, ex1, ex2, prep, frep) ==
+             absolute : R := norm(ex1-ex2)$R
+             if not zero? ex2
+             then relative : R := norm(ex1/ex2-1)$R
+             else relative : R := 0
+             res : List O := []
+             if relative > epsilonRelative then
+                 if R has CoercibleTo O
+                 then res := cons(hconcat(message("rel err: ")$O,
+                                          relative::O), res)
+                 else res := cons(message("rel err ")$O, res)
+
+             if absolute > epsilonAbsolute then
+                 if R has CoercibleTo O
+                 then res := cons(hconcat(message("abs err: ")$O,
+                                          absolute::O), res)
+                 else res := cons(message("abs err ")$O, res)
+
+             if empty? res
+             then prep(inp, [ex1::O, ex2::O])
+             else frep(inp, concat([ex1::O, ex2::O], res))
+
+         testRealEqualsAux(inp, ex1, ex2) ==
+             testRealEqualsAux0(inp, ex1, ex2, nPassInc, nFailInc)
+
+         xftestRealEqualsAux(inp, ex1, ex2) ==
+             testRealEqualsAux0(inp, ex1, ex2, xPassInc, xFailInc)
+
+         testComplexEqualsAux0 : (String, Complex R, Complex R, REPF,
+                                 REPF) -> Void
+
+         testComplexEqualsAux0(inp, ex1, ex2, prep, frep) ==
+             absolute : R := norm(ex1-ex2)$Complex(R)
+             if not zero? ex2
+             then relative : R := norm(ex1/ex2-1)$Complex(R)
+             else relative : R := 0
+             res : List O := []
+             if relative > epsilonRelative then
+                 if R has CoercibleTo O
+                 then res := cons(hconcat(message("rel err: ")$O,
+                                          relative::O), res)
+                 else res := cons(message("rel err ")$O, res)
+
+             if absolute > epsilonAbsolute then
+                 if R has CoercibleTo O
+                 then res := cons(hconcat(message("abs err: ")$O,
+                                          absolute::O), res)
+                 else res := cons(message("abs err ")$O, res)
+
+             if empty? res
+             then prep(inp, [ex1::O, ex2::O])
+             else frep(inp, concat([ex1::O, ex2::O], res))
+
+         testComplexEqualsAux(inp, ex1, ex2) ==
+             testComplexEqualsAux0(inp, ex1, ex2, nPassInc, nFailInc)
+
+         xftestComplexEqualsAux(inp, ex1, ex2) ==
+             testComplexEqualsAux0(inp, ex1, ex2, xPassInc, xFailInc)
+
+
+     testNotEqualsAux(inp, ex1, ex2) ==
+         testEqualsAux0(inp, ex1, ex2, nFailInc, nPassInc)
+
+     xftestNotEqualsAux(inp, ex1, ex2) ==
+         testEqualsAux0(inp, ex1, ex2, xFailInc, xPassInc)
+
+     testTrueAux0 : (String, R, REPF, REPF) -> Void
+
+     testTrueAux0(inp, ex, prep, frep) ==
+         if R is Boolean then
+             if ex
+             then prep(inp, [ex::Boolean::O])
+             else frep(inp, [ex::Boolean::O])
+         else
+             if R has CoercibleTo O
+             then frep(inp, [ex::O])
+             else frep(inp, [])
+
+     testTrueAux(inp, ex) ==
+         testTrueAux0(inp, ex, nPassInc, nFailInc)
+
+     xftestTrueAux(inp, ex) ==
+         testTrueAux0(inp, ex, xPassInc, xFailInc)
+
+     testLibraryErrorAux(inp, ex) ==
+-- at this point, ex was already evaluated.
+-- this will only be called if ex (unexpectedly) did not fail fatally
+         if R has CoercibleTo O
+         then incLibraryError(inp, [ex::O])$U
+         else incLibraryError(inp, [])$U
+
+     xftestLibraryErrorAux(inp, ex) ==
+-- at this point, ex was already evaluated.
+-- this will only be called if ex (expectedly) did not fail fatally
+         if R has CoercibleTo O
+         then incXfLibraryError(inp, [ex::O])$U
+         else incXfLibraryError(inp, [])$U
+
+)abbrev package TESTUNIT Unittest
+++ Author: Martin Rubey
+++ Description:
+++  Unittest is a package that provides functions for regression
+++  testing.  Note that it calls the interpreter, thus, all
+++  functions require that their arguments be passed as strings.
+Unittest : with
+
+     testEquals : (String, String) -> Void
+       ++ testEquals(ex1, ex2) states that ex1 and ex2 should be equal.  To
+       ++ sidestep the possibility that the equality function of the domain R
+       ++ performs some simplifications, we convert ex1 and ex2 to
+       ++ \spad{InputForm}, if possible.
+
+     xftestEquals : (String, String) -> Void
+       ++ xftestEquals is like testEquals, but expects failure.
+
+     testRealEquals : (String, String) -> Void
+       ++ testRealEquals(ex1, ex2) states that ex1 and ex2 should be
+       ++ approximately equal as real numbers, taking into account
+       ++ \spadfun{testAbsolutePrecision} and \spadfun{testRelativePrecision}.
+
+     xftestRealEquals : (String, String) -> Void
+       ++ xftestRealEquals is like testRealEquals, but expects failure.
+
+     testComplexEquals : (String, String) -> Void
+       ++ testComplexEquals(ex1, ex2) states that ex1 and ex2 should be
+       ++ approximately equal as complex numbers, taking into account
+       ++ \spadfun{testAbsolutePrecision} and \spadfun{testRelativePrecision}.
+
+     xftestComplexEquals : (String, String) -> Void
+       ++ xftestComplexEquals is like testComplexEquals, but expects failure.
+
+     testNotEquals : (String, String) -> Void
+       ++ testNotEquals(ex1, ex2) states that ex1 and ex2 should be
+       ++ different.
+
+     xftestNotEquals : (String, String) -> Void
+       ++ xftestNotEquals is like testNotEquals, but expects failure.
+
+     testTrue : String -> Void
+       ++ testTrue(ex) states that ex should be true.
+
+     xftestTrue : String -> Void
+       ++ xftestTrue is like testTrue, but expects failure.
+
+     testLibraryError : String -> Void
+       ++ testLibraryError ex states that ex should throw an error. Such a test
+       ++ will never count as a fatal error.
+
+     xftestLibraryError : String -> Void
+       ++ xftestLibraryError is like testLibraryError, but expects failure.
+
+  == add
+
+     interpretFunction1(f : Symbol, info : String, arg : String) : Any ==
+         if1 := parse(arg)$InputForm
+         ff := convert(f)@InputForm
+         info_f := convert(info)@InputForm
+         interpret(convert([ff, info_f, if1])@InputForm)$InputForm
+
+     interpretFunction2(f : Symbol, info : String, arg1 : String,
+                       arg2 : String) : Any ==
+         if1 := parse(arg1)$InputForm
+         if2 := parse(arg2)$InputForm
+         ff := convert(f)@InputForm
+         info_f := convert(info)@InputForm
+         interpret(convert([ff, info_f, if1, if2])@InputForm)$InputForm
+
+     do_interpret1(label : String, fun : Symbol, arg : String,
+                   upd : String -> Void) : Void ==
+         incTest()$UnittestCount
+         inp := label ": (" arg ")"
+         ru := trappedSpadEval(interpretFunction1(fun, inp, arg)
+                              )$Lisp :: Union(None, "failed")
+         if ru case "failed" then upd(inp)
+
+     do_interpret2(label : String, fun : Symbol, a1 : String, a2 : String,
+                   upd : String -> Void) : Void ==
+         incTest()$UnittestCount
+         inp := label ": (" a1 ", " a2 ")"
+         ru := trappedSpadEval(interpretFunction2(fun, inp, a1, a2)
+                              )$Lisp :: Union(None, "failed")
+         if ru case "failed" then upd(inp)
+
+     do_test2(label : String, fun : Symbol, a1 : String, a2 : String
+             ) : Void ==
+         do_interpret2(label, fun, a1, a2, incFatal$UnittestCount)
+
+     do_xf_test2(label : String, fun : Symbol, a1 : String, a2 : String
+             ) : Void ==
+         do_interpret2(label, fun, a1, a2, incXfFatal$UnittestCount)
+
+     testEquals(s1, s2) ==
+         do_test2("EQUL", 'testEqualsAux, s1, s2)
+
+     xftestEquals(s1, s2) ==
+         do_xf_test2("EQUL", 'xftestEqualsAux, s1, s2)
+
+     testRealEquals(s1, s2) ==
+         do_test2("EQLR", 'testRealEqualsAux, s1, s2)
+
+     xftestRealEquals(s1, s2) ==
+         do_xf_test2("EQLR", 'xftestRealEqualsAux, s1, s2)
+
+     testComplexEquals(s1, s2) ==
+         do_test2("EQLC", 'testComplexEqualsAux, s1, s2)
+
+     xftestComplexEquals(s1, s2) ==
+         do_xf_test2("EQLC", 'xftestComplexEqualsAux, s1, s2)
+
+     testNotEquals(s1, s2) ==
+         do_test2("DIFF", 'testNotEqualsAux, s1, s2)
+
+     xftestNotEquals(s1, s2) ==
+         do_xf_test2("DIFF", 'xftestNotEqualsAux, s1, s2)
+
+     testTrue(s) ==
+         do_interpret1("TRUE", 'testTrueAux, s,
+                       incFatal$UnittestCount)
+
+     xftestTrue(s) ==
+         do_interpret1("TRUE", 'xftestTrueAux, s,
+                       incXfFatal$UnittestCount)
+
+     testLibraryError(s) ==
+         do_interpret1("ERROR", 'testLibraryErrorAux, s,
+                       dummy +-> void())
+
+     xftestLibraryError(s) ==
+         do_interpret1("ERROR", 'xftestLibraryErrorAux, s,
+             inp +-> incXfPass(inp, empty()$List(OutputForm))$UnittestCount)
+
+
+--Copyright (c) 2006-2007, Martin Rubey <Martin.Rubey@univie.ac.at>
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

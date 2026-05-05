@@ -1,0 +1,12 @@
+extern void init_extents(void);
+extern void init_text(void);
+extern void init_title_extents(HyperDocPage * page);
+extern void insert_bitmap_file(TextNode * node);
+extern void insert_pixmap_file(TextNode * node);
+extern int max_x(TextNode * node, int Ender);
+extern int plh(int height);
+extern void start_newline(int distance, TextNode * node);
+extern int text_height(TextNode * node, int Ender);
+extern int text_width(TextNode * node, int Ender);
+extern int total_width(TextNode * node, int Ender);
+extern int trailing_space(TextNode * node);

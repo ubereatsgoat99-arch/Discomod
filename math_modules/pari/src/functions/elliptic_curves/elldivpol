@@ -1,0 +1,25 @@
+Function: elldivpol
+Section: elliptic_curves
+C-Name: elldivpol
+Prototype: GLDn
+Help: elldivpol(E,n,{v='x}): n-division polynomial f_n for the curve E in the
+ variable v.
+Doc: $n$-division polynomial $f_{n}$ for the curve $E$ in the
+ variable $v$. In standard notation, for any affine point $P = (X,Y)$ on the
+ curve and any integer $n \geq 0$, we have
+ $$[n]P = (\phi_{n}(P)\psi_{n}(P) : \omega_{n}(P) : \psi_{n}(P)^{3})$$
+ for some polynomials $\phi_{n},\omega_{n},\psi_{n}$ in
+ $\Z[a_{1},a_{2},a_{3},a_{4},a_{6}][X,Y]$. We have $f_{n}(X) = \psi_{n}(X)$
+ for $n$ odd, and
+ $f_{n}(X) = \psi_{n}(X,Y) (2Y + a_{1}X+a_{3})$ for $n$ even. We have
+ $$ f_{0} = 0,\quad f_{1}  = 1,\quad
+    f_{2} = 4X^{3} + b_{2}X^{2} + 2b_{4} X + b_{6}, \quad
+    f_{3} = 3 X^{4} + b_{2} X^{3} + 3b_{4} X^{2} + 3 b_{6} X + b8, $$
+ $$ f_{4} = f_{2}(2X^{6} + b_{2} X^{5} + 5b_{4} X^{4} + 10 b_{6} X^{3}
+  + 10 b_{8} X^{2} + (b_{2}b_{8}-b_{4}b_{6})X + (b_{8}b_{4} - b_{6}^{2})),
+  \dots $$
+ When $n$ is odd, the roots of $f_{n}$ are the $X$-coordinates of the affine
+ points in the $n$-torsion subgroup $E[n]$; when $n$ is even, the roots
+ of $f_{n}$ are the $X$-coordinates of the affine points in $E[n]\setminus
+ E[2]$ when $n > 2$, resp.~in $E[2]$ when $n = 2$.
+ For $n < 0$, we define $f_{n} := - f_{-n}$.

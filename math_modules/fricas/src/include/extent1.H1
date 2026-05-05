@@ -1,0 +1,5 @@
+extern void compute_header_extent(HyperDocPage * page);
+extern void compute_footer_extent(HyperDocPage * page);
+extern void compute_scrolling_extent(HyperDocPage * page);
+extern void compute_title_extent(HyperDocPage * page);
+extern void compute_text_extent(TextNode * node);

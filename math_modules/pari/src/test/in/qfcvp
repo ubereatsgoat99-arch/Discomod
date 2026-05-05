@@ -1,0 +1,33 @@
+test_cvp(A, target, bound, sols)=
+{
+  r = qfcvp(A, target, bound);
+  V = r[3];
+  if(r[1] != sols, print("ERROR, wrong number of close vectors"));
+  for(i=1, r[1],
+    if(bound > 0 && qfeval(A, V[,i]-target) > bound * (1+0.001), print("ERROR, result too far away.")));
+  return r;
+};
+
+M = [2,1;1,2];
+t = [0.5,0.5]~;
+test_cvp(M, t, 0, 2);
+test_cvp(M, t, 0.5, 2);
+test_cvp(M, t, 1.5, 4);
+
+Q=[8,4,4,4,4,4,4,4,4,4,4,4;4,8,4,4,4,4,4,4,4,4,4,4;4,4,8,0,0,0,3,0,0,0,0,0;4,4,0 ,8,4,4,1,4,4,4,4,4;4,4,0,4,8,4,4,4,4,4,4,4;4,4,0,4,4,8,4,4,4,4,4,4;4,4,3,1,4,4,8 ,4,1,1,1,1;4,4,0,4,4,4,4,8,4,4,4,4;4,4,0,4,4,4,1,4,8,4,4,4;4,4,0,4,4,4,1,4,4,8,4 ,4;4,4,0,4,4,4,1,4,4,4,8,4;4,4,0,4,4,4,1,4,4,4,4,8];
+t = [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5]~;
+test_cvp(Q, t, 0, 6);
+test_cvp(Q, t, 4, 6);
+qfcvp(Q, t~, 4); \\ test transpose input
+
+R = Mat([1]);
+test_cvp(R, [3/2]~, 0, 2);
+test_cvp(R, [1.6]~, 0, 1);
+test_cvp(R, [1.5]~, 2.25, 4);
+test_cvp(R, [1.51]~, 2.25, 3);
+
+test_cvp(Mat(), []~, 2.25, 0);
+
+print("Cases that should fail:")
+qfcvp(Mat(), [1.5]~, 2.25);
+qfcvp(Q, [1.5, 5]~, 2.25);

@@ -1,0 +1,81 @@
+VPATH=@srcdir@
+ALDOR=@ALDOR@
+ALDOR_FOREIGNSTYLE=|@ALDOR_foreignStyle@|
+ALDOR_CONDITIONALCAST=@ALDOR_conditionalCast@
+
+GENAX=@srcdir@/gendepap.lsp
+include @srcdir@/aldor.mk
+
+INTERPSYS = DAASE=$(fricas_targetdir) FRICAS_INITFILE='' $(fricas_target_bindir)/FRICASsys
+
+# We assume here that the directory 'al' has already been created.
+default: al/libfricas.al
+
+###################################################################
+# Now we can start to build libfricas. All the computation up to here
+# has only been done to get cliques.mk. That file contains all (recursive)
+# dependencies of the types/files, so things should compile in the right
+# dependency order from now on.
+include cliques.mk
+FRICAS_CLIQUES=$(filter-out $(aldor_srcs), $(CLIQUES))
+
+define clq_template
+ao/$1.ao: $(patsubst %,ao/%,$(DEPS_$1))
+endef
+
+$(foreach l,$(CLIQUES), $(eval $(call clq_template,$(l))))
+
+###################################################################
+# Now we create an .ap file for each clique.
+$(patsubst %,ap/%.ap,$(FRICAS_CLIQUES)): ap/%.ap: ap/%.lsp tmp/.dir
+	rm -f $@
+	$(INTERPSYS) < $< > tmp/$*.log
+	test -f $@
+
+ap/%.lsp:
+	echo ')lisp (load "$(GENAX)")' > $@
+	echo ')lisp (|setForeignStyle| (quote $(ALDOR_FOREIGNSTYLE)))' >> $@
+	echo ')lisp (|setConditionalCast| $(ALDOR_CONDITIONALCAST))' >> $@
+	echo ')lisp (generate-ax-file "$*" (quote ($(filter-out init_%, $(MEMBERS_$*)))) (quote ($(patsubst %,|%|,$(filter init_%, $(MEMBERS_$*))))))' >> $@
+
+.PHONY: all-ap
+all-ap: $(patsubst %,ap/%.ap,$(FRICAS_CLIQUES))
+
+###################################################################
+# All the files that should go into libfricas.al
+libfricas_members=$(patsubst %,ao/%.ao,$(CLIQUES))
+al/libfricas.al: $(libfricas_members)
+	ar r $@ $+
+
+# From the .ap dependency we get a lot more dependencies, see cliques.mk.
+$(patsubst %,ao/%.ao,$(aldor_srcs)): extra_ao_options=
+$(patsubst %,ao/%.ao,$(FRICAS_CLIQUES)): extra_ao_options=-Wname=fricas -Mno-abbrev -Mpreview
+.PRECIOUS: ao/%.ao
+ao/%.ao: ap/%.ap
+	ar r libfricas_$*.al $(patsubst %,ao/%,$(DEPS_$*))
+	$(ALDOR) $(extra_ao_options) -Y al -L FriCASLib=fricas_$* -fao=$@ $< 2>&1 | tee tmp/$*_ao.out
+	rm libfricas_$*.al
+
+# We compile a separate temporary library for the compilation of each
+# .ao file in order to avoid trouble with big libraries and the aldor
+# compiler.
+# Another option would be to build libfricas.al step by step in the right
+# dependency order. If the Aldor compiler produces correct code that
+# should become the method of choice.
+# The dependencies are in cliques.mk.
+
+
+
+
+
+#
+# :: Directories
+#
+
+###################################################################
+# Creation of build subdirectories.
+# TODO: Maybe that can be removed some day. There is no real need to create
+# subdirectories.
+%/.dir:
+	${MKDIR_P} $(patsubst %/.dir,%,$@)
+	touch -t 199901010000 $@

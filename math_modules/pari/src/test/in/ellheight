@@ -1,0 +1,26 @@
+\\package:elldata
+{
+  K = nfinit(t^3-2); d = #K.zk;
+  forell(E, 1, 1000,
+    my(e,N,f,v,P,F,FK);
+    N = ellconvertname(E[1])[1];
+    v = [1/60,7131/3600,11/12,5/12];
+    F = ellinit(E[2]);
+    FK = ellinit(E[2],K);
+    e = ellchangecurve(F, v);
+    eK= ellchangecurve(FK, v);
+    P = E[3];
+    for(i=1,#P,
+      my(Q=ellchangepoint(P[i],v));
+      my(hF=ellheight(F,P[i]));
+      if (!ellisoncurve(e,Q),error("e:",Q));
+      if (!ellisoncurve(eK,Q),error("eK:",Q));
+      my(hFK=ellheight(FK,P[i])/d);
+      if (abs(hF-hFK)>10^-15,error("height/FK:",E[1],":",[hF,hFK,exp(hF-hFK)]));
+      my(he=ellheight(e,Q));
+      if (hF!=he,error("height:",E[1],":",[hF,he]));
+      my(hK=ellheight(eK,Q)/d);
+      if (abs(hF-hK)>10^-15,error("height/K:",E[1],":",[Q,exp(hF-hK)]));
+      );
+  )
+}

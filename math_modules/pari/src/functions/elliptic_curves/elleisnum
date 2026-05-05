@@ -1,0 +1,64 @@
+Function: elleisnum
+Section: elliptic_curves
+C-Name: elleisnum0
+Prototype: GGp
+Help: elleisnum(w,k): k being an even positive integer, computes the
+ numerical value of the Eisenstein series of weight k at the lattice
+ w, as given by ellperiods.
+Doc: $k$ being an even positive integer, computes the numerical value of the
+ Eisenstein series of weight $k$ at the lattice $w$, as given by
+ \tet{ellperiods}, namely
+ $$
+ (2i \pi/\omega_{2})^{k}
+ \Big(1 + 2/\zeta(1-k) \sum_{n\geq 1} n^{k-1}q^{n} / (1-q^{n})\Big),
+ $$
+ where $q = \exp(2i\pi \tau)$ and $\tau:=\omega_{1}/\omega_{2}$ belongs to the
+ complex upper half-plane. It is also possible to directly input $w =
+ [\omega_{1},\omega_{2}]$, or an elliptic curve given by \kbd{ellinit}.
+ \bprog
+ ? w = ellperiods([1,I]);
+ ? elleisnum(w, 4)
+ %2 = 2268.8726415508062275167367584190557607
+ ? elleisnum(w, 6)
+ %3 = -3.977978632282564763 E-33
+ ? e = ellinit([1, 2]);
+ ? elleisnum(e, 4)  \\ this is e.c4
+ %5 = -48
+ ? elleisnum(e, 6) \\ this is -e.c6
+ %5 = 1728
+ ? elleisnum(e.omega, 6) \\ compute from scratch using only period lattice
+ %6 = 1728.0000000000000000000000000000000000 - 3.752050069099151603 E-54*I
+ @eprog\noindent Finally, $k$ may also be a vector of weights and we return
+ the corresponding vector of $E_{k}(w)$, in the same order. This is more
+ efficient (about \kbd{length}$(k)$ times faster) than computing each
+ value individually.
+ \bprog
+ ? elleisnum(w, [4,6])
+ %7 = [2268.8726415508062275167367584190557608, -2.7638833468502411511 E-33]
+ ? elleisnum(e, [4,6])
+ %8 = [-48, 1728]
+ @eprog\noindent For elliptic curves over a field of characteristic $0$, the
+ result is given over the field of definition:
+ \bprog
+ ? e = ellinit([x,y]);
+ ? E12 = elleisnum(e, 12)
+ %9 = -48771072/691*x^3 + 186624000/691*y^2
+ ? [e4,e6] = elleisnum(e, [4,6])
+ %10 = [-48*x, 864*y]
+ ? substpol(substpol(E12, e4, E4), e6, E6)
+ %11 = 441/691*E4^3 + 250/691*E6^2
+ @eprog
+
+ Note that the elliptic invariants $g_{2}$ or $g_{3}$, such that
+ $$y^{2} = 4x^{3} - g_{2} x - g_{3}$$
+ is a Weierstrass equation for $e$ are given by
+ \bprog
+   g2 = elleisnum(w, 4) / 12;
+   g3 = elleisnum(w, 6) / -216;
+ @eprog\noindent respectively.
+ \bprog
+ ? [a, b] = elleisnum(w, [4,6]); [a / 12, b / -216]
+ %12 = [189.07272012923385229306139653492131340, 1.2795756235417783107 E-35]
+ ? [a, b] = elleisnum(e, [4,6]); [a / 12, b / -216]
+ %13 = [-4, -8]
+ @eprog

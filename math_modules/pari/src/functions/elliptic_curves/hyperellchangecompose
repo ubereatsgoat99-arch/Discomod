@@ -1,0 +1,28 @@
+Function: hyperellchangecompose
+Section: elliptic_curves
+C-Name: hyperellchangecompose
+Prototype: GGG
+Help: hyperellchangecompose(C,m1, m2): C being a hyperelliptic curve given by a
+ Weierstrass equation, compose the change of coordinates given by m1 and m2.
+ C can be
+ given either by a squarefree polynomial P such that
+ C:y^2=P(x) or by a vector [P,Q] such that C:y^2+Q(x)*y=P(x) and Q^2+4P is
+ squarefree.
+Doc:
+ $C$ being a hyperelliptic curve given by a Weierstrass equation,
+ compose the change of coordinates given \kbd{m1} and \kbd{m2}.
+
+ $C$ can be given either by a squarefree polynomial $P$ such that
+ $C: y^{2} = P(x)$ or by a vector $[P,Q]$ such that
+ $C: y^{2} + Q(x)\*y = P(x)$ and $Q^{2}+4\*P$ is squarefree.
+
+ \bprog
+ ? W=[Pol([a6,a5,a4,a3,a2,a1,a0]),Pol([b2,b1,b0])];
+ ? v=[6,[0,1;2,3],4*x^3+3*x^2+2*x+1];
+ ? w=[7,[1,2;3,4],5*x^3+4*x^2+3*x+2];
+ ? vw = hyperellchangecompose(W,v,w);
+ ? hyperellchangepoint(W,hyperellchangepoint(W,[X,Y],v),w)
+ %5 = [(-16*X+4)/(11*X-3),(36806*X^3-26974*X^2+6570*X+(-32*Y-530))/(27951*X^3-22869*X^2+6237*X-567)]
+ ? hyperellchangepoint(W,[X,Y],vw)
+ %6 = [(-16*X+4)/(11*X-3),(36806*X^3-26974*X^2+6570*X+(-32*Y-530))/(27951*X^3-22869*X^2+6237*X-567)]
+ @eprog

@@ -1,0 +1,59 @@
+Function: algmodprinit
+Section: algebras
+C-Name: algmodprinit
+Prototype: GGDn
+Help: algmodprinit(al,pr,{v}): initialises a reduction mod pr map.
+Doc: Consider a central simple algebra \var{al} output by \tet{alginit} and a
+ \kbd{prid} \var{pr} representing a prime ideal $\goth{p}$ at which the order
+ ${\cal O}$ stored in \var{al} is maximal (not checked; by default, this is true
+ for all primes, see \kbd{alginit}). This function returns a data structure
+ \var{modP} representing a reduction mod $\goth{p}$ map
+ $$
+  {\cal O} / \goth{p}{\cal O} \longrightarrow {\cal O} / \goth{P}
+  \simeq M_{k}(\F_{p^{m}})
+ $$
+ where~$\goth{P}$ is the unique maximal two-sided ${\cal O}$-ideal above~$\goth{p}$,
+ $m = e \times pr.f$ with~$e$ the ramification index of~\var{al}
+ at~$\goth{p}$ ($\goth{P}^{e} = \goth{p}{\cal O}$) and~$d = ke$ is the degree of~\var{al}.
+ In particular, if $\goth{p}$ is unramified in~\var{al}, then~$k=d$
+ and~$\F_{p^{m}}$
+ is isomorphic to the residue field of~$\goth{p}$.
+ The variable \var{v} is used to display the finite field elements.
+ The function is nondeterministic and does not always return the same map, but
+ the target ring is deterministic (the finite field is always represented by the
+ \tet{ffinit} polynomial).
+ The structure \var{modP} contains:
+
+ \item \var{modP}[1]: the \kbd{prid} \var{pr};
+
+ \item \var{modP}[2]: the \typ{VECSMALL}~$[k,m]$;
+
+ \item \var{modP}[3]: the \typ{FFELT}~$1\in \F_{q^{m}}$;
+
+ \item other technical data.
+
+ \bprog
+ ? nf = nfinit(y^2-5);
+ ? al = alginit(nf, [-1,-1]); \\ quaternion algebra unramified at all primes
+ ? pr = idealprimedec(nf, 3)[1]; pr.f
+ % = 2
+ ? modP = algmodprinit(al, pr, 'a);
+ ? modP[2] \\ image in M_2(F_{3^2})
+ % = Vecsmall([2,2])
+ ? type(modP[3])
+ % = "t_FFELT"
+ ? algmodpr(al,algrandom(al,3),modP)
+ % =
+ [2*a + 1 2*a + 1]
+
+ [      a     2*a]
+ ? nf = nfinit(y); \\ Q
+ ? al = alginit(nf, [-1,-1]); \\ quaternion algebra ramified at 2 and oo
+ ? pr = idealprimedec(nf, 2)[1];
+ ? modP = algmodprinit(al, pr, 'a);
+ ? modP[2] \\ image in M_1(F_{2^2})
+ % = Vecsmall([1,2])
+ ? algmodpr(al,algrandom(al,4),modP)
+ % =
+ [a + 1]
+ @eprog

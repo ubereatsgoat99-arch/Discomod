@@ -1,0 +1,5 @@
+extern void sigusr2_handler(int sig);
+extern void sigcld_handler(int sig);
+extern void clean_socket(void);
+extern int main(int argc, char * * argv);
+extern void init_page_structs(HDWindow * w);

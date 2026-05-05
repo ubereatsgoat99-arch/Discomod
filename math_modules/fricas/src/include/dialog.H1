@@ -1,0 +1,4 @@
+extern void add_buffer_to_sym(char * buffer, InputItem * sym);
+extern void dialog(XEvent * event, KeySym keysym, char * buffer);
+extern void draw_inputsymbol(InputItem * sym);
+extern void update_inputsymbol(InputItem * sym);

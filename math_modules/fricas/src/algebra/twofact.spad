@@ -1,0 +1,271 @@
+)abbrev package NORMRETR NormRetractPackage
+++ Description:
+++ This package \undocumented
+NormRetractPackage(F, ExtF, SUEx, ExtP, n) : C  == T where
+  F          :   FiniteFieldCategory
+  ExtF       :   FiniteAlgebraicExtensionField(F)
+  SUEx       :   UnivariatePolynomialCategory ExtF
+  ExtP       :   UnivariatePolynomialCategory SUEx
+  n          :   PositiveInteger
+  SUP       ==>  SparseUnivariatePolynomial
+  R         ==>  SUP F
+  P         ==>  SUP R
+
+  C  ==> with
+      normFactors : ExtP -> List ExtP
+        ++ normFactors(x) \undocumented
+      retractIfCan : ExtP -> Union(P, "failed")
+        ++ retractIfCan(x) \undocumented
+      Frobenius    : ExtP -> ExtP
+        ++ Frobenius(x) \undocumented
+
+  T  ==> add
+
+      normFactors(p : ExtP) : List ExtP ==
+          facs : List ExtP := [p]
+          for i in 1..n-1 repeat
+             member?((p := Frobenius p), facs) => return facs
+             facs := cons(p, facs)
+          facs
+
+      Frobenius(ff : ExtP) : ExtP ==
+         fft : ExtP := 0
+         while ff ~= 0 repeat
+           fft := fft + monomial(map(Frobenius, leadingCoefficient ff),
+                               degree ff)
+           ff := reductum ff
+         fft
+
+      retractIfCan(ff:ExtP):Union(P, "failed") ==
+         fft : P := 0
+         while ff ~= 0 repeat
+           lc : SUEx := leadingCoefficient ff
+           plc : SUP F := 0
+           while lc ~= 0 repeat
+              lclc : ExtF := leadingCoefficient lc
+              (retlc := retractIfCan lclc) case "failed" => return "failed"
+              plc := plc + monomial(retlc@F, degree lc)
+              lc := reductum lc
+           fft := fft+monomial(plc, degree ff)
+           ff := reductum ff
+         fft
+
+)abbrev package TWOFACT TwoFactorize
+++ Authors : P.Gianni, J.H.Davenport
+++ Date Created : May 1990
+++ Description:
+++ A basic package for the factorization of bivariate polynomials
+++ over a finite field.
+++ The functions here represent the base step for the multivariate factorizer.
+
+TwoFactorize(F) : C == T
+ where
+  F          :   FiniteFieldCategory
+  SUP       ==>  SparseUnivariatePolynomial
+  R         ==>  SUP F
+  P         ==>  SUP R
+  UPCF2     ==>  UnivariatePolynomialCategoryFunctions2
+
+  C == with
+    generalTwoFactor    : (P)  ->  Factored P
+      ++ generalTwoFactor(p) returns the factorisation of polynomial p,
+      ++ a sparse univariate polynomial (sup) over a
+      ++ sup over F.
+    tryTwoFactor   : (P) -> Factored P
+      ++ tryTwoFactor(p) returns the factorisation of polynomial p,
+      ++ if it does not require using field extensions, otherwise
+      ++ returns p unfactored (nil factorization).
+    doFactor : (P, Integer, Boolean) -> Factored P
+      ++ doFactor(p, n, ext?) returns the factorisation of polynomial p,
+      ++ p is assumed to be primitive and squarefree,
+      ++ n is degree in auxiliary variable, ext? if false inhibits
+      ++ use of extension field.
+
+  T == add
+    PI ==> PositiveInteger
+    NNI ==> NonNegativeInteger
+    import from CommuteUnivariatePolynomialCategory(F, R, P)
+
+                   ----  Local Functions  ----
+    pthRoot        :     (R, NNI, NNI)    -> R
+
+
+    pthRoot(poly : R, p : NonNegativeInteger, PthRootPow : NonNegativeInteger) : R ==
+       tmp := divideExponents(map((x : F) : F +-> (x::F)^PthRootPow, poly), p)
+       tmp case "failed" => error "consistency error in TwoFactor"
+       tmp
+
+    fUnion ==> Union("nil", "sqfr", "irred", "prime")
+    FF     ==> Record(flag : fUnion, factor : P, exponent : NNI)
+
+    doTwoFactor : (P, Boolean) -> Factored P
+
+    tryTwoFactor(m : P) : Factored P ==
+       doTwoFactor(m, false)
+
+    generalTwoFactor(m : P) : Factored P ==
+       doTwoFactor(m, true)
+
+    doTwoFactor(m : P, do_ext : Boolean) : Factored P ==
+       m = 0 => 0
+       degree m = 0 =>
+         l := factor(leadingCoefficient(m)
+                    )$UnivariateFiniteFieldFactorize(F, R)
+         makeFR(unit(l)::P, [[u.flag, u.factor::P, u.exponent] for u in factorList l])
+       ll : List FF
+       ll := []
+       unitPart : P
+       cont := content m
+       if degree(cont)>0 then
+          m1 := m exquo cont
+          m1 case "failed" => error "content doesn't divide"
+          m := m1
+          contfact := factor(cont)$UnivariateFiniteFieldFactorize(F, R)
+          unitPart := (unit contfact)::P
+          ll := [[w.flag, (w.factor)::P, w.exponent] for w in factorList contfact]
+       else
+          unitPart := cont::P
+       sqfrm := squareFree m
+       for u in factorList sqfrm repeat
+           expon := u.exponent
+           fac := u.factor
+           degree fac = 1 => ll := [["prime", fac,expon], :ll]
+           differentiate fac = 0 =>
+              -- the polynomial is  inseparable w.r.t. its main variable
+              map(differentiate, fac) = 0 =>
+                p := characteristic$F
+                PthRootPow := (size$F exquo p)::NonNegativeInteger
+                m1 := divideExponents(
+                       map(x +-> pthRoot(x, p, PthRootPow), fac), p)
+                m1 case "failed" => error "consistency error in TwoFactor"
+                res := generalTwoFactor m1
+                unitPart := unitPart*unit(res)^((p*expon)::NNI)
+                ll := [:[[v.flag, v.factor, expon *p*v.exponent] for v in factorList res], :ll]
+              m2 := generalTwoFactor swap fac
+              unitPart := unitPart*unit(m2)^(expon::NNI)
+              ll := [:[[v.flag, swap v.factor, expon*v.exponent] for v in factorList m2], :ll]
+           ydeg := "max"/[degree w for w in coefficients fac]
+           twoF := doFactor(fac, ydeg, do_ext)
+           nfl := factorList(twoF)
+           #nfl = 1 and nfl(1).flag case "nil" =>
+               return twoF
+           unitPart := unitPart*unit(twoF)^expon
+           ll := [:[[v.flag, v.factor, expon*v.exponent] for v in factorList twoF],
+                 :ll]
+       makeFR(unitPart, ll)
+
+
+    doExtension1(m : P, n : PI, dx : Integer,
+      extField : FiniteAlgebraicExtensionField(F)) : Factored P ==
+        SUEx := SUP extField
+        TP := SparseUnivariatePolynomial SUEx
+        mm : TP := 0
+        m1 := m
+        while m1 ~= 0 repeat
+            mm := mm + monomial(map(coerce, leadingCoefficient m1)$UPCF2(
+                         F, R, extField, SUEx), degree m1)
+            m1 := reductum m1
+        res1 := doFactor(mm, dx, false)$TwoFactorize(extField)
+        flist := factorList res1
+        #flist = 1 =>
+            first(flist).flag = "prime" => primeFactor(m, 1)
+            nilFactor(m, 1)
+        Normp := NormRetractPackage(F, extField, SUEx, TP, n)
+        lfacth := [fac.factor for fac in flist]
+        lfactk : List P := []
+        while not empty? lfacth repeat
+            ff := first lfacth
+            lfacth := rest lfacth
+            if (c := leadingCoefficient leadingCoefficient ff) ~= 1 then
+                ff := ((inv c)::SUEx)*ff
+            not ((ffu := retractIfCan(ff)$Normp) case "failed") =>
+                    lfactk := cons(ffu@P, lfactk)
+            normfacs := normFactors(ff)$Normp
+            lfacth := [g for g in lfacth | not member?(g, normfacs)]
+            ffn := */normfacs
+            lfactk := cons(retractIfCan(ffn)$Normp::P, lfactk)
+        */[primeFactor(ff1, 1) for ff1 in lfactk]
+
+    doExtension(m : P, dx : Integer) : Factored P ==
+        ln : List(PI) := [2, 3, 5, 7, 9, 11, 13, 17, 19, 23, 29]
+        for n in ln repeat
+            nsize := size()$F ^ n
+            res1 :=
+                nsize < 1000 => doExtension1(m, n, dx,
+                      FiniteFieldCyclicGroupExtension(F, n))
+                doExtension1(m, n, dx, FiniteFieldExtension(F, n))
+            first(factorList(res1)).flag = "prime" => return res1
+        error "doExtension : Impossible"
+
+    doFactor(m : P, dx : Integer, do_ext : Boolean) : Factored P ==
+        look : Boolean := true
+        try_max : Integer := min(dx + 5, size()$F)
+        i : Integer := 0
+        lcm := leadingCoefficient m
+        umv : R
+        val : F
+        use_random := 2*try_max < size()$F
+        while look and i < try_max repeat
+            i := i + 1
+            if use_random then
+                val := random()$F
+            else
+                val := index(qcoerce(i)@PositiveInteger)$F
+            zero? elt(lcm, val) => "next value"
+            umv := map(x +-> elt(x, val), m)$UPCF2(R, P, F, R)
+            degree(gcd(umv, differentiate umv)) ~= 0 => "next val"
+            look := false
+        look and not do_ext => return nilFactor(m, 1)
+        look => doExtension(m, dx)
+
+        prime : R := monomial(1, 1) - monomial(val, 0)
+        fumv := factor(umv)$UnivariateFiniteFieldFactorize(F, R)
+        lfact1 := factorList fumv
+
+        #lfact1 = 1 => primeFactor(m, 1)
+        lfact : List P := [map(coerce, lf.factor)$UPCF2(F, R, R, P)
+                             for lf in lfact1]
+        lfact := cons(map(coerce, unit fumv)$UPCF2(F, R, R, P),
+                      lfact)
+        import from GeneralHenselPackage(R, P)
+        dx1 : PI := (dx + 1)::PI
+        lfacth := completeHensel(m, lfact, prime, dx1)
+        lfactk : List P := []
+        while not empty? lfacth repeat
+            ff := first lfacth
+            lfacth := rest lfacth
+            if (c := leadingCoefficient leadingCoefficient ff) ~= 1 then
+                ff := ((inv c)::R)* ff
+            lfactk := cons(ff, lfactk)
+        */[primeFactor(ff1, 1) for ff1 in lfactk]
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

@@ -1,0 +1,1 @@
+extern void show_text(TextNode * node, int Ender);

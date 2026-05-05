@@ -1,0 +1,10 @@
+default(parisize, 1<<20);
+vector(100000, k, k); \\ #1881
+default(parisize, 100kB);
+default(parisize, 100KB);
+default(parisize, 1MB);
+\\ ERRORS
+default(parisize, 1kb);
+default(parisize, 1nB);
+default(parisize, 1gB);
+default(parisize, 1mB);

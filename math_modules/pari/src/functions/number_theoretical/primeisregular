@@ -1,0 +1,19 @@
+Function: primeisregular
+Section: number_theoretical
+C-Name: primeisregular
+Prototype: lU
+Help: primeisregular(p): true(1) if p is regular, false(0) otherwise.
+ p must be prime.
+Doc: true (1) if the prime $p$ is regular, false (0) otherwise.
+ Raise an exception if $p$ is not prime.
+
+ A regular prime (in the sense of Kummer) is such that $p$ does not divide
+ the class number of the $p$-th cyclotomic field $\Q(\zeta_p)$, in particular
+ $2$ is considered to be regular. This function runs in time $\tilde{O}(p)$.
+
+ The first irregular primes:
+ \bprog
+ ? [ p | p <- primes([2, 500]), !primeisregular(p) ]
+ %1 = [37, 59, 67, 101, 103, 131, 149, 157, 233, 257, 263, 271, 283, 293,
+ 307, 311, 347, 353, 379, 389, 401, 409, 421, 433, 461, 463, 467, 491]
+ @eprog

@@ -1,0 +1,1430 @@
+)abbrev domain SAOS SingletonAsOrderedSet
+++ This trivial domain let us build Univariate Polynomials
+++ in an anonymous variable.
+SingletonAsOrderedSet() : Join(OrderedSet, Hashable, Canonical) with
+              create : () -> %
+                ++ create() returns the only element of \spad{%}.
+              convert : % -> Symbol
+  ==  add
+   create() == ("?"::Symbol) pretend %
+   a<b == false -- only one element
+   coerce(a) == outputForm "?"  -- CJW doesn't like this: change ?
+   a = b == true  -- only one element
+   min(a, b) == a  -- only one element
+   max(a, b) == a  -- only one element
+   convert a == a pretend Symbol
+   hashUpdate!(s : HashState, x : %) : HashState ==
+       hashUpdate!(s, qconvert(42)@SingleInteger)$SingleInteger
+
+)abbrev category FMCAT FreeModuleCategory
+++ Author: Michel Petitot petitot@lifl.fr
+++ Date Created: 91
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++   A domain of this category
+++   implements formal linear combinations
+++   of elements from a domain \spad{Basis} with coefficients
+++   in a domain \spad{R}. The domain \spad{Basis} needs only
+++   to belong to the category \spadtype{SetCategory} and \spad{R}
+++   to the category \spadtype{Ring}. Thus the coefficient ring
+++   may be non-commutative.
+++   See the \spadtype{XDistributedPolynomial} constructor
+++   for examples of domains built with the \spadtype{FreeModuleCategory}
+++   category constructor.
+++   Author: Michel Petitot (petitot@lifl.fr)
+++
+++   Note (Franz Lehner, June 2009):
+++   \spad{FreeModule} originally was not of FreeModuleCategory.
+++   Some functions (like \spad{support}, \spad{coefficients},
+++   \spad{monomials}, ...) from here could be moved to
+++   \spad{IndexedDirectProductCategory}
+++   but at the moment there is no need for this.
+FreeModuleCategory(R, S) : Category == Exports where
+   R : Join(SemiRng, AbelianMonoid)
+   S : SetCategory
+
+   Exports == Join(BiModule(R, R), IndexedDirectProductCategory(R, S)) with
+        coefficients : % -> List(R)
+          ++ \spad{coefficients(x)} returns the list of coefficients of \spad{x}.
+        support : % -> List(S)
+          ++ \spad{support(x)} returns the list of basis elements with nonzero coefficients.
+        monomials : % -> List(%)
+          ++ \spad{monomials(x)} returns the list of \spad{r_i*b_i}
+          ++ whose sum is \spad{x}.
+        coefficient : (%, S) -> R
+          ++ \spad{coefficient(x, s)} returns the coefficient of the basis element s
+        -- attributes
+        if R has CommutativeRing then
+             Module(R)
+             linearExtend : (S->R, %)->R
+          ++ \spad{linearExtend: (f, x)} returns the linear extension
+          ++ of a map defined on the basis applied to a linear combination
+      add
+
+        support(p : %) : List(S) == [t.k for t in listOfTerms(p)]
+
+        coefficients(p : %) : List(R) == [t.c for t in listOfTerms(p)]
+
+        monomials(p : %) : List(%) ==
+            [monomial(t.c, t.k) for t in listOfTerms(p)]
+
+        if S has Comparable then
+
+            leadingSupport(p : %) : S == leadingTerm(p).k
+
+            leadingCoefficient(p : %) : R == leadingTerm(p).c
+
+            leadingMonomial(p : %) : % ==
+                t := leadingTerm(p)
+                monomial(t.c, t.k)
+
+        if R has Comparable and S has Comparable then
+          smaller?(p : %, q : %) : Boolean ==
+              repeat
+                  zero?(q) => return false
+                  zero?(p) => return true
+                  if leadingSupport(p) = leadingSupport(q) then
+                      if leadingCoefficient(p) = leadingCoefficient(q) then
+                          p := reductum p
+                          q := reductum q
+                      else
+                          return smaller?(leadingCoefficient(p),
+                                          leadingCoefficient(q))
+                  else
+                      return smaller?(leadingSupport(p), leadingSupport(q))
+
+)abbrev domain FM FreeModule
+++ Author: Dave Barton, James Davenport, Barry Trager
+++ Basic Functions: BiModule(R, R)
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ A bi-module is a free module
+++ over a ring with generators indexed by an ordered set.
+++ Each element can be expressed as a finite linear combination of
+++ generators. Only non-zero terms are stored.
+
+++ old domain FreeModule1 was merged to it in May 2009
+++ The description of the latter:
+++   This domain implements linear combinations
+++   of elements from the domain \spad{S} with coefficients
+++   in the domain \spad{R} where \spad{S} is an ordered set
+++   and \spad{R} is a ring (which may be non-commutative).
+++   This domain is used by domains of non-commutative algebra such as:
+++       \spadtype{XDistributedPolynomial},
+++       \spadtype{XRecursivePolynomial}.
+++   Author: Michel Petitot (petitot@lifl.fr)
+
+
+FreeModule(R : Join(SemiRng, AbelianMonoid), S : SetCategory) :
+        Join(BiModule(R, R), FreeModuleCategory(R, S)) with
+    if R has CommutativeRing then Module(R)
+    if R has SemiRing then RetractableTo S
+    if R has Hashable and S has Hashable then Hashable
+    if S has OrderedSet then
+        if R has OrderedAbelianMonoid then OrderedAbelianMonoid
+        if R has OrderedAbelianMonoidSup then OrderedAbelianMonoidSup
+    "*"                : (R, S) -> %
+      ++ \spad{r*b} returns the product of \spad{r} by \spad{b}.
+    "*":(S,R) -> %
+      ++ \spad{s*r} returns the product \spad{r*s}
+      ++ used by \spadtype{XRecursivePolynomial}
+
+ == IndexedDirectProductObject(R, S) add
+    --representations
+       Term ==>  Record(k : S, c : R)
+       Rep :=  List Term
+
+       rep(x:%):Rep == x :: Rep
+       per(r:Rep):% == r :: %
+
+    --declarations
+       x, y : %
+       r : R
+       n : Integer
+       f : R -> R
+       s : S
+       lt : List Term
+   --define
+       r_one : R :=
+           R has Monoid => 1
+           0
+       if R has noZeroDivisors then
+         r * x  ==
+             zero? r => 0
+             (r = r_one) => x
+           --map(x+->r*x1, x)
+             [[u.k, r*u.c] for u in x ]
+       else
+         r * x  ==
+             zero? r => 0
+             (r = r_one) => x
+           --map(x1+->r*x1, x)
+             [[u.k, a] for u in x | (a := r*u.c) ~= 0$R]
+
+       if R has noZeroDivisors then
+         x * r  ==
+             zero? r => 0
+             (r = r_one) => x
+           --map(x1+->r*x1, x)
+             [[u.k, u.c*r] for u in x ]
+       else
+         x * r  ==
+             zero? r => 0
+             (r = r_one) => x
+           --map(x1+->r*x1, x)
+             [[u.k, a] for u in x | (a := u.c*r) ~= 0$R]
+
+       r * s ==
+         r = 0 => 0
+         [[s, r]$Term]
+
+       s * r ==
+         r = 0 => 0
+         [[s, r]$Term]
+
+       if R has Monoid then
+           coerce(x) : OutputForm ==
+               empty?(x) => (0$R) :: OutputForm
+               le : List OutputForm := []
+               for rec in reverse x repeat
+                   rec.c = 1 => le := cons(rec.k :: OutputForm, le)
+                   le := cons(rec.c :: OutputForm *  rec.k :: OutputForm, le)
+               reduce("+", le)
+       else
+           coerce(x) : OutputForm ==
+               reduce("+", [rec.c :: OutputForm *  rec.k :: OutputForm
+                             for rec in x])
+
+       support x == [t.k for t in x]
+
+       coefficients x == [t.c for t in x]
+
+       monom(b : S, r : R) : % == [[b, r]$Term]
+
+       monomials x == [ monom(t.k, t.c) for t in x]
+
+       if R has SemiRing then
+           retractIfCan x ==
+               numberOfMonomials(x) ~= 1 => "failed"
+               x.first.c = 1 => x.first.k
+               "failed"
+
+           retract x ==
+               (rr := retractIfCan x) case "failed" =>
+                   error "FM1.retract impossible"
+               rr
+
+           coerce(s : S) : % == [[s, 1$R]]
+
+       if S has Comparable then
+
+           coefficient(x, s) ==
+               empty?(x) => 0$R
+               smaller?(s, x.first.k) => coefficient(rest x, s)
+               x.first.k = s => x.first.c
+               0$R
+
+       else
+
+           coefficient(x, s) ==
+               xr := x::Rep
+               for t in xr repeat
+                   if t.k = s then return t.c
+               0
+
+       if R has CommutativeRing then
+           f : S->R
+           x : %
+           t : Term
+           linearExtend(f, x) ==
+               zero? x => 0
+               res : R := 0
+               for t in listOfTerms x repeat
+                   res := res + (t c)*f(t k)
+               res
+
+
+)abbrev package FM2 FreeModuleFunctions2
+++ Author: Franz Lehner lehner@finanz.math.tugraz.at
+++ Date Created: 2009
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++   linear extensions of maps on the basis
+FreeModuleFunctions2(R : CommutativeRing, S : Comparable, M1 : FreeModuleCategory(R, S), M2 : Module(R)) : public == private where
+    TERM1 ==> Record(k : S, c : R)
+
+    public ==> with
+        linearExtend : (S->M2, M1)->M2
+        ++ \spad{linearExtend: (f, x)} returns the linear extension
+        ++ of a map defined on the basis of M2 applied to a linear combination
+
+    private ==> add
+        f : S->M2
+        x : M1
+        t : TERM1
+        linearExtend(f, x) ==
+            zero? x => 0
+            res : M2 := 0
+            for t in listOfTerms x repeat
+                res := res + (t c)*f(t k)
+            res
+
+
+)abbrev package FMCF2 FreeModuleCoefficientFunctions2
+++ Author: Franz Lehner
+++ Date Created: 31.12.2014
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++   A package for mappings between coefficients of free modules over the same
+++   base set.
+FreeModuleCoefficientFunctions2(R1, R2, S, M1, M2) : Exports == Implementation where
+  R1 : Join(SemiRng, AbelianMonoid)
+  R2 : Join(SemiRng, AbelianMonoid)
+  S : Comparable
+  M1 : FreeModuleCategory(R1, S)
+  M2 : FreeModuleCategory(R2, S)
+
+  Term1 ==> Record(k:S, c:R1)
+  Term2 ==> Record(k:S, c:R2)
+  Exports ==> with
+    map : (R1 -> R2, M1) -> M2
+    ++ \spad{map(f, x)} applies the function f to every coefficient of x
+  Implementation ==> add
+    map(f, x) ==
+        rx: List Term1 := listOfTerms x
+        ry: List Term2 := map((t:Term1):Term2 +-> [t.k, f(t.c)], rx)$ListFunctions2(Term1, Term2)
+        constructOrdered select((t:Term2):Boolean +-> not zero?(t.c), ry)
+
+)abbrev domain PR PolynomialRing
+++ Author: Dave Barton, James Davenport, Barry Trager
+++ Basic Functions: Ring, degree, coefficient, monomial, reductum
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This domain represents generalized polynomials with coefficients
+++ (from a not necessarily commutative ring), and terms
+++ indexed by their exponents (from an arbitrary ordered abelian monoid).
+++ This type is used, for example,
+++ by the \spadtype{DistributedMultivariatePolynomial} domain where
+++ the exponent domain is a direct product of non negative integers.
+
+PolynomialRing(R : Join(SemiRng, AbelianMonoid), E : OrderedAbelianMonoid
+              ) : T == C
+ where
+  T == Join(FiniteAbelianMonoidRing(R, E),
+            VariablesCommuteWithCoefficients) with
+    --assertions
+       if R has canonicalUnitNormal then canonicalUnitNormal
+       if R has Hashable and E has Hashable then Hashable
+       if R has Comparable then Comparable
+
+  C == FreeModule(R, E) add
+    --representations
+       Term ==>  Record(k : E, c : R)
+       Rep :=  List Term
+
+       TermS ==>  Record(k : SingleInteger, c : R)
+       RepS ==> List TermS
+
+    --declarations
+       x, y, p, p1, p2 : %
+       n : Integer
+       nn : NonNegativeInteger
+       np : PositiveInteger
+       e : E
+       r : R
+
+       commutative := R has CommutativeRing
+
+    --local operations
+       if R has Monoid then
+           1  == [[0$E, 1$R]]
+       if R has Ring then
+           characteristic  == characteristic$R
+       degree p == if empty?(p) then 0 else p.first.k
+       minimumDegree p == if empty?(p) then 0 else (last p).k
+       leadingCoefficient p == if empty?(p) then 0$R else p.first.c
+       leadingMonomial p == if empty?(p) then 0 else [p.first]
+       reductum p == if empty?(p) then p else p.rest
+       retractIfCan(p:%):Union(R,"failed") ==
+         empty?(p) => 0$R
+         not(empty?(p.rest)) => "failed"
+         zero?(p.first.k) => p.first.c
+         "failed"
+
+       if E is NonNegativeInteger then
+           coefficient(p : %, e : E)  ==
+               empty?(p) => 0$R
+               degp := first(p).k pretend Integer
+               degp < max()$SingleInteger =>
+                   not(e pretend Integer < max()$SingleInteger) => 0$R
+                   ps := p pretend RepS
+                   es := e pretend SingleInteger
+                   for tms in ps repeat
+                       ks := tms.k pretend SingleInteger
+                       ks = es => return tms.c
+                       ks < es => return 0$R
+                   return 0$R
+               for tm in p repeat
+                   tm.k = e => return tm.c
+                   tm.k < e => return 0$R
+               0$R
+       else
+           coefficient(p : %, e : E)  ==
+               for tm in p repeat
+                   tm.k = e => return tm.c
+                   tm.k < e => return 0$R
+               0$R
+
+       recip(p) ==
+           empty?(p) => "failed"
+           p.first.k > 0$E => "failed"
+           (u := recip(p.first.c)) case "failed" => "failed"
+           (u@R)::%
+
+       coerce(r) == if zero? r then 0$% else [[0$E, r]]
+       if R has Ring then
+           coerce(n) == (n::R)::%
+
+       ground?(p) : Boolean == empty? p or (empty? rest p and zero? degree p)
+
+       -- qsetrest!: (Rep, Rep) -> Rep
+       -- qsetrest!(l: Rep, e: Rep): Rep == RPLACD(l, e)$Lisp
+       qsetrest! ==> RPLACD$Lisp
+
+       times :  (R, E, %) -> %
+
+       entireRing? := R has noZeroDivisors
+
+        --- term * polynomial
+       termTimes : (R, E, Term) -> Term
+       termTimes(r : R, e : E, tx : Term) : Term == [e+tx.k, r*tx.c]
+       times(tco : R, tex : E, rx : %) : % ==
+        if entireRing? then
+                map(x1+->termTimes(tco, tex, x1), rx::Rep)
+        else
+                [[tex + tx.k, r] for tx in rx::Rep | not zero? (r := tco * tx.c)]
+
+
+
+       -- local addm!
+       addm! : (Rep, R, E, Rep) -> Rep
+        -- p1 + coef*x^E * p2
+        -- `spare' (commented out) is for storage efficiency (not so good for
+        -- performance though.
+       ADDM_BODY ==>
+                res     := empty()
+                endcell := empty()
+                --spare   := empty()
+                while not empty? p1 and not empty? p2 repeat
+                        tx := first p1
+                        ty := first p2
+                        exy := exp + ty.k
+                        newcell := empty()
+                        if tx.k = exy then
+                                newcoef := tx.c + coef * ty.c
+                                if not zero? newcoef then
+                                        tx.c    := newcoef
+                                        newcell := p1
+                                --else
+                                --      spare   := cons(p1, spare)
+                                p1 := rest p1
+                                p2 := rest p2
+                        else if exy < tx.k then
+                                newcell := p1
+                                p1      := rest p1
+                        else
+                                newcoef := coef * ty.c
+                                if not entireRing? and zero? newcoef then
+                                        newcell := empty()
+                                --else if empty? spare then
+                                --      ttt := [exy, newcoef]
+                                --      newcell := cons(ttt, empty())
+                                --else
+                                --      newcell := first spare
+                                --      spare   := rest spare
+                                --      ttt := first newcell
+                                --      ttt.k := exy
+                                --      ttt.c := newcoef
+                                else
+                                        ttt := [exy, newcoef]
+                                        newcell := cons(ttt, empty())
+                                p2 := rest p2
+                        if not empty? newcell then
+                                if empty? res then
+                                        res := newcell
+                                        endcell := res
+                                else
+                                        qsetrest!(endcell, newcell)
+                                        endcell := newcell
+
+       addm!(p1 : Rep, coef : R, exp : E, p2 : Rep) : Rep ==
+           res, newcell, endcell : Rep
+           spare : List Rep
+           ADDM_BODY
+           if not empty? p1 then  -- then end is const * p1
+               newcell := p1
+           else  -- then end is (coef, exp) * p2
+               newcell := times(coef, exp, p2)
+           empty? res => newcell
+           qsetrest!(endcell, newcell)
+           res
+
+       pomopo! (p1, r, e, p2) ==  addm!(p1, r, e, p2)
+
+       if E is NonNegativeInteger then
+           -- addms! works only for SingleInteger exponents
+           -- but is much faster than general case
+           addms!(pp1 : Rep, coef : R, exp1 : E, pp2 : Rep) : Rep ==
+               res, newcell, endcell : RepS
+               spare : List RepS
+               p1 : RepS := pp1 pretend RepS
+               p2 : RepS := pp2 pretend RepS
+               exp : SingleInteger := exp1 pretend SingleInteger
+               ADDM_BODY
+               if not empty? p1 then  -- then end is const * p1
+                   newcell := p1
+               else  -- then end is (coef, exp) * p2
+                   newcell := times(coef, exp pretend NonNegativeInteger,
+                                    p2 pretend Rep) pretend RepS
+               empty? res => newcell pretend Rep
+               qsetrest!(endcell, newcell)
+               res pretend Rep
+
+           p1 * p2 ==
+                xx := p1::Rep
+                empty? xx => p1
+                yy := p2::Rep
+                empty? yy => p2
+                if commutative then
+                    lx := # xx
+                    ly := # yy
+                    if ly < lx then
+                        (xx, yy) := (yy, xx)
+                        (p1, p2) := (p2, p1)
+                degx := first(xx).k
+                degy := first(yy).k
+                zero? degx => first(xx).c * p2
+                zero? degy => p1 * first(yy).c
+                xx := reverse xx
+                res : Rep := empty()
+                if degx + degy < max()$SingleInteger then
+                    for tx in xx repeat res := addms!(res, tx.c, tx.k, yy)
+                else
+                    for tx in xx repeat res := addm!(res, tx.c, tx.k, yy)
+                res
+       else
+           p1 * p2 ==
+                xx := p1::Rep
+                empty? xx => p1
+                yy := p2::Rep
+                empty? yy => p2
+                zero? first(xx).k => first(xx).c * p2
+                zero? first(yy).k => p1 * first(yy).c
+                --if #xx > #yy then
+                --      (xx, yy) := (yy, xx)
+                --      (p1, p2) := (p2, p1)
+                xx := reverse xx
+                res : Rep := empty()
+                for tx in xx repeat res := addm!(res, tx.c, tx.k, yy)
+                res
+
+       if % has CommutativeRing  then
+
+         p ^ np == p^(np::NonNegativeInteger)
+
+         p ^ nn  ==
+            zero? nn => 1
+            empty?(p) => 0
+            (nn = 1) => p
+            empty? p.rest =>
+              zero?(cc := p.first.c ^ nn) => 0
+              [[nn * p.first.k, cc]]
+            binomThmExpt([p.first], p.rest, nn)
+
+       if R has Field then
+         x/r == inv(r)*x
+         unitNormal(p) ==
+            empty?(p) or (lcf : R := p.first.c) = 1 => [1, p, 1]
+            a := inv lcf
+            [lcf::%, cons([p.first.k, 1], (a * p.rest)), a::%]
+         unitCanonical(p) ==
+            empty?(p) or (lcf : R := p.first.c) = 1 => p
+            a := inv lcf
+            cons([p.first.k, 1], (a * p.rest))
+       else if R has IntegralDomain then
+         unitNormal(p) ==
+            empty?(p) or p.first.c = 1 => [1, p, 1]
+            (u, cf, a) := unitNormal(p.first.c)
+            [u::%, cons([p.first.k, cf], (a * p.rest)), a::%]
+         unitCanonical(p) ==
+            empty?(p) or p.first.c = 1 => p
+            (u, cf, a) := unitNormal(p.first.c)
+            cons([p.first.k, cf], (a * p.rest))
+       if R has Ring then
+         fmecg(p1 : %, e : E, r : R, p2 : %) : % ==       -- p1 - r * X^e * p2
+            rout : % := []
+            r := - r
+            for tm in p2 repeat
+               c2 := r * tm.c
+               c2 = 0 => iterate
+               e2 := e + tm.k
+               while not(empty?(p1)) and p1.first.k > e2 repeat
+                 (rout := cons(p1.first, rout); p1 := p1.rest)  --use PUSH and POP?
+               empty?(p1) or p1.first.k < e2 => rout := cons([e2, c2], rout)
+               if (u := p1.first.c + c2) ~= 0 then
+                   rout := cons([e2, u], rout)
+               p1 := p1.rest
+            concat!(reverse! rout, p1)
+       if R has IntegralDomain then
+         associates?(p1, p2) ==
+            empty?(p1) => empty?(p2)
+            empty?(p2) => false
+            p1.first.k = p2.first.k and
+              associates?(p1.first.c, p2.first.c) and
+               ((p2.first.c exquo p1.first.c)::R * p1.rest = p2.rest)
+         p exquo r  ==
+           [(if (a := tm.c exquo r) case "failed"
+               then return "failed" else [tm.k,a])
+                  for tm in p] :: Union(%,"failed")
+         if E has CancellationAbelianMonoid then
+           if R has Approximate then
+             p1 exquo p2  ==
+               empty?(p2) => error "Division by 0"
+               p2 = 1 => p1
+               p1 = p2 => 1
+             --(p1.lastElt.c exquo p2.lastElt.c) case "failed" => "failed"
+               rout := []@List(Term)
+               while not(empty?(p1)) repeat
+                  (a := p1.first.c exquo p2.first.c)
+                  a case "failed" => return "failed"
+                  ee := subtractIfCan(p1.first.k, p2.first.k)
+                  ee case "failed" => return "failed"
+                  p1 := fmecg(p1.rest, ee, a, p2.rest)
+                  rout := cons([ee, a], rout)
+               empty?(p1) => reverse!(rout)::%
+               "failed"
+           else -- R not Approximate
+             p1 exquo p2  ==
+               empty?(p2) => error "Division by 0"
+               p2 = 1 => p1
+             --(p1.lastElt.c exquo p2.lastElt.c) case "failed" => "failed"
+               rout := []@List(Term)
+               while not(empty?(p1)) repeat
+                  (a := p1.first.c exquo p2.first.c)
+                  a case "failed" => return "failed"
+                  ee := subtractIfCan(p1.first.k, p2.first.k)
+                  ee case "failed" => return "failed"
+                  p1 := fmecg(p1.rest, ee, a, p2.rest)
+                  rout := cons([ee, a], rout)
+               empty?(p1) => reverse!(rout)::%
+               "failed"
+
+)abbrev domain SUP SparseUnivariatePolynomial
+++ Author: Dave Barton, Barry Trager
+++ Basic Functions: Ring, monomial, coefficient, reductum, differentiate,
+++ elt, map, resultant, discriminant
+++ Related Constructors: UnivariatePolynomial, Polynomial
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This domain represents univariate polynomials over arbitrary
+++ (not necessarily commutative) coefficient rings. The variable is
+++ unspecified so that the variable displays as \spad{?} in output.
+++ If it is necessary to specify the variable name, use type \spadtype{UnivariatePolynomial}.
+++ The representation is sparse
+++ in the sense that only non-zero terms are represented.
+++ Note: if the coefficient ring is a field, this domain forms a euclidean domain.
+
+SparseUnivariatePolynomial(R : Join(SemiRng, AbelianMonoid)
+                          ) : UnivariatePolynomialCategory(R) with
+     outputForm : (%, OutputForm) -> OutputForm
+        ++ outputForm(p, var) converts the SparseUnivariatePolynomial p to
+        ++ an output form (see \spadtype{OutputForm}) printed as a polynomial in the
+        ++ output form \spad{var}.
+     if R has Canonical then Canonical
+    == PolynomialRing(R, NonNegativeInteger)
+  add
+   --representations
+   Term ==> Record(k : NonNegativeInteger, c : R)
+   Rep  := List Term
+   p : %
+   n : NonNegativeInteger
+   np : PositiveInteger
+   FP ==> SparseUnivariatePolynomial %
+   pp, qq : FP
+   lpp : List FP
+
+)if false
+   -- for karatsuba
+   kBound : NonNegativeInteger := 63
+   upmp := UnivariatePolynomialMultiplicationPackage(R, %)
+)endif
+
+   makeSUP(p : %) : SparseUnivariatePolynomial(R) ==
+       p pretend SparseUnivariatePolynomial(R)
+
+   unmakeSUP(sp : SparseUnivariatePolynomial(R)) : % ==
+       sp pretend %
+
+   if R has FieldOfPrimeCharacteristic  then
+         p ^ np == p^(np::NonNegativeInteger)
+         p ^ n  ==
+            zero? n => 1
+            empty?(p) => 0
+            (n = 1) => p
+            empty? p.rest =>
+              zero?(cc := p.first.c ^ n) => 0
+              [[n * p.first.k, cc]]
+            -- not worth doing special trick if characteristic is too small
+            characteristic()$R < 3 =>
+                expt(p, qcoerce(n)@PositiveInteger)$RepeatedSquaring(%)
+            y : % := 1
+            -- break up exponent in qn * characteristic + rn
+            -- exponentiating by the characteristic is fast
+            rec := divide(n, characteristic()$R)
+            qn := rec.quotient
+            rn := rec.remainder
+            repeat
+                if rn = 1 then y := y * p
+                if rn > 1 then y := y * binomThmExpt([p.first], p.rest, rn)
+                zero? qn => return y
+                -- raise to the characteristic power
+                p := [[t.k * characteristic()$R , primeFrobenius(t.c)$R ]$Term for t in p]
+                rec := divide(qn, characteristic()$R)
+                qn := rec.quotient
+                rn := rec.remainder
+            y
+
+
+
+   zero?(p) : Boolean == empty?(p)
+   if R has SemiRing then
+       one?(p):Boolean ==
+           not empty? p and (empty? rest p and zero? first(p).k and
+             (first(p).c = 1))
+
+   ground?(p) : Boolean == empty? p or (empty? rest p and zero? first(p).k)
+   multiplyExponents(p, n) == [ [u.k*n, u.c] for u in p]
+   divideExponents(p, n) ==
+     empty?(p) => p
+     m := (p.first.k :: Integer exquo n::Integer)
+     m case "failed" => "failed"
+     u := divideExponents(p.rest, n)
+     u case "failed" => "failed"
+     cons([m@Integer::NonNegativeInteger, p.first.c], u)
+   karatsubaDivide(p, n)  ==
+     zero? n => [p, 0]
+     lowp : Rep := p
+     highp : Rep := []
+     repeat
+       if empty? lowp then break
+       t := first lowp
+       if t.k < n then break
+       lowp := rest lowp
+       highp := cons([subtractIfCan(t.k, n)::NonNegativeInteger, t.c]$Term, highp)
+     [ reverse highp,  lowp]
+   shiftRight(p, n)  ==
+      [[subtractIfCan(t.k, n)::NonNegativeInteger, t.c]$Term for t in p]
+   shiftLeft(p, n)  ==
+      [[t.k + n, t.c]$Term for t in p]
+
+-- implementation using karatsuba algorithm conditionally
+--
+--   p1 * p2 ==
+--     xx := p1::Rep
+--     empty? xx => p1
+--     yy := p2::Rep
+--     empty? yy => p2
+--     zero? first(xx).k => first(xx).c * p2
+--     zero? first(yy).k => p1 * first(yy).c
+--     (first(xx).k > kBound) and (first(yy).k > kBound) and (#xx > kBound) and (#yy > kBound) =>
+--       karatsubaOnce(p1, p2)$upmp
+--     xx := reverse xx
+--     res : Rep := empty()
+--     for tx in xx repeat res := rep pomopo!( res, tx.c, tx.k, p2)
+--     res
+
+
+   univariate(p : %) == p pretend SparseUnivariatePolynomial(R)
+   multivariate(sup : SparseUnivariatePolynomial(R), v : SingletonAsOrderedSet) ==
+      sup pretend %
+   univariate(p : %, v : SingletonAsOrderedSet) ==
+     zero? p => 0
+     monomial(leadingCoefficient(p)::%, degree p) +
+         univariate(reductum p, v)
+   multivariate(supp : SparseUnivariatePolynomial(%), v : SingletonAsOrderedSet) ==
+     zero? supp => 0
+     lc := leadingCoefficient supp
+     degree lc > 0 => error "bad form polynomial"
+     monomial(leadingCoefficient lc, degree supp) +
+         multivariate(reductum supp, v)
+   if R has FiniteFieldCategory and R has PolynomialFactorizationExplicit then
+     RXY ==> SparseUnivariatePolynomial SparseUnivariatePolynomial R
+     squareFreePolynomial pp ==
+        squareFree(pp)$UnivariatePolynomialSquareFree(%, FP)
+     factorPolynomial pp ==
+          (generalTwoFactor(pp pretend RXY)$TwoFactorize(R))
+                      pretend Factored SparseUnivariatePolynomial %
+     factorSquareFreePolynomial pp ==
+          (generalTwoFactor(pp pretend RXY)$TwoFactorize(R))
+                      pretend Factored SparseUnivariatePolynomial %
+     factor p == factor(p)$UnivariateFiniteFieldFactorize(R, %)
+     solveLinearPolynomialEquation(lpp, pp) ==
+       solveLinearPolynomialEquation(lpp, pp)$FiniteFieldSolveLinearPolynomialEquation(R, %, FP)
+
+   -- Ugly, but we want to avoid conditional exports or testing
+   -- in inner loops
+   mm_one : R := 0$R
+   m_one : R :=  0$R
+   one_inited : Boolean := false
+
+   init_one() : Void ==
+       one_inited => "done"
+       mm_one -- treat as free variable
+       if R has Ring then
+           mm_one := -1$R
+       m_one -- treat as free variable
+       if R has Monoid then
+           m_one := 1$R
+       one_inited := true
+
+   toutput(t1 : Term, v : OutputForm) : OutputForm ==
+     if not(one_inited) then init_one()
+     t1.k = 0 => t1.c :: OutputForm
+     if t1.k = 1
+       then mon := v
+       else mon := v ^ t1.k::OutputForm
+     t1.c = 0 => empty()
+     t1.c = m_one => mon
+     t1.c = mm_one and
+          ((t1.c :: OutputForm) = (-1$Integer)::OutputForm)@Boolean => - mon
+     t1.c::OutputForm * mon
+   outputForm(p : %, v : OutputForm) ==
+     l : List(OutputForm)
+     l := [toutput(t, v) for t in p]
+     empty?(l) => (0$Integer)::OutputForm -- else FreeModule 0 problems
+     reduce(_+, l)
+
+   coerce(p:%):OutputForm == outputForm(p, message("?"))
+   elt(p : %, val : R) ==
+      empty?(p) => 0$R
+      co := p.first.c
+      n := p.first.k
+      for tm in p.rest repeat
+          co := co * val ^ (n - (n := tm.k))::PositiveInteger + tm.c
+      n = 0 => co
+      co*val^(n::PositiveInteger)
+   elt(p : %, val : %) ==
+      empty?(p) => 0$%
+      coef : % := p.first.c :: %
+      n := p.first.k
+      for tm in p.rest repeat
+          coef := coef * val ^ (n-(n := tm.k))::PositiveInteger+(tm.c::%)
+      n = 0 => coef
+      coef*val^(n::PositiveInteger)
+
+   if R has Ring then
+       monicDivide(p1 : %, p2 : %) ==
+           empty?(p2) => error "monicDivide: division by 0"
+           leadingCoefficient p2 ~= 1 => error "Divisor Not Monic"
+           p2 = 1 => [p1, 0]
+           empty?(p1) => [0, 0]
+           degree p1 < (n := degree p2) => [0, p1]
+           rout : Rep := []
+           p2 := p2.rest
+           while not(empty?(p1)) repeat
+               (u := subtractIfCan(p1.first.k, n)) case "failed" => break
+               rout := cons([u, p1.first.c], rout)
+               p1 := fmecg(p1.rest, rout.first.k, rout.first.c, p2)
+           [reverse!(rout), p1]
+
+   if R has IntegralDomain then
+       discriminant(p) == discriminant(p)$PseudoRemainderSequence(R, %)
+
+       subResultantGcd(p1, p2) == subResultantGcd(p1, p2)$PseudoRemainderSequence(R, %)
+
+       resultant(p1, p2) == resultant(p1, p2)$PseudoRemainderSequence(R, %)
+
+   if R has GcdDomain then
+     content(p) == if empty?(p) then 0$R else "gcd"/[tm.c for tm in p]
+        --make CONTENT more efficient?
+
+     primitivePart(p) ==
+        empty?(p) => p
+        ct := content(p)
+        unitCanonical((p exquo ct)::%)
+               -- exquo  present since % is now an IntegralDomain
+
+     gcd(p1, p2) ==
+          gcdPolynomial(p1 pretend SparseUnivariatePolynomial R,
+                        p2 pretend SparseUnivariatePolynomial R) pretend %
+
+   if R has Field then
+     divide( p1, p2)  ==
+       zero? p2 => error "Division by 0"
+       (p2 = 1) => [p1, 0]
+       ct := inv(p2.first.c)
+       n := p2.first.k
+       p2 := p2.rest
+       rout := empty()$List(Term)
+       while p1 ~= 0 repeat
+          (u := subtractIfCan(p1.first.k, n)) case "failed" => break
+          rout := cons([u, ct * p1.first.c], rout)
+          p1 := fmecg(p1.rest, rout.first.k, rout.first.c, p2)
+       [reverse!(rout), p1]
+
+     p / co == inv(co) * p
+
+)abbrev package SUP2 SparseUnivariatePolynomialFunctions2
+++ Author:
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This package lifts a mapping from coefficient rings R to S to
+++ a mapping from sparse univariate polynomial over R to
+++ a sparse univariate polynomial over S.
+++ Note that the mapping is assumed
+++ to send zero to zero, since it will only be applied to the non-zero
+++ coefficients of the polynomial.
+
+SparseUnivariatePolynomialFunctions2(R : Ring, S : Ring) : with
+  map : (R->S, SparseUnivariatePolynomial R) -> SparseUnivariatePolynomial S
+    ++ map(func, poly) creates a new polynomial by applying func to
+    ++ every non-zero coefficient of the polynomial poly.
+ == add
+  map(f, p) == map(f, p)$UnivariatePolynomialCategoryFunctions2(R,
+           SparseUnivariatePolynomial R, S, SparseUnivariatePolynomial S)
+
+)abbrev domain UP UnivariatePolynomial
+++ Author:
+++ Basic Functions: Ring, monomial, coefficient, reductum, differentiate,
+++ elt, map, resultant, discriminant
+++ Related Constructors: SparseUnivariatePolynomial, MultivariatePolynomial
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This domain represents univariate polynomials in some symbol
+++ over arbitrary (not necessarily commutative) coefficient rings.
+++ The representation is sparse
+++ in the sense that only non-zero terms are represented.
+++ Note: if the coefficient ring is a field, then this domain forms a euclidean domain.
+
+UnivariatePolynomial(x : Symbol, R : Ring):
+  UnivariatePolynomialCategory(R) with
+    coerce : Variable(x) -> %
+      ++ coerce(x) converts the variable x to a univariate polynomial.
+    if R has Canonical then Canonical
+   == SparseUnivariatePolynomial(R)   add
+    Rep := SparseUnivariatePolynomial(R)
+    coerce(p : %) : OutputForm  == outputForm(p, outputForm x)
+    coerce(v : Variable(x)) : % == monomial(1, 1)
+
+)abbrev package UP2 UnivariatePolynomialFunctions2
+++ Author:
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This package lifts a mapping from coefficient rings R to S to
+++ a mapping from \spadtype{UnivariatePolynomial}(x, R) to
+++ \spadtype{UnivariatePolynomial}(y, S). Note that the mapping is assumed
+++ to send zero to zero, since it will only be applied to the non-zero
+++ coefficients of the polynomial.
+
+UnivariatePolynomialFunctions2(x : Symbol, R : Ring, y : Symbol, S : Ring) : with
+  map : (R -> S, UnivariatePolynomial(x, R)) -> UnivariatePolynomial(y, S)
+    ++ map(func, poly) creates a new polynomial by applying func to
+    ++ every non-zero coefficient of the polynomial poly.
+ == add
+  map(f, p) == map(f, p)$UnivariatePolynomialCategoryFunctions2(R,
+              UnivariatePolynomial(x, R), S, UnivariatePolynomial(y, S))
+
+)abbrev package POLY2UP PolynomialToUnivariatePolynomial
+++ Author:
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This package is primarily to help the interpreter do coercions.
+++ It allows you to view a polynomial as a
+++ univariate polynomial in one of its variables with
+++ coefficients which are again a polynomial in all the
+++ other variables.
+
+PolynomialToUnivariatePolynomial(x : Symbol, R : Ring) : with
+  univariate : (Polynomial R, Variable x) ->
+                                   UnivariatePolynomial(x, Polynomial R)
+     ++ univariate(p, x) converts the polynomial p to a one of type
+     ++ \spad{UnivariatePolynomial(x, Polynomial(R))}, ie. as a member of \spad{R[...][x]}.
+ == add
+  univariate(p, y) ==
+    q : SparseUnivariatePolynomial(Polynomial R) := univariate(p, x)
+    map(x1+->x1, q)$UnivariatePolynomialCategoryFunctions2(Polynomial R,
+                  SparseUnivariatePolynomial Polynomial R, Polynomial R,
+                      UnivariatePolynomial(x, Polynomial R))
+
+)abbrev package UPSQFREE UnivariatePolynomialSquareFree
+++ Author: Dave Barton, Barry Trager
+++ Basic Functions: squareFree, squareFreePart
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This package provides for square-free decomposition of
+++ univariate polynomials over arbitrary rings, i.e.
+++ a partial factorization such that each factor is a product
+++ of irreducibles with multiplicity one and the factors are
+++ pairwise relatively prime. If the ring
+++ has characteristic zero, the result is guaranteed to satisfy
+++ this condition. If the ring is an infinite ring of
+++ finite characteristic, then it may not be possible to decide when
+++ polynomials contain factors which are pth powers. In this
+++ case, the flag associated with that polynomial is set to "nil"
+++ (meaning that that polynomials are not guaranteed to be square-free).
+
+UnivariatePolynomialSquareFree(RC : IntegralDomain, P) : C == T
+  where
+    fUnion ==> Union("nil", "sqfr", "irred", "prime")
+    FF     ==> Record(flag : fUnion, factor : P, exponent : NonNegativeInteger)
+    P : Join(UnivariatePolynomialCategory(RC), IntegralDomain) with
+      gcd : (%, %) -> %
+        ++ gcd(p, q) computes the greatest-common-divisor of p and q.
+
+    C == with
+      squareFree : P -> Factored(P)
+        ++ squareFree(p) computes the square-free factorization of the
+        ++ univariate polynomial p. Each factor has no repeated roots, and the
+        ++ factors are pairwise relatively prime.
+      squareFreePart : P -> P
+        ++ squareFreePart(p) returns a polynomial which has the same
+        ++ irreducible factors as the univariate polynomial p, but each
+        ++ factor has multiplicity one.
+      BumInSepFFE : FF -> FF
+        ++ BumInSepFFE(f) is a local function, exported only because
+        ++ it has multiple conditional definitions.
+
+    T == add
+
+      if RC has CharacteristicZero then
+        squareFreePart(p : P) == (p exquo gcd(p, differentiate p))::P
+      else
+        squareFreePart(p : P) ==
+          unit(s := squareFree(p)$%) * */[f.factor for f in factorList s]
+
+      if RC has FiniteFieldCategory then
+        BumInSepFFE(ffe : FF) ==
+           ["sqfr", map(charthRoot,ffe.factor), characteristic$P*ffe.exponent]
+      else if RC has PolynomialFactorizationExplicit
+              and RC has CharacteristicNonZero then
+         BumInSepFFE(ffe : FF) ==
+            np := multiplyExponents(ffe.factor, characteristic$P::NonNegativeInteger)
+            (nthrp := charthRoot(np)) case "failed" =>
+               ["nil", np, ffe.exponent]
+            ["sqfr", nthrp, characteristic$P*ffe.exponent]
+
+      else
+        BumInSepFFE(ffe : FF) ==
+          ["nil",
+           multiplyExponents(ffe.factor, characteristic$P::NonNegativeInteger),
+            ffe.exponent]
+
+
+      if RC has CharacteristicZero then
+        squareFree(p : P) ==             --Yun's algorithm - see SYMSAC '76, p.27
+           --Change gcd to return cofctrs also?
+           ci := p; di := differentiate(p); pi := gcd(ci, di)
+           degree(pi)=0 =>
+             (u, c, a) := unitNormal(p)
+             makeFR(u,[["sqfr",c,1]])
+           i : NonNegativeInteger := 0; lffe : List FF := []
+           lcp := leadingCoefficient p
+           while degree(ci) ~= 0 repeat
+              ci := (ci exquo pi)::P
+              di := (di exquo pi)::P - differentiate(ci)
+              pi := gcd(ci, di)
+              i := i+1
+              degree(pi) > 0 =>
+                 lcp := (lcp exquo (leadingCoefficient(pi)^i))::RC
+                 lffe := [["sqfr",pi,i],:lffe]
+           makeFR(lcp::P, lffe)
+
+      else if RC has FiniteFieldCategory then
+
+        Res1 ==> Record(f_list : List(P), e_list : List(NonNegativeInteger))
+
+        char_RC := characteristic()$RC
+
+        --Bernardin modification to Yun, see Bernardin thesis
+        squareFree1(p : P) : Res1 ==
+            dp := differentiate(p)
+            -- facs_pow contains powers of factors
+            facs_pow := gcd(p, dp)
+            degree(facs_pow) = 0 => [[p], [1]]
+            -- product of factors in power 1 or 0
+            facs := (p exquo facs_pow)::P
+            i : NonNegativeInteger := 1
+            lf : List(P) := []
+            le : List(NonNegativeInteger) := []
+            di := (dp exquo facs_pow)::P - differentiate(facs)
+            while i < char_RC - 1 and di ~=0 repeat
+                fac_i := gcd(facs, di)
+                if degree(fac_i) > 0 then
+                    lf := cons(fac_i, lf)
+                    le := cons(i, le)
+                facs := (facs exquo fac_i)::P
+                facs_pow := (facs_pow exquo facs)::P
+                di := (di exquo fac_i)::P - differentiate(facs)
+                i := i + 1
+            if degree(facs) > 0 then
+                lf := cons(facs, lf)
+                le := cons(i, le)
+            degree(facs_pow) = 0 => [lf, le]
+            facs_pow := map(charthRoot, divideExponents(facs_pow, char_RC)::P)
+            res1 := squareFree1(facs_pow)
+            rec_fl := res1.f_list
+            rec_el := res1.e_list
+            res_lf : List(P) := []
+            res_le : List(NonNegativeInteger) := []
+            for rec_f in rec_fl for rec_e in rec_el repeat
+                nlf : List(P) := []
+                nle : List(NonNegativeInteger) := []
+                for f in lf for e in le repeat
+                    f1 := gcd(f, rec_f)
+                    if degree(f1) > 0 then
+                        res_lf := cons(f1, res_lf)
+                        res_le := cons(char_RC*rec_e + e, res_le)
+                        nf := (f exquo f1)::P
+                        rec_f := (rec_f exquo f1)::P
+                    else
+                        nf := f
+                    if degree(nf) > 0 then
+                        nlf := cons(nf, nlf)
+                        nle := cons(e, nle)
+                if degree(rec_f) > 0 then
+                    res_lf := cons(rec_f, res_lf)
+                    res_le := cons(char_RC*rec_e, res_le)
+                lf := reverse!(nlf)
+                le := reverse!(nle)
+            for f in lf for e in le repeat
+                res_lf := cons(f, res_lf)
+                res_le := cons(e, res_le)
+            [reverse!(res_lf), reverse!(res_le)]
+
+        squareFree(p : P) ==
+            u := leadingCoefficient(p)
+            res1 := squareFree1((1/u)*p)
+            fl : List FF := []
+            for f in res1.f_list for e in res1.e_list repeat
+                fl := cons(["sqfr", f, e], fl)
+            -- we assume that GCD are monic, so we know correct unit
+            makeFR(u::P, fl)
+
+      else
+        squareFree(p : P) ==           --Musser's algorithm - see SYMSAC '76, p.27
+             --p MUST BE PRIMITIVE, Any characteristic.
+             --Note ci primitive, so GCD's don't need to %do contents.
+             --Change gcd to return cofctrs also?
+           ci := gcd(p, differentiate(p))
+           degree(ci)=0 =>
+             (u, c, a) := unitNormal(p)
+             makeFR(u,[["sqfr",c,1]])
+           di := (p exquo ci)::P
+           i : NonNegativeInteger := 0; lffe : List FF := []
+           dunit : P := 1
+           while degree(di) ~= 0 repeat
+              diprev := di
+              di := gcd(ci, di)
+              ci := (ci exquo di)::P
+              i := i+1
+              degree(diprev) = degree(di) =>
+                 lc := (leadingCoefficient(diprev) exquo leadingCoefficient(di))::RC
+                 dunit := lc^i * dunit
+              pi := (diprev exquo di)::P
+              lffe := [["sqfr",pi,i],:lffe]
+           dunit := dunit * di ^ (i+1)
+           degree(ci)=0 => makeFR(dunit*ci, lffe)
+           redSqfr := squareFree(divideExponents(ci, characteristic$P)::P)
+           lsnil := [BumInSepFFE(ffe) for ffe in factorList redSqfr]
+           lffe := append(lsnil, lffe)
+           makeFR(dunit*(unit redSqfr), lffe)
+
+)abbrev package PSQFR PolynomialSquareFree
+++ Author:
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This package computes square-free decomposition of multivariate
+++ polynomials over a coefficient ring which is an arbitrary gcd domain.
+++ The requirement on the coefficient domain guarantees that the \spadfun{content} can be
+++ removed so that factors will be primitive as well as square-free.
+++ Over an infinite ring of finite characteristic, it may not be possible to
+++ guarantee that the factors are square-free.
+
+PolynomialSquareFree(VarSet : OrderedSet, E, RC : GcdDomain, P) : C == T where
+  E : OrderedAbelianMonoidSup
+  P : PolynomialCategory(RC, E, VarSet)
+
+  C == with
+    squareFree : P -> Factored P
+      ++ squareFree(p) returns the square-free factorization of the
+      ++ polynomial p.  Each factor has no repeated roots, and the
+      ++ factors are pairwise relatively prime.
+
+  T == add
+    SUP    ==> SparseUnivariatePolynomial(P)
+    NNI    ==> NonNegativeInteger
+    fUnion ==> Union("nil", "sqfr", "irred", "prime")
+    FF     ==> Record(flag : fUnion, factor : P, exponent : NNI)
+
+    finSqFr : (P, List VarSet) -> Factored P
+    pthPower : P -> Factored P
+    pPolRoot : P -> P
+    putPth   : P -> P
+
+    chrc := characteristic$RC
+
+    if RC has CharacteristicNonZero
+          and RC has PolynomialFactorizationExplicit then
+    -- find the p-th root of a polynomial
+      pPolRoot(f : P) : P ==
+        lvar := variables f
+        empty? lvar => f
+        mv := first lvar
+        uf := univariate(f, mv)
+        uf := divideExponents(uf, chrc)::SUP
+        uf := map(pPolRoot, uf)
+        multivariate(uf, mv)
+
+    -- substitute variables with their p-th power
+      putPth(f : P) : P ==
+        lvar := variables f
+        empty? lvar => f
+        mv := first lvar
+        uf := univariate(f, mv)
+        uf := multiplyExponents(uf, chrc)::SUP
+        uf := map(putPth, uf)
+        multivariate(uf, mv)
+
+    -- the polynomial is a perfect power
+      pthPower(f : P) : Factored P ==
+        proot : P := 0
+        isSq  : Boolean := false
+        if (g := charthRoot f) case "failed" then proot := pPolRoot(f)
+        else
+          proot := g@P
+          isSq  := true
+        psqfr := finSqFr(proot, variables f)
+        isSq  =>
+          makeFR((unit psqfr)^chrc, [[u.flag, u.factor,
+           (u.exponent)*chrc] for u in factorList psqfr])
+        makeFR((unit psqfr),[["nil", putPth u.factor, u.exponent]
+                             for u in factorList psqfr])
+
+    -- compute the square free decomposition, finite characteristic case
+      finSqFr(f : P, lvar : List VarSet) : Factored P ==
+         empty? lvar => pthPower(f)
+         mv := first lvar
+         lvar := lvar.rest
+         differentiate(f, mv)=0 => finSqFr(f, lvar)
+         uf := univariate(f, mv)
+         cont := content uf
+         cont1 : P := 1
+         uf := (uf exquo cont)::SUP
+         squf := squareFree(uf)$UnivariatePolynomialSquareFree(P, SUP)
+         pfaclist : List FF := []
+         for u in factorList squf repeat
+           uexp : NNI := (u.exponent)::NNI
+           u.flag = "sqfr" =>  -- the square free factor is OK
+             pfaclist := cons([u.flag, multivariate(u.factor, mv), uexp],
+                              pfaclist)
+           --listfin1 := finSqFr(multivariate(u.factor, mv), lvar)
+           listfin1 := squareFree multivariate(u.factor, mv)
+           flistfin1 := [[uu.flag, uu.factor, uu.exponent*uexp]
+                        for uu in factorList listfin1]
+           cont1 := cont1*((unit listfin1)^uexp)
+           pfaclist := append(flistfin1, pfaclist)
+         cont := cont*cont1
+         cont ~= 1 =>
+           sqp := squareFree cont
+           pfaclist := append (factorList sqp, pfaclist)
+           makeFR(unit(sqp)*coefficient(unit squf, 0), pfaclist)
+         makeFR(coefficient(unit squf, 0), pfaclist)
+
+    squareFree(p : P) ==
+       mv := mainVariable p
+       mv case "failed" => makeFR(p,[])$Factored(P)
+       characteristic$RC ~= 0 => finSqFr(p, variables p)
+       up := univariate(p, mv)
+       cont := content up
+       up := (up exquo cont)::SUP
+       squp := squareFree(up)$UnivariatePolynomialSquareFree(P, SUP)
+       pfaclist : List FF :=
+         [[u.flag, multivariate(u.factor, mv), u.exponent]
+                                            for u in factorList squp]
+       cont ~= 1 =>
+         sqp := squareFree cont
+         makeFR(unit(sqp)*coefficient(unit squp, 0),
+              append(factorList sqp, pfaclist))
+       makeFR(coefficient(unit squp, 0), pfaclist)
+
+)abbrev package UPMP UnivariatePolynomialMultiplicationPackage
+++ Author: Marc Moreno Maza
+++ Date Created: 14.08.2000
+++ Description:
+++ This package implements Karatsuba's trick for multiplying
+++ (large) univariate polynomials. It could be improved with
+++ a version doing the work on place and also with a special
+++ case for squares. We've done this in Basicmath, but we
+++ believe that this out of the scope of FriCAS.
+-- Currently unused.
+
+UnivariatePolynomialMultiplicationPackage(R : Ring, U : UnivariatePolynomialCategory(R)) : C == T
+  where
+    HL ==> Record(quotient : U, remainder : U)
+    C == with
+      noKaratsuba : (U, U) -> U
+        ++ \spad{noKaratsuba(a, b)} returns \spad{a*b} without
+        ++ using Karatsuba's trick at all.
+      karatsubaOnce : (U, U) -> U
+        ++ \spad{karatsuba(a, b)} returns \spad{a*b} by applying
+        ++ Karatsuba's trick once. The other multiplications
+        ++ are performed by calling \spad{*} from \spad{U}.
+      karatsuba : (U, U, NonNegativeInteger, NonNegativeInteger) -> U
+        ++ \spad{karatsuba(a, b, l, k)} returns \spad{a*b} by applying
+        ++ Karatsuba's trick provided that both \spad{a} and \spad{b}
+        ++ have at least \spad{l} terms and \spad{k > 0} holds
+        ++ and by calling \spad{noKaratsuba} otherwise. The other
+        ++ multiplications are performed by recursive calls with
+        ++ the same third argument and \spad{k-1} as fourth argument.
+
+    T == add
+      noKaratsuba(a, b) ==
+        zero? a => a
+        zero? b => b
+        zero?(degree(a)) => leadingCoefficient(a) * b
+        zero?(degree(b)) => a * leadingCoefficient(b)
+        lu : List(U) := reverse monomials(a)
+        res : U := 0
+        for u in lu repeat
+          res := pomopo!(res, leadingCoefficient(u), degree(u), b)
+        res
+      karatsubaOnce(a : U, b : U) : U ==
+        da := minimumDegree(a)
+        db := minimumDegree(b)
+        if not zero? da then a := shiftRight(a, da)
+        if not zero? db then b := shiftRight(b, db)
+        d := da + db
+        n : NonNegativeInteger := min(degree(a), degree(b)) quo 2
+        rec : HL := karatsubaDivide(a, n)
+        ha := rec.quotient
+        la := rec.remainder
+        rec := karatsubaDivide(b, n)
+        hb := rec.quotient
+        lb := rec.remainder
+        w : U := (ha - la) * (lb - hb)
+        u : U := la * lb
+        v : U := ha * hb
+        w := w + (u + v)
+        w := shiftLeft(w, n) + u
+        zero? d => shiftLeft(v, 2*n) + w
+        shiftLeft(v, 2*n + d) + shiftLeft(w, d)
+      karatsuba(a : U, b : U, l : NonNegativeInteger, k : NonNegativeInteger) : U ==
+        zero? k => noKaratsuba(a, b)
+        degree(a) < l => noKaratsuba(a, b)
+        degree(b) < l => noKaratsuba(a, b)
+        numberOfMonomials(a) < l => noKaratsuba(a, b)
+        numberOfMonomials(b) < l => noKaratsuba(a, b)
+        da := minimumDegree(a)
+        db := minimumDegree(b)
+        if not zero? da then a := shiftRight(a, da)
+        if not zero? db then b := shiftRight(b, db)
+        d := da + db
+        n : NonNegativeInteger := min(degree(a), degree(b)) quo 2
+        k := subtractIfCan(k, 1)::NonNegativeInteger
+        rec : HL := karatsubaDivide(a, n)
+        ha := rec.quotient
+        la := rec.remainder
+        rec := karatsubaDivide(b, n)
+        hb := rec.quotient
+        lb := rec.remainder
+        w : U := karatsuba(ha - la, lb - hb, l, k)
+        u : U := karatsuba(la, lb, l, k)
+        v : U := karatsuba(ha, hb, l, k)
+        w := w + (u + v)
+        w := shiftLeft(w, n) + u
+        zero? d => shiftLeft(v, 2*n) + w
+        shiftLeft(v, 2*n + d) + shiftLeft(w, d)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

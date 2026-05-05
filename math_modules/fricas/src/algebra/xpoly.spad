@@ -1,0 +1,837 @@
+)abbrev category XALG XAlgebra
+++ Author: Michel Petitot petitot@lifl.fr
+++ Date Created: 91
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++   This is the category of algebras over non-commutative rings.
+++   It is used by constructors of non-commutative algebras such as:
+++       \spadtype{XPolynomialRing}.
+++       \spadtype{XFreeAlgebra}
+
+XAlgebra(R : Ring) : Category ==
+  Join(Ring, BiModule(R, R)) with
+    --operations
+      coerce : R -> %
+          ++ \spad{coerce(r)} equals  \spad{r*1}.
+    -- attributes
+      if R has CommutativeRing then Algebra(R)
+      -- if R has CommutativeRing then Module(R)
+-- add
+--  coerce(x: R): % == x * 1$%
+
+)abbrev category XFALG XFreeAlgebra
+++ Author: Michel Petitot petitot@lifl.fr
+++ Date Created: 91
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++    This category specifies operations for  polynomials
+++    and formal series with non-commutative variables.
+
+XFreeAlgebra(vl : OrderedSet, R : Ring) : Category == Catdef where
+   WORD   ==> FreeMonoid(vl)
+   NNI    ==> NonNegativeInteger
+   I      ==> Integer
+   TERM   ==> Record(k : WORD, c : R)
+
+   Catdef == Join(XAlgebra(R), RetractableTo(R), RetractableTo(WORD))
+     with
+       "*": (vl,%) -> %
+         ++ \spad{v * x} returns the product of a variable \spad{x} by \spad{x}.
+       "*": (%, R) -> %
+         ++ \spad{x * r} returns the product of \spad{x} by \spad{r}.
+         ++ Useful if \spad{R} is a non-commutative Ring.
+       mindeg : % -> WORD
+         ++ \spad{mindeg(x)} returns the little word which appears in \spad{x}.
+         ++ Error if \spad{x=0}.
+       mindegTerm : % -> TERM
+         ++ \spad{mindegTerm(x)} returns the term whose word is \spad{mindeg(x)}.
+       coef  : (%, WORD) -> R
+         ++ \spad{coef(x, w)} returns the coefficient of the word \spad{w} in \spad{x}.
+       coef  : (%, %) -> R
+         ++ \spad{coef(x, y)} returns scalar product of \spad{x} by \spad{y},
+         ++ the set of words being regarded as an orthogonal basis.
+       lquo  : (%, vl) -> %
+         ++ \spad{lquo(x, v)} returns the left simplification of \spad{x} by the variable \spad{v}.
+       lquo  : (%, WORD) -> %
+         ++ \spad{lquo(x, w)} returns the left simplification of \spad{x} by the word \spad{w}.
+       lquo  : (%, %) -> %
+         ++ \spad{lquo(x, y)} is a bilinear extension of \spad{lquo} from
+         ++ words to \spad{%}.
+       rquo  : (%, vl) -> %
+         ++ \spad{rquo(x, v)} returns the right simplification of \spad{x} by the variable \spad{v}.
+       rquo  : (%, WORD) -> %
+         ++ \spad{rquo(x, w)} returns the right simplification of \spad{x} by \spad{w}.
+       rquo  : (%, %) -> %
+         ++ \spad{rquo(x, y)} is a bilinear extension of \spad{rquo} from
+         ++ words to \spad{%}.
+       monomial : (R, WORD) -> %
+         ++ \spad{monomial(r, w)} returns the product of the word \spad{w}
+         ++ by the coefficient \spad{r}.
+       monomial? : % -> Boolean
+         ++ \spad{monomial?(x)} returns true if \spad{x} is a monomial
+       mirror : % -> %
+         ++ \spad{mirror(x)} returns \spad{Sum(r_i mirror(w_i))} if \spad{x} writes \spad{Sum(r_i w_i)}.
+       coerce : vl -> %
+         ++ \spad{coerce(v)} returns \spad{v}.
+       constant? : % -> Boolean
+         ++ \spad{constant?(x)} returns true if \spad{x} is constant.
+       constant : % -> R
+         ++ \spad{constant(x)} returns the constant term of \spad{x}.
+       quasiRegular? : % -> Boolean
+         ++ \spad{quasiRegular?(x)} return true if \spad{constant(x)} is zero.
+       quasiRegular : % -> %
+         ++ \spad{quasiRegular(x)} return \spad{x} minus its constant term.
+       if R has CommutativeRing then
+          sh : (%, %) -> %
+             ++ \spad{sh(x, y)} returns the shuffle-product of \spad{x} by \spad{y}.
+             ++ This multiplication is associative and commutative.
+          sh : (%, NNI) -> %
+             ++ \spad{sh(x, n)} returns the shuffle power of \spad{x} to the \spad{n}.
+       map   : (R -> R, %) -> %
+         ++ \spad{map(fn, x)} returns \spad{Sum(fn(r_i) w_i)} if \spad{x} writes \spad{Sum(r_i w_i)}.
+       varList : % -> List vl
+         ++ \spad{varList(x)} returns the list of variables which appear in \spad{x}.
+
+     -- attributes
+       if R has noZeroDivisors then noZeroDivisors
+
+)abbrev category XPOLYC XPolynomialsCat
+++ Author: Michel Petitot petitot@lifl.fr
+++ Date Created: 91
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++   The Category of polynomial rings with non-commutative variables.
+++   The coefficient ring may be non-commutative too.
+++   However coefficients commute with variables.
+
+XPolynomialsCat(vl : OrderedSet, R : Ring) : Category == Export where
+  WORD ==> FreeMonoid(vl)
+
+  Export == XFreeAlgebra(vl, R) with
+    maxdeg : % -> WORD
+      ++ \spad{maxdeg(p)} returns the greatest leading word in the support of \spad{p}.
+    degree : % -> NonNegativeInteger
+      ++ \spad{degree(p)} returns the degree of \spad{p}.
+      ++  Note that the degree of a word is its length.
+    trunc : (%, NonNegativeInteger) -> %
+      ++  \spad{trunc(p, n)} returns the polynomial \spad{p} truncated at order \spad{n}.
+
+)abbrev domain XPR XPolynomialRing
+++ Author: Michel Petitot petitot@lifl.fr
+++ Date Created: 91
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This domain represents generalized polynomials with coefficients
+++ (from a not necessarily commutative ring), and words
+++ belonging to an arbitrary \spadtype{OrderedMonoid}.
+++ This type is used, for instance, by the \spadtype{XDistributedPolynomial}
+++ domain constructor where the Monoid is free.
+
+XPolynomialRing(R : Ring, E : OrderedMonoid) : T == C where
+  TERM   ==> Record(k : E, c : R)
+  EX     ==> OutputForm
+  NNI    ==> NonNegativeInteger
+
+  T == Join(XAlgebra(R), FreeModuleCategory(R, E)) with
+    --operations
+      "*": (%,R) -> %
+        ++ \spad{p*r} returns the product of \spad{p} by \spad{r}.
+      "#": % -> NonNegativeInteger
+        ++ \spad{# p} returns the number of terms in \spad{p}.
+      coerce : E -> %
+        ++ \spad{coerce(e)} returns \spad{1*e}
+      maxdeg : % -> E
+        ++ \spad{maxdeg(p)} returns the greatest word occurring in the polynomial \spad{p}
+        ++ with a non-zero coefficient. An error is produced if  \spad{p} is zero.
+      mindeg : % -> E
+        ++ \spad{mindeg(p)} returns the smallest word occurring in the polynomial \spad{p}
+        ++ with a non-zero coefficient. An error is produced if  \spad{p} is zero.
+      reductum : % -> %
+        ++ \spad{reductum(p)} returns \spad{p} minus its leading term.
+        ++ An error is produced if  \spad{p} is zero.
+      coef  : (%, E) -> R
+        ++ \spad{coef(p, e)} extracts the coefficient of the monomial \spad{e}.
+        ++ Returns zero if \spad{e} is not present.
+      constant? : % -> Boolean
+        ++ \spad{constant?(p)} tests whether the polynomial \spad{p} belongs to the
+        ++ coefficient ring.
+      constant : % -> R
+        ++ \spad{constant(p)} return the constant term of \spad{p}.
+      quasiRegular? : % -> Boolean
+        ++ \spad{quasiRegular?(x)} return true if \spad{constant(p)} is zero.
+      quasiRegular : % -> %
+        ++ \spad{quasiRegular(x)} return \spad{x} minus its constant term.
+      map   : (R -> R, %) -> %
+        ++ \spad{map(fn, x)} returns \spad{Sum(fn(r_i) w_i)} if \spad{x} writes \spad{Sum(r_i w_i)}.
+      if R has Field then "/" : (%,R) -> %
+        ++ \spad{p/r} returns \spad{p*(1/r)}.
+
+    --assertions
+      if R has noZeroDivisors then noZeroDivisors
+      if R has unitsKnown then unitsKnown
+      if R has canonicalUnitNormal then canonicalUnitNormal
+
+  C == FreeModule(R, E) add
+    --representations
+       Rep :=  List TERM
+    --uses
+       repeatMultExpt : (%, NonNegativeInteger) -> %
+    --define
+       1  == [[1$E, 1$R]]
+
+       characteristic  == characteristic$R
+       #x == #$Rep x
+       maxdeg p == if empty?(p) then  error "zero polynomial !!"
+                             else p.first.k
+       mindeg p == if empty?(p) then  error "zero polynomial !!"
+                             else (last p).k
+
+       coef(p, e)  ==
+          for tm in p repeat
+            tm.k = e => return tm.c
+            tm.k < e => return 0$R
+          0$R
+
+       constant? p == (p = 0) or (maxdeg(p) = 1$E)
+       constant  p == coef(p, 1$E)
+
+       quasiRegular? p == (p = 0) or (last p).k ~= 1$E
+       quasiRegular  p ==
+          quasiRegular?(p) => p
+          [t for t in p | not(t.k = 1$E)]
+
+       recip(p) ==
+           p = 0 => "failed"
+           p1 := first(p)
+           p1.k > 1$E => "failed"
+           (u := recip(p1.c)) case "failed" => "failed"
+           (u@R)::%
+
+       leftRecip(p) ==
+           p = 0 => "failed"
+           p1 := first(p)
+           p1.k > 1$E => "failed"
+           (u := leftRecip(p.first.c)) case "failed" => "failed"
+           (u@R)::%
+
+       rightRecip(p) ==
+           p = 0 => "failed"
+           p1 := first(p)
+           p1.k > 1$E => "failed"
+           (u := rightRecip(p.first.c)) case "failed" => "failed"
+           (u@R)::%
+
+       coerce(r : R) == if r = 0$R then 0$% else [[1$E, r]]
+       coerce(n : Integer) == (n::R)::%
+
+       if R has noZeroDivisors then
+         p1 : % * p2 : %  ==
+            empty?(p1) => 0
+            empty?(p2) => 0
+            p1.first.k = 1$E => p1.first.c * p2
+            p2 = 1 => p1
+--            +/[[[t1.k*t2.k, t1.c*t2.c]$TERM for t2 in p2]
+--                   for t1 in reverse(p1)]
+            +/[[[t1.k*t2.k, t1.c*t2.c]$TERM for t2 in p2]
+                   for t1 in p1]
+        else
+         p1 : % * p2 : %  ==
+            empty?(p1) => 0
+            empty?(p2) => 0
+            p1.first.k = 1$E => p1.first.c * p2
+            p2 = 1 => p1
+--            +/[[[t1.k*t2.k, r]$TERM for t2 in p2 | not (r := t1.c*t2.c) =$R 0]
+--                 for t1 in reverse(p1)]
+            +/[[[t1.k*t2.k, r]$TERM for t2 in p2 | not (r := t1.c*t2.c) =$R 0]
+                   for t1 in p1]
+       p : % ^ nn : NNI  == repeatMultExpt(p, nn)
+       repeatMultExpt(x, nn) ==
+               nn = 0 => 1
+               y : % := x
+               for i in 2..nn repeat y := x * y
+               y
+
+       outTerm(r : R, m : E) : EX ==
+            r = 1 => m::EX
+            m = 1 => r::EX
+            r::EX * m::EX
+
+       coerce(a : %) : EX ==
+            empty? a => (0$R)::EX
+            reduce(_+, reverse! [outTerm(t.c, t.k) for t in a])$List(EX)
+
+
+       if R has Field then
+          x/r == inv(r)*x
+
+
+)abbrev domain XDPOLY XDistributedPolynomial
+++ Author: Michel Petitot petitot@lifl.fr
+++ Date Created: 91
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This type supports distributed multivariate polynomials
+++ whose variables do not commute.
+++ The coefficient ring may be non-commutative too.
+++ However, coefficients and variables commute.
+
+XDistributedPolynomial(vl : OrderedSet, R : Ring) : XDPcat == XDPdef where
+
+  WORD ==> FreeMonoid(vl)
+  I    ==> Integer
+  NNI  ==> NonNegativeInteger
+  TERM ==> Record(k : WORD, c : R)
+
+  XDPcat ==> Join(XPolynomialsCat(vl, R), FreeModuleCategory(R, WORD))
+
+  XDPdef ==> XPolynomialRing(R, WORD) add
+
+       import( WORD, TERM)
+
+    -- Representation
+       Rep  :=  List TERM
+
+    -- local functions
+       shw : (WORD, WORD) -> %    -- shuffle of two words
+
+    -- definitions
+
+       mindegTerm p == last(p)$Rep
+
+       if R has CommutativeRing then
+         sh(p : %, n : NNI) : % ==
+            n = 0 => 1
+            n = 1 => p
+            n1 : NNI := (n-$I 1)::NNI
+            sh(p, sh(p, n1))
+
+
+         sh(p1 : %, p2 : %) ==
+           p : % := 0
+           for t1 in p1 repeat
+             for t2 in p2 repeat
+                p := p + (t1.c * t2.c) * shw(t1.k, t2.k)
+           p
+
+       coerce(w : WORD) : % == monomial(1, w)
+       coerce(v : vl) : % == coerce(v::WORD)
+       v : vl * p : % ==
+         [[v * t.k, t.c]$TERM for t in p]
+
+       retractIfCan(p : %) : Union(R, "failed") ==
+           lt := p::Rep
+           empty?(lt) => 0
+           t1 := first(lt)
+           not(t1.k = 1$WORD) => "failed"
+           t1.c
+
+       retractIfCan(p : %) : Union(WORD, "failed") ==
+           lt := p::Rep
+           empty?(lt) => "failed"
+           not(empty?(rest(lt))) => "failed"
+           t1 := first(lt)
+           t1.c = 1 => t1.k
+           "failed"
+
+       mirror p ==
+         empty?(p) => p
+         monomial(leadingCoefficient(p), (mirror$WORD)(leadingSupport(p)))
+               + mirror(reductum(p))
+
+       degree(p) == length(maxdeg(p))$WORD
+
+       trunc(p, n) ==
+         p = 0 => p
+         degree(p) > n => trunc( reductum p, n)
+         p
+
+       varList p ==
+         constant? p => []
+         le : List vl := "setUnion"/[varList(t.k) for t in p]
+         sort!(le)
+
+       rquo(p : %, w : WORD) ==
+         [[r::WORD,t.c]$TERM for t in p | not (r := rquo(t.k,w)) case "failed" ]
+       lquo(p : %, w : WORD) ==
+         [[r::WORD,t.c]$TERM for t in p | not (r := lquo(t.k,w)) case "failed" ]
+       rquo(p : %, v : vl) ==
+         [[r::WORD,t.c]$TERM for t in p | not (r := rquo(t.k,v)) case "failed" ]
+       lquo(p : %, v : vl) ==
+         [[r::WORD,t.c]$TERM for t in p | not (r := lquo(t.k,v)) case "failed" ]
+
+       shw(w1, w2) ==
+         w1 = 1$WORD => monomial(1, w2)$%
+         w2 = 1$WORD => monomial(1, w1)$%
+         x : vl := first w1 ; y : vl := first w2
+         x * shw(rest w1, w2) + y * shw(w1, rest w2)
+
+       lquo(p : %, q : %) : % ==
+         +/ [t.c * r  for t in q | (r := lquo(p, t.k)) ~= 0]
+
+       rquo(p : %, q : %) : % ==
+         +/ [r * t.c for t in q | (r := rquo(p, t.k)) ~= 0]
+
+       coef(p : %, q : %) : R ==
+         p = 0 => 0$R
+         q = 0 => 0$R
+         p.first.k > q.first.k => coef(p.rest, q)
+         p.first.k < q.first.k => coef(p, q.rest)
+         return p.first.c * q.first.c + coef(p.rest, q.rest)
+
+
+)abbrev domain XRPOLY XRecursivePolynomial
+++ Author: Michel Petitot petitot@lifl.fr
+++ Date Created: 91
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This type supports multivariate polynomials
+++ whose variables do not commute.
+++ The representation is recursive.
+++ The coefficient ring may be non-commutative.
+++ Coefficients and variables commute.
+
+XRecursivePolynomial(VarSet : OrderedSet, R : Ring) :  Xcat == Xdef where
+  I      ==> Integer
+  NNI    ==> NonNegativeInteger
+  XDPOLY ==> XDistributedPolynomial(VarSet, R)
+  EX     ==> OutputForm
+  WORD   ==> FreeMonoid(VarSet)
+  TERM   ==> Record(k : VarSet, c : %)
+  LTERMS ==> List(TERM)
+  REGPOLY==> FreeModule(%, VarSet)
+  VPOLY  ==> Record(c0 : R, reg : REGPOLY)
+
+  Xcat == Join(XPolynomialsCat(VarSet, R), FreeModuleCategory(R, WORD)) with
+       expand : % -> XDPOLY
+         ++ \spad{expand(p)} returns \spad{p} in distributed form.
+       unexpand : XDPOLY -> %
+         ++ \spad{unexpand(p)} returns \spad{p} in recursive form.
+       RemainderList : % -> LTERMS
+         ++ \spad{RemainderList(p)} returns the regular part of \spad{p}
+         ++ as a list of terms.
+
+  Xdef == add
+       import(VPOLY)
+
+    -- representation, in VPOLY case p = c0 + \sum c_i*x_i where
+    -- x_i is last letter of the word
+       Rep     := Union(R, VPOLY)
+
+    -- local functions
+       simplifie : VPOLY -> %
+       rquo1 : (LTERMS, LTERMS) -> %
+       coef1 : (LTERMS, LTERMS) -> R
+       outForm : REGPOLY -> EX
+
+    --define
+       p1 : %  =  p2 : %  ==
+         p1 case R =>
+             p2 case R => p1 =$R p2
+             false
+         p2 case R => false
+         p1.c0 =$R p2.c0 and p1.reg =$REGPOLY p2.reg
+
+       monom0(w : WORD, r : R) : % ==
+         r =0 => 0
+         one?(w) => r
+         [0, monomial(monom0(rest(w), r), first(w))$REGPOLY]$VPOLY
+
+       monomial(r, w) == monom0(mirror(w), r)
+
+       coeff0(p : %, w : WORD) : R ==
+           w = 1$WORD =>
+               p case R => p
+               p.c0
+           p case R => 0
+           coeff0(coefficient(p.reg, first(w)), rest(w))
+
+       coefficient(p : %, w : WORD) : R == coeff0(p, mirror(w))
+
+       construct(lt) == unexpand(construct(lt)$XDPOLY)
+
+       constructOrdered(lt) ==
+           unexpand(constructOrdered(lt)$XDPOLY)
+
+       listOfTerms(p : %) == listOfTerms(expand(p))$XDPOLY
+
+       reductum(p : %) == unexpand(reductum(expand(p))$XDPOLY)
+
+       if R has CommutativeRing then
+
+           linearExtend(f, p) ==
+               linearExtend(f, expand(p))$XDPOLY
+
+       numberOfMonomials(p) ==
+           p case R =>
+               p@R = 0 => 0
+               1
+           res : NonNegativeInteger :=
+               p.c0 = 0 => 0
+               1
+           res + +/[numberOfMonomials(t.c) for t in listOfTerms(p.reg)]
+
+--       if R has Field then                  -- Bug non resolu !!!!!!!!
+--         p: % / r: R == inv(r) * p
+
+       lquo(p1 : %, p2 : %) : % ==
+           p2 case R => p2::R * p1
+           p1 case R => p2.c0 * p1
+           x := construct([[t.k, a]$TERM for t in listOfTerms(p1.reg)
+                           | (a := lquo(t.c, p2)) ~=$% 0 ]$LTERMS)@REGPOLY
+           simplifie([coef(p2, p1), x]$VPOLY)
+
+       trunc(p, n) ==
+         n = 0 or (p case R) => (constant p)::%
+         n1 : NNI := (n-1)::NNI
+         lt : LTERMS := [[t.k, r]$TERM for t in listOfTerms p.reg _
+                        | (r := trunc(t.c, n1)) ~=$% 0]$LTERMS
+         x : REGPOLY := construct lt
+         simplifie([constant p, x]$VPOLY)
+
+       unexpand p ==
+           constant?(p) => constant(p)::%
+           vl : List VarSet := sort((y, z) +-> y > z, varList p)
+           x : REGPOLY := construct([[v, unexpand(r)]$TERM for v in vl
+                                     | (r := rquo(p, v)) ~= 0])
+           [constant(p), x]$VPOLY
+
+       if R has CommutativeRing then
+           sh(p : %, n : NNI) : % ==
+               n = 0 => 1
+               p case R => (p@R)^ n
+               n1 : NNI := (n-1)::NNI
+               p1 : % := n *$% sh(p, n1)
+               lt : LTERMS := [[t.k, sh(t.c, p1)]$TERM for t in
+                                   listOfTerms(p.reg)]
+               simplifie([p.c0 ^ n, construct(lt)]$VPOLY)
+
+           sh(p1 : %, p2 : %) ==
+               p1 case R => p1::R * p2
+               p2 case R => p1 * p2::R
+               lt1 : LTERMS := listOfTerms(p1.reg)
+               lt2 : LTERMS := listOfTerms(p2.reg)
+               x : REGPOLY := construct([[t.k, sh(t.c, p2)]$TERM for t in lt1])
+               y : REGPOLY := construct([[t.k, sh(p1, t.c)]$TERM for t in lt2])
+               simplifie([p1.c0*p2.c0, x + y]$VPOLY)
+
+       RemainderList p ==
+           p case R => []
+           listOfTerms(p.reg)$REGPOLY
+
+       rquo(p1 : %, p2 : %) : % ==
+           p2 case R => p1 * p2
+           p1 case R => p1 *$R p2.c0
+           p1 * p2.c0 +$% rquo1(listOfTerms(p1.reg), listOfTerms(p2.reg))
+
+       rquo1(x : LTERMS, y : LTERMS) : % ==
+           empty?(x) => 0$%
+           empty?(y) => 0$%
+           x1 := first(x)
+           y1 := first(y)
+           x1.k < y1.k => rquo1(x, rest(y))
+           x1.k = y1.k =>
+               rquo(x1.c, y1.c) +$% rquo1(rest(x), rest(y))
+           rquo1(rest(x), y)
+
+       coef(p1 : %, p2 : %) : R ==
+         p1 case R => p1::R * constant p2
+         p2 case R => p1.c0 * p2::R
+         p1.c0 * p2.c0 +$R coef1(listOfTerms p1.reg, listOfTerms p2.reg)
+
+       coef1(x : LTERMS, y : LTERMS) : R ==
+         empty?(x) => 0$R
+         empty?(y) => 0$R
+         x.first.k < y.first.k => coef1(x, y.rest)
+         x.first.k = y.first.k =>
+             coef(x.first.c, y.first.c) + coef1(x.rest, y.rest)
+         return coef1(x.rest, y)
+
+       --------------------------------------------------------------
+       outForm(p : REGPOLY) : EX ==
+           le : List EX :=  [t.c::EX * t.k::EX for t in listOfTerms p]
+           reduce(_+, reverse! le)$List(EX)
+
+       coerce(p : %) : EX ==
+           p case R => (p@R)::EX
+           p.c0 = 0 => outForm p.reg
+           p.c0::EX + outForm p.reg
+
+       0 == 0$R::%
+       1 == 1$R::%
+       constant? p ==  p case R
+       constant p ==
+          p case R => p
+          p.c0
+
+       retractIfCan(p : %) : Union(R, "failed") ==
+           p case R => p
+           "failed"
+
+       retractIfCan(p : %) : Union(WORD, "failed") ==
+           p case R =>
+               p@R ~= 1 => "failed"
+               1$WORD
+           p.c0 ~= 0 => "failed"
+           lt := listOfTerms(p.reg)
+           not(empty?(rest(lt))) => "failed"
+           t1 := first(lt)
+           ru := retractIfCan(t1.c)@Union(WORD, "failed")
+           ru case "failed" => "failed"
+           ru@WORD *$WORD t1.k
+
+       monomial?(p : %) : Boolean ==
+           p case R => true
+           p.c0 ~= 0 => false
+           lt := listOfTerms(p.reg)
+           not(empty?(rest(lt))) => false
+           monomial?(first(lt).c)
+
+       simplifie(p) ==
+         p.reg = 0$REGPOLY => (p.c0)::%
+         p
+
+       coerce (v : VarSet) : % ==
+           [0$R, monomial(1, v)$REGPOLY]$VPOLY
+
+       coerce (r : R) : % == r
+       coerce (n : Integer) == n::R
+
+       coerce (w : WORD) : % ==
+           res : % := 1
+           while w ~=$WORD 1 repeat
+               res := [0, monomial(res, first(w))$REGPOLY]$VPOLY
+               w := rest(w)
+           res
+
+       expand p ==
+           p case R => p@R::XDPOLY
+           lt : LTERMS := listOfTerms(p.reg)
+           ep : XDPOLY := (p.c0)::XDPOLY
+           for t in lt repeat
+               ep := ep + expand(t.c) * monomial(1, t.k::WORD)$XDPOLY
+           ep
+
+       mirror(p : %) : % ==
+           p case R => p
+           lt := listOfTerms(p.reg)
+           lt1 := [(t.k)::% * mirror(t.c) for t in lt]
+           p.c0::% + +/lt1
+
+       - p : % ==
+         p case R => -$R p
+         [- p.c0, - p.reg]$VPOLY
+
+       p1 + p2 ==
+         p1 case R and p2 case R => p1 +$R p2
+         p1 case R => [p1 +$R p2.c0, p2.reg]$VPOLY
+         p2 case R => [p2 +$R p1.c0, p1.reg]$VPOLY
+         simplifie([p1.c0 + p2.c0, p1.reg +$REGPOLY p2.reg]$VPOLY)
+
+       p1 - p2 ==
+         p1 case R and p2 case R => p1 -$R p2
+         p1 case R => [p1 -$R p2.c0, -p2.reg]$VPOLY
+         p2 case R => [p1.c0 - p2, p1.reg]$VPOLY
+         simplifie([p1.c0 - p2.c0, p1.reg -$REGPOLY p2.reg]$VPOLY)
+
+       n : Integer * p : % ==
+           n = 0 => 0$%
+           p case R => n *$R p
+           simplifie([n*p.c0, n*p.reg]$VPOLY)
+
+       r : R * p : % ==
+           r = 0 => 0$%
+           p case R => r *$R p
+           simplifie([r*p.c0, r*p.reg]$VPOLY)
+
+       p : % * r : R ==
+           r = 0 => 0$%
+           p case R => p *$R r
+           simplifie([p.c0*r, p.reg*r]$VPOLY)
+
+       v : VarSet * p : % == coerce(v)*p
+
+       p1 : % * p2 : % ==
+           p1 case R => p1::R * p2
+           p2 case R => p1 * p2::R
+           x : REGPOLY := p1 *$REGPOLY p2.reg
+           y : REGPOLY := p1.reg *$REGPOLY p2.c0
+           simplifie([p1.c0 * p2.c0, x+y ]$VPOLY)
+
+       rquo(p : %, v : VarSet) : % ==
+           p case R => 0
+           coefficient(p.reg, v)$REGPOLY
+
+       rquo(p : %, w : WORD) : % ==
+           w = 1$WORD => p
+           rquo(rquo(p, rest(w)), first(w))
+
+       lquo(p : %, v : VarSet) : % ==
+           p case R => 0
+           x : REGPOLY := construct([[t.k, a]$TERM for t in listOfTerms(p.reg)
+                           | (a := lquo(t.c, v)) ~=$% 0 ])
+           simplifie([constant(coefficient(p.reg, v)), x]$VPOLY)
+
+       lquo(p : %, w : WORD) : % ==
+           w = 1$WORD => p
+           lquo(lquo(p, first(w)), rest(w))
+
+       coef(p : %, w : WORD) : R == constant(rquo(p, w))
+
+       quasiRegular? p ==
+         p case R => p = 0$R
+         p.c0 = 0$R
+
+       quasiRegular p ==
+         p case R => 0$%
+         [0$R, p.reg]$VPOLY
+
+       characteristic() == characteristic()$R
+
+       recip p ==
+         p case R => recip(p@R)
+         "failed"
+
+       leftRecip(p) ==
+           p case R => leftRecip(p@R)
+           "failed"
+
+       rightRecip(p) ==
+           p case R => rightRecip(p@R)
+           "failed"
+
+       mindeg p ==
+           p case R =>
+               p = 0 => error "XRPOLY.mindeg: zero polynomial !!"
+               1$WORD
+           p.c0 ~= 0 => 1$WORD
+           "min"/[mindeg(t.c) *$WORD (t.k) for t in listOfTerms(p.reg)]
+
+       mindegTerm(p) ==
+           p case R => [1$WORD, p]
+           p.c0 ~= 0 => [1$WORD, p.c0]
+           lt := listOfTerms(p.reg)
+           lm := [[tp, mt.c] for t in lt | (mt := mindegTerm(t.c);
+                     tp := mt.k *$WORD (t.k); true)]
+           res := first(lm)
+           rd := res.k
+           for mt in rest(lm) repeat
+               if mt.k < rd then
+                   res := mt
+                   rd := res.k
+           res
+
+       maxdeg p ==
+           p case R =>
+               p = 0 => error "XRPOLY.maxdeg: zero polynomial !!"
+               1$WORD
+           "max"/[maxdeg(t.c) *$WORD (t.k)  for t in listOfTerms(p.reg)]
+
+       leadingTerm(p) ==
+           p case R => [1$WORD, p]
+           lt := listOfTerms(p.reg)
+           lm := [[tp, mt.c] for t in lt | (mt := leadingTerm(t.c);
+                     tp := mt.k *$WORD (t.k); true)]
+           res := first(lm)
+           rd := res.k
+           for mt in rest(lm) repeat
+               if rd < mt.k then
+                   res := mt
+                   rd := res.k
+           res
+
+       degree p ==
+           p = 0 => error "XRPOLY.degree: zero polynomial !!"
+           length(maxdeg(p))
+
+       map(fn, p) ==
+           p case R => fn(p@R)
+           x : REGPOLY := construct([[t.k, a]$TERM for t in listOfTerms(p.reg)
+                           |(a := map(fn, t.c)) ~=$% 0])
+           simplifie([fn(p.c0), x]$VPOLY)
+
+       varList p ==
+           p case R => []
+           lv : List(VarSet) := "setUnion"/[varList(t.c) for t in
+                                            listOfTerms(p.reg)]
+           lv := setUnion(lv, [t.k for t in listOfTerms(p.reg)])
+           sort!(lv)
+
+)abbrev domain XPOLY XPolynomial
+++ Author: Michel Petitot petitot@lifl.fr
+++ Date Created: 91
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This type supports multivariate polynomials
+++ whose set of variables is \spadtype{Symbol}.
+++ The representation is recursive.
+++ The coefficient ring may be non-commutative and the variables
+++ do not commute.
+++ However, coefficients and variables commute.
+
+XPolynomial(R : Ring) == XRecursivePolynomial(Symbol, R)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

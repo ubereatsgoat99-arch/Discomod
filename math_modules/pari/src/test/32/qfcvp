@@ -1,0 +1,8 @@
+Cases that should fail:
+  ***   at top-level: qfcvp(Mat(),[1.5]~,2.25)
+  ***                 ^------------------------
+  *** qfcvp: incorrect type in cvp0 [different dimensions] (t_COL).
+  ***   at top-level: qfcvp(Q,[1.5,5]~,2.25)
+  ***                 ^----------------------
+  *** qfcvp: incorrect type in cvp0 [different dimensions] (t_COL).
+Total time spent: 2

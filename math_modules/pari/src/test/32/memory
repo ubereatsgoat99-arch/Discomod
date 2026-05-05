@@ -1,0 +1,18 @@
+  ***   Warning: new stack size = 1048576 (1.000 Mbytes).
+  ***   at top-level: vector(100000,k,k)
+  ***                                 ^--
+  ***   the PARI stack overflows !
+  current stack size: 1048576 (1.000 Mbytes)
+  [hint] set 'parisizemax' to a nonzero value in your GPRC
+
+  ***   Warning: new stack size = 102400 (0.098 Mbytes).
+  ***   Warning: new stack size = 1048576 (1.000 Mbytes).
+  ***   I was expecting an integer here: 1kb
+  ***                                    ^---
+  ***   I was expecting an integer here: 1nB
+  ***                                    ^---
+  ***   I was expecting an integer here: 1gB
+  ***                                    ^---
+  ***   I was expecting an integer here: 1mB
+  ***                                    ^---
+Total time spent: 1

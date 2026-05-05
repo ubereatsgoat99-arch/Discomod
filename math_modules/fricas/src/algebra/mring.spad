@@ -1,0 +1,390 @@
+)abbrev category MRCAT MonoidRingCategory
+++ Authors: Stephan M. Watt; revised by Johannes Grabmeier
+++ Date Created: January 1986
+++ Basic Operations: *, +, monomials, coefficients
+++ Related Constructors: Polynomial
+++ Also See:
+++ AMS Classifications:
+++ Keywords: monoid ring, group ring, polynomials in non-commuting
+++  indeterminates
+++ References:
+++ Description:
+++  \spadtype{MonoidRingCategory}(R, M) defines the algebra
+++  of all maps from the monoid M to the commutative ring R with
+++  finite support.
+MonoidRingCategory(R : Ring, M : Monoid) : Category == MRCdefinition where
+    Term ==> Record(k : M, c : R)
+
+    MRCdefinition == Join(Ring, FreeModuleCategory(R, M), RetractableTo M,
+                          RetractableTo R) with
+        coerce :   List Term -> %
+          ++ coerce(lt) converts a list of terms and coefficients to a member of the domain.
+        terms       : % -> List Term
+          ++ terms(f) gives the list of non-zero coefficients combined
+          ++ with their corresponding basis element as records.
+          ++ This is the internal representation.
+        if R has CharacteristicZero then CharacteristicZero
+        if R has CharacteristicNonZero then CharacteristicNonZero
+        if R has CommutativeRing then Algebra(R)
+        if R has CommutativeRing and M has CommutativeStar then
+            CommutativeRing
+        if (R has Finite and M has Finite) then Finite
+
+)abbrev domain MRING MonoidRing
+++ Authors: Stephan M. Watt; revised by Johannes Grabmeier
+++ Date Created: January 1986
+++ Basic Operations: *, +, monomials, coefficients
+++ Related Constructors: Polynomial
+++ Also See:
+++ AMS Classifications:
+++ Keywords: monoid ring, group ring, polynomials in non-commuting
+++  indeterminates
+++ References:
+++ Description:
+++  \spadtype{MonoidRing}(R, M), implements the algebra
+++  of all maps from the monoid M to the commutative ring R with
+++  finite support.
+++  Multiplication of two maps f and g is defined
+++  to map an element c of M to the (convolution) sum over {\em f(a)g(b)}
+++  such that {\em ab = c}. Thus M can be identified with a canonical
+++  basis and the maps can also be considered as formal linear combinations
+++  of the elements in M. Scalar multiples of a basis element are called
+++  monomials. A prominent example is the class of polynomials
+++  where the monoid is a direct product of the natural numbers
+++  with pointwise addition. When M is
+++  \spadtype{FreeMonoid Symbol}, one gets polynomials
+++  in infinitely many non-commuting variables. Another application
+++  area is representation theory of finite groups G, where modules
+++  over \spadtype{MonoidRing}(R, G) are studied.
+MonoidRing(R : Ring, M : Monoid) : MonoidRingCategory(R, M) == MRdefinition where
+    Term ==> Record(k : M, c : R)
+
+    MRdefinition ==> add
+        Ex ==> OutputForm
+        Cf ==> c
+        Mn ==> k
+
+        Rep := List Term
+
+        rep(x:%):Rep == x :: Rep
+        per(r:Rep):% == r :: %
+
+        characteristic() == characteristic()$R
+
+        coerce(x : List Term) : % == per x
+
+        monomial(r : R, m : M)  ==
+          r = 0 => empty()
+          [[m, r]]
+
+        monomial?(x) == empty? x or empty? rest x
+
+        if (R has Finite and M has Finite) then
+          size() == size()$R ^ size()$M
+
+          index i0 ==
+            -- use p-adic decomposition of k
+            -- coefficient of p^j determines coefficient of index(i+p)$M
+            i : Integer := i0 rem size()
+            p : Integer := size()$R
+            n : Integer := size()$M
+            ans : % := 0
+            for j in 0.. while i > 0 repeat
+              h := i rem p
+              -- we use index(p) = 0$R
+              if h ~= 0 then
+                cf : R := index(h :: PositiveInteger)$R
+                m : M := index((j+n) :: PositiveInteger)$M
+                --ans := ans + c *$% m
+                ans := ans + monomial(cf, m)$%
+              i := i quo p
+            ans
+
+          lookup(z : %) : PositiveInteger ==
+            -- could be improved, if M has OrderedSet
+            -- z = index lookup z, n = lookup index n
+            -- use p-adic decomposition of k
+            -- coefficient of p^j determines coefficient of index(i+p)$M
+            zero?(z) => qcoerce(size()$%)@PositiveInteger
+            liTe : List Term := terms z  -- all non-zero coefficients
+            p  : Integer := size()$R
+            n  : Integer := size()$M
+            res : Integer := 0
+            for te in liTe repeat
+              -- assume that lookup(p)$R = 0
+              l : NonNegativeInteger := lookup(te.Mn)$M
+              ex : NonNegativeInteger := (n = l => 0;l)
+              co : Integer := lookup(te.Cf)$R
+              res := res + co * p ^ ex
+            qcoerce(res)@PositiveInteger
+
+        0                   == empty()
+        1                   == [[1, 1]]
+        zero? a == empty? a
+        one? a == size?(a, 1) and one?(a.first.Cf) and one?(a.first.Mn)
+        terms a             == copy rep a
+        monomials a         == [[t] for t in a]
+        coefficients a      == [t.Cf for t in a]
+        coerce(m : M) : %       == [[m, 1]]
+        coerce(r : R) : % ==
+        -- coerce of ring
+          r = 0 => 0
+          [[1, r]]
+        coerce(n : Integer) : % ==
+        -- coerce of integers
+          n = 0 => 0
+          [[1, n::R]]
+        - a                 == [[t.Mn, -t.Cf] for t in a]
+        if R has noZeroDivisors then
+            (r : R) * (a : %) ==
+              r = 0 => 0
+              one? r => a
+              [[t.Mn, r*t.Cf] for t in a]
+        else
+            (r : R) * (a : %) ==
+              r = 0 => 0
+              one? r => a
+              [[t.Mn, rt] for t in a | (rt := r*t.Cf) ~= 0]
+        if R has noZeroDivisors then
+            (n : Integer) * (a : %) ==
+                n = 0 => 0
+                n = 1 => a
+                [[t.Mn, n*t.Cf] for t in a]
+        else
+            (n : Integer) * (a : %) ==
+                n = 0 => 0
+                n = 1 => a
+                [[t.Mn, nt] for t in a | (nt := n*t.Cf) ~= 0]
+        map(f, a)           == [[t.Mn, ft] for t in a | (ft := f(t.Cf)) ~= 0]
+        numberOfMonomials a == #a
+
+        retractIfCan(a:%):Union(M, "failed") ==
+          ((#a) = 1) and ((a.first.Cf) = 1) => a.first.Mn
+          "failed"
+
+        retractIfCan(a:%):Union(R, "failed") ==
+          ((#a) = 1) and ((a.first.Mn) = 1) => a.first.Cf
+          "failed"
+
+        if R has noZeroDivisors then
+          if M has Group then
+            recip a ==
+              not size?(a, 1) => "failed"
+              (u := recip a.first.Cf) case "failed" => "failed"
+              monomial((u@R), inv a.first.Mn)
+          else
+            recip a ==
+              #a ~= 1 or a.first.Mn ~= 1 => "failed"
+              (u := recip a.first.Cf) case "failed" => "failed"
+              u@R::%
+
+        mkTerm(r : R, m : M) : Ex ==
+            r = 1 => m::Ex
+            r = 0 or m = 1 => r::Ex
+            r::Ex * m::Ex
+
+        coerce(a : %) : Ex ==
+            empty? a => (0$Integer)::Ex
+            empty? rest a => mkTerm(a.first.Cf, a.first.Mn)
+            reduce(_+, [mkTerm(t.Cf, t.Mn) for t in a])$List(Ex)
+
+        if M has Comparable then
+            -- Terms are stored in descending order.
+            leadingCoefficient a == (empty? a => 0; a.first.Cf)
+            leadingSupport a    == (empty? a => 1; a.first.Mn)
+            leadingMonomial a    ==
+                empty? rep a => error "empty support"
+                [first a]
+
+            leadingTerm a    ==
+                empty? a => error "empty support"
+                a.first
+
+            reductum a           == (empty? a => a; rest a)
+
+            listOfTerms a == rep a
+
+            support a == [t.k for t in rep a]
+
+            constructOrdered(x : List Term) : % == per x
+
+            termless(t1:Term, t2:Term):Boolean == smaller?(t1.k, t2.k)
+
+            construct!(x : List Term) : % ==
+                xs : List Term := sort!(termless, x)
+                res : List Term := empty()
+                -- find duplicates
+                while not empty? xs repeat
+                    t1:= first xs
+                    xs := rest xs
+                    newc := t1.c
+                    while not empty? xs repeat
+                        t2:= first xs
+                        if t1.k = t2.k then
+                            newc := newc + t2.c
+                            xs := rest xs
+                        else break
+                    if not zero? newc then
+                        res :=
+                            newc = t1.c => cons(t1, res)
+                            cons([t1.k, newc], res)
+                res
+
+            construct(x : List Term) : % == construct! copy x
+
+            if R has CommutativeRing then
+                f : M -> R
+                x : %
+                t : Term
+                linearExtend(f, x) ==
+                    zero? x => 0
+                    res : R := 0
+                    for t in rep x repeat
+                        res := res + (t.Cf)*f(t.Mn)
+                    res
+
+            a = b ==
+                #rep a ~= #rep b => false
+                for ta in rep a for tb in rep b repeat
+                    ta.Cf ~= tb.Cf or ta.Mn ~= tb.Mn => return false
+                true
+
+            a + b ==
+                zero? a => b
+                zero? b => a
+                repa:Rep := rep a
+                repb:Rep := rep b
+                res : Rep := empty()
+                while not empty? repa and not empty? repb repeat
+                  ta:Term := first repa; tb:Term := first repb
+                  ra:Rep := rest repa;  rb:Rep := rest repb
+                  res :=
+                    smaller?(tb.Mn, ta.Mn) => (repa := ra; concat(ta, res))
+                    smaller?(ta.Mn, tb.Mn) => (repb := rb; concat(tb, res))
+                    repa := ra; repb := rb
+                    not zero?(r := ta.Cf + tb.Cf) =>
+                                        concat([ta.Mn, r], res)
+                    res
+                per concat!(reverse! res, if empty? repa then repb else repa)
+
+            coefficient(a, m) ==
+                for t in a repeat
+                    if t.Mn = m then return t.Cf
+                    if smaller?(t.Mn, m) then return 0
+                0
+
+
+            if M has OrderedMonoid then
+
+            -- we use that multiplying an ordered list of monoid elements
+            -- by a single element respects the ordering
+
+              if R has noZeroDivisors then
+                a : % * b : % ==
+                  +/[[[ta.Mn*tb.Mn, ta.Cf*tb.Cf]$Term
+                    for tb in b ] for ta in reverse a]
+              else
+                a : % * b : % ==
+                  +/[[[ta.Mn*tb.Mn, r]$Term
+                    for tb in b | not zero?(r := ta.Cf*tb.Cf)]
+                      for ta in reverse a]
+            else -- M hasn't OrderedMonoid
+
+                a : % * b : % ==
+                    zero? a or zero? b => 0
+                    one? a => b
+                    one? b => a
+                    construct! concat! [[[ta.Mn*tb.Mn, ta.Cf*tb.Cf]$Term
+                        for tb in b] for ta in a]
+
+        else -- M hasn't Comparable
+            -- Terms are stored in random order.
+          a = b ==
+            #a ~= #b => false
+            for t in a repeat
+                not member?(t, b) => return false
+            true
+
+          coefficient(a, m) ==
+            for t in a repeat
+              t.Mn = m => return t.Cf
+            0
+
+          addterm(Tabl : AssociationList(M, R), r : R, m : M) : R ==
+              (u := search(m, Tabl)) case "failed" => Tabl.m := r
+              zero?(r := r + u@R) => (remove!(m, Tabl); 0)
+              Tabl.m := r
+
+          a + b ==
+              Tabl := table()$AssociationList(M, R)
+              for t in rep a repeat
+                  Tabl t.Mn := t.Cf
+              for t in rep b repeat
+                  addterm(Tabl, t.Cf, t.Mn)
+              [[m, Tabl m]$Term for m in keys Tabl]
+
+          a : % * b : % ==
+              Tabl := table()$AssociationList(M, R)
+              for ta in a repeat
+                  for tb in (b pretend List(Term)) repeat
+                      addterm(Tabl, ta.Cf*tb.Cf, ta.Mn*tb.Mn)
+              [[m, Tabl.m]$Term for m in keys Tabl]
+
+)abbrev package MRF2 MonoidRingFunctions2
+++ Author: Johannes Grabmeier
+++ Date Created: 14 May 1991
+++ Basic Operations: map
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords: monoid ring, group ring, change of coefficient domain
+++ References:
+++ Description:
+++  MonoidRingFunctions2 implements functions between
+++  two monoid rings defined with the same monoid over different rings.
+MonoidRingFunctions2(R, S, M) : Exports == Implementation where
+    R  : Ring
+    S  : Ring
+    M  : Monoid
+    Exports ==> with
+      map : (R -> S, MonoidRing(R, M)) -> MonoidRing(S, M)
+        ++ map(f, u) maps f onto the coefficients of the element
+        ++ u of the monoid ring to create an element of a monoid
+        ++ ring with the same monoid b.
+    Implementation ==> add
+      map(fn, u) ==
+        res : MonoidRing(S, M) := 0
+        for te in terms u repeat
+          res := res + monomial(fn(te.c), te.k)
+        res
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

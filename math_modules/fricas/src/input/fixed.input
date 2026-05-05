@@ -1,0 +1,658 @@
+--Copyright The Numerical Algorithms Group Limited 1996.
+--fixed.input
+
+)set break resume
+
+-------------------------------------------------------------------
+-- daly/10/06/92
+-------------------------------------------------------------------
+)clear all
+-- something is wrong with the integration of series, when the
+-- coefficients are not constants. while the series is mathematically
+-- correct, this is not what one expects as the taylor series, which
+-- does not exist.
+series(x/(x+log(x)))
+-- here integrate is treating log(x) as a constant, which is incorrect.
+integrate(%)
+
+-------------------------------------------------------------------
+-- bmt/10/20/92 multiple complex in type tower
+-------------------------------------------------------------------
+)clear all
+n:Complex ?
+-- an invalid type. can't have 2 complex constructors in a tower
+n:=x/y+%i
+
+-------------------------------------------------------------------------
+-- grabm/09/28/92 coercion bug
+-- comment: this coercion must carefully check whether there is a symbol
+--          among the kernels which is equal to an indeterminate of the
+--          polynomial ring, and not simply considering every expression
+--          as a constant
+-------------------------------------------------------------------------
+)clear all
+f:=(a-b-c-d)^2::EXPR INT
+f::DMP(['a,'b],EXPR INT)
+degree %
+
+-------------------------------------------------------------------
+-- bmt/11/17/92 interpreter resolve problem
+-------------------------------------------------------------------
+-- says cannot find an appropriate *
+)clear all
+%i/m*sqrt(m)
+
+-------------------------------------------------------------------------
+-- tpd/09/22/92 this generates extra brackets
+-------------------------------------------------------------------------
+)clear all
+foo n == matrix[[i for i in 1..n] for j in 1..n]
+foo
+
+-------------------------------------------------------------------------
+--- tpd/09/24/92 matrix multiplication appears broken in the product.
+-- fails with
+--   >> System error:
+--   The function |deleteAssoc| is undefined.
+--   You are being returned to the top level of the interpreter.
+-- comment: (barry)
+-- This bug is due to the new autoloading scheme for the compiler, the
+-- function deleteAssoc needs to be moved into the in core system.
+-- As a work around,
+-- if you compile a non existent file, the appropriate files will be loaded,
+-- e.g.:
+-- )co foo
+--  comment: this works in version 2
+-------------------------------------------------------------------------
+msq := Matrix SquareMatrix(2,POLY INT)
+m : msq := zero(2,2)
+m(1,1) := matrix([[1,2],[a,b]])
+m(1,2) := matrix([[a,b],[2,b]])
+m(2,2) := matrix([[1,2],[2,b]])
+m
+m*m
+m^2
+m^3
+(m*m)*m
+mm:=m*m
+mm*m
+
+-------------------------------------------------------------------------
+-- tpd/09/25/92 new equation.spad from johannes grabmeier
+-------------------------------------------------------------------------
+
+
+--Furthermore, we have function to put 0 or 1 on one side
+--and factor the left hand side, after the right hand side
+--is 0 and we have an IntegralDomain.
+--Johannes
+
+eq1 := (-6*x^3+13*x^2+4)=(-x^4+12*x)
+--
+--
+--            3      2         4
+--   (1)  - 6x  + 13x  + 4= - x  + 12x
+--                                            Type: Equation Polynomial Integer
+--                                       Time: 1.61 (IN) + 1.47 (OT) = 3.08 sec
+eq2 := x^4+13*x^2-12*x = 6*x^3-4
+--
+--
+--         4      2          3
+--   (2)  x  + 13x  - 12x= 6x  - 4
+--                                            Type: Equation Polynomial Integer
+--                                       Time: 0.16 (IN) + 0.11 (OT) = 0.27 sec
+eq := eq1*y^2+eq2
+--
+--
+--             3      2      2    4      2            4        2     3
+--   (3)  (- 6x  + 13x  + 4)y  + x  + 13x  - 12x= (- x  + 12x)y  + 6x  - 4
+--                                            Type: Equation Polynomial Integer
+--               Time: 0.26 (IN) + 0.01 (EV) + 0.01 (OT) + 1.54 (GC) = 1.82 sec
+swap %
+--
+--
+--            4        2     3           3      2      2    4      2
+--   (4)  (- x  + 12x)y  + 6x  - 4= (- 6x  + 13x  + 4)y  + x  + 13x  - 12x
+--                                            Type: Equation Polynomial Integer
+--                                                   Time: 0.07 (OT) = 0.07 sec
+% + 4
+--
+--
+--            4        2     3       3      2      2    4      2
+--   (5)  (- x  + 12x)y  + 6x = (- 6x  + 13x  + 4)y  + x  + 13x  - 12x + 4
+--                                            Type: Equation Polynomial Integer
+--                                       Time: 0.69 (IN) + 0.01 (OT) = 0.70 sec
+%-6*x^3
+--
+--
+--            4        2       3      2      2    4     3      2
+--   (6)  (- x  + 12x)y = (- 6x  + 13x  + 4)y  + x  - 6x  + 13x  - 12x + 4
+--                                            Type: Equation Polynomial Integer
+--                                       Time: 0.19 (IN) + 0.01 (OT) = 0.20 sec
+leftZero %
+--
+--
+--             4     3      2            2    4     3      2
+--   (7)  0= (x  - 6x  + 13x  - 12x + 4)y  + x  - 6x  + 13x  - 12x + 4
+--                                            Type: Equation Polynomial Integer
+--                                       Time: 0.01 (IN) + 0.05 (OT) = 0.06 sec
+swap %
+--
+--
+--          4     3      2            2    4     3      2
+--   (8)  (x  - 6x  + 13x  - 12x + 4)y  + x  - 6x  + 13x  - 12x + 4= 0
+--                                            Type: Equation Polynomial Integer
+--                                                   Time: 0.01 (IN) = 0.01 sec
+factor lhs %
+--
+--
+--               2       2  2
+--   (9)  (x - 2) (x - 1) (y  + 1)
+--                                            Type: Factored Polynomial Integer
+--                           Time: 0.50 (IN) + 0.09 (EV) + 0.30 (OT) = 0.89 sec
+factorAndSplit eq
+--
+--
+--                             2
+--   (10)  [x - 2= 0,x - 1= 0,y  + 1= 0]
+--                                       Type: List Equation Polynomial Integer
+--                                       Time: 0.09 (EV) + 0.21 (OT) = 0.30 sec
+inv (eq :: EQ FRAC POLY INT)
+--
+--
+--                            1                                1
+--   (11)  - ------------------------------------= - ----------------------
+--              3      2      2    4      2            4        2     3
+--           (6x  - 13x  - 4)y  - x  - 13x  + 12x    (x  - 12x)y  - 6x  + 4
+--                                   Type: Equation Fraction Polynomial Integer
+--                                                   Time: 0.03 (IN) = 0.03 sec
+- %
+--
+--
+--                          1                              1
+--   (12)  ------------------------------------= ----------------------
+--            3      2      2    4      2          4        2     3
+--         (6x  - 13x  - 4)y  - x  - 13x  + 12x  (x  - 12x)y  - 6x  + 4
+--                                   Type: Equation Fraction Polynomial Integer
+--                                       Time: 0.01 (IN) + 0.01 (OT) = 0.02 sec
+
+
+-------------------------------------------------------------------
+-- bmt/09/29/92 coercion bug
+-- fails with:
+-- failed cannot be coerced to mode
+-- (Record (: coef1 (Integer)) (: coef2 (Integer)))
+-- fixed on 09/29/92
+-------------------------------------------------------------------
+)clear all
+(p,q):UP(x,INT)
+p:=3*x^4+11*x^2-4
+q:=9*x^4+9*x^2-4
+myNextPrime: (INT,NNI) -> INT
+myNextPrime(x,n)==nextPrime(x)$PRIMES(INT)
+--  runs forever due to algebra bug in handling leading coefficients
+modularGcdPrimitive([p,q])$InnerModularGcd(INT,UP(x,INT),67108859,myNextPrime)
+
+-------------------------------------------------------------------
+-- henderson/10/08/92
+-------------------------------------------------------------------
+)clear all
+--TextFile claims that the operator readLineIfCan! returns "failed" when
+--the end of the file is reached.  In fact, I get a system error, which is
+--not very useful:
+--(16) ->readLineIfCan!(fp)
+--   >> System error:
+--   Unexpected end of #<input stream "/home/mcd/work/work">.
+--   You are being returned to the top level of the interpreter.
+fout:TextFile:=open("./foo","output")
+write!(fout,"foo")
+close!(fout)
+fin:TextFile:=open("./foo","input")
+readLineIfCan!(fin)
+readLineIfCan!(fin)
+close!(fin)
+)system rm ./foo
+
+-------------------------------------------------------------------
+-- bmt/10/08/92 factoring over SAEs
+-------------------------------------------------------------------
+)clear all
+a | a^2+1
+(x+a)*(x+a+1)
+factor %
+
+-------------------------------------------------------------------
+-- sutor/09/28/92 operator bug?
+-------------------------------------------------------------------
+)clear all
+L n ==
+  n = 0 => 1
+  n = 1 => x
+  (2*n-1)/n * x * L(n-1) - (n-1)/n * L(n-2)
+R := POLY FRAC INT
+dx := operator("D")::OP(R)
+evaluate(dx, (p+-> differentiate(p,'x))@(R -> R))
+E n == (1-x^2)*dx^2-2*x*dx+n*(n+1)
+L 15
+-- used to fail on this line
+E 15
+
+-------------------------------------------------------------------
+-- james/10/28/92 coerce bug
+-------------------------------------------------------------------
+)clear all
+-- improper character in Roman numeral: G
+g::ROMAN
+
+-------------------------------------------------------------------
+-- dewar/02/15/93
+-------------------------------------------------------------------
+)clear all
+--i::Polynomial(Integer)
+--%::Union(Symbol,Polynomial Integer)
+--list %
+--
+--this is a bug in old style union handling, this style of unions
+--will become obsolete, so the suggested fix is to use tagged unions instead:
+i::POLY INT
+%::Union(s:Symbol, p:POLY INT)
+list % -- works
+
+-------------------------------------------------------------------
+-- bronstein/03/08/93
+-------------------------------------------------------------------
+)clear all
+I:=operator 'I
+J:=operator 'J
+eq := mu * D(I x,x) = - (K + S) * I(x) + S*J(x)
+solve(eq,I,x)
+--> wrong particular solution
+
+-------------------------------------------------------------------
+-- themos/04/07/93
+-- this sometimes fails
+-- comment:
+--thanks for tracing down the problem. Basically the lines for monicizing
+--the result need to be done before we try to
+--retract back from the algebraic extension.
+-------------------------------------------------------------------
+)clear all
+pol:DMP([x,y,z],PF(2)):=x^2*y^2+x^2*y*z+x^2*z^2+x*y*z^2+y^3*z+y*z^3
+factor pol
+
+-------------------------------------------------------------------
+-- williamson/04/21/93
+-- comment:
+--I ran into some problems when factoring polynomials over number fields.
+--Evidently the interpreter doesn't choose the correct function 'factor'.
+--It uses a function from MULTFACT, when it should be using a function from
+--SAEFACT.
+-------------------------------------------------------------------
+)clear all
+up := UP('w,FRAC INT)
+p : up := w^4 + w^3 + w^2 + w + 1
+sae := SAE(FRAC INT,up,p)
+q : UP('x,sae) := x^5 - 1
+factor q -- used to report: x^5-1
+
+-------------------------------------------------------------------
+-- grabm/04/30/93
+-- comment:
+--This bug has been fixed at yorktown, in radix.spad, change line 163, the
+--third line of intgroup to be:
+--      empty? rest li => intToExpr first(li)
+--and then recompile RADIX
+-------------------------------------------------------------------
+)clear all
+-- results in 10 and not A
+10::RadixExpansion(16)
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch (manuel bronstein)
+-------------------------------------------------------------------
+)clear all
+r:=rule 'x == 1
+-- used to return x, now returns 1
+r x
+
+-------------------------------------------------------------------
+-- ADK@scri.fsu.edu (tony kennedy)
+-------------------------------------------------------------------
+)clear all
+factor(-12)
+%^2
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/10/6/93 (Manuel Bronstein)
+-------------------------------------------------------------------
+)clear all
+--Here is an updated efstruc.spad where ker2trigs now knows about abs.
+real abs(4 + %i * 5) -- does the right thing.
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/10/5/93 (Manuel Bronstein)
+-------------------------------------------------------------------
+)clear all
+--Here is again an enhanced elemntry.spad. What happens now is that
+exp(q * %i * %pi)
+--gets automatically simplified whenever q is a rational number whose
+--denominator is one of  {1,2,3,4,6}.
+exp(5/3*%i*%pi)
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/10/4/93 (Manuel Bronstein)
+-- luczak@nag.com (Richard Luczak)
+-------------------------------------------------------------------
+)clear all
+exp(log(-1))
+sum((-1)^k * (k+m),k=0..n)
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/10/4/93 (Manuel Bronstein)
+-------------------------------------------------------------------
+)clear all
+--simplifies (abs now checks quotients instead of just retraction to R).
+abs((1/2)::EXPR(INT))
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/10/4/93 (Manuel Bronstein)
+-------------------------------------------------------------------
+)clear all
+integrate(1/(x^2 + %i*a),x)
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/9/22/93 (Manuel Bronstein)
+-------------------------------------------------------------------
+-- ')clear all' messes kernel cache which leads to wrong result
+-- since we are testing different thing here we use
+-- ')clear completely' to avoid the problem
+)clear completely
+--Here is an update to efstruc.spad that handles complex constants much better.
+--Negative square roots and negative logs are now recognized as complex and
+--treated properly by real?, real, imag, and complexForm:
+x := sqrt(-3) + sqrt 2 + sqrt(- exp a) + log(-a^2-1)
+real? x
+real x
+imag x
+--As a result, integrals involving sqrt(-2) etc... are now treated correctly
+--(this was the case only for sqrt(-1) with the older version).
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/9/22/93 (Manuel Bronstein)
+-------------------------------------------------------------------
+)clear all
+-->> haha := rule x*x == z
+-->> haha(a*a + b*b + c^2)        -->  3z
+-->> haha(a*a + b*b + c^2 + d*d)  -->  z
+-->>
+-->> the bug is that the last line returns z instead of 4z.
+--
+--Sorry guys, this is not a bug: haha is so general a rule that it matches
+--the integer 4 (as 2 squared), so the rewrite chain for the last example is:
+--
+--a*a + b*b + c^2 + d*d  --->  z + z + z + z  = 4 * z ---> z * z ---> z
+--
+--Here is a console showing what exactly happens:
+haha := rule x*x == z
+haha 4
+haha 3
+haha(4*z)
+haha(3*z)
+--To see the whole rewrite chain:
+a*a + b*b + c^2 + d*d
+applyRules([haha], %, 1)$APPRULE(INT,INT,EXPR INT)
+applyRules([haha], %, 1)$APPRULE(INT,INT,EXPR INT)
+applyRules([haha], %, 1)$APPRULE(INT,INT,EXPR INT)
+--I think it's actually the proper behavior for the pattern matcher. This
+--example shows that rules can bite, something Mma users are quite aware about!
+
+-------------------------------------------------------------------
+-- dewar/9/16/93 (mike dewar)
+-------------------------------------------------------------------
+--There's an odd discontinuity about the behaviour of the following
+--function:
+
+harm(1) == 1
+harm(n) == harm(n-1) + 1/n
+harm : Integer -> Fraction Integer
+harm(1023) -- takes a little while, as expected
+harm(1024) -- takes forever?
+
+-------------------------------------------------------------------
+-- williams@inf.ethz.ch/9/1/93 (Clifton Williamson)
+-------------------------------------------------------------------
+--> we should probably support integrate(%,x) on series types.
+--> x could be either the variable of expansion or a parameter variable.
+--
+--We've discussed this before with regard to the function 'differentiate'.
+--The technical problem is that "generalized" power series may have
+--"coefficients" involving the series variable:
+)clear all
+series(x^x,x=0)
+--In this case, as currently implemented, 'differentiate' returns incorrect
+--answers:
+)set mess test off
+differentiate %
+)set mess test on
+--The solution we discussed (perhaps "resolution" is a better word) was to
+--create a separate series type for generalized series.  This would be a
+--carbon copy of UPXS, except that differentiate(series,variable(series)) and
+--integrate(series,variable(series)) would return an error message.  The
+--error message could also suggest that the user first apply 'approximate',
+--then compute a derivative or integral.  We would also have a coercion from
+--UPXS to this type.  The function 'series' would return a UPXS, when the
+--coefficients do not involve the series variable, and a "generalized series",
+--when the coefficients involve the series variable.
+--
+--If this sounds cool to you, I'll go ahead with it when I have time.  (I'm
+--trying to meet a 16 September deadline for a MEGA '94 submission.  I'm still
+--getting my results together, so time is tight.  Let me know if there is a
+--time deadline for the AXIOM code!)
+--
+--> Also we need better tools for taking finite truncations of series objects.
+--> In particular since we now mostly use series(expr,var) to create a series,
+--> UPXS if over a coefficient domain which supports the symbol of expansion,
+--> should be able to truncate a series to an EXPR.
+--
+--I thought I had you on this one!  The signature is there (in pscat.spad):
+--
+--    if Coef has coerce: Symbol -> Coef then
+--      if Coef has "^":(Coef,Expon) -> Coef then
+--        approximate: ($,Expon) -> Coef
+--          ++ \spad{approximate(f)} returns a truncated power series with the
+--          ++ series variable viewed as an element of the coefficient domain.
+--
+--It certainly works for Laurent series:
+laurent(cos(a+x)/x,x=0)
+approximate(%,3)
+--But, unfortunately, I never implemented it for Puiseux series:
+puiseux(cos(a+x)/x,x=0)
+approximate(%,3)
+series(cos(x^(2/3) + a),x=0)
+approximate(%,2)
+approximate(%% 1,7/5)
+
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/10/6/93 (manuel bronstein)
+-------------------------------------------------------------------
+)clear all
+)set message type off
+
+-- Here is algfunc.spad with an old bug fixed: eventh-roots of negative floats
+-- coerced to EXPR FLOAT (e.g. sqrt(-1::EXPR FLOAT)) used to produced an error
+-- message since the sqrt from FLOAT was called.
+-- I have now fixed iroot from AF(R,)
+-- to call the sqrt from R only if either R is algebraically closed, or the
+-- root is odd, or the argument is positive. Here's the new behaviour:
+sqrt(-1::EXPR FLOAT)
+sqrt(2::EXPR FLOAT)
+nthRoot(-2::EXPR FLOAT, 3)
+nthRoot(-2::EXPR FLOAT, 4)
+--As a side-effect, this fixes the problem with numeric
+-- (which was instantiating sqrt(-1)$EXPR(FLOAT)).
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/8/5/93 (manuel bronstein)
+-------------------------------------------------------------------
+)clear all
+simplify(2^(1/3)*2^(1/2)) -- will return 2^(5/6).
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/7/26/93 (manuel bronstein)
+-------------------------------------------------------------------
+)clear all
+rad:=last zerosOf((2+y)^8-3,y)
+k:=first kernels %
+eval(rad,k,rad)
+
+-------------------------------------------------------------------
+-- nagttt@vax.ox.ac.uk/7/15/93 themos tsikas
+-------------------------------------------------------------------
+)clear all
+f := (x - y) / (x + y)
+eval(f,x=1/x)
+
+-------------------------------------------------------------------
+-- nagttt@vax.ox.ac.uk/7/15/93 themos tsikas
+-------------------------------------------------------------------
+)clear all
+digits 200
+--I claim that these two should give the same result (they do in Reduce):
+--(precision was 200)
+a:=4*sin(2*%pi/9)*sin(5*%pi/9)/sqrt(3)
+b:=1/(2*sin(%pi/9))
+a::EXPR FLOAT
+b::EXPR FLOAT
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/6/14/93 (manuel bronstein)
+-------------------------------------------------------------------
+)clear all
+a := x::EXPR INT
+b := x::EXPR COMPLEX INT
+zeroOf(a^4+1,x)
+zeroOf(b^4+1,x)
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/6/11/93 (manuel bronstein)
+-------------------------------------------------------------------
+)clear all
+normalize(0^a) -- now returns 0  (was crashing before)
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/6/11/93 (manuel bronstein)
+-------------------------------------------------------------------
+)clear all
+-- new export  complexForm(f)  which returns the rectangular complex form of f:
+log(a+%i * b)
+complexForm %
+complexIntegrate(1/(x-%i),x)
+complexForm %
+
+-------------------------------------------------------------------
+-- jcf@posso.ibp.fr
+-------------------------------------------------------------------
+--  normalForm over rings:
+D:=DMP([a,b],INT)
+l:List D:=[2*a-1,b-a]
+g:=groebner l
+p:D:=a
+normalForm(p,g)
+-- was  1
+--   instead of 1/2 !!
+
+-------------------------------------------------------------------
+-- nagttt@vax.ox.ac.uk/6/9/93 themos tsikas
+-------------------------------------------------------------------
+)clear all
+squareFreePart(50)
+
+-------------------------------------------------------------------
+-- mcd@maths.bath.ac.uk/6/4/92 mike dewar
+-------------------------------------------------------------------
+)clear all
+f:=complexIntegrate(1/((x-%i)*(x-2*%i)),x)
+g:=subst(f,x=1)
+imag g
+
+-------------------------------------------------------------------
+-- nagttt@vax.ox.ac.uk/1/11/93 themos tsikas
+-------------------------------------------------------------------
+)clear all
+m:=matrix[[1,a,0],[b,0,a],[0,b,c]]
+ll:=radicalEigenvectors m
+-- ends in error:
+-- Internal system problem in function appInfix : fewer than 2 arguments to
+-- an infix function
+--
+-- but this works
+ll 1
+ll 2
+ll 3
+
+-------------------------------------------------------------------
+-- copper@yktvmv/12/1/93 Don Coppersmith
+-------------------------------------------------------------------
+)clear all
+--Attached is the list of integers n such that 2^512-n is prime
+--and n is between 0 and 5000:
+--
+--   4893,4653,4475,4005,3893,3669,3459,3143,2967,
+--   2807,2529,1827,1695,975,875,629,569
+
+--It was gotten from Axiom by issuing the commands
+qrimes : Stream Integer := stream(nextPrime, 2^512-5000)
+rrimes := [ 2^512-p for p in qrimes while p < 2^512 ]
+srimes := complete rrimes
+[srimes.i for i in [1..18]]
+[srimes.i for i in [10..18]]
+
+-------------------------------------------------------------------
+--  quitte@knuth.univ-poitiers.fr/1/13/94 Claude Quitte
+-------------------------------------------------------------------
+)clear all
+K := Fraction(Integer)
+PolK := UP('X, K)
+X : PolK := monomial(1, 1)
+n : PositiveInteger := 15
+E := SimpleAlgebraicExtension(K, PolK, X^n + X^(n-3) -1)
+y : E := X::E
+minimalPolynomial(y)$E
+--
+--Internal Error
+--The function minimalPolynomial with signature SimpleAlgebraicExtension(
+--Fraction Integer,UnivariatePolynomial(X,Fraction Integer),X^15+X^12-1)
+---> UnivariatePolynomial(X,Fraction Integer) is missing from domain
+--SimpleAlgebraicExtension(Fraction (Integer))
+--(UnivariatePolynomial X (Fraction (Integer)))((15 1 . 1) (12 1 . 1) (0 -1 . 1))
+
+-------------------------------------------------------------------
+-- bronstei@inf.ethz.ch/02/28/94 Manuel Bronstein
+-------------------------------------------------------------------
+)clear all
+f := exp(exp(x)*exp(1/exp(x))) / exp exp x
+--)tr LIMITPS )math
+--)tr DFINTTLS )math
+--)tr DFINTTLS_;findLimit
+-- the following exits back to the shell after limit returns "failed":
+computeInt(first tower f, f, 0, %plusInfinity, false)$DFINTTLS(INT, EXPR INT)
+
+-------------------------------------------------------------------
+-- jhd@maths.bath.ac.uk/03/02/94 James Davenport
+-------------------------------------------------------------------
+)clear all
+--I've fixed coercions of List and Vector to DirectProduct.
+--You can now do things like
+[1,2,3] :: DirectProduct(3, Fraction Integer)
+--
+--I also fixed coercions from Vector to List, which seems to have
+--been removed via a library change.
+
+-------------------------------------------------------------------
+-- jhd@maths.bath.ac.uk/03/09/94 James Davenport
+-------------------------------------------------------------------
+)clear all
+-- used to give a lisp error
+x^10+1::Polynomial PrimeField 2
+

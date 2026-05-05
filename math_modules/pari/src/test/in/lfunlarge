@@ -1,0 +1,38 @@
+default(parisize,20M);
+default(realprecision,38);
+lfun(-4,1/2+10^6*I)
+lfun(101,1/2+10^5*I)
+exponent(lfun(Mod(3,4),1/2+10^5*I)-lfun(-4,1/2+10^5*I)) < -128
+lfun(Mod(3,5),1/2+10^5*I)
+lfun(Mod(2,10^3+1),1/2+10^3*I)
+exponent(lfun(Mod(2,7),1/2-10^4*I)-conj(lfun(Mod(4,7),1/2+10^4*I))) < -128
+lfunhardy(Mod(3,5),10^8)
+lfunzeros(Mod(3,5),[10^6,10^6+1])
+exponent(lfun(1,1/2+3000*I)-zeta(1/2+3000*I)) < -125
+exponent(lfun(1,1/4+3000*I)-zeta(1/4+3000*I)) < -123
+exponent(lfun(1,3/5+3000*I)-zeta(3/5+3000*I)) < -125
+lfun(1,1/2+10^6*I)
+lfun(1,1/2+10^10*I)
+lfun(1,1/2+10^12*I)
+lfunhardy(1,10^14)
+lfunzeros(1,[10^10,10^10+1])
+default(realprecision,211)
+zeta(1/2+10^8*I)
+exponent(lfun(1,1/2+12000*I)-zeta(1/2+12000*I)) < -128
+lfun(1,1/2+10^12*I)
+z0=solve(t=10^10-0.2,10^10,lfunhardy(1,t))
+exponent(lfun(1,1/2+z0*I))
+default(realprecision,38)
+lfun(polcyclo(7),1/2+10^10*I)
+lfun(polsubcyclo(13,3),1/2+10^10*I)
+
+L=lfuninit(1, []); lfun(L,1/2+10^10*I)
+L=lfuninit(Mod(3,5), []); lfun(L,1/2+10^10*I)
+L=lfuninit(polsubcyclo(13,3),[]); lfun(L,1/2+10^10*I)
+
+zeta(1/2+3000*I)
+zeta(1/2+10^(-10)+3000*I)
+lfun(-4,1/2+3000*I)
+lfun(-4,1/2+10^(-10)+3000*I)
+lfun(-4,1/2+8000*I)
+lfun(-4,1/2+8000*I+10^(-10))

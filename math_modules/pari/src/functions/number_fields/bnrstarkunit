@@ -1,0 +1,26 @@
+Function: bnrstarkunit
+Section: number_fields
+C-Name: bnrstarkunit
+Prototype: GDG
+Help: bnrstarkunit(bnr,{subgroup}): bnr being as output by bnrinit, returns
+ the characteristic polynomial of the (conjectural) Stark unit corresponding
+ to the module in bnr and the given congruence subgroup (the trivial subgroup
+ if omitted). The ground field must be totally real and all but one infinite
+ place must become complex in the class field.
+Doc:
+ \var{bnr} being as output by \kbd{bnrinit}, returns the characteristic
+ polynomial of the (conjectural) Stark unit corresponding to the modulus in
+ \var{bnr} and the given congruence subgroup (as usual, omit $\var{subgroup}$
+ if you want the whole ray class group).
+
+ The ground field attached to \var{bnr} must be totally real and
+ all but one infinite place must become complex in the class field, which
+ must be a quadratic extension of its totally real subfield. Finally,
+ the output is given as a polynomial in $x$, so the main
+ variable of \var{bnr} must not be $x$. Here is an example:
+ \bprog
+ ? bnf = bnfinit(y^2 - 2);
+ ? bnr = bnrinit(bnf, [15, [1,0]]);
+ ? lift(bnrstarkunit(bnr))
+ %3 = x^8 + (-9000*y - 12728)*x^7 + (57877380*y + 81850978)*x^6 + ... + 1
+ @eprog

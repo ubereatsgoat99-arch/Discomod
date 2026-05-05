@@ -1,0 +1,1741 @@
+)abbrev package NBLM NaiveBeckermannLabahnModular
+++ Description:
+++  This package solves (multipoint) Hermite-Pade
+++  interpolation problem over $Z_p$, where $p$ is machine
+++  sized prime.  We use quadratic algorithm from 94
+++  Beckermann and Labahn paper (with modification to handle
+++  multipoint case).
+
+K ==> Integer
+VUP ==> Vector SparseUnivariatePolynomial K
+-- PA ==> PrimitiveArray K
+PA ==> U32Vector
+VPA ==> Vector PA
+MPA ==> TwoDimensionalArray PA
+VI ==> Vector Integer
+NBR ==> Record(basis : MPA, defects : VI, cinds : VI)
+
+NaiveBeckermannLabahnModular : with
+  naiveBeckermannLabahn : (VPA, VI, NonNegativeInteger, Integer) _
+                         -> List Any
+    ++ naiveBeckermannLabahn(f, degs, sigma, p) solves modulo $p$
+    ++ Hermite-Pade interpolation problem of order $sigma$.  $degs$
+    ++ specifies degree bounds for solution.  The first element of
+    ++ result contains sigma-basis.  The second gives defects
+    ++ of elements of sigma-basis.  The third one contains residuals
+    ++ -- we stop updating solution if this would violate degree
+    ++ bounds, so residual is zero for elements of sigma-basis
+    ++ which are within bounds, but non-zero otherwise.
+
+  naiveBeckermannLabahn : (VUP, VI, NonNegativeInteger, Integer) _
+                         -> List Any
+    ++ naiveBeckermannLabahn(f, degs, sigma, p) solves modulo $p$
+    ++ Hermite-Pade interpolation problem of order $sigma$.  $degs$
+    ++ specifies degree bounds for solution.  The first element of
+    ++ result contains sigma-basis.  The second gives defects
+    ++ of elements of sigma-basis.  The third one contains residuals
+    ++ -- we stop updating solution if this would violate degree
+    ++ bounds, so residual is zero for elements of sigma-basis
+    ++ which are within bounds, but non-zero otherwise.
+
+  naiveBeckermannLabahnMultipoint : (VPA, VI, PA, Integer) _
+                         -> List Any
+    ++ naiveBeckermannLabahnMultipoint(f, degs, sigma, p) solves modulo $p$
+    ++ multipoint Hermite-Pade interpolation problem of order $sigma$.
+    ++ $degs$ specifies degree bounds for solution.  The first element of
+    ++ result contains sigma-basis.  The second gives defects
+    ++ of elements of sigma-basis.  The third one contains residuals
+    ++ -- we stop updating solution if this would violate degree
+    ++ bounds, so residual is zero for elements of sigma-basis
+    ++ which are within bounds, but non-zero otherwise.
+
+  naiveBeckermannLabahnMultipoint : (VUP, VI, PA, Integer) _
+                         -> List Any
+    ++ naiveBeckermannLabahnMultipoint(f, degs, sigma, p) solves modulo $p$
+    ++ multipoint Hermite-Pade interpolation problem of order $sigma$.
+    ++ $degs$ specifies degree bounds for solution.  The first element of
+    ++ result contains sigma-basis.  The second gives defects
+    ++ of elements of sigma-basis.  The third one contains residuals
+    ++ -- we stop updating solution if this would violate degree
+    ++ bounds, so residual is zero for elements of sigma-basis
+    ++ which are within bounds, but non-zero otherwise.
+
+  naiveBeckermannLabahn1 : (VUP, VI, NonNegativeInteger, _
+                            Integer, Integer -> K, _
+                            (PA, K, Integer) -> Void, _
+                            (PA, K, Integer) -> Void) -> List Any
+
+  naiveBeckermannLabahn1 : (VPA, VI, NonNegativeInteger, _
+                            Integer, Integer -> K, _
+                            (PA, K, Integer) -> Void, _
+                            (PA, K, Integer) -> Void) -> List Any
+
+  naiveBeckermannLabahn0 : (VPA, VPA, VI, NonNegativeInteger, _
+                            Integer, Integer -> K, _
+                            (PA, K, Integer) -> Void, _
+                            (PA, K, Integer) -> Void) -> Void
+    ++ main solver routine
+
+  reduceBasis0 : (MPA, VI, VI, Integer) -> NBR
+
+  reduceBasis : (VPA, VI, VI, Integer) -> NBR
+    ++ reduceBasis skips elements of sigma basis which do not satisfy
+    ++ degree bounds and puts sigma-basis into canonical form.
+
+ == add
+
+  import from U32VectorPolynomialOperations
+
+  muladdmod ==> QSMULADDMOD64_32$Lisp
+  mulmod ==> QSMULMOD32$Lisp
+
+  vector_shift : PA -> Void
+
+  mul_by_binomial_pointwise : (PA, K, PA, Integer) -> Void
+
+  naiveBeckermannLabahn(vp : VUP, vn : Vector Integer, _
+                        sigma : NonNegativeInteger, prime : Integer) ==
+      naiveBeckermannLabahn1(vp, vn, sigma, prime, _
+                             x +-> 0,
+                             (x, pt, p) +-> vector_shift(x),
+                             (x, pt, p) +-> vector_shift(x))
+
+  naiveBeckermannLabahn(vp : VPA, vn : Vector Integer, _
+                        sigma : NonNegativeInteger, prime : Integer) ==
+      naiveBeckermannLabahn1(vp, vn, sigma, prime, _
+                             x +-> 0,
+                             (x, pt, p) +-> vector_shift(x),
+                             (x, pt, p) +-> vector_shift(x))
+
+  naiveBeckermannLabahnMultipoint(vp : VUP, vn : Vector Integer, pts : PA, _
+                                  prime : Integer) ==
+      #pts > prime =>
+          error "naiveBeckermannLabahnMultipoint: number of points > prime"
+      naiveBeckermannLabahn1(vp, vn, #pts, prime, _
+                             x +-> sub_SI(prime, pts(x))$Lisp,
+                             (x, pt, p) +-> _
+                                mul_by_binomial_pointwise(x, pt, pts, p), _
+                             mul_by_binomial)
+
+  naiveBeckermannLabahnMultipoint(vp : VPA, vn : Vector Integer, pts : PA, _
+                                  prime : Integer) ==
+      #pts > prime =>
+          error "naiveBeckermannLabahnMultipoint: number of points > prime"
+      naiveBeckermannLabahn1(vp, vn, #pts, prime, _
+                             x +-> sub_SI(prime, pts(x))$Lisp,
+                             (x, pt, p) +-> _
+                                mul_by_binomial_pointwise(x, pt, pts, p), _
+                             mul_by_binomial)
+
+  naiveBeckermannLabahn1(vp : VUP, vn : Vector Integer, _
+                         sigma : NonNegativeInteger, prime : Integer, _
+                         pts : Integer-> K, _
+                         up_residual : (PA, K, Integer) -> Void, _
+                         up_poly : (PA, K, Integer) -> Void) : List Any ==
+    import from PA
+    k : NonNegativeInteger
+    m : NonNegativeInteger
+    (m := #vp) ~= #vn =>
+          error "Number of polynomials and number of degrees do not agree"
+    vpa : VPA := vector([new(sigma, 0$K)$PA for k in 1..m])
+    for k in 1..m repeat
+        p := vp(k)
+        vk := vpa(k)
+        while not(zero? p) repeat
+            l : NonNegativeInteger := degree(p)
+            if l < sigma then
+                vk(l) := leadingCoefficient(p)
+            p := reductum p
+    naiveBeckermannLabahn1(vpa, vn, sigma, prime, pts, up_residual, _
+                           up_poly)
+
+  naiveBeckermannLabahn1(vpa : VPA, vn : Vector Integer, _
+                         sigma : NonNegativeInteger, prime : Integer, _
+                         pts : Integer-> K, _
+                         up_residual : (PA, K, Integer) -> Void, _
+                         up_poly : (PA, K, Integer) -> Void) : List Any ==
+    k : NonNegativeInteger
+    m : NonNegativeInteger
+    (m := #vpa) ~= #vn =>
+          error "Number of polynomials and number of degrees do not agree"
+
+    m1 : Integer := 0
+    for k in 1..m repeat
+        m1 := m1 + vn(k) + 1
+    mp := new(m, empty()$PA)$VPA
+    m2 : Integer := 0
+    for k in 1..m repeat
+        mp(k) := new(qcoerce(m1)@NonNegativeInteger, 0)$PA
+        vk := mp(k)
+        vk(m2) := 1
+        m2 := m2 + vn(k) + 1
+    vd : Vector Integer := vector([vn(k) for k in 1..m])
+    naiveBeckermannLabahn0(mp, vpa, vd, sigma, prime, pts, up_residual, _
+                           up_poly)
+    [coerce(mp)$AnyFunctions1(VPA), _
+     coerce(vpa)$AnyFunctions1(VPA), _
+     coerce(vd)$AnyFunctions1(Vector Integer)]
+
+  vector_shift(v : PA) : Void ==
+    n := qconvert(#v)@SingleInteger
+    i : SingleInteger := (n - 1)
+    while 0 < i repeat
+        v(i) := v(i - 1)
+        i := i - 1
+    v(0) := 0
+
+  mul_by_binomial_pointwise(v : PA, pt : K, pts : PA, _
+       p : Integer) : Void ==
+    n := qconvert(#v)@SingleInteger
+    for i in 0..(n - 1) repeat
+        pp : Integer := addmod_SI(pts(i), pt, p)$Lisp
+        v(i) := mulmod(v(i), pp, p)
+
+  naiveBeckermannLabahn0(mp : VPA, vp : VPA, vd : Vector Integer, _
+                       sigma : NonNegativeInteger, p : Integer,
+                       pts : Integer-> K, _
+                       up_residual : (PA, K, Integer) -> Void, _
+                       up_poly : (PA, K, Integer) -> Void) : Void ==
+    m := #vd
+    vc := new(m, 0)$(Vector K)
+    maxd : Integer
+    pi : Integer
+    m1 := #mp(1) - 1
+    s1 := sigma-1
+    for l in 0..(qcoerce(s1)@NonNegativeInteger) repeat
+        pt := pts(l)
+        maxd := -1
+        pi := 0
+        for k in 1..m repeat
+            vc(k) := vp(k)(l)
+            if vc(k) ~= 0 and maxd < vd(k) then
+                pi := k
+                maxd := vd(k)
+        pi = 0 =>
+             iterate
+        vcinv : Integer := mulmod(p-1, invmod(vc(pi),
+                                  qconvert(p)@SingleInteger), p)
+        for k in 1..m repeat
+            if vc(k) ~= 0 and vd(k) >= 0 and k ~= pi then
+                vckinv : Integer := mulmod(vcinv, vc(k), p)
+                vector_add_mul(vp(k), vp(pi), l, s1, vckinv, p)
+                vector_add_mul(qelt(mp, k), qelt(mp, pi), 0, m1, vckinv, p)
+        vd(pi) := vd(pi) - 1
+        if vd(pi) >= 0 then
+            up_residual(vp(pi), pt, p)
+            up_poly(qelt(mp, pi), pt, p)
+
+  critical_index(m : MPA, i : Integer, d : Integer, _
+                  vn : Vector Integer) : Integer ==
+      nc := #vn
+      for j in 1..nc repeat
+          nj := vn(j) - d
+          nj < 0 => iterate
+          pa := qelt(m, i, j)
+          pa(nj) ~= 0 => return j
+      error "Incorrect defect"
+
+  swap_rows(m : MPA, i : Integer, j : Integer) : Void ==
+      i = j => "nothing"::Void
+      kmax := ncols(m)
+      for k in 1..kmax repeat
+          t1 := qelt(m, i, k)
+          t2 := qelt(m, j, k)
+          qsetelt!(m, i, k, t2)
+          qsetelt!(m, j, k, t1)
+
+  mult_vector(v : PA, c : K, p : Integer) : Void ==
+      n := #v
+      for i in 0..(n - 1) repeat
+          v(i) := mulmod(c, v(i), p)
+
+  mult_row(m : MPA, i : Integer, c : K, p : Integer) : Void ==
+      jmax := ncols(m)
+      for j in 1..jmax repeat mult_vector(qelt(m, i, j), c, p)
+
+  add_vector(v1 : PA, v2 : PA, c : K, k : Integer, p : Integer) : Void ==
+      n := #v1
+      for i in k..(n - 1) repeat
+          v1(i) := muladdmod(c, v2(i - k), v1(i), p)
+
+  add_row(m : MPA, j1 : Integer, j2 : Integer, _
+           c : K, k : Integer, p : Integer) : Void ==
+      imax := ncols(m)
+      for i in 1..imax repeat
+          add_vector(qelt(m, j1, i), qelt(m, j2, i), c, k, p)
+
+  reduce_row_by_row1(m : MPA, j : Integer, i : Integer, _
+                        ci : Integer, cdeg : Integer, vdiff : Integer, _
+                        p : Integer) : Void ==
+      rj0 := qelt(m, j, ci)
+      vdiff < 0 =>
+          error "Internal error : vdiff < 0 in reduce_row_by_row1"
+      k := vdiff + cdeg
+      c := rj0(k)
+      c ~= 0 =>
+          add_row(m, j, i, (p - c)::K, vdiff, p)
+
+  top_reduce_by_row(m : MPA, i : Integer, ci : Integer, _
+                  vn : Vector Integer, vd : Vector Integer, _
+                  p : Integer) : Void ==
+      nr := #vd
+      mdeg := vn(ci)
+      cdeg := mdeg - vd(i)
+      mcoeff := qelt(m, i, ci)(cdeg)
+      minv := invmod(mcoeff, p)::K
+      mult_row(m, i, minv, p)
+      for j in (i + 1)..nr repeat
+          reduce_row_by_row1(m, j, i, ci, cdeg, vd(i) - vd(j), p)
+
+  final_reduce(m : MPA, civ : VI, vn : VI, vd : VI, p : Integer) : Void ==
+      ns := #vd
+      mvd := vd(1)
+      for j in 1..ns repeat
+          vdj := vd(j)
+          for d in 0..(mvd - vdj) repeat
+              for i in 1..ns repeat
+                  i = j => iterate
+                  vdi := vd(i)
+                  vdi < vdj + d => break
+                  ci := civ(i)
+                  reduce_row_by_row1(m, j, i, ci, vn(ci) - vdi, d, p)
+
+  reduceBasis0(m : MPA, vn : Vector Integer, vd : Vector Integer, _
+              p : Integer) : NBR ==
+      ns := #vd
+      civ := new(ns, 0)$Vector(Integer)
+      ci : Integer
+      for i in 1..ns repeat
+          maxd : Integer := -1
+          maxj : Integer
+          for j in i..ns repeat
+              cd := vd(j)
+              cd > maxd =>
+                  maxd := cd
+                  ci := critical_index(m, j, maxd, vn)
+                  maxj := j
+              cd = maxd =>
+                  nci := critical_index(m, j, maxd, vn)
+                  nci < ci =>
+                      ci := nci
+                      maxj := j
+          swap_rows(m, i, maxj)
+          tmp := vd(i)
+          vd(i) := vd(maxj)
+          vd(maxj) := tmp
+          civ(i) := ci
+          top_reduce_by_row(m, i, ci, vn, vd, p)
+      final_reduce(m, civ, vn, vd, p)
+      [m, vd, civ]
+
+  reduceBasis(m : VPA, vn : Vector Integer, vd : Vector Integer, _
+              p : Integer) : NBR ==
+      nr := #vd
+      nc := #vn
+      ns := 0
+      for i in 1..nr repeat
+          if vd(i) >= 0 then
+              ns := ns + 1
+      res := new(ns, nc, empty()$PA)$MPA
+      nvd := new(ns, 0)$Vector(Integer)
+      j := 1
+      for i in 1..nr repeat
+          mi := m(i)
+          m2 : SingleInteger := 0
+          if vd(i) >= 0 then
+              nvd(j) := vd(i)
+              for k in 1..nc repeat
+                  vnk1 := qconvert(vn(k) + 1)@SingleInteger
+                  resjk := new(qcoerce(vnk1)@NonNegativeInteger, 0)$PA
+                  for i1 in 0..(vnk1 - 1) repeat
+                      resjk(i1) := mi(m2 + i1)
+                  m2 := m2 + vnk1
+                  qsetelt!(res, j, k, resjk)
+              j := j + 1
+      reduceBasis0(res, vn, nvd, p)
+
+
+
+
+)abbrev package IMODHP InnerModularHermitePade
+++ Description:
+++  This package solves Hermite-Pade interpolation problem
+++  over ring of integer polynomials.  We use reduction modulo primes
+++  and modular reconstruction to reduce problem to polynomials modulo
+++  $Z_p$.  Then we use evaluation and Lagrange interpolation to
+++  reduce problem to solving over $Z_p$.
+
+VI ==> Vector Integer
+PA ==> U32Vector
+PPA ==> PrimitiveArray PA
+VPA ==> Vector PA
+MP ==> Polynomial Integer
+FrP ==> Record(numer : MP, denom : MP)
+PMP1 ==> PrimitiveArray FrP
+PMP ==> PrimitiveArray Fraction MP
+PAI ==> PrimitiveArray Integer
+MPA ==> TwoDimensionalArray PA
+NBR ==> Record(basis : MPA, defects : VI, cinds : VI)
+
+PBR ==> Record(defects : VI, cinds : VI, _
+               rowlen : Integer, offsetdata : VI, _
+               expdata : SortedExponentVector, _
+               coeffdata : PA)
+
+PBRI ==> Record(defects : VI, cinds : VI, _
+               rowlen : Integer, offsetdata : VI, _
+               expdata : SortedExponentVector, _
+               coeffdata : PAI)
+
+PDR ==> Record(nvars : Integer, offsetdata : VI, _
+               expdata : SortedExponentVector, _
+               coeffdata : PA)
+
+-- part of solver state shared between recursion levels
+PSS1 ==> Record(prime : Integer, eval1coeffbuf : PA,
+                 eval1expbuf : SortedExponentVector)
+PSS ==> Record(degree_bounds : VI, pss_sigma : NonNegativeInteger, _
+               points : PA, pss_qvar : Symbol, pss_qval : Integer, _
+               pss_kind : Symbol,  oldva : VI, oldciv : VI,
+               pss_m : Integer, sol_cnt : Integer, pss1 : PSS1)
+
+GEN ==> (List(U32Vector), Integer, Integer) -> Vector(U32Vector)
+
+InnerModularHermitePade : with
+    do_modular_solve : (VPA, Vector Integer, NonNegativeInteger, _
+                          PA, Integer, Symbol) -> Union(NBR, "no_solution")
+
+    do_poly_integer : (List(Symbol), List(PMP), Vector(Integer), _
+                         NonNegativeInteger, PA, Symbol, Symbol, GEN) _
+                 -> Union(PBRI, "no_solution")
+
+    merge_exponents : (Integer, VI, SortedExponentVector, VI, _
+                        SortedExponentVector) -> List List Integer
+
+    merge2 : (Integer, List Integer, List Integer, VI, _
+              SortedExponentVector, VI, SortedExponentVector) _
+              -> Record(offsetdata : VI, expdata : SortedExponentVector)
+
+ == add
+
+    MS ==> NaiveBeckermannLabahnModular
+    VMR ==> VectorModularReconstructor
+    VIR ==> VectorIntegerReconstructor
+    PEVALUT ==> PolynomialEvaluationUtilities
+
+    Qmul ==> QSMULMOD32$Lisp
+
+    import from U32VectorPolynomialOperations
+    import from OutputForm
+
+    eval1s(gvl : List(PMP1), pt : Integer, var : Symbol, _
+           pss : PSS1) : Union(List(PA), "failed") ==
+        p := pss.prime
+        resl := empty()$List(PA)
+        for gv0 in gvl repeat
+            n := #gv0
+            ress := new(n , 0)$PA
+            for j in 0..(n - 1) repeat
+                nlcq := gv0(j)
+                nm := eval1a(nlcq.numer, pt, pss)$PEVALUT
+                dm := eval1a(nlcq.denom, pt, pss)$PEVALUT
+                dm = 0 => return "failed"
+                dms := qconvert(dm)@SingleInteger
+                nlc : Integer :=
+                    Qmul(nm, invmod(dms, qconvert(p)@SingleInteger), p)
+                ress(j) := nlc
+            resl := cons(ress, resl)
+        reverse!(resl)
+
+    eval2s(gvl : List(PMP1), pt : Integer, var : Symbol, _
+           pss : PSS1) : Union(List(PMP1), "failed") ==
+        resl := empty()$List(PMP1)
+        for gv0 in gvl repeat
+            n := #gv0
+            ress := new(n , [0, 1]$FrP)$PMP1
+            for j in 0..(n - 1) repeat
+                nlcq := gv0(j)
+                res1 := eval1(nlcq, var, pt, pss)$PEVALUT
+                res1 case "failed" => return "failed"
+                ress(j) := res1@FrP
+            resl := cons(ress, resl)
+        reverse!(resl)
+
+    eval3s(gvl : List(PMP), p : Integer) : Union(List(PMP1), "failed") ==
+        resl := empty()$List(PMP1)
+        for gv0 in gvl repeat
+            n := #gv0
+            ress := new(n, [0, 1]$FrP)$PMP1
+            for j in 0..(n - 1) repeat
+                nlcq := gv0(j)
+                res1 := modpreduction(nlcq, p)$PEVALUT
+                res1 case "failed" => return "failed"
+                ress(j) := res1@FrP
+            resl := cons(ress, resl)
+        reverse!(resl)
+
+    do_modular_solve0(gv : VPA, ve : Vector Integer, _
+                       sigma : NonNegativeInteger, _
+                       pts : PA, _
+                       prime : Integer, kind : Symbol) : List Any ==
+        kind = 'diffHP or kind = 'qdiffHP =>
+            naiveBeckermannLabahn(gv, ve, sigma, prime)$MS
+        kind = 'shiftHP or kind = 'qshiftHP or kind = 'qmixed =>
+            naiveBeckermannLabahnMultipoint(gv, ve, pts, prime)$MS
+        error "kind must be diffHP, qdiffHP, shiftHP, qshiftHP or qmixed"
+
+    do_modular_solve(gv : VPA, ve : Vector Integer, _
+                       sigma : NonNegativeInteger, _
+                       pts : PA, _
+                       prime : Integer, kind : Symbol) _
+                       : Union(NBR, "no_solution") ==
+        m0 := #ve
+        m1 : NonNegativeInteger := 0
+        for i in 1..m0 repeat
+            if ve(i) >= 0 then
+                m1 := m1 + 1
+        if m1 < m0 then
+            ngv := new(m1, empty()$PA)$VPA
+            nve := new(m1, 0)$VI
+            j : Integer := 1
+            for i in 1..m0 repeat
+                if ve(i) >= 0 then
+                    ngv(j) := gv(i)
+                    nve(j) := ve(i)
+                    j := j + 1
+        else
+            ngv := gv
+            nve := ve
+        blr := do_modular_solve0(ngv, nve, sigma, pts, prime, kind)
+        dva := blr(3)
+        va := retract(dva)$AnyFunctions1(Vector Integer)
+        ok := false
+        m2 := #va
+        for i in 1..m2 repeat
+            ok := ok or va(i) >= 0
+        not(ok) => return "no_solution"
+        dbm := blr(1)
+        bm := retract(dbm)$AnyFunctions1(Vector PA)
+        res := reduceBasis(bm, nve, va, prime)$MS
+        if m1 < m0 then
+            bas := res.basis
+            nr := nrows(bas)
+            nbas := new(nr, m0, empty()$PA)$MPA
+            j := 1
+            for i in 1..m0 repeat
+                if ve(i) >= 0 then
+                    for k in 1..nr repeat
+                        qsetelt!(nbas, k, i, qelt(bas, k, j))
+                    j := j + 1
+            res.basis := nbas
+            for k in 1..nr repeat
+                cindk := (res.cinds)(k)
+                j := 1
+                for i in 1..m0 repeat
+                    if ve(i) >= 0 then
+                        if j = cindk then
+                            (res.cinds)(k) := i
+                            break
+                        j := j + 1
+        res
+
+    compute_blocks(offsets : VI, rowlen : Integer, nsols : Integer) : VI ==
+        block_offsets := new(qcoerce(nsols)@NonNegativeInteger, 0)$VI
+        for i in 1..nsols repeat
+            block_offsets(i) := offsets((i - 1)*rowlen + 1)
+        block_offsets
+
+    merge_exponents(nvars : Integer, offsets : VI, _
+                     exps : SortedExponentVector, noffsets : VI, _
+                     nexps : SortedExponentVector) : _
+              List List Integer ==
+        n := #exps quo nvars
+        m := #nexps quo nvars
+        oc := #offsets
+        -- i0 and j0 count exponents in exps and nexps respectively
+        i0 : Integer := 0
+        j0 : Integer := 0
+        -- ci counts exponents in merged exponent vector
+        ci : Integer := 0
+        -- i = nvars*i0, j = nvars*j
+        i : Integer := 0
+        j : Integer := 0
+        -- limits of polynomials
+        li : Integer := 0
+        lj : Integer := 0
+        -- result lists
+        il : List Integer := []
+        jl : List Integer := []
+        -- kk counts through polynomials
+        kk : Integer := 1
+        nn := nvars - 1
+        repeat
+            i0i : Integer := 1
+            j0i : Integer := 1
+            ii : Integer := nvars
+            ji : Integer := nvars
+            i0 = li or j0 = lj =>
+                kk := kk + 1
+                if i0 < li then
+                    for jj in i0..(li - 1) repeat
+                        jl := cons(ci, jl)
+                        ci := ci + 1
+                if j0 < lj then
+                    for jj in j0..(lj - 1) repeat
+                        il := cons(ci, il)
+                        ci := ci + 1
+                li = n =>
+                    return [reverse! il, reverse! jl]
+                i0 := li
+                j0 := lj
+                i := i0*nvars
+                j := j0*nvars
+                kk <= oc =>
+                    li := offsets(kk)
+                    lj := noffsets(kk)
+                li := n
+                lj := m
+            for k in 0..nn repeat
+                exps(i + k) ~= nexps(j + k) =>
+                    exps(i + k) > nexps(j + k) =>
+                        il := cons(ci, il)
+                        ii := 0
+                        i0i := 0
+                        break
+                    jl := cons(ci, jl)
+                    ji := 0
+                    j0i := 0
+                    break
+            ci := ci + 1
+            i := i + ii
+            j := j + ji
+            i0 := i0 + i0i
+            j0 := j0 + j0i
+
+    merge2(nvars : Integer, odl : List Integer, ndl : List Integer, _
+           ov1 : VI, exps1 : SortedExponentVector, ov2 : VI, _
+           exps2 : SortedExponentVector) : _
+           Record(offsetdata : VI, expdata : SortedExponentVector) ==
+        n0 := #exps1
+        nn := #odl
+        n1 := (n0 quo nvars) + nn
+        nn1 := n1*nvars
+        nexps := new(nn1 :: NonNegativeInteger, 0)$SortedExponentVector
+        m := #ov2
+        noffsets := new(m, 0)$VI
+        nv1 := nvars - 1
+        i0 : Integer := 0
+        j0 : Integer := 0
+        ci0 : Integer := 0
+        i : Integer := 0
+        j : Integer := 0
+        ci : Integer := 0
+        j00 : Integer :=
+            empty?(ndl) => n1
+            first(ndl)
+        i00 := first(odl)
+        li := ov1(1)
+        lj := ov2(1)
+        kk : Integer := 1
+        for ci0 in 0..(n1 - 1) repeat
+            while i0 = li and j0 = lj repeat
+                noffsets(kk) := ci0
+                kk := kk + 1
+                if kk <= m then
+                    li := ov1(kk)
+                    lj := ov2(kk)
+                else
+                    li := n1
+                    lj := n1
+            if ci0 = j00 then
+                for k in 0..nv1 repeat
+                    nexps(ci + k) := exps1(i + k)
+                ndl := rest ndl
+                j00 :=
+                    empty?(ndl) => n1
+                    first(ndl)
+            else
+                for k in 0..nv1 repeat
+                    nexps(ci + k) := exps2(j + k)
+                j := j + nvars
+                j0 := j0 + 1
+            if ci0 ~= i00 then
+                i := i + nvars
+                i0 := i0 + 1
+            else
+                odl := rest odl
+                i00 :=
+                    empty?(odl) => n1
+                    first(odl)
+            ci := ci + nvars
+        for i in kk..m repeat
+            noffsets(i) := n1
+        [noffsets, nexps]
+
+    check_defects(va : VI, civ : VI, pss : PSS) : _
+         Union("OK", "failed", "all_bad") ==
+        -- Check for bad reduction
+        nsols := pss.sol_cnt
+        is_bad : Boolean := #va > nsols
+        all_bad : Boolean := #va < nsols
+        if #va = nsols then
+            ova  := pss.oldva
+            ociv := pss.oldciv
+            for i in 1..nsols repeat
+                va(i) < ova(i) =>
+                    all_bad := true
+                    break
+                va(i) > ova(i) =>
+                    is_bad := true
+                    break
+                civ(i) < ociv(i) =>
+                    all_bad := true
+                    break
+                civ(i) > ociv(i) =>
+                    is_bad := true
+                    break
+        is_bad => return "failed"
+        all_bad => return "all_bad"
+        return "OK"
+
+    do_poly_modular : (List(Symbol), List(PMP1), PSS, GEN) _
+                 -> Union(PBR, "failed", "no_solution")
+
+    eval_and_solve(pt : Integer, vars : List(Symbol), gvl : List(PMP1),
+                     pss : PSS, gen : GEN) _
+                  : Union(PBR, "failed", "no_solution") ==
+        pss1 := pss.pss1
+        p := pss1.prime
+        nvars := #vars
+        nvars = 1 =>
+            ngv10p := eval1s(gvl, pt, first vars, pss1)
+            ngv10p case "failed" => return "failed"
+            ngv10 := ngv10p@List(PA)
+            ngv2 := gen(ngv10, p, pss.pss_qval)
+            ve := pss.degree_bounds
+            blr := do_modular_solve(ngv2, ve, pss.pss_sigma,
+                                      pss.points, p, pss.pss_kind)
+            blr case "no_solution" => return "no_solution"
+            rblr := blr@NBR
+            bm := rblr.basis
+            va := rblr.defects
+            civ := rblr.cinds
+            nsols := #va
+            r_cnt : Integer := 0
+            m := #ve
+            for j in 1..m repeat r_cnt := r_cnt + ve(j) + 1
+            r_cnt := r_cnt*nsols
+            cv := new(r_cnt :: NonNegativeInteger, 0)$PA
+            ev := new(r_cnt :: NonNegativeInteger, 0)$SortedExponentVector
+            ov := new(nsols*m, 0)$VI
+            k : Integer := 0
+            k1 : Integer := 1
+            for i in 1..nsols repeat
+                for j in 1..m repeat
+                    ov(k1) := k
+                    k1 := k1 + 1
+                    mm := ve(j)
+                    cp := bm(i, j)
+                    for l in 0..mm repeat
+                        cpl := cp(l)
+                        if cpl ~= 0 then
+                            cv(k) := cpl
+                            ev(k) := l
+                            k := k + 1
+            ncv := new(k ::NonNegativeInteger, 0)$PA
+            nev := new(k ::NonNegativeInteger, 0)$SortedExponentVector
+            for i in 0..(k - 1) repeat
+                ncv(i) := cv(i)
+                nev(i) := ev(i)
+            return [va, civ, m, ov, nev, ncv]
+        ngv0p := eval2s(gvl, pt, first vars, pss1)
+        ngv0p case "failed" => return "failed"
+        ngvl := ngv0p@List(PMP1)
+        return do_poly_modular(rest vars, ngvl, pss, gen)
+
+    do_poly_modular(vars : List(Symbol), gvl : List(PMP1), pss : PSS,
+                      gen : GEN) : Union(PBR, "failed", "no_solution") ==
+        lpt : List Integer := []
+        bad_cnt : Integer := 0
+        good_cnt : Integer := 0
+        rstate : VMR
+        exps := empty()$SortedExponentVector
+        offsets := empty()$VI
+        all_bad := true
+        update_points :=
+             pss.pss_kind = 'qshiftHP and pss.pss_qvar = first vars
+        update_qval :=
+             (pss.pss_kind = 'qshiftHP or pss.pss_kind = 'qdiffHP or _
+              pss.pss_kind = 'qmixed) and pss.pss_qvar = first vars
+        p := pss.pss1.prime
+        m := pss.pss_m
+        nvars := #vars
+        nsols : Integer := m + 1
+        repeat
+            -- choose point
+            ok := false
+            for k in 1..100 while not(ok) repeat
+                pt := random(p)
+                member?(pt, lpt) => iterate
+                lpt := cons(pt, lpt)
+                ok := true
+            if positiveRemainder((npt := #lpt), 100) = 0 then
+                print(message("Number of evaluation points"))
+                print(npt::OutputForm)
+            not(ok) => error "Run out of evaluation points"
+
+            if update_points then
+                pts := pss.points
+                qn : Integer := 1
+                for k in 0..(pss.pss_sigma - 1) repeat
+                    pts(k) := qn
+                    qn := positiveRemainder(pt*qn, p)
+            if update_qval then
+                pss.pss_qval := pt
+
+            -- eval and solve reduced system
+            pprp := eval_and_solve(pt, vars, gvl, pss, gen)
+            pprp case "no_solution" => return "no_solution"
+            pprp case "failed" =>
+                bad_cnt := bad_cnt + 1
+                bad_cnt > good_cnt + 2 => return "failed"
+                iterate
+            ppr := pprp@PBR
+
+            -- check for bad reduction and other lossage
+            va := ppr.defects
+            civ := ppr.cinds
+            nexps := ppr.expdata
+            noffsets := ppr.offsetdata
+            coeffs := ppr.coeffdata
+            chk_ress := check_defects(va, civ, pss)
+            chk_ress case "failed" =>
+                bad_cnt := bad_cnt + 1
+                bad_cnt > good_cnt + 2 => return "failed"
+                iterate
+            if chk_ress case "all_bad" then
+                all_bad := true
+            if all_bad then
+                nsols := #va
+                pss.sol_cnt := nsols
+                pss.oldva := va
+                pss.oldciv := civ
+                exps := nexps
+                offsets := noffsets
+                rstate := empty(#coeffs, p)$VMR
+            all_bad := false
+
+            good_cnt := good_cnt + 1
+
+            -- merge exponents
+            dl := merge_exponents(nvars, offsets, exps, noffsets, nexps)
+            odl := dl(1)
+            ndl := dl(2)
+            if odl ~= [] then
+                oer := merge2(nvars, odl, ndl, offsets, exps, _
+                              noffsets, nexps)
+                offsets := oer.offsetdata
+                exps := oer.expdata
+                -- add_slots is wrong in case of change of leading exponent
+                -- add_slots(odl, rstate)
+                ncc := #exps quo nvars
+                rstate := empty(ncc::NonNegativeInteger, p)$VMR
+
+            if ndl ~= [] then
+                -- expand coeffs
+                n0 := #coeffs
+                nn := #ndl
+                n1 := n0 + nn
+                ncoeffs := new(n1, 0)$PA
+                i : Integer := 0
+                jl := first ndl
+                for j in 0..(n1 - 1) repeat
+                    j = jl =>
+                        ncoeffs(j) := 0
+                        ndl := rest ndl
+                        jl :=
+                            empty?(ndl) => n1
+                            first ndl
+                    ncoeffs(j) := coeffs(i)
+                    i := i + 1
+                coeffs := ncoeffs
+
+            -- normalize
+            block_offsets := compute_blocks(offsets, m, nsols)
+            n1 := #coeffs
+            ok := true
+            for i in 1..nsols repeat
+                cnum := civ(i)
+                ofin := m*(i - 1) + cnum
+                ofi := offsets(ofin)
+                nofi :=
+                    i < nsols or cnum < m => offsets(ofin + 1)
+                    n1
+                nofi := nofi - 1
+                nofi < ofi =>
+                    print(civ::OutputForm)
+                    print(offsets::OutputForm)
+                    error "Internal error: corrupted offsets 1"
+                coeffs(nofi) = 0 =>
+                    ok := false
+                    break
+                invc := invmod(coeffs(nofi), p)
+                lo := block_offsets(i)
+                hi :=
+                    i < nsols => block_offsets(i + 1)
+                    n1
+                for j in lo..(hi - 1) repeat
+                    coeffs(j) := Qmul(coeffs(j), invc, p)
+            not(ok) => iterate
+            chinese_update(coeffs, pt, rstate)$VMR
+
+            -- try reconstruction
+            pp := reconstruct(rstate, nvars, block_offsets, _
+                              offsets, exps)$VMR
+            pp case "failed" => iterate
+            -- if successful return
+            rr := pp@PDR
+            return [va, civ, m, rr.offsetdata, _
+                    rr.expdata, rr.coeffdata]
+
+    do_poly_integer0(vars : List(Symbol), gvl : List(PMP), pss : PSS,
+                       gen : GEN)  : Union(PBRI, "no_solution") ==
+        lp : List Integer := []
+        rstate : VIR
+        exps := empty()$SortedExponentVector
+        offsets := empty()$VI
+        all_bad := true
+        pss1 := pss.pss1
+        p : Integer := 16
+        m := pss.pss_m
+        nvars := #vars
+        nsols : Integer := m + 1
+        repeat
+            -- choose point
+            ok := false
+            for k in 1..100 while not(ok) repeat
+                p := nextPrime(random(200000) + 200000 _
+                              )$IntegerPrimesPackage(Integer)
+                member?(p, lp) => iterate
+                lp := cons(p, lp)
+                ok := true
+            not(ok) => error "Run out of primes"
+            -- print("Using prime"::OutputForm)
+            -- print(p::OutputForm)
+            pss1.prime := p
+
+            -- eval and solve reduced system
+            ngv0p := eval3s(gvl, p)
+            ngv0p case "failed" => iterate
+            ngvl := ngv0p@List(PMP1)
+            pprp := do_poly_modular(vars, ngvl, pss, gen)
+
+            pprp case "no_solution" => return "no_solution"
+            pprp case "failed" => iterate
+            ppr := pprp@PBR
+
+            -- check for bad reduction and other lossage
+            va := ppr.defects
+            civ := ppr.cinds
+            nexps := ppr.expdata
+            noffsets := ppr.offsetdata
+            coeffs := ppr.coeffdata
+            chk_ress := check_defects(va, civ, pss)
+            chk_ress case "failed" => iterate
+            if chk_ress case "all_bad" then
+                all_bad := true
+            if all_bad then
+                nsols := #va
+                pss.sol_cnt := nsols
+                pss.oldva := va
+                pss.oldciv := civ
+                exps := nexps
+                offsets := noffsets
+                rstate := empty(#coeffs)$VIR
+            all_bad := false
+
+            -- merge exponents
+            dl := merge_exponents(nvars + 1, offsets, exps, noffsets, nexps)
+            odl := dl(1)
+            ndl := dl(2)
+            if odl ~= [] then
+                oer := merge2(nvars + 1, odl, ndl, offsets, exps, _
+                              noffsets, nexps)
+                offsets := oer.offsetdata
+                exps := oer.expdata
+                -- add_slots is wrong in case of change of leading exponent
+                -- add_slots(odl, rstate)
+                ncc := #exps quo (nvars + 1)
+                -- print("resetting rstate"::OutputForm)
+                rstate := empty(ncc::NonNegativeInteger)$VIR
+
+            if ndl ~= [] then
+                -- expand coeffs
+                n0 := #coeffs
+                nn := #ndl
+                n1 := n0 + nn
+                ncoeffs := new(n1, 0)$PA
+                i : Integer := 0
+                jl := first ndl
+                for j in 0..(n1 - 1) repeat
+                    j = jl =>
+                        ncoeffs(j) := 0
+                        ndl := rest ndl
+                        jl :=
+                            empty?(ndl) => n1
+                            first ndl
+                    ncoeffs(j) := coeffs(i)
+                    i := i + 1
+                coeffs := ncoeffs
+
+            -- normalize
+            block_offsets := compute_blocks(offsets, m, nsols)
+            n1 := #coeffs
+            ok := true
+            for i in 1..nsols repeat
+                cnum := civ(i)
+                ofin := m*(i - 1) + cnum
+                ofi := offsets(ofin)
+                nofi :=
+                    i < nsols or cnum < m => offsets(ofin + 1)
+                    n1
+                nofi := nofi - 1
+                nofi < ofi =>
+                    print(civ::OutputForm)
+                    print(offsets::OutputForm)
+                    error "Internal error: corrupted offsets"
+                coeffs(nofi) = 0 =>
+                    ok := false
+                    break
+                invc := invmod(coeffs(nofi), p)
+                lo := block_offsets(i)
+                hi :=
+                    i < nsols => block_offsets(i + 1)
+                    n1
+                for j in lo..(hi - 1) repeat
+                    coeffs(j) := Qmul(coeffs(j), invc, p)
+            not(ok) => iterate
+            chinese_update(coeffs, p, rstate)$VIR
+
+            -- try reconstruction
+            pp := reconstruct(rstate, block_offsets)$VIR
+            pp case "failed" => iterate
+            -- if successful return
+            return [va, civ, m, offsets, _
+                    exps, pp@PAI]
+
+    do_poly_integer(vars : List Symbol, gvl : List(PMP),
+                      ve : Vector Integer,
+                      sigma : NonNegativeInteger, pts : PA, kind : Symbol,
+                      qvar : Symbol, gen : GEN) : Union(PBRI, "no_solution") ==
+        pss1 := [0, new(10, 0)$PA, new(10, 0)$SortedExponentVector]$PSS1
+        pss := [ve, sigma, pts, qvar, 0, kind, empty()$VI, _
+                empty()$VI, #ve, #ve + 1, pss1]$PSS
+        return do_poly_integer0(vars, gvl, pss, gen)
+
+
+)abbrev package MODHP ModularHermitePade
+++ Description:
+++  This package provides modular Hermite-Pade solvers
+++  for a few rings.  Solver over integers is implemented in this
+++  package.  Also it contains interfaces to solver over $Z_p$ and
+++  solver over ring of integer polynomials.
+K1 ==> SingleInteger
+-- K2 ==> SingleInteger
+MP ==> Polynomial Integer
+PAN ==> SparseUnivariatePolynomial AlgebraicNumber
+PPF ==> SparseUnivariatePolynomial Integer
+PFI ==> SparseUnivariatePolynomial Fraction Integer
+PFPI ==> SparseUnivariatePolynomial Fraction Polynomial Integer
+PFPA ==> SparseUnivariatePolynomial Fraction Polynomial AlgebraicNumber
+PK  ==> SparseUnivariatePolynomial K1
+LPI ==> List PFI
+LPPI ==> List PFPI
+LPAN ==> List PAN
+LPPA ==> List PFPA
+LPPF ==> List PPF
+NNI ==> NonNegativeInteger
+MPI ==> Matrix SparseUnivariatePolynomial Integer
+MPAN ==> Matrix PAN
+MPPI ==> Matrix SparseUnivariatePolynomial Polynomial Integer
+MPPA ==> Matrix SparseUnivariatePolynomial Polynomial AlgebraicNumber
+PA ==> U32Vector
+VPA ==> Vector PA
+VI ==> Vector Integer
+PAF ==> PrimitiveArray Fraction MP
+VPAF ==> Vector PAF
+PAI ==> PrimitiveArray Integer
+
+PBRI ==> Record(defects : VI, cinds : VI, _
+               rowlen : Integer, offsetdata : VI, _
+               expdata : SortedExponentVector, _
+               coeffdata : PAI)
+
+MPA ==> TwoDimensionalArray PA
+NBR ==> Record(basis : MPA, defects : VI, cinds : VI)
+
+GEN ==> (List(U32Vector), Integer, Integer) -> Vector(U32Vector)
+CHKR ==> Union("good", "reject", "no_solution")
+SUP ==> SparseUnivariatePolynomial
+ModularHermitePade() : with
+   HP_solve_I : (List(List(Fraction(Integer))), List Integer, Symbol, NNI, _
+                   GEN, (List SUP Integer) -> CHKR) -> Union(MPI, Boolean)
+     ++ HP_solve_I implements  HP_solve over integers.
+
+   HP_solve_A : (List(List(AlgebraicNumber)), List Integer, Symbol, NNI,
+                   GEN, (List SUP AlgebraicNumber) -> CHKR) _
+                       -> Union(MPAN, Boolean)
+     ++ HP_solve_A is a fake solver over algebraic numbers.
+
+   HP_solve_P : (List(List(Fraction(MP))), List Integer, Symbol, Symbol,
+                   NNI, GEN, (List SUP MP) -> CHKR) _
+                       -> Union(MPPI, Boolean)
+     ++ HP_solve_P implements  HP_solve over integer polynomials.
+
+   HP_solve_PA : (List(List(Fraction(Polynomial(AlgebraicNumber)))),
+                    List Integer, Symbol, Symbol, NNI, GEN,
+                    (List SUP Polynomial(AlgebraicNumber)) -> CHKR) _
+                       -> Union(MPPA, Boolean)
+     ++ HP_solve_PA is a fake solver over polynomials having algebraic
+     ++ coefficients.
+
+   HP_solve_M : (List(List(Integer)), List Integer, Symbol, Integer, NNI,
+                   GEN, (List SUP Integer) -> CHKR) _
+                       -> Union(MPI, Boolean)
+     ++ HP_solve_M implements  HP_solve over $Z_p$ with machine-sized $p$.
+
+   check_sol1a : (VPA, List(PA), GEN, Integer, Integer, Integer) -> PA
+     ++ check_sol1a performs one round of modular Monte Carlo check for
+     ++ solutions.
+
+   VSUPI_to_VPA : (Vector SUP(Integer), Integer) -> VPA
+     ++ evaluation routine
+
+   VSUPPI_to_VPA : (Vector SUP(MP), List Symbol, List Integer, Integer) _
+                   -> VPA
+     ++ evaluation routine
+
+   LLFI_to_LPA : (List(List(Fraction(Integer))), Integer, Integer)
+                 -> Union(List(PA), "failed")
+     ++ evaluation routine
+
+   LLFPI_to_LPA : (List(List(Fraction(MP))), Integer, List Symbol,
+                     List Integer, Integer) -> Union(List(PA), "failed")
+     ++ evaluation routine
+
+   get_variables : (List(List(Fraction(MP))), Symbol, Symbol) -> List Symbol
+
+   unpack_poly : (List Symbol, SortedExponentVector, PAI, Integer, _
+                   Integer) -> SparseUnivariatePolynomial(MP)
+     ++ unpack_poly(vars, exps, coeffs, lo, hi) converts polynomial
+     ++ from packed to sparse representation.  Coefficients of
+     ++ packed polynomial are stored in coeffs(l0) up to coeffs(hi)
+     ++ Exponents are stored in corresponding elements of exps.
+
+  == add
+
+   import from PrintPackage
+   import from OutputForm
+   Qmul ==> QSMULMOD32$Lisp
+   PEVALUT ==> PolynomialEvaluationUtilities
+
+   VSUPI_to_VPA(vps : Vector SparseUnivariatePolynomial(Integer), _
+                  p : Integer) : VPA ==
+       m := #vps
+       vpa := new(m, empty()$PA)$VPA
+       for i in 1..m repeat
+           vpa(i) := to_mod_pa(vps(i), p)$U32VectorPolynomialOperations
+       vpa
+
+   SUPPI_to_PA(poli : SUP(MP), vars : List Symbol, _
+                 pts : List Integer, p : Integer) : PA ==
+       n := degree(poli)
+       pa := new(n + 1, 0)$PA
+       while not(zero? poli) repeat
+           m := degree poli
+           nlc := modpeval(leadingCoefficient(poli), vars, pts, p)$PEVALUT
+           pa(m) := nlc
+           poli := reductum poli
+       pa
+
+   VSUPPI_to_VPA(vps : Vector SUP(MP), vars : List Symbol, _
+                   pts : List Integer, p : Integer) : VPA ==
+       m := #vps
+       vpa := new(m, empty()$PA)$VPA
+       for i in 1..m repeat
+           vpa(i) := SUPPI_to_PA(vps(i), vars, pts, p)
+       vpa
+
+   LLFI_to_LPA(llfi : List(List(Fraction(Integer))), n : Integer, _
+               prime : Integer) : Union(List(PA), "failed") ==
+       resl := empty()$List(PA)
+       for lfi in llfi repeat
+           nn :=
+              n > 0 => n
+              #lfi
+           pa := new(qcoerce(nn)@NonNegativeInteger, 0)$PA
+           for j in 0..(nn - 1) for el in lfi repeat
+               nm := positiveRemainder(numer(el), prime)
+               dm := positiveRemainder(denom(el), prime)
+               dm = 0 => return "failed"
+               dms := qconvert(dm)@K1
+               nlc : Integer :=
+                   Qmul(nm, invmod(dms, qconvert(prime)@K1), prime)
+               pa(j) := qconvert(nlc)@K1
+           resl := cons(pa, resl)
+       reverse!(resl)
+
+   LLFPI_to_LPA(llfi : List(List(Fraction(MP))), n : Integer, _
+               vars : List Symbol, pts : List Integer, _
+               prime : Integer) : Union(List(PA), "failed") ==
+       resl := empty()$List(PA)
+       for lfi in llfi repeat
+           pa := new(qcoerce(n)@NonNegativeInteger, 0)$PA
+           for j in 0..(n - 1) for el in lfi repeat
+               nm := modpeval(numer(el), vars, pts, prime)$PEVALUT
+               dm := modpeval(denom(el), vars, pts, prime)$PEVALUT
+               dm = 0 => return "failed"
+               dms := qconvert(dm)@K1
+               nlc : Integer :=
+                   Qmul(nm, invmod(dms, qconvert(prime)@K1), prime)
+               pa(j) := qconvert(nlc)@K1
+           resl:= cons(pa, resl)
+       reverse!(resl)
+
+   PPFtoPA(pfi : PPF, sigma : NNI, psi : K1) : Union(PA, "failed") ==
+       pa := new(sigma, 0)$PA
+       prime := psi :: Integer
+       while not(zero? pfi) repeat
+           m := degree pfi
+           if m < sigma then
+               nlcq := leadingCoefficient(pfi)
+               nc := positiveRemainder(nlcq, prime)
+               pa(m) := qconvert(nc)@K1
+           pfi := reductum pfi
+       pa
+
+   LPPFtoVPA(lpi : LPPF, sigma : NNI, psi : K1) : Union(VPA, "failed") ==
+       m := #lpi
+       vpa := new(m, empty()$PA)$VPA
+       for i in 1..m for p in lpi repeat
+           vpp := PPFtoPA(p, sigma, psi)
+           vpp case "failed" => return "failed"
+           vpa(i) := vpp@PA
+       vpa
+
+   intpoly_to_PFI(p : SparseUnivariatePolynomial(Integer)) : PFI ==
+       map((x : Integer) : Fraction(Integer) +-> x::Fraction(Integer), _
+           p)$SparseUnivariatePolynomialFunctions2(Integer, Fraction(Integer))
+
+   check_sol1a(nres : VPA, _
+                gv0 : List(PA), gen : GEN, _
+                sigma : Integer, qval : Integer, p : Integer) : PA ==
+       m := #nres
+       gvp := gen(gv0, p, qval)
+       res := new(qcoerce(sigma)@NonNegativeInteger, 0)$PA
+       for i in 1..m repeat
+           truncated_mul_add(gvp(i), nres(i), res, sigma - 1, _
+                           p)$U32VectorPolynomialOperations
+       res
+
+   RR ==> Record(numers : PrimitiveArray Integer, _
+                 denoms : PrimitiveArray Integer)
+
+   HP_solve_I(list : List(List(Fraction(Integer))), degs : List Integer, kind : Symbol, _
+                sigma : NNI, gen : GEN, check : (List SUP Integer) -> CHKR) _
+                : Union(MPI, Boolean) ==
+       lp := []@List(Integer)
+       kind = 'qdiffHP or kind = 'qshiftHP => true
+       m := #degs
+       degs_sum := qcoerce(reduce(_+, degs) + m)@NNI
+       ve : Vector Integer := vector [d::Integer for d in degs]
+       pts :=
+           kind = 'diffHP => empty()$PA
+           kind = 'shiftHP =>
+               pts0 := new(sigma, 0)$PA
+               for i in 0..(sigma - 1) repeat
+                   pts0(i) := i
+               pts0
+       rv : U32Vector
+       rstate : VectorIntegerReconstructor
+       nsols : Integer := -1
+       gv : VPA
+       prime : Integer
+       nprimes : Integer := 0
+       nsols : Integer := m + 1
+       oldva : Vector(Integer)
+       oldciv : Vector(Integer)
+       empty_offsets : Boolean := true
+       offsets : VI
+       repeat
+           ok := false
+           for k in 1..100 while not(ok) repeat
+               prime := nextPrime(random(2000000) + 2000000_
+                                     )$IntegerPrimesPackage(Integer)
+               member?(prime, lp) => iterate
+               lp := cons(prime, lp)
+               ok := true
+           not(ok) => error "Run out of primes"
+           nprimes := nprimes + 1
+           psi := prime::K1
+           gv0p := LLFI_to_LPA(list, 0, psi)
+           gv0p case "failed" => iterate
+           gv0 := gv0p@List(PA)
+           gv2 := gen(gv0, prime, 1)
+
+           blr := do_modular_solve(gv2, ve, sigma, pts, prime, _
+                     kind)$InnerModularHermitePade
+           blr case "no_solution" => return false
+           rblr := blr@NBR
+           bm := rblr.basis
+           va := rblr.defects
+           civ := rblr.cinds
+           -- Check for bad reduction
+           #va > nsols => iterate
+           is_bad : Boolean := false
+           all_bad : Boolean := #va < nsols
+           if #va = nsols then
+               for i in 1..nsols repeat
+                   va(i) < oldva(i) =>
+                       all_bad := true
+                       break
+                   va(i) > oldva(i) =>
+                       is_bad := true
+                       break
+                   civ(i) < oldciv(i) =>
+                       all_bad := true
+                       break
+                   civ(i) > oldciv(i) =>
+                       is_bad := true
+                       break
+           is_bad => iterate
+           if all_bad then
+               -- (Re-)initialize
+               nsols := #va
+               oldva := va
+               oldciv := civ
+               rstate := empty(nsols*degs_sum)
+               rv := new((nsols::PositiveInteger)*degs_sum, 0)$U32Vector
+               empty_offsets := true
+           k : Integer := 0
+           if positiveRemainder(nprimes, 100) = 0 then
+               print(message("number of primes"))
+               print(nprimes::OutputForm)
+           for i in 1..nsols repeat
+               for j in 1..m repeat
+                   mm := ve(j)
+                   cp := bm(i, j)
+                   for l in 0..mm repeat
+                       rv(k) := cp(l)
+                       k := k + 1
+           chinese_update(rv, prime, rstate)
+           j : Integer
+           if empty_offsets then
+               offsets := new(nsols::NNI, 0)$VI
+               j := 0
+               for i in 1..nsols repeat
+                   offsets(i) := j
+                   j := j + degs_sum
+               empty_offsets := false
+           pp := reconstruct(rstate, offsets)
+           pp case "failed" =>
+               iterate
+           ppr := pp@PAI
+           k := 0
+           resv :=  new(nsols::NonNegativeInteger, _
+                        empty()$Vector(SparseUnivariatePolynomial Integer) _
+                       )$Vector(Vector(SparseUnivariatePolynomial Integer))
+           ii : Integer := 1
+           sol_ok := true
+           for i in 1..nsols repeat
+               resvi := new(m, 0)$Vector(SparseUnivariatePolynomial Integer)
+               for j in 1..m repeat
+                   mm := ve(j)
+                   s : SparseUnivariatePolynomial(Integer) := 0
+                   for l in 0..mm repeat
+                       s := s + monomial(ppr(k), l_
+                            )$SparseUnivariatePolynomial(Integer)
+                       k := k + 1
+                   resvi(j) := s
+               sol_okp := check(entries resvi)
+               sol_okp case "reject" => iterate
+               sol_okp case "no_solution" =>
+                   sol_ok := false
+                   break
+               resv(ii) := resvi
+               ii := ii + 1
+           sol_ok =>
+               mress := new(m, (ii - 1)::NonNegativeInteger, 0)$MPI
+               for i in 1..(ii - 1) repeat
+                   for l in 1..m repeat
+                       mress(l, i) := resv(i)(l)
+               return mress
+       return true
+
+   get_variables2(llpi : List(List(Fraction(MP)))) : List(Symbol) ==
+       res := []@List(Symbol)
+       for lpi in llpi repeat
+           for p in lpi repeat
+               res := setUnion(res, variables(numer(p)))
+               res := setUnion(res, variables(denom(p)))
+       res
+
+   unpack_poly(vars : List Symbol, exps : SortedExponentVector, _
+                coeffs : PAI, lo : Integer, hi : Integer) _
+                : SparseUnivariatePolynomial(MP) ==
+       res : SparseUnivariatePolynomial(MP) := 0
+       nvars := #vars
+       nn := nvars + 1
+       vars := reverse(vars)
+       j : Integer := -1
+       i := lo*(nn)
+       term : MP
+       term1 : MP
+       for i0 in lo..hi repeat
+           jj := exps(i)
+           jj < j =>
+               error "Internal error: inconsistent exponent vector"
+           if jj > j then
+               if j >= 0 then
+                   res := res + monomial(term, j::NNI _
+                      )$SparseUnivariatePolynomial(MP)
+               j := jj
+               term := 0
+           term1 := coeffs(i0)::MP
+           for k in 1..nvars for var in vars repeat
+               term1 := term1*monomial(1, var, exps(i + k)::NNI)$MP
+           term := term1 + term
+           i := i + nn
+       if j >= 0 then
+           res := res + monomial(term, j::NNI)$SparseUnivariatePolynomial(MP)
+       res
+
+   intpoly_to_PFPI(p : SparseUnivariatePolynomial(MP)) : PFPI ==
+       map((x : MP) : Fraction(MP) +-> x::Fraction(MP), _
+           p)$SparseUnivariatePolynomialFunctions2(MP, Fraction(MP))
+
+
+   PFPI_to_PFI(p : PFPI) : PFI ==
+       res : PFI := 0
+       while not(zero? p) repeat
+           m := degree p
+           q := leadingCoefficient(p)
+           p := reductum(p)
+           iq := retract(q)@Fraction(Integer)
+           res := monomial(iq, m)$PFI + res
+       res
+
+   PI_to_PPI(p : SparseUnivariatePolynomial Integer) _
+               : SparseUnivariatePolynomial(MP) ==
+       res : SparseUnivariatePolynomial(MP) := 0
+       while not(zero? p) repeat
+           m := degree p
+           q := leadingCoefficient(p)
+           p := reductum(p)
+           mq := q::MP
+           res := monomial(mq, m)$SparseUnivariatePolynomial(MP) + res
+       res
+
+   LPI_to_LPPI(lp : List SUP Integer) : List SUP MP ==
+       [PI_to_PPI(p) for p in lp]
+
+   trivial_poly_solve(list : List(List(Fraction(MP))), degs : List Integer,
+                        kind : Symbol, sigma : NNI, gen : GEN,
+                        check : (List SUP MP) -> CHKR) : Union(MPPI, Boolean) ==
+        kind = 'qshiftHP => return true
+        if kind = 'qdiffHP then kind := 'diffHP
+        nlist := [[retract(q)@Fraction(Integer) for q in li] for li in list]
+        pres := HP_solve_I(nlist, degs, kind, sigma, gen,
+                             (x : List(SUP(Integer))) : CHKR
+                                +-> check(LPI_to_LPPI(x)))
+        pres case Boolean => return pres@Boolean
+        resi := pres@MPI
+        nr := nrows(resi)
+        nc := ncols(resi)
+        res := new(nr, nc, 0)$MPPI
+        for i in 1..nr repeat
+            for j in 1..nc repeat
+                res(i, j) := PI_to_PPI(resi(i, j))
+        res
+
+   get_variables(list, kind, qvar) ==
+       vars := get_variables2(list)
+       if kind = 'qdiffHP or kind = 'qshiftHP or kind = 'qmixed then
+           vars :=
+               member?(qvar, vars) => vars
+               cons(qvar, vars)
+       sort(vars)
+
+   HP_solve_P(list, degs, kind, qvar, sigma, gen, check) ==
+       -- print(sigma::OutputForm)
+       m := #degs
+       ve : Vector Integer := vector [d::Integer for d in degs]
+       pts :=
+           kind = 'diffHP or kind = 'qdiffHP => empty()$PA
+           kind = 'shiftHP or kind = 'qmixed =>
+               pts0 := new(sigma, 0)$PA
+               for i in 0..(sigma - 1) repeat
+                   pts0(i) := i
+               pts0
+           kind = 'qshiftHP =>  new(sigma, 0)$PA
+       vars := get_variables(list, kind, qvar)
+       empty?(vars) =>
+           trivial_poly_solve(list, degs, kind, sigma, gen, check)
+       gv0 := [construct(li)$PrimitiveArray(Fraction(MP)) for li in list]
+       repeat
+           pp := do_poly_integer(vars, gv0, ve, sigma, pts, _
+                     kind, qvar, gen)$InnerModularHermitePade
+           pp case "no_solution" => return false
+           ppr := pp@PBRI
+           offsets := ppr.offsetdata
+           oc := #offsets
+           exps := ppr.expdata
+           coeffs := ppr.coeffdata
+           cc := #coeffs
+           nsols := #offsets quo m
+           ok := true
+           kk : Integer := 1
+           ohi := offsets(1)
+           lo : Integer
+           resv :=  new(nsols::NonNegativeInteger, _
+                        empty()$Vector(SparseUnivariatePolynomial(MP))_
+                       )$Vector(Vector(SparseUnivariatePolynomial(MP)))
+           ii : Integer := 1
+           for i in 1..nsols repeat
+               resvi := new(m, 0)$Vector(SparseUnivariatePolynomial(MP))
+               for j in 1..m repeat
+                   lo := ohi
+                   ohi :=
+                       kk := kk + 1
+                       kk <= oc => offsets(kk)
+                       cc
+                   hi := ohi - 1
+                   resvi(j) := unpack_poly(vars, exps, coeffs, lo, hi)
+               sol_okp  := check(entries resvi)
+               sol_okp case "reject" => iterate
+               sol_okp case "no_solution" =>
+                   ok := false
+                   break
+               resv(ii) := resvi
+               ii := ii + 1
+           ok =>
+               mress := new(m, (ii - 1)::NonNegativeInteger, 0
+                           )$Matrix(SparseUnivariatePolynomial(MP))
+               for i in 1..(ii - 1) repeat
+                   for l in 1..m repeat
+                       mress(l, i) := resv(i)(l)
+               return mress
+           print(message("check_sol_poly rejected solution"))
+           print(resvi::OutputForm)
+           error "giving up"
+
+   HP_solve_M(list, degs, kind, prime, sigma, gen, check) ==
+       kind = 'qdiffHP or kind = 'qshiftHP => true
+       -- print(sigma::OutputForm)
+       m := #degs
+       ve : Vector Integer := vector [d::Integer for d in degs]
+       pts :=
+           kind = 'diffHP => empty()$PA
+           kind = 'shiftHP =>
+               pts0 := new(sigma, 0)$PA
+               for i in 0..(sigma - 1) repeat
+                   pts0(i) := i
+               pts0
+       gv0 := [construct(li)$PA for li in list]
+       gv := gen(gv0, prime, 1)
+       blr := do_modular_solve(gv, ve, sigma, pts, prime, _
+                  kind)$InnerModularHermitePade
+       blr case "no_solution" => return false
+       rblr := blr@NBR
+       bm := rblr.basis
+       va := rblr.defects
+       nsols := #va
+       resv :=  new(nsols::NonNegativeInteger, _
+                    empty()$Vector(SparseUnivariatePolynomial Integer) _
+                    )$Vector(Vector(SparseUnivariatePolynomial Integer))
+       ii : Integer := 1
+       for i in 1..nsols repeat
+           resvi := new(m, 0)$Vector(SparseUnivariatePolynomial Integer)
+           for j in 1..m repeat
+                mm := ve(j)
+                bmij := bm(i, j)
+                s : SparseUnivariatePolynomial(Integer) := 0
+                for l in 0..mm repeat
+                    s := s + monomial(bmij(l), l _
+                            )$SparseUnivariatePolynomial(Integer)
+                resvi(j) := s
+           sol_okp  := check(entries resvi)
+           sol_okp case "reject" => iterate
+           sol_okp case "no_solution" =>
+               error "HP_solve_M: check should never return no_solution for finite fields"
+           resv(ii) := resvi
+           ii := ii + 1
+       mress := new(m, (ii - 1)::NonNegativeInteger, 0)$MPI
+       for i in 1..(ii - 1) repeat
+            for l in 1..m repeat
+                 mress(l, i) := resv(i)(l)
+       return mress
+
+   HP_solve_A(list, degs, kind, sigma, gen, check) ==
+       -- print("modularCheckA"::OutputForm)
+       true
+
+   HP_solve_PA(list, degs, kind, qvar, sigma, gen, check) ==
+       -- print("modularCheckPA"::OutputForm)
+       true
+
+
+
+)abbrev package MODHPS ModularHermitePadeSolver
+++ Description: This package provides generic interface to modular
+++ Hermite-Pade solver.
+ModularHermitePadeSolver(F : CommutativeRing, S : CommutativeRing)_
+                       : Exports == Implementation where
+
+    PA ==> U32Vector
+    VPA ==> Vector PA
+    GEN ==> (List(PA), Integer, Integer) -> VPA
+    NNI ==> NonNegativeInteger
+    CHKR ==> Union("good", "reject", "no_solution")
+    SUP ==> SparseUnivariatePolynomial
+    CHKT ==> (List SUP S) -> CHKR
+    MPS ==> Matrix SparseUnivariatePolynomial S
+
+    Exports ==>
+        with
+            HP_solve : (List(List(F)), List(Integer), Symbol, Symbol, NNI,
+                         GEN, CHKT) -> Union(MPS, Boolean)
+              ++ HP_solve(l, degs, kind, sigma, gen check) finds a sigma
+              ++ basis with degree bounds given by degs.  It returns false
+              ++ if there is no interpolating vector that is correct up to
+              ++ (and including) z^(sigma-1) with sigma >= |degs+[1, 1, ..., 1]|
+              ++ or if check rejects all solutions.
+              ++ It returns true if it can not handle given problem.
+            gen_Monte_Carlo_check : (CHKT, List(List(F)), Symbol, Symbol,
+                                        NNI, GEN) -> CHKT
+              ++ gen_Monte_Carlo_check(check, l, kind, qvar, sigma, gen)
+              ++ returns Monte Carlo check for solutions to guessing problem.
+              ++ If Monte Carlo check is unavailable returns check.
+
+            LLF_to_LPA : (List(List(F)), Integer, List(Symbol),
+                            List(Integer), Integer) _
+                               -> Union(List(PA), "failed")
+              ++ modular reduction
+            VSUPS_to_VPA : (Vector(SUP S), List Symbol, List Integer, _
+                          Integer) -> VPA
+              ++ modular reduction
+
+    Implementation ==> add
+
+        import from ModularHermitePade()
+
+        check_sol_mod_diff : (Vector(SUP S), List(List(F)), Integer, _
+               GEN, Symbol, List Symbol _
+               ) -> Union("good", "reject", "no_solution")
+
+        if F is Fraction Integer and S is Integer then
+            HP_solve(l, degs, kind, qvar, sigma, gen, check) ==
+                HP_solve_I(l, degs, kind, sigma, gen, check)
+            LLF_to_LPA(l, sigma, vars, points, p) ==
+                LLFI_to_LPA(l, sigma, p)
+            VSUPS_to_VPA(v, vars, points, p) == VSUPI_to_VPA(v, p)
+            gen_Monte_Carlo_check(check, l, kind, qvar, sigma, gen) ==
+                kind ~= 'diffHP => check
+                x +-> check_sol_mod_diff(vector x, l, sigma, gen, _
+                                  'dummy, [])
+        else if F is Fraction Polynomial Integer and _
+                        S is Polynomial Integer then
+            HP_solve(l, degs, kind, qvar, sigma, gen, check) ==
+                HP_solve_P(l, degs, kind, qvar, sigma, gen, check)
+            LLF_to_LPA(l, sigma, vars, points, p) ==
+                LLFPI_to_LPA(l, sigma, vars, points, p)
+            VSUPS_to_VPA(v, vars, points, p) ==
+                VSUPPI_to_VPA(v, vars, points, p)
+            gen_Monte_Carlo_check(check, l, kind, qvar, sigma, gen) ==
+                not(kind = 'diffHP or kind = 'qdiffHP or kind = 'qmixed) =>
+                    check
+                vars :=  reverse(get_variables(l, kind, qvar))
+                x +-> check_sol_mod_diff(vector x, l, sigma, gen, _
+                           qvar, vars)
+        else if F is AlgebraicNumber and S is AlgebraicNumber then
+            HP_solve(l, degs, kind, qvar, sigma, gen, check) ==
+                HP_solve_A(l, degs, kind, sigma, gen, check)
+            gen_Monte_Carlo_check(check, l, kind, qvar, sigma, gen) ==
+                check
+        else if F is Fraction Polynomial AlgebraicNumber and _
+                        S is Polynomial AlgebraicNumber then
+            HP_solve(l, degs, kind, qvar, sigma, gen, check) ==
+                HP_solve_PA(l, degs, kind, qvar, sigma, gen, check)
+            gen_Monte_Carlo_check(check, l, kind, qvar, sigma, gen) ==
+                check
+        else
+            p := characteristic()$F
+            if p > 0 and p < 32000000 and _
+               F is PrimeField(p::PositiveInteger) and _
+               S is PrimeField(p::PositiveInteger) then
+                HP_solve(l, degs, kind, qvar, sigma, gen, check) ==
+                    checkPF : (List SUP Integer) -> CHKR
+                    checkPF := ll +-> check(ll pretend List SUP S)
+                    pp := HP_solve_M(l pretend List(List(Integer)),
+                                        degs, kind, p, sigma,
+                                        gen, checkPF)
+                    pp case Matrix SUP Integer =>
+                        return (pp@Matrix(SUP Integer) pretend Matrix(SUP S))
+                    return (pp@Boolean)
+            else
+                HP_solve(l, degs, kind, qvar, sigma, gen, check) == true
+            gen_Monte_Carlo_check(check, l, kind, qvar, sigma, gen) ==
+                check
+
+        -- chhh
+
+        check_sol_mod_diff(resv, list, sigma, gen, qvar, vars) _
+                : Union("good", "reject", "no_solution") ==
+            #list ~= 1 =>
+                error "check_sol_mod_diff: #list ~= 1"
+            n0 := #(first(list))
+            sigma0 := n0 + 2
+            min_ord := sigma0
+            delta := sigma0 - sigma
+            -- print("check_sol_mod_diff, delta is"::OutputForm)
+            -- print(delta::OutputForm)
+            delta >= sigma =>
+                error "delta too big"
+            for ii in 1..20 repeat
+                p : Integer := nextPrime(random(2000000)+2000000 _
+                                        )$IntegerPrimesPackage(Integer)
+                lpt : List Integer := []
+                qval : Integer := 0
+                for var in vars repeat
+                    lpt := cons(random(p), lpt)
+                    if var = qvar then qval := first(lpt)
+                lpt := reverse!(lpt)
+                gv0p := LLF_to_LPA(list, n0 + delta, vars, lpt, p)
+                gv0p case "failed" => iterate
+                gvl := gv0p@List(PA)
+                #gvl ~= 1 =>
+                   "check_sol_mod_diff: #gvl ~= 1"
+                gv0 := first(gvl)
+                nres := VSUPS_to_VPA(resv, vars, lpt, p)
+                pa := check_sol1a(nres, gvl, gen, sigma0, qval, p)
+                ord := sigma0
+                for i in 0..(sigma0 - 1) repeat
+                    if pa(i) ~= 0 then
+                        ord := i
+                        break
+                ord < sigma => return "no_solution"
+                ord < sigma0 =>
+                    c0 := pa(ord)
+                    for j in 0..(delta -1) repeat
+                        gv0(n0 + j) := 1
+                        pa := check_sol1a(nres, [gv0], gen, sigma0, qval, p)
+                        pa(ord) ~= c0 =>
+                            -- print("decreasing delta"::OutputForm)
+                            sigma0 := ord
+                            delta := sigma0 - sigma
+                            break
+                        gv0(n0 + j) := 0
+                    if ord < min_ord then min_ord := ord
+                -- print(p::OutputForm)
+            min_ord < sigma0 => return "reject"
+            return "good"

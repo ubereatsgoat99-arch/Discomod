@@ -1,0 +1,52 @@
+Function: nfresolvent
+Section: number_fields
+C-Name: nfresolvent
+Prototype: GD0,L,
+Help: nfresolvent(pol,{flag=0}): In the case where the Galois closure of the
+ number field defined by pol is S3, Dl, A4, S4, F5, A5, M21, or M42, gives the
+ corresponding resolvent field. Otherwise, give a "canonical" subfield,
+ or if flag >= 2 all "canonical" subfields. If flag is odd, give also the
+ "conductor" f, whose definition is specific to each group.
+Doc: Let \kbd{pol} be an irreducible integral polynomial defining a number
+ field $K$ with Galois closure $\tilde{K}$. This function is limited to the
+ Galois groups supported by \kbd{nflist}; in the following $\ell$ denotes an
+ odd prime. If $\text{Gal}(\tilde{K}/\Q)$ is $D_{\ell}$, $A_{4}$, $S_{4}$,
+ $F_{5}$ ($M_{20}$), $A_{5}$, $M_{21}$ or $M_{42}$,
+ returns a polynomial $R$ defining the corresponding resolvent field (quadratic
+ for $D_{\ell}$, cyclic cubic for $A_{4}$ and $M_{21}$, noncyclic cubic for
+ $S_{4}$, cyclic quartic for $F_{5}$, $A_{5}(6)$ sextic for $A_{5}$, and cyclic
+ sextic for $M_{42}$). In the $A_{5}(6)$ case, returns the $A_{5}$ field of
+ which it is the resolvent. Otherwise, gives a ``canonical'' subfield, or $0$
+ if the Galois group is not supported.
+
+ The binary digits of \fl\ correspond to 1: returns a pair $[R,f]$ where $f$
+ is a ``conductor'' whose definition is specific to each group and given
+ below; 2: returns all ``canonical'' subfields.
+
+ Let $D$ be the discriminant of the resolvent field \kbd{nfdisc}$(R)$:
+
+ \item In cases $C_{\ell}$, $D_{\ell}$, $A_{4}$, or $S_{4}$, $\text{disc}(K)
+ =(Df^{2})^{m}$ with $m=(\ell-1)/2$ in the first two cases, and $1$ in the last
+ two.
+
+ \item In cases where $K$ is abelian over the resolvent subfield, the conductor
+ of the relative extension.
+
+ \item In the case $C_{pq}$ with $p$ and $q$ primes with $p<q$, the conductor
+ of the degree $q$ subfield.
+
+ \item In case $F_{5}$, $\text{disc}(K)=Df^{4}$ if $f>0$ or $5^{2}Df^{4}$
+ if $f<0$.
+
+ \item In cases $M_{21}$ or $M_{42}$, $\text{disc}(K)=D^{m}f^{6}$ if $f>0$ or
+ $7^{3}D^{m}f^{6}$ if $f<0$, where $m=2$ for $M_{21}$ and $m=1$ for $M_{42}$.
+
+ \item In cases $A_{5}$ and $A_{5}(6)$, $\fl$ is currently ignored.
+
+  \bprog
+  ? pol = x^6-3*x^5+7*x^4-9*x^3+7*x^2-3*x+1; \\ Galois closure D_6
+  ? nfresolvent(pol)
+  %2 = x^3 + x - 1
+  ? nfresolvent(pol,1)
+  %3 = [x^3 + x - 1, [[31, 21, 3; 0, 1, 0; 0, 0, 1], [1]]]
+  @eprog

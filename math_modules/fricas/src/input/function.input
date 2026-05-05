@@ -1,0 +1,36 @@
+)cl all
+-- This is the recursive definition of the Legendre polynomials
+L n ==
+  n = 0 => 1
+  n = 1 => x
+  (2*n-1)/n * x * L(n-1) - (n-1)/n * L(n-2)
+
+L 5
+
+-- Create the differential operator d/dx on Q[x]
+dx := operator("D")::OP(POLY FRAC INT)
+-- and attach the map d/dx to it:
+evaluate(dx, p +-> differentiate(p, 'x))$OP(POLY FRAC INT)
+
+-- This is the differential equation satisfied by the nth Legendre poly:
+E n == (1 - x^2) * dx^2 - 2 * x * dx + n*(n+1)
+E 5
+[L i for i in 1..10]
+[E i for i in 1..10]
+[(E i)(L i) for i in 1..10]
+
+
+-- Input for page PatternMatchingPage
+)clear all
+
+sinCosExpand := rule
+  sin(-x)    == - sin(x)
+  cos(-x)    == cos(x)
+  sin(x + y) == sin(x) * cos(y) + sin(y) * cos(x)
+  cos(x + y) == cos(x) * cos(y) - sin(x) * sin(y)
+  sin((n | integer? n and integer n > 1) * x) ==_
+       sin(x) * cos((n-1)*x) + sin((n-1)*x) * cos(x)
+  cos((n | integer? n and integer n > 1) * x) ==_
+       cos(x) * cos((n-1)*x) - sin(x) * sin((n-1)*x)
+
+sinCosExpand(sin(x+y-2*z) * cos y)

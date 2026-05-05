@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cd "$SAGE_DOC"
+
+find html -name '*.html' | xargs grep "$@"

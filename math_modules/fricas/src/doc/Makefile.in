@@ -1,0 +1,818 @@
+#------------------------------------------------------------------
+#---
+#--- FriCAS
+#--- Copyright (C) 2013, 2014, 2020, 2024  Ralf Hemmecke <ralf@hemmecke.org>
+#--- Copyright (C) 2024  Qian Yun <oldk1331@gmail.com>
+#---
+#------------------------------------------------------------------
+# The main targets of this Makefile are "all" and "doc".
+# Other useful targets are "localdoc", "book", "stamp-html", "viewports".
+
+# Whereas "all" is made during normal FriCAS build, "doc" must be
+# invoked separately.
+
+# The "all" target builds the contents of HyperDoc and creates the
+# .help files from their sources in src/doc/htex/ug16.htex.
+# The "doc" target builds the FriCAS book (book.pdf) and the website
+# that can be put at fricas.github.io.
+
+# "make all" puts everything into $(fricas_target_datadir).
+# It is responsible to make the graphics and (evaluated)
+# formulas from the files in src/doc/ht and src/doc/htex
+# so that they are available in HyperDoc.
+# "make all" does the following:
+# - Copy src/doc/bitmap/*.bitmap files to the target directory.
+# - Copy some demo programs from src/input/*.input for use during
+#   the generation of .pht files.
+# - Create .ht and .menu files from htex/ug*.htex files,
+# - Create tmp/examples.list to translate abbreviated names to long names
+#   for the examples in htex/*.htex. The name is like the )abbrev entry,
+#   see ${HTEX_EXAMPLES}.
+# - Create .ht and .menu files for the htex/*.htex examples files.
+# - Create xmpexp.ht (list of examples, corresponds to ug09).
+# - Create coverex.ht (a few explicit examples grouped by topic).
+# - Copy ht/gloss.text and generate gloss.ht, glossdef.text, and
+#   glosskey.text via ")boot buildGloss()".
+# - Create ht.db from the .ht files via "bin/htadd".
+# - Create *.pht files from *.ht files (ug*.ht and ${HTEX_EXAMPLES}).
+#   See target ${GEN_NONVIEWPORTFILES_PHT}.
+# - Create *.pht files from *.ht files also for graphics output.
+#   See target ${GEN_VIEWPORTFILES_PHT}. This also creates
+#   *.VIEW/ directories.
+# - Add the .pht files to ht.db via "bin/htadd" (target ht.db).
+# - src/input/mobius.input is treated separately to create mobius.VIEW/.
+# - The (generated) .VIEW directories are copied to their target.
+# - The .ht files are copied to the target directory.
+# - The .help files are copied to the target directory for ")help ...".
+#
+# "make book" does the following:
+# - Copy pictures from the png/ directory for documentation of HyperDoc.
+# - Convert pictures from tmp/*.VIEW/image.ps (target stamp-book-pics).
+# - Generate tmo/ug09.tex with the list of examples.
+# - Create tmp/*.input from htex/*.htex (target ${HTEX_FILES_INPUT}).
+#   The .input files contain the commands that should be executed.
+#   All the other text from the .htex file is also included in the .input
+#   file but commented with "-- " prefix.
+# - Run the tmp/*.input files through bin/interpsys to produce
+#   tmp/*.spool files (target ${HTEX_FILES_SPOOL}).
+# - Turn the tmp/*.spool files into tmp/*.tex files (target ${HTEX_FILES_TEX}).
+# - Create tmp/info.tex with version information.
+# - Create tmp/vp-*.input files by prepending ")assert CreateGraphics"
+#   to tmp/*.input files for .htex files that contain \spadgraph commands.
+# - Run the tmp/vp-*.input files through fricas (target ${HTEX_VIEWPORTS_STAMP})
+#   in order to produce the postscript pictures for the book.
+# - LaTeX book.tex, call makeindex, and re-latex to get references right.
+#
+# "make stamp-html" does the following:
+# - Copy the source .rst files into the tmp directory.
+# - Generate the .rst files for the API via api.spad into the tmp directory.
+# - Call "make html" inside tmp/sphinx to generate the .html files.
+#
+# "make doc" builds book.pdf and the .html files and copies everything
+# into the src/doc/html directory. The content of the html directory
+# can be committed to the
+# https://github.com/fricas/fricas.github.io repository.
+#
+# "make localdoc" is like "make doc" except that links point to the local
+# repository instead of pointing to github. In fact, by adding the line
+#   text/x-spad	spad
+# to /etc/mime.types (https://help.ubuntu.com/community/AddingMimeTypes)
+# and associating text/x-spad in firefox with your editor, would open
+# the respective .spad file, if you click the respective file link at
+# the top of an API page.
+#
+# ------------------------------------------------------------------
+# General notes
+#
+# Not everything is generated. There are a few .bitmap, .png, and .ht
+# files in the sources.
+# The png/*.png files are pictures of HyperDoc windows and are included
+# in book.pdf (search for "\includehyperdoc{" in the sources). They are not
+# used for HyperDoc.
+# The .ht and .menu files are exclusively for display in HyperDoc.
+# The actual HyperDoc datebase however is ht.db.
+# Some .ht files are generated from .htex sources.
+# The .htex format is such that it can be translated into .ht and .tex.
+# The .pht files are generated (pasted ht?) and contain evaluated spad
+# formulas that are used in HyperDoc.
+# The .help files are generated from ug16.htex for display via ")help ...".
+#
+# ------------------------------------------------------------------
+
+subdir = src/doc/
+
+# MAYBE_VIEWPORTS is either empty or equal to viewports.
+# XVFB is either empty or equal to xvfb-run.
+# See configure.ac.
+MAYBE_VIEWPORTS=@MAYBE_VIEWPORTS@
+XVFB=@XVFB@
+
+###################################################################
+# A few variables that must be set before starting 'make'.
+###################################################################
+srcdir       = ${fricas_src_srcdir}/doc
+htexsrcdir   = ${srcdir}/htex
+htsrcdir     = ${srcdir}/ht
+bitmapssrcdir= $(srcdir)/bitmaps
+inputsrcdir  = ${fricas_src_srcdir}/input
+pngsrcdir    = ${srcdir}/png
+
+httargetdir        = $(fricas_target_datadir)/hypertex/pages
+bitmapstargetdir   = $(fricas_target_datadir)/hypertex/bitmaps
+viewportstargetdir = $(fricas_target_datadir)/viewports
+helptargetdir      = $(fricas_target_datadir)/spadhelp
+algebratargetdir   = ${fricas_targetdir}/algebra
+
+###################################################################
+# No need to set anything below this point
+###################################################################
+
+# A few programs that are needed to generate the pht and ht files and
+# add them to the ht.db database.
+# We silently assume 'sed' to be available.
+INTERPSYS     = FRICAS=${FRICAS} $(fricas_build_bindir)/interpsys
+SMAN          = ${fricas_target_bindir}/sman
+ADD2HTDB      = ${fricas_target_bindir}/htadd
+HTEX2HT       = ${AWK} -f ${srcdir}/ht.awk
+HTEX2SECMENU  = ${AWK} -f ${srcdir}/secmenu.awk
+UGSYSCMD2HELP = ${AWK} -f ${srcdir}/syscmd.awk
+HTEX2INPUT    = ${AWK} -f ${srcdir}/htex2input.awk
+SPOOL2TEX     = ${AWK} -f ${srcdir}/spool2tex.awk
+UGEXAMPLES    = ${AWK} -f ${srcdir}/ugexamples.awk
+
+###################################################################
+# Most of the variables below are designed in the following way: If
+# there is just one underscore, then the first part denotes the
+# directory from which the files (without extension) are taken. The
+# second part tries to explain the meaning of the files. If there are
+# two underscores then the third part denotes the file extension.
+###################################################################
+
+###################################################################
+# The current chapters. Except for 09, there exists a .htex file under
+# src/doc/htex for each chapter. ug09.tex is generated and is not
+# needed for HyperDoc.
+#
+# The lists of categories, domains, packages, and operations in
+# chapters 17-20 is not copied from the original sources, since they
+# are out-of-date and look pretty useless.
+#
+# All the examples sections are available as .htex sources.
+#
+# Unfortunately, the chapter filenames must match the regular
+# expression "ug[0-9][0-9]", since these numbers will be extracted in
+# some .awk scripts. Also, currently, the generated examples chapter
+# must be 09.
+# (The g below stands for "is generated", o for "omitted".)
+
+# 00   Introduction to FriCAS
+# 01   An Overview of \Language{}
+# 02   Using Types and Modes
+# 03   Using \HyperName{}
+# 04   Input Files and Output Styles
+# 05   Introduction to the \Language{} Interactive Language
+# 06   User-Defined Functions, Macros and Rules
+# 07   Graphics
+# 08   Advanced Problem Solving
+# 09 g Some Examples of Domains and Packages
+# 10   Interactive Programming
+# 11   Packages
+# 12   Categories
+# 13   Domains
+# 14   Browse
+# 15   What's New in FriCAS
+# Here starts the appendix.
+# 16   \Language{} System Commands
+# 17 o Categories (List)
+# 18 o Domains (List)
+# 19 o Packages (List)
+# 20 o Operations (List)
+# 21   Programs for FriCAS Images
+
+# The stuff from the src/doc/htex directory that should be visible in
+# HyperDoc and book.pdf.
+# Note that Chapter 9 is treated differently for HyperDoc and book.pdf.
+# The file xmpexp.ht will be generated For HyperDoc and tmp/ug09.tex for
+# book.pdf.
+# CHAPTER is the result of running:
+# find htex -name 'ug*.htex'|sed 's,.*ug,,;s,\.htex$,,'|sort
+CHAPTERS = 00 01 02 03 04 05 06 07 08   10 11 12 13 14 15 16   21
+HTEX_UGCHAPTERS = ${patsubst %, ug%, ${CHAPTERS}}
+
+# The chapter number as it will be put into generated .ht files for
+# the examples.
+EXAMPLES_CHAPTER_NO_LEADING_ZERO = 9
+
+# The examples files live in src/doc/htex.
+# HTEX_EXAMPLES is the result of running:
+# find htex -name '*.htex'|grep -v 'ug.*\.htex'|sed 's,.*/,,;s,\.htex$,,'|sort
+HTEX_EXAMPLES = ALIST ARRAY1 ARRAY2 BBTREE BINARY BOP BSTREE CARD CARTEN \
+  CCLASS CHAR CLIF COMPLEX CONTFRAC CYCLES DECIMAL DERHAM DFLOAT DMP \
+  EQ EQTBL EXIT EXPR FARRAY FILE FLOAT FMAGMA \
+  FNAME FPARFRAC FR FR2 FRAC GBF GROUPP GSTBL GUESSPI \
+  HEAP HEXADEC INT INTHEORY KAFILE KERNEL LAZM3PK LEXP LEXTRIPK	\
+  LIB LIST LLLRED LODO LODO1 LODO2 LPOLY LWORD MAPPKG1 MATRIX MKFUNC \
+  MPOLY MSET NONE OCT ODPOL OP OVAR PERMAN PFR POLY QUAT QUAT2 RADIX \
+  RECLOS REGSET ROMAN SEG SEGBIND SET SINT SQMATRIX SREGSET STBL \
+  STREAM STRING STRTBL SYMBOL TABLE TEXTFILE UNISEG UP VECTOR VOID \
+  WUTSET XPBWPOLY XPOLY XPR ZDSOLVE ZLINDEP
+
+###################################################################
+# A few files exist in a source .ht format under ${htsrcdir}.
+# HT_EXAMPLES is the result of running:
+# find ht -name 'ex*.ht'|grep -v 'expose\.ht'|sed 's,.*/,,;s,\.ht$,,'|sort
+HT_EXAMPLES = exdiff exint exlap exlimit exmatrix explot2d explot3d	\
+  exseries exsum
+
+# HT_SOURCES are all the files in the src/doc/ht directory.
+HT_SOURCES = ${HT_EXAMPLES} algebra aspex basic bmcat CPHelp evalex	\
+  enum expose function graphics grpthry help HTXAdvPage1 HTXAdvPage2    \
+  HTXAdvPage3 HTXAdvPage4 HTXAdvPage5 HTXAdvPage6 HTXAdvTopPage		\
+  HTXFormatPage1 HTXFormatPage2 HTXFormatPage3 HTXFormatPage4		\
+  HTXFormatPage5 HTXFormatPage6 HTXFormatPage7 HTXFormatPage8		\
+  HTXFormatTopPage HTXIntroPage1 HTXIntroPage2 HTXIntroPage3		\
+  HTXIntroTopPage HTXLinkPage1 HTXLinkPage2 HTXLinkPage3 HTXLinkPage4	\
+  HTXLinkPage5 HTXLinkPage6 HTXLinkTopPage HTXplay HTXTopPage		\
+  HTXTryPage hyperdoc man0 mapping newuser numbers patch polys		\
+  record rootpage srchkey topics type ug union util
+
+###################################################################
+# The following files are generated and handled in an explicit way.
+# xmpexp.ht  corresponds to ${HTEX_EXAMPLES},
+#            i.e., to chapter 09 of the user guide (in HyperDoc).
+# coverex.ht corresponds to ${HT_EXAMPLES}.
+# gloss.ht   is generated from src/doc/ht/gloss.text.
+GEN_HTFILES = xmpexp coverex gloss
+
+###################################################################
+# These are the files that produce *.VIEW output via the
+#    unset DAASE; HTPATH=. ${SMAN} -noihere -paste $<
+# command.
+# The viewport generation for these files will be postponed to an
+# explicit call to 'cd src/doc; make MAYBE_VIEWPORTS=viewports'
+# unless the program xvfb-run was detected during the run of
+# ./configure.
+# The reason for this delayed execution is that generation of the .xpm
+# files in *.VIEW/ without the xvfb-run program will pop up image
+# windows in X and will make working during compilation impossible.
+HT_VIEWPORTFILES = coverex \
+  $(shell grep -lRe '^\\graphpaste{' ${srcdir}/ht/* \
+          | sed 's,.*/,,;s,\..*,,' \
+          | sort -u)
+# HTEX_VIEWPORTFILES is also used in stamp-book-viewports.
+HTEX_VIEWPORTFILES = \
+  $(shell grep -lRe '^\\spadgraph{' ${srcdir}/htex/* \
+          | sed 's,.*/,,;s,\..*,,' \
+          | sort -u)
+VIEWPORTFILES = ${HT_VIEWPORTFILES} ${HTEX_VIEWPORTFILES}
+# This should give
+# VIEWPORTFILES = coverex explot2d explot3d graphics SEGBIND \
+#                 ug00 ug01 ug07 ug08 ug10 ug11
+# Note that \spadgraph in a .htex file is translated to \graphpaste in
+# the .ht file during generation via ht.awk.
+
+# HT_PASTEFILES lists all the .ht files in the directory src/doc/ht
+# that do contain "paste" commands, i.e., for which .pht files must be
+# generated.
+HT_PASTEFILES = \
+  $(shell grep -lRe '^\\\(graph\|spad\)paste{' ${srcdir}/ht/*.ht \
+          | sed 's,.*/,,;s,\..*,,' \
+          | sort -u)
+# This should give
+# HT_PASTEFILES = exdiff exint exlap exlimit exmatrix explot2d explot3d \
+#                 exseries exsum function graphics grpthry numbers polys
+
+# HTEX_PASTEFILES lists all the .htex files that will produce .pht files.
+# Note that \spadcommand and \spadgraph are translated to \spadpaste
+# and \graphpaste, respectively, in the .ht file during generation via
+# ht.awk.
+HTEX_PASTEFILES = \
+  $(shell grep -lRe '^\\spad\(command\|graph\){' ${srcdir}/htex/*.htex \
+          | sed 's,.*/,,;s,\..*,,' \
+          | sort -u)
+
+###################################################################
+# Chapter 10 of the FriCAS book refers to short programs (.input
+# files) that are stored under ${inputsrcdir}. They are used for
+# HyperDoc and book.pdf.
+# The list can be generated by the following command.
+# grep -R '\\spadcommand{)read' *| sed 's/[^ ]* //;s/[ \].*//'|sort -u
+# Additionally there are ntube, tknot, images1, and knot3 that
+# generate more .ps files for their use in the book.
+# All these files are going to be generated from the sources in the
+# .htex files in a future release of FriCAS.
+INPUT_EXTRA = arrows bouquet newton ribbon vectors \
+              ntube tknot images1 knot3
+
+###################################################################
+# For these files .ht files will be generated.
+GEN_FILES = $(HTEX_UGCHAPTERS) ${HTEX_EXAMPLES} \
+            ${HT_SOURCES} ${GEN_HTFILES}
+
+###################################################################
+# We make graphical files via indirect addressing depending on
+# ${MAYBE_VIEWPORTS}, which is supposed to be either empty or has the
+# value "viewports".
+VIEWPORTNAMES =
+VIEWPORTNAMESviewports = ${VIEWPORTFILES}
+
+# The (generated) .pht files are divided into two groups. Whereas the
+# files in ${GEN_VIEWPORTFILES_PHT} involve the generation of
+# graphics, the files in ${GEN_NONVIEWPORTFILES_PHT} do not.
+GEN_VIEWPORTFILES_PHT = ${patsubst %, %.pht, ${VIEWPORTNAMES${MAYBE_VIEWPORTS}}}
+GEN_NONVIEWPORTFILES_PHT = ${patsubst %, %.pht, \
+    ${filter-out ${VIEWPORTFILES}, ${HT_PASTEFILES} ${HTEX_PASTEFILES}}}
+
+###################################################################
+# The actual targets... The targets are sorted such that prerequisites
+# come first, except for the default "all" target .
+###################################################################
+all: copy-to-target
+
+# Do not remove the util-ht target although it is not otherwise used
+# in this Makefile. This target is a dependency of target all-algebra
+# in src/Makefile.in.
+util-ht: ${httargetdir}/util.ht
+	${STAMP} $@
+
+###################################################################
+# The bitmap files must be copied to the right place.
+###################################################################
+stamp-bitmaps:
+	${MKDIR_P} ${bitmapstargetdir}
+	cp -r ${bitmapssrcdir}/* ${bitmapstargetdir}
+
+###################################################################
+# Input files needed during the computation of the pht files.
+INPUT_EXTRA_INPUT = $(patsubst %, %.input, ${INPUT_EXTRA})
+${INPUT_EXTRA_INPUT}: %: ${inputsrcdir}/%
+	cp $< $@
+
+###################################################################
+# Make auxiliary files.
+###################################################################
+# This snippet relies on the fact that )abbrev lines lead to unique
+# short/long names for constructors in the ${HTEX_EXAMPLES} list.
+# Line in abbrev-lines.list looks like this:
+#   aggcat 182 category CLAGG Collection
+# where the entries are:
+# 1 filename
+# 2 line number of the )abbrev command
+# 3-6 the part of the )abbrev line without ")abbrev".
+tmp/abbrev-lines.list:
+	${MKDIR_P} tmp
+	(cd ${fricas_src_algdir}; \
+	grep -nH '^.*$$' *.spad \
+	| ${AWK} '/:[)]if (LiterateDoc|false) *$$/,/:[)]endif/ {next}; /:[)]abbrev / {gsub(/[.:]/," "); if($$1 != $$6){print $$1, $$3, $$5, $$6, $$7}}') > $@
+
+# We need this to translate short names to long names.
+tmp/examples.list: tmp/abbrev-lines.list
+	(for e in ${HTEX_EXAMPLES}; do echo "-- $$e"; done; \
+	 cat $< \
+	) | ${AWK} '{if($$1=="--"){a[$$2]=1}else{if($$4 in a){print $$4, $$5}}}'\
+	  | sort -k2 > $@.tmp
+	cmp $@.tmp $@ || mv $@.tmp $@
+
+###################################################################
+# Make the special .ht files from ${GEN_HTFILES}.
+###################################################################
+xmpexp.ht: tmp/examples.list
+	echo '% !! DO NOT MODIFY BY HAND !! It is generated.' > $@
+	echo '\newcommand{\ExamplesExposedTitle}{${EXAMPLE_TITLE}}' >> $@
+	echo '\newcommand{\ExamplesExposedNumber}{${EXAMPLES_CHAPTER_NO_LEADING_ZERO}.}' >> $@ # Chapter 9
+	echo '\begin{page}{ExamplesExposedPage}{${EXAMPLES_CHAPTER_NO_LEADING_ZERO}. ${EXAMPLE_TITLE}}' >> $@
+	echo 'This is a menu of examples of some domains and packages.' >> $@
+	echo 'Click on any item below to see that section.' >> $@
+	echo '\beginscroll' >> $@
+	echo '\table{'   >> $@
+	sed 's/.* //;h;s/1/One/g;s/2/Two/g;s/3/Three/g;s/4/Four/g;s/5/Five/g;s/6/Six/g;s/7/Seven/g;s/8/Eight/g;s/9/Nine/g;s/0/Ten/g;s/^/}{/;s/$$/XmpPage} }/;H;x;s/^/{ \\downlink{/;s/\n//' $< >> $@
+	echo '}'       >> $@
+	echo '\endscroll'     >> $@
+	echo '\autobuttons'   >> $@
+	echo '\end{page}'     >> $@
+
+###################################################################
+HT_EXAMPLES_COVEREXHT = $(patsubst %, tmp/%.coverexht, ${HT_EXAMPLES})
+${HT_EXAMPLES_COVEREXHT}: tmp/%.coverexht: ${htsrcdir}/%.ht
+	${MKDIR_P} tmp
+	echo "\\begin{page}{Menu$*}{`sed -n 's/^% Title: //p' $<`}" > $@
+	echo '\beginscroll\beginmenu' >> $@
+	sed -n \
+	  -e 's/^\\begin{page}\({[a-zA-Z0-9]*}\)\({.*}\)/\\menudownlink\2\1/p' \
+	  -e '/^\\\(spad\|graph\)paste/p' $< >> $@
+	echo '\endmenu\endscroll\end{page}' >> $@
+	echo >> $@
+
+coverex.ht: ${HT_EXAMPLES_COVEREXHT}
+	(echo '% DO NOT EDIT! This file is generated.'; \
+	 echo;\
+	 echo '\begin{page}{ExampleCoverPage}{Examples Of FriCAS Commands}';\
+	 echo '\beginscroll\table{';\
+	 for x in $(HT_EXAMPLES); do \
+	   echo "{\\downlink{`sed -n 's/^% Title: //p' ${htsrcdir}/$$x.ht`}{Menu$$x}}"; \
+	 done;\
+	 echo '}\endscroll\end{page}';\
+	 echo;\
+	 cat  ${HT_EXAMPLES_COVEREXHT}\
+	) > $@
+
+###################################################################
+gloss.text: ${htsrcdir}/gloss.text
+	cp $< $@
+gloss.ht: gloss.text
+	( echo ')boot buildGloss()') \
+	| FRICAS_INITFILE='' ${INTERPSYS}
+
+###################################################################
+# Make the special .menu files for HyperDoc.
+###################################################################
+# First for the ug*.htex files.
+$(patsubst %, tmp/%.menu, $(HTEX_UGCHAPTERS)): tmp/ug%.menu: \
+    ${htexsrcdir}/ug%.htex
+# Provide chapter and section number as 2nd and 3rd arguments.
+	${MKDIR_P} tmp
+#       ${HTEX2SECMENU} SRC CHAPTERNUMBER SECTIONNUMBER MENUDIR
+	${HTEX2SECMENU} $< $* 0 tmp > $@
+
+# Then for the examples.
+$(patsubst %, tmp/%.menu, ${HTEX_EXAMPLES}): tmp/%.menu: \
+    ${htexsrcdir}/%.htex tmp/examples.list
+	${MKDIR_P} tmp
+#       ${HTEX2SECMENU} SRC CHAPTERNUMBER SECTIONNUMBER MENUDIR
+	${HTEX2SECMENU} $< ${EXAMPLES_CHAPTER_NO_LEADING_ZERO} `sed -n '/^$* /=' tmp/examples.list` tmp > $@
+
+###################################################################
+# Make the .ht files from the .htex files.
+###################################################################
+# First for the ug*.htex files.
+$(patsubst %, %.ht, $(HTEX_UGCHAPTERS)): %.ht: \
+    ${htexsrcdir}/%.htex tmp/%.menu
+#	${HTEX2HT} SRC MENUDIR
+#       Chapter number will be extracted from the source filename ug??.htex
+	${HTEX2HT} $< tmp > $@
+
+# Then for the example files.
+$(patsubst %, %.ht, ${HTEX_EXAMPLES}): %.ht: \
+    ${htexsrcdir}/%.htex tmp/%.menu tmp/examples.list
+#	${HTEX2HT} SRC MENUDIR CONSTRUCTORNAME CHAPTERNUMBER SECTIONNUMBER
+	${HTEX2HT} $< \
+	           tmp \
+                   `sed -n 's/^$* //p' tmp/examples.list` \
+	           ${EXAMPLES_CHAPTER_NO_LEADING_ZERO} \
+	           `sed -n '/^$* /=' tmp/examples.list` \
+	    > $@
+
+$(patsubst %, %.ht, ${HT_SOURCES}): %.ht: ${htsrcdir}/%.ht
+	cp $< $@
+
+###################################################################
+# Create the final ht.db database.
+###################################################################
+# Note that ht.db must exist before SMAN can be called. In fact,
+# according to page "Standard Pages" in HTXLinkPage2.ht, there must be
+# certain content in ht.db, otherwise the hypertex program will
+# immediately exit.
+#
+# So the following uses stamp-initial-db-ht to create a ht.db with all
+# the .ht files and the creation of the .pht files depends on the
+# existence of that stamp.
+###################################################################
+# Create a partial ht.db database of the .ht files.
+###################################################################
+# We need to make sure that 'ht.db', the hypertex database file
+# is up to date. The file contains absolute offsets into the various
+# '.ht' and '.pht' files so it must reflect the current pages.
+GEN_FILES_HT = ${patsubst %, %.ht, ${GEN_FILES}}
+stamp-initial-ht-db: ${GEN_FILES_HT}
+# The -n flag means "create a fresh ht.db".
+	${ADD2HTDB} -n ${addprefix ./, $^}
+	${STAMP} $@
+
+###################################################################
+# Make the .pht files.
+###################################################################
+${GEN_NONVIEWPORTFILES_PHT}: %.pht: %.ht ${INPUT_EXTRA_INPUT} ${SMAN} \
+    $(fricas_target_bindir)/hypertex$(EXEEXT) stamp-initial-ht-db
+	echo $<
+	unset DAASE; HTPATH=. FRICAS_INITFILE='' ${SMAN} -noihere -paste $<
+
+${GEN_VIEWPORTFILES_PHT}: %.pht: %.ht ${INPUT_EXTRA_INPUT} ${SMAN} \
+    $(fricas_target_bindir)/hypertex$(EXEEXT) stamp-initial-ht-db
+	echo $<
+	unset DAASE; HTPATH=.; export HTPATH; \
+	  FRICAS_INITFILE='' ${XVFB} ${SMAN} -noihere -paste $<
+
+mobius.VIEW: ${inputsrcdir}/mobius.input
+	(unset DAASE; FRICAS=${FRICAS}; export FRICAS; \
+	    echo ')read $<' | FRICAS_INITFILE='' ${XVFB} \
+	    ${FRICAS}/bin/fricas -noht -noclef)
+
+# This target will only be taken if
+# MAYBE_VIEWPORTS=viewports
+# is set. This is supposed to be done through configure.ac.
+# The copy command should actually appear during the "copy-to-target"
+# below, but it would needlessly complicate this Makefile.
+viewports: ${GEN_VIEWPORTFILES_PHT} mobius.VIEW
+	${MKDIR_P} ${viewportstargetdir}
+	cp -r *.VIEW ${viewportstargetdir}
+	${STAMP} $@
+
+###################################################################
+# Create the final ht.db database.
+###################################################################
+ht.db: ${GEN_NONVIEWPORTFILES_PHT} ${GEN_VIEWPORTFILES_PHT}
+	${ADD2HTDB} ${addprefix ./, $^}
+
+###################################################################
+# Generate the .help file.
+###################################################################
+# ug16.htex contains documentation about system commands
+stamp-ug16helpfiles:
+	${UGSYSCMD2HELP} ${htexsrcdir}/ug16.htex
+	${STAMP} $@
+
+###################################################################
+# The following targets only copy generated files to the target
+# directory.
+###################################################################
+copy-helpfiles: stamp-ug16helpfiles
+	${MKDIR_P} ${helptargetdir}
+	cp *.help ${helptargetdir}
+
+###################################################################
+# Copy .pht files to target dir.
+###################################################################
+copy-phts: ${GEN_NONVIEWPORTFILES_PHT} ${MAYBE_VIEWPORTS}
+	${MKDIR_P} ${httargetdir}
+	cp *.pht ${httargetdir}
+
+###################################################################
+# Copy .ht files to target dir.
+###################################################################
+copy-hts: ${addprefix ${httargetdir}/, ${GEN_FILES_HT}}
+
+${addprefix ${httargetdir}/, ${GEN_FILES_HT}}: ${httargetdir}/%: %
+	${MKDIR_P} ${httargetdir}
+	cp $< $@
+
+###################################################################
+# Copy glossdef.text and glosskey.text that were generated at the same
+# time as gloss.ht.
+###################################################################
+glossdef.text glosskey.text: gloss.ht
+copy-gloss: glossdef.text glosskey.text
+	${MKDIR_P} ${algebratargetdir}
+	cp $^ ${algebratargetdir}
+
+###################################################################
+# We created ht.db here and then copy it to the target dir.
+###################################################################
+${httargetdir}/ht.db: ht.db
+	${MKDIR_P} ${httargetdir}
+	cp $< $@
+
+###################################################################
+# We first create all .ht, .pht and .VIEW files here and then copy
+# them to ${httargetdir}.
+###################################################################
+make-then-copy-to-target: ${httargetdir}/ht.db stamp-bitmaps \
+    copy-phts copy-hts copy-helpfiles copy-gloss
+
+# If the "${PREGENERATED}" directory exists, we assume that the files
+# have already been copied to the targetdir.
+# Note that the value of ${PREGENERATED} must be an absolute directory.
+copy-to-target: stamp-bitmaps
+	test -d ${PREGENERATED}/target/share \
+	  || ${MAKE} make-then-copy-to-target
+
+###################################################################
+###################################################################
+# The following targets only copy generated files to the dist
+# directory. The directory structure under ${distdir} should be
+# identical to the structure under "target".
+###################################################################
+copy-to-dist: ${httargetdir}/ht.db copy-phts copy-hts copy-helpfiles \
+             copy-gloss viewports
+dist:
+	${MAKE} httargetdir=$(disttargetdir)/share/hypertex/pages \
+	        viewportstargetdir=$(disttargetdir)/share/viewports \
+	        helptargetdir=$(disttargetdir)/share/spadhelp \
+	        algebratargetdir=$(disttargetdir)/algebra \
+	    copy-to-dist
+
+
+###################################################################
+# Below this point are targets for building book.pdf and html
+# documentation.
+###################################################################
+# The following targets create .input files from .htex files. The
+# .input files contain the same text as the .htex file except that
+# anything outside of the second argument of an \xtc command appears
+# prefixed with "-- ". For simplicity, we require the \xtc command to
+# be written like this:
+## \xtc{
+##   SOME TEXT
+## }{
+##   COMMANDS
+## }
+# where SOME TEXT must not contain "}{" at the beginning of the line
+# and COMMANDS must not include "}" at the beginning of the line.
+# COMMANDS is either one line of the form
+## \spadcommand{.... \free{...} \bound{}}
+# where \free and \bound are optional or can occur multiple times or
+# of the form
+## \begin{spadsrc}[...]
+## ...
+## \end{spadsrc}
+###################################################################
+# The chapters used in HyperDoc and book.pdf that must be made from
+# the .htex files.
+HTEX_FILES = $(HTEX_UGCHAPTERS) $(HTEX_EXAMPLES)
+
+HTEX_FILES_INPUT = $(patsubst %, tmp/%.input, ${HTEX_FILES})
+${HTEX_FILES_INPUT}: tmp/%.input: ${htexsrcdir}/%.htex
+	${MKDIR_P} tmp
+	${HTEX2INPUT} $< > $@
+
+HTEX_FILES_SPOOL = ${patsubst %, tmp/%.spool, ${HTEX_FILES}}
+${HTEX_FILES_SPOOL}: tmp/%.spool: tmp/%.input
+	echo ")read $<" | FRICAS_INITFILE='' ${INTERPSYS} > $@
+
+HTEX_FILES_TEX = ${patsubst %, tmp/%.tex, ${HTEX_FILES}}
+${HTEX_FILES_TEX}: tmp/%.tex: tmp/%.spool
+	${MKDIR_P} tmp
+	cat $< | ${SPOOL2TEX} > $@
+
+tmp/ug09.tex: tmp/examples.list
+	${MKDIR_P} tmp
+	${UGEXAMPLES} $< > $@
+
+###################################################################
+# There are a number of pictures for sections in book.pdf that
+# demonstrate the use of HyperDoc.
+
+# Note that one tmp/vp-*.input file may produces several postscript
+# files.
+HTEX_VIEWPORTS_INPUT = ${patsubst %, tmp/vp-%.input, ${HTEX_VIEWPORTFILES}}
+HTEX_VIEWPORTS_STAMP = ${patsubst %, tmp/stamp-%,    ${HTEX_VIEWPORTFILES}} \
+                       tmp/stamp-knot3
+
+${HTEX_VIEWPORTS_INPUT}: tmp/vp-%.input: tmp/%.input
+	${MKDIR_P} tmp
+	(echo ")assert CreateGraphics"; cat $<) > $@
+
+tmp/vp-knot3.input: knot3.input ${INPUT_EXTRA_INPUT}
+	cp $< $@
+
+${HTEX_VIEWPORTS_STAMP}: tmp/stamp-%: tmp/vp-%.input ${INPUT_EXTRA_INPUT}
+	unset DAASE; FRICAS=${FRICAS}; export FRICAS; \
+		echo ")read $<" | FRICAS_INITFILE='' ${XVFB} \
+		  ${FRICAS}/bin/fricas -noht -noclef > /dev/null
+	${STAMP} $@
+
+stamp-book-viewports: ${HTEX_VIEWPORTS_STAMP}
+	${STAMP} $@
+
+stamp-book-pics: stamp-book-viewports
+	cp ${pngsrcdir}/*.png tmp/
+	for f in tmp/*.VIEW/image.ps; do \
+		epstopdf $$f --outfile=`echo $$f | sed 's/VIEW.*/pdf/'`; \
+	done
+	${STAMP} $@
+
+###################################################################
+# In order to figure out the exact git hash that is used to produce
+# this book, we rely on the fact that we are inside a git repository.
+# If that is not the case, The info.tex file simply takes
+# ${PACKAGE_VERSION} for a clearer reference of the version of the
+# book. Note that the used variables can be overridden by setting
+# them on the "make" commandline.
+
+# Here lives the official git repository of the package.
+# It should be possible to say "git clone ${PACKAGE_SOURCE}".
+# Do not use ".git" extension explicitly for PACKAGE_SOURCE.
+PACKAGE_SOURCE=https://github.com/fricas/fricas
+
+tmp/info.tex:
+	${MKDIR_P} tmp
+	echo "\\begin{description}" > $@
+	echo "\\item[Website:] \url{${PACKAGE_URL}}" >> $@
+	echo "\\item[Repository:] \url{${PACKAGE_SOURCE}}" >> $@
+	if test -r ${top_srcdir}/.git/HEAD; then \
+	  (cd $(top_srcdir) && echo "\\item[Git hash:] \texttt{$$(git log -1 --pretty=%H)}");\
+	else \
+	  echo "\\item[FriCAS version:] ${PACKAGE_VERSION}"; \
+	fi >> $@
+	echo "\\end{description}" >> $@
+	echo >> $@
+
+# Convince latex to abort on error.
+LATEX=pdflatex -halt-on-error -file-line-error -interaction=nonstopmode
+
+book-pdf: stamp-book-pics tmp/ug09.tex tmp/info.tex ${HTEX_FILES_TEX}
+	TEXINPUTS=$$TEXINPUTS:${srcdir}:tmp:. ${LATEX} book.tex \
+	|| (echo "==> Detected problem while running LaTeX."; \
+	    echo "==> LaTeX must be installed."; \
+	    echo "==> The following LaTeX packages must be available."; \
+	    echo "==> amsmath, amssymb, breqn, color, epstopdf, framed,"; \
+	    echo "==> graphicx, hyperref, listings, makeidx, tensor"; \
+	    echo "==> tikz, verbatim, xparse"; \
+	    exit 1)
+
+book: book-pdf
+	makeindex book
+	${MAKE} $<
+	${MAKE} $<
+
+clean-book:
+	-rm -f info.tex *.sfort
+	-rm -f ${patsubst %,book.%, aux idx ind out ps dvi ilg log pdf toc}
+
+###################################################################
+# The official FriCAS homepage. It is supposed that the API description
+# lives under "${FRICAS_URL}/api".
+FRICAS_URL=${PACKAGE_URL}
+
+# In case we consider another git branch of ${PACKAGE_SOURCE}.
+BRANCH=master
+
+# Base source URL into the git repo. Appending the respective path
+# should give a valid URL to view/edit a file.
+# Local references must include a absolute path like this:
+# PACKAGE_SOURCE_VIEW="file:///home/hemmecke/g/fricas".
+PACKAGE_SOURCE_VIEW=${PACKAGE_SOURCE}/blob/${BRANCH}
+PACKAGE_SOURCE_EDIT=${PACKAGE_SOURCE}/edit/${BRANCH}
+SHOW_ON_GITHUB_URL=${PACKAGE_SOURCE_VIEW}/src/doc/sphinx/source/{path}
+EDIT_ON_GITHUB_URL=${PACKAGE_SOURCE_EDIT}/src/doc/sphinx/source/{path}
+###################################################################
+# The following environment variables considered in
+# sphinx/source/conf.py, so we export them for sphinx "make html".
+export PACKAGE_URL
+export FRICAS_URL
+export PACKAGE_SOURCE
+export PACKAGE_SOURCE_VIEW
+export PACKAGE_SOURCE_EDIT
+export PACKAGE_NAME
+export PACKAGE_VERSION
+export PACKAGE_YEAR
+export PACKAGE_TARNAME
+export PACKAGE_BUGREPORT
+export SHOW_ON_GITHUB_URL
+export EDIT_ON_GITHUB_URL
+###################################################################
+API_DIR=tmp/sphinx/source/api
+
+# Copy the sphinx sources into the tmp directory
+stamp-sphinx: ${srcdir}/sphinx/source/conf.py
+	-rm -rf tmp/sphinx
+	${MKDIR_P} tmp
+	cp -r ${srcdir}/sphinx tmp/
+	${STAMP} $@
+
+# Generate the API documentation into ${API_DIR}/*.rst files.
+stamp-api: tmp/abbrev-lines.list stamp-sphinx
+	-rm -rf tmp/sphinx/build ${API_DIR}
+	$(MKDIR_P) ${API_DIR}
+	(cd ${API_DIR}; \
+	  (echo ')set breakmode quit"'; \
+	   echo ')compile "$(srcdir)/api.spad"'; \
+	   echo 'documentAll("${abs_builddir}/$<")') \
+	  | FRICAS_INITFILE='' $(FRICAS)/bin/fricas -nosman) > $@
+
+# Call sphinx-build to compile the .rst files into .html files.
+stamp-html: stamp-api
+	sphinx-build --version \
+	|| (echo "==> sphinx-build not found. Please install it."; exit 1)
+	cd tmp/sphinx && ${MAKE} html
+	${STAMP} $@
+
+# Copy the generated html directory into the target place and include
+# book.pdf.
+stamp-doc: book stamp-html
+	-rm -rf html
+	cp -R tmp/sphinx/build/html .
+	cp book.pdf html
+	${STAMP} $@
+
+doc: stamp-doc
+
+# The following target makes links point to the local repository.
+# Might be useful for development without internet connection.
+localdoc:
+	${MAKE} PACKAGE_SOURCE_VIEW=file://${abs_top_srcdir} \
+	        PACKAGE_BOOK=file://${abs_builddir}/html/book.pdf \
+	    stamp-doc
+
+clean-html:
+	-rm -rf html tmp/sphinx
+	-rm -rf stamp-sphinx stamp-api stamp-html stamp-doc
+
+###################################################################
+clean-local: clean-book clean-html
+	-rm -f ${GEN_NONVIEWPORTFILES_PHT} ${GEN_VIEWPORTFILES_PHT}
+	-rm -f ${GEN_FILES_HT} *.input *.help *.text *.ps
+	-rm -rf tmp
+	-rm -f examples.* stamp* ht.db
+	-rm -rf *.VIEW viewports test*.svg *.sfort
+
+distclean-local: clean-local

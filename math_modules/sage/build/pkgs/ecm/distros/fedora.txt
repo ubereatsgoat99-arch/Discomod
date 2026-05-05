@@ -1,0 +1,2 @@
+gmp-ecm
+gmp-ecm-devel

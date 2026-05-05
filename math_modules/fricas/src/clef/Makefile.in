@@ -1,0 +1,55 @@
+fricas_c_runtime_extra = @fricas_c_runtime_extra@
+
+# this is where the include files live
+INC=    $(fricas_src_srcdir)/include
+
+build_libdir = $(abs_top_builddir)/src/lib
+
+bin_PROGRAMS = clef$(EXEEXT)
+
+clef_sources = edible.c e_buf.c edin.c fnct_key.c prt.c wct.c
+clef_objects = $(clef_sources:.c=.$(OBJEXT))
+clef_LDADD = -L$(build_libdir) -lspad $(fricas_c_runtime_extra)
+clef_DEPENDENCIES = $(build_libdir)/libspad.a
+
+spadbuf_sources = spadbuf.c e_buf.c edin.c fnct_key.c prt.c wct.c
+spadbuf_objects = $(spadbuf_sources:.c=.$(OBJEXT))
+spadbuf_LDADD = -L$(build_libdir) -lspad $(fricas_c_runtime_extra)
+spadbuf_DEPENDENCIES = $(build_libdir)/libspad.a
+
+subdir = src/clef/
+
+.PHONY: all all-clef
+all: all-ax
+
+all-ax all-clef: stamp
+	@ echo finished $(builddir)
+
+stamp: $(fricas_target_bindir)/clef$(EXEEXT) \
+       $(fricas_target_libdir)/spadbuf$(EXEEXT)
+	-rm -f stamp
+	$(STAMP) stamp
+
+$(fricas_target_bindir)/clef$(EXEEXT): $(clef_objects) $(clef_DEPENDENCIES)
+	${CC} -Wall $(clef_objects) $(clef_LDADD) ${LDF} ${LDFLAGS} -o $@
+
+$(fricas_target_libdir)/spadbuf$(EXEEXT): $(spadbuf_objects) \
+           $(spadbuf_DEPENDENCIES)
+	${CC} -Wall $(spadbuf_objects) $(spadbuf_LDADD) ${LDF} ${LDFLAGS} -o $@
+
+.PRECIOUS: %.$(OBJEXT)
+
+
+
+%.$(OBJEXT): ${INC}/edible.h $(fricas_c_macros)
+
+%.$(OBJEXT): $(srcdir)/%.c
+	${CC} -c ${CCF} ${CFLAGS} $(fricas_includes) -o $@ $<
+
+clean-local:
+	-rm -f $(clef_objects) $(spadbuf_objects)
+	-rm -f stamp
+	-rm -f $(fricas_target_bindir)/clef$(EXEEXT)
+	-rm -f $(fricas_target_libdir)/spadbuf$(EXEEXT)
+
+distclean-local: clean-local

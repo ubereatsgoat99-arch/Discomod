@@ -1,0 +1,22 @@
+Function: qfbredsl2
+Section: number_theoretical
+C-Name: qfbredsl2
+Prototype: GDG
+Help: qfbredsl2(x,{isD}): reduction of the binary quadratic form x, returns
+ [y,g] where y is reduced and g in Sl(2,Z) is such that g.x = y; isD, if
+ present, must be equal to sqrtint(D), where D > 0 is the discriminant of x.
+Doc:
+ reduction of the (real or imaginary) binary quadratic form $x$, returns
+ $[y,g]$ where $y$ is reduced and $g$ in $\text{SL}(2,\Z)$ is such that
+  $g \cdot x = y$; \var{isD}, if
+ present, must be equal to $\kbd{sqrtint}(D)$, where $D > 0$ is the
+ discriminant of $x$.
+
+ The action of $g$ on $x$ can be computed using \kbd{qfeval(x,g)}
+ \bprog
+ ? q1 = Qfb(33947,-39899,11650);
+ ? [q2,U] = qfbredsl2(q1)
+ %2 = [Qfb(749,2207,-1712),[-1,3;-2,5]]
+ ? qfeval(q1,U)
+ %3 = Qfb(749,2207,-1712)
+ @eprog

@@ -1,0 +1,5 @@
+Function: _gerepileall
+Class: gp2c_internal
+Description:
+ (pari_sp,gen):void:parens    $2 = gc_GEN($1, $2)
+ (pari_sp,gen,...):void       (void)gc_all($1, ${nbarg 1 sub}, ${stdref 3 code})

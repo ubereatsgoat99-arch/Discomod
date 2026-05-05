@@ -1,0 +1,10 @@
+Function: bitflip
+C-Name: bitflip
+Section: conversions
+Prototype: vWL
+Help: bitflip(~x,n): flip bit n of x in place, assuming x >= 2^(n+1).
+Doc:
+ Flip \emph{in place} the $n^{\text{th}}$ bit of the integer $x \geq 2^{n+1}$
+ starting from the right, i.e.~the coefficient of $2^{n}$ in the binary
+ expansion of $x$. See \kbd{bitset} for details.
+ If you need to flip an higher bit, use \kbd{x = bitxor(x, 1<<n)}.

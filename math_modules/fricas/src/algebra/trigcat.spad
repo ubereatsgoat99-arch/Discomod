@@ -1,0 +1,461 @@
+)abbrev category RADCAT RadicalCategory
+++ Author:
+++ Basic Operations: nthRoot, sqrt, ^
+++ Related Constructors:
+++ Keywords: rational numbers
+++ Description: The \spad{RadicalCategory} is a model for the rational numbers.
+RadicalCategory() : Category == with
+  sqrt   : % -> %
+      ++ sqrt(x) returns the square root of x.  The branch cut lies along the
+      ++ negative real axis, continuous with quadrant II.
+  nthRoot : (%, Integer) -> %
+      ++ nthRoot(x, n) returns the nth root of x.
+  _^     : (%, Fraction Integer) -> %
+      ++ x ^ y is the rational exponentiation of x by the power y.
+ add
+  sqrt x        == x ^ inv(2::Fraction(Integer))
+  nthRoot(x, n) == x ^ inv(n::Fraction(Integer))
+
+)abbrev category ELEMFUN ElementaryFunctionCategory
+++ Category for the elementary functions
+++ Author: Manuel Bronstein
+++ Description: Category for the elementary functions;
+ElementaryFunctionCategory() : Category == with
+    log : % -> %
+    ++ log(x) returns the natural logarithm of x.  When evaluated into some
+    ++ subset of the complex numbers, the branch cut lies along
+    ++ the negative real axis, continuous with quadrant II.  The domain does
+    ++ not contain the origin.
+    exp : % -> %       ++ exp(x) returns %e to the power x.
+    "^": (%, %) -> %  ++ x^y returns x to the power y.
+
+ add
+   if % has Monoid then
+     x ^ y == exp(y * log x)
+
+)abbrev category AHYP ArcHyperbolicFunctionCategory
+++ Category for the inverse hyperbolic trigonometric functions
+++ Author: ???
+++ Description:
+++ Category for the inverse hyperbolic trigonometric functions;
+ArcHyperbolicFunctionCategory() : Category == with
+    acosh : % -> % ++ acosh(x) returns the hyperbolic arc-cosine of x.
+    acoth : % -> % ++ acoth(x) returns the hyperbolic arc-cotangent of x.
+    acsch : % -> % ++ acsch(x) returns the hyperbolic arc-cosecant of x.
+    asech : % -> % ++ asech(x) returns the hyperbolic arc-secant of x.
+    asinh : % -> % ++ asinh(x) returns the hyperbolic arc-sine of x.
+    atanh : % -> % ++ atanh(x) returns the hyperbolic arc-tangent of x.
+
+)abbrev category ATRIG ArcTrigonometricFunctionCategory
+++ Category for the inverse trigonometric functions
+++ Author: ???
+++ Description: Category for the inverse trigonometric functions;
+ArcTrigonometricFunctionCategory() : Category == with
+    acos : % -> %
+    ++ acos(x) returns the arc-cosine of x.  When evaluated into some
+    ++ subset of the complex numbers, one branch cut for acos lies
+    ++ along the negative real axis to the left of -1 (inclusive),
+    ++ continuous  with the upper half plane, the other along the
+    ++ positive real axis to the right of 1 (inclusive), continuous
+    ++ with the lower half plane.
+    acot : % -> %       ++ acot(x) returns the arc-cotangent of x.
+    acsc : % -> %       ++ acsc(x) returns the arc-cosecant of x.
+    asec : % -> %       ++ asec(x) returns the arc-secant of x.
+    asin : % -> %
+    ++ asin(x) returns the arc-sine of x.  When evaluated into some
+    ++ subset of the complex numbers, one branch cut for asin lies
+    ++ along the negative real axis to the left of -1 (inclusive),
+    ++ continuous with the upper half plane, the other along the
+    ++ positive real axis to the right of 1 (inclusive), continuous
+    ++ with the lower half plane.
+    atan : % -> %
+    ++ atan(x) returns the arc-tangent of x.  When evaluated into some
+    ++ subset of the complex numbers, one branch cut for atan lies
+    ++ along the positive imaginary axis above %i (exclusive), continuous
+    ++ with the left half plane, the other along the negative
+    ++ imaginary axis below -%i (exclusive) continuous with the right
+    ++ half plane.  The domain does not contain %i and -%i.
+ add
+    if % has Ring then
+       asec(x) ==
+         (a := recip x) case "failed" => error "asec: no reciprocal"
+         acos(a@%)
+       acsc(x) ==
+         (a := recip x) case "failed" => error "acsc: no reciprocal"
+         asin(a@%)
+
+)abbrev category HYPCAT HyperbolicFunctionCategory
+++ Category for the hyperbolic trigonometric functions
+++ Author: ???
+++ Description: Category for the hyperbolic trigonometric functions;
+HyperbolicFunctionCategory() : Category == with
+    cosh : % -> %       ++ cosh(x) returns the hyperbolic cosine of x.
+    coth : % -> %       ++ coth(x) returns the hyperbolic cotangent of x.
+    csch : % -> %       ++ csch(x) returns the hyperbolic cosecant of x.
+    sech : % -> %       ++ sech(x) returns the hyperbolic secant of x.
+    sinh : % -> %       ++ sinh(x) returns the hyperbolic sine of x.
+    tanh : % -> %       ++ tanh(x) returns the hyperbolic tangent of x.
+ add
+    if % has Ring then
+       csch x ==
+         (a := recip(sinh x)) case "failed" => error "csch: no reciprocal"
+         a@%
+       sech x ==
+         (a := recip(cosh x)) case "failed" => error "sech: no reciprocal"
+         a@%
+       tanh x == sinh x * sech x
+       coth x == cosh x * csch x
+       if % has ElementaryFunctionCategory then
+         cosh x ==
+           e := exp x
+           (e + recip(e)::%) * recip(2::%)::%
+         sinh(x) : % ==
+           e := exp x
+           (e - recip(e)::%) * recip(2::%)::%
+
+)abbrev category TRANFUN TranscendentalFunctionCategory
+++ Category for the transcendental elementary functions
+++ Author: Manuel Bronstein
+++ Description: Category for the transcendental elementary functions;
+TranscendentalFunctionCategory() : Category ==
+    Join(TrigonometricFunctionCategory, ArcTrigonometricFunctionCategory,
+         HyperbolicFunctionCategory, ArcHyperbolicFunctionCategory,
+         ElementaryFunctionCategory) with
+           pi : () -> %        ++ pi() returns the constant pi.
+   add
+     if % has Ring then
+       pi()   == 2*asin(1)
+       acsch x ==
+         (a := recip x) case "failed" => error "acsch: no reciprocal"
+         asinh(a@%)
+       asech x ==
+         (a := recip x) case "failed" => error "asech: no reciprocal"
+         acosh(a@%)
+       acoth x ==
+         (a := recip x) case "failed" => error "acoth: no reciprocal"
+         atanh(a@%)
+     if % has Field and % has sqrt : % -> % then
+       asin x == atan(x/sqrt(1-x^2))
+       acos x == pi()/2::% - asin x
+       acot x == pi()/2::% - atan x
+       asinh x == log(x + sqrt(x^2 + 1))
+       acosh x == 2*log(sqrt((x+1)/2::%) + sqrt((x-1)/2::%))
+       atanh x == (log(1+x)-log(1-x))/2::%
+
+)abbrev category TRIGCAT TrigonometricFunctionCategory
+++ Category for the trigonometric functions
+++ Author: ???
+++ Description: Category for the trigonometric functions;
+TrigonometricFunctionCategory() : Category == with
+    cos : % -> %        ++ cos(x) returns the cosine of x.
+    cot : % -> %        ++ cot(x) returns the cotangent of x.
+    csc : % -> %        ++ csc(x) returns the cosecant of x.
+    sec : % -> %        ++ sec(x) returns the secant of x.
+    sin : % -> %        ++ sin(x) returns the sine of x.
+    tan : % -> %        ++ tan(x) returns the tangent of x.
+ add
+    if % has Ring then
+       csc x ==
+         (a := recip(sin x)) case "failed" => error "csc: no reciprocal"
+         a@%
+       sec x ==
+         (a := recip(cos x)) case "failed" => error "sec: no reciprocal"
+         a@%
+       tan x == sin x * sec x
+       cot x == cos x * csc x
+
+)abbrev category PRIMCAT PrimitiveFunctionCategory
+++ Category for the integral functions
+++ Author: Manuel Bronstein
+++ Description: Category for the functions defined by integrals;
+PrimitiveFunctionCategory() : Category == with
+    integral : (%, Symbol) -> %
+      ++ integral(f, x) returns the formal integral of f dx.
+    integral : (%, SegmentBinding %) -> %
+      ++ integral(f, x = a..b) returns the formal definite integral
+      ++ of f dx for x between \spad{a} and b.
+
+)abbrev category LFCAT LiouvillianFunctionCategory
+++ Category for the transcendental Liouvillian functions
+++ Author: Manuel Bronstein
+++ Description: Category for the transcendental Liouvillian functions;
+LiouvillianFunctionCategory() : Category ==
+  Join(PrimitiveFunctionCategory, TranscendentalFunctionCategory) with
+    Ei      : %  -> %
+      ++ Ei(x) returns the exponential integral of x, i.e.
+      ++ the integral of \spad{exp(x)/x dx}.
+    Si      : %  -> %
+      ++ Si(x) returns the sine integral of x, i.e.
+      ++ the integral of \spad{sin(x) / x dx}.
+    Ci      : %  -> %
+      ++ Ci(x) returns the cosine integral of x, i.e.
+      ++ the integral of \spad{cos(x) / x dx}.
+    Shi      : %  -> %
+      ++ Shi(x) returns the hyperbolic sine integral of x, i.e.
+      ++ the integral of \spad{sinh(x) / x dx}.
+    Chi      : %  -> %
+      ++ Chi(x) returns the hyperbolic cosine integral of x, i.e.
+      ++ the integral of \spad{cosh(x) / x dx}.
+    li      : %  -> %
+      ++ li(x) returns the logarithmic integral of x, i.e.
+      ++ the integral of \spad{dx / log(x)}.
+    dilog   : %  -> %
+      ++ dilog(x) returns the dilogarithm of x, i.e.
+      ++ the integral of \spad{log(x) / (1 - x) dx}.
+    erf     : %  -> %
+      ++ erf(x) returns the error function of x, i.e.
+      ++ \spad{2 / sqrt(%pi)} times the integral of \spad{exp(-x^2) dx}.
+    erfi    : %  -> %
+      ++ erfi(x) denotes \spad{-%i*erf(%i*x)}
+    fresnelS : % -> %
+      ++ fresnelS(x) is the Fresnel integral \spad{S}, defined by
+      ++ \spad{S(x) = integrate(sin(%pi*t^2/2), t=0..x)}
+    fresnelC : % -> %
+      ++ fresnelC(x) is the Fresnel integral \spad{C}, defined by
+      ++ \spad{C(x) = integrate(cos(%pi*t^2/2), t=0..x)}
+
+)abbrev category CFCAT CombinatorialFunctionCategory
+++ Category for the usual combinatorial functions
+++ Author: Manuel Bronstein
+++ Description: Category for the usual combinatorial functions;
+CombinatorialFunctionCategory() : Category == with
+    binomial   : (%, %) -> %
+      ++ binomial(n, r) returns the \spad{(n, r)} binomial coefficient
+      ++ (often denoted in the literature by \spad{C(n, r)}).
+      ++ Note: \spad{C(n, r) = n!/(r!(n-r)!)} where \spad{n >= r >= 0}.
+    factorial  : % -> %
+      ++ factorial(n) computes the factorial of n
+      ++ (denoted in the literature by \spad{n!})
+      ++ Note: \spad{n! = n (n-1)! when n > 0}; also, \spad{0! = 1}.
+    permutation : (%, %) -> %
+      ++ permutation(n, m) returns the number of
+      ++ permutations of n objects taken m at a time.
+      ++ Note: \spad{permutation(n, m) = n!/(n-m)!}.
+
+)abbrev category SPFCAT SpecialFunctionCategory
+++ Category for the other special functions
+++ Author: Manuel Bronstein
+++ Description: Category for the other special functions;
+SpecialFunctionCategory() : Category == with
+    abs :      % -> %
+        ++ abs(x) returns the absolute value of x.
+    sign :     % -> %
+        ++ sign(x) returns the sign of x.
+    unitStep : % -> %
+        ++ unitStep(x) is 0 for x less than 0, 1 for x bigger or equal 0.
+    ceiling : % -> %
+        ++ ceiling(x) returns the smallest integer above or equal x.
+    floor : % -> %
+        ++ floor(x) returns the largest integer below or equal x.
+    fractionPart : % -> %
+        ++ fractionPart(x) returns the fractional part of x.
+        ++ Note: fractionPart(x) = x - floor(x).
+    diracDelta : % -> %
+        ++ diracDelta(x) is unit mass at zeros of x.
+    conjugate :      % -> %
+        ++ conjugate(x) returns the conjugate of x.
+    Gamma :     % -> %
+        ++ Gamma(x) is the Euler Gamma function.
+    Beta :      (%, %)->%
+        ++ Beta(x, y) is \spad{Gamma(x) * Gamma(y)/Gamma(x+y)}.
+    Beta : (%, %, %) -> %
+        ++ Beta(x, a, b) is the incomplete Beta function.
+    digamma :   % -> %
+        ++ digamma(x) is the logarithmic derivative of \spad{Gamma(x)}
+        ++ (often written \spad{psi(x)} in the literature).
+    polygamma : (%, %) -> %
+        ++ polygamma(k, x) is the \spad{k-th} derivative of \spad{digamma(x)},
+        ++ (often written \spad{psi(k, x)} in the literature).
+    Gamma :     (%, %) -> %
+        ++ Gamma(a, x) is the incomplete Gamma function.
+    besselJ :   (%, %) -> %
+        ++ besselJ(v, z) is the Bessel function of the first kind.
+    besselY :   (%, %) -> %
+        ++ besselY(v, z) is the Bessel function of the second kind.
+    besselI :   (%, %) -> %
+        ++ besselI(v, z) is the modified Bessel function of the first kind.
+    besselK :   (%, %) -> %
+        ++ besselK(v, z) is the modified Bessel function of the second kind.
+    airyAi :    % -> %
+        ++ airyAi(x) is the Airy function \spad{Ai(x)}.
+    airyAiPrime : % -> %
+        ++ airyAiPrime(x) is the derivative of the Airy function \spad{Ai(x)}.
+    airyBi :    % -> %
+        ++ airyBi(x) is the Airy function \spad{Bi(x)}.
+    airyBiPrime : % -> %
+        ++ airyBiPrime(x) is the derivative of the Airy function \spad{Bi(x)}.
+    lambertW : % -> %
+        ++ lambertW(z) = w is the principal branch of the solution
+        ++ to the equation \spad{we^w = z}.
+    polylog : (%, %) -> %
+        ++ polylog(s, x) is the polylogarithm of order s at x.
+    weierstrassP : (%, %, %) -> %
+        ++ weierstrassP(g2, g3, z) is the Weierstrass P function.
+    weierstrassPPrime : (%, %, %) -> %
+        ++ weierstrassPPrime(g2, g3, z) is the derivative of Weierstrass P
+        ++ function.
+    weierstrassSigma : (%, %, %) -> %
+        ++ weierstrassSigma(g2, g3, z) is the Weierstrass Sigma function.
+    weierstrassZeta : (%, %, %) -> %
+        ++ weierstrassZeta(g2, g3, z) is the Weierstrass Zeta function.
+    weierstrassPInverse : (%, %, %) -> %
+        ++ weierstrassPInverse(g2, g3, z) is the inverse of Weierstrass
+        ++ P function, defined by the formula
+        ++ \spad{weierstrassP(g2, g3, weierstrassPInverse(g2, g3, z)) = z}.
+    whittakerM : (%, %, %) -> %
+        ++ whittakerM(k, m, z) is the Whittaker M function.
+    whittakerW : (%, %, %) -> %
+        ++ whittakerW(k, m, z) is the Whittaker W function.
+    angerJ : (%, %) -> %
+        ++ angerJ(v, z) is the Anger J function.
+    weberE : (%, %) -> %
+        ++ weberE(v, z) is the Weber E function.
+    struveH : (%, %) -> %
+        ++ struveH(v, z) is the Struve H function.
+    struveL : (%, %) -> %
+        ++ struveL(v, z) is the Struve L function defined by the formula
+        ++ \spad{struveL(v, z) = -%i^exp(-v*%pi*%i/2)*struveH(v, %i*z)}.
+    hankelH1 : (%, %) -> %
+        ++ hankelH1(v, z) is first Hankel function (Bessel function of
+        ++ the third kind).
+    hankelH2 : (%, %) -> %
+        ++ hankelH2(v, z) is the second Hankel function (Bessel function of
+        ++ the third kind).
+    lommelS1 : (%, %, %) -> %
+        ++ lommelS1(mu, nu, z) is the Lommel s function.
+    lommelS2 : (%, %, %) -> %
+        ++ lommelS2(mu, nu, z) is the Lommel S function.
+    kummerM : (%, %, %) -> %
+        ++ kummerM(mu, nu, z) is the Kummer M function.
+    kummerU : (%, %, %) -> %
+        ++ kummerU(mu, nu, z) is the Kummer U function.
+    legendreP : (%, %, %) -> %
+        ++ legendreP(nu, mu, z) is the Legendre P function.
+    legendreQ : (%, %, %) -> %
+        ++ legendreQ(nu, mu, z) is the Legendre Q function.
+    kelvinBei : (%, %) -> %
+        ++ kelvinBei(v, z) is the Kelvin bei function defined by equality
+        ++ \spad{kelvinBei(v, z) = imag(besselJ(v, exp(3*%pi*%i/4)*z))}
+        ++ for z and v real.
+    kelvinBer : (%, %) -> %
+        ++ kelvinBer(v, z) is the Kelvin ber function defined by equality
+        ++ \spad{kelvinBer(v, z) = real(besselJ(v, exp(3*%pi*%i/4)*z))}
+        ++ for z and v real.
+    kelvinKei : (%, %) -> %
+        ++ kelvinKei(v, z) is the Kelvin kei function defined by equality
+        ++ \spad{kelvinKei(v, z) =
+        ++ imag(exp(-v*%pi*%i/2)*besselK(v, exp(%pi*%i/4)*z))}
+        ++ for z and v real.
+    kelvinKer : (%, %) -> %
+        ++ kelvinKer(v, z) is the Kelvin kei function defined by equality
+        ++ \spad{kelvinKer(v, z) =
+        ++ real(exp(-v*%pi*%i/2)*besselK(v, exp(%pi*%i/4)*z))}
+        ++ for z and v real.
+    ellipticK : % -> %
+        ++ ellipticK(m) is the complete elliptic integral of the
+        ++ first kind: \spad{ellipticK(m) =
+        ++ integrate(1/sqrt((1-t^2)*(1-m*t^2)), t = 0..1)}.
+    ellipticE : % -> %
+        ++ ellipticE(m) is the complete elliptic integral of the
+        ++ second kind: \spad{ellipticE(m) =
+        ++ integrate(sqrt(1-m*t^2)/sqrt(1-t^2), t = 0..1)}.
+    ellipticE : (%, %) -> %
+        ++ ellipticE(z, m) is the incomplete elliptic integral of the
+        ++ second kind: \spad{ellipticE(z, m) =
+        ++ integrate(sqrt(1-m*t^2)/sqrt(1-t^2), t = 0..z)}.
+    ellipticF : (%, %) -> %
+        ++ ellipticF(z, m) is the incomplete elliptic integral of the
+        ++ first kind : \spad{ellipticF(z, m) =
+        ++ integrate(1/sqrt((1-t^2)*(1-m*t^2)), t = 0..z)}.
+    ellipticPi : (%, %, %) -> %
+        ++ ellipticPi(z, n, m) is the incomplete elliptic integral of
+        ++ the third kind: \spad{ellipticPi(z, n, m) =
+        ++ integrate(1/((1-n*t^2)*sqrt((1-t^2)*(1-m*t^2))), t = 0..z)}.
+    jacobiSn : (%, %) -> %
+        ++ jacobiSn(z, m) is the Jacobi elliptic sn function, defined
+        ++ by the formula \spad{jacobiSn(ellipticF(z, m), m) = z}.
+    jacobiCn : (%, %) -> %
+        ++ jacobiCn(z, m) is the Jacobi elliptic cn function, defined
+        ++ by \spad{jacobiCn(z, m)^2 + jacobiSn(z, m)^2 = 1} and
+        ++ \spad{jacobiCn(0, m) = 1}.
+    jacobiDn : (%, %) -> %
+        ++ jacobiDn(z, m) is the Jacobi elliptic dn function, defined
+        ++ by \spad{jacobiDn(z, m)^2 + m*jacobiSn(z, m)^2 = 1} and
+        ++ \spad{jacobiDn(0, m) = 1}.
+    jacobiZeta : (%, %) -> %
+        ++ jacobiZeta(z, m) is the Jacobi elliptic zeta function, defined
+        ++ by \spad{D(jacobiZeta(z, m), z) =
+        ++ jacobiDn(z, m)^2 - ellipticE(m)/ellipticK(m)} and
+        ++ \spad{jacobiZeta(0, m) = 0}.
+    jacobiTheta : (%, %) -> %
+        ++ jacobiTheta(z, m) is the Jacobi Theta function
+        ++ in Jacobi notation.
+    lerchPhi : (%, %, %) -> %
+        ++ lerchPhi(z, s, a) is the Lerch Phi function.
+    riemannZeta : % -> %
+        ++ riemannZeta(z) is the Riemann Zeta function.
+    charlierC : (%, %, %) -> %
+        ++ charlierC(n, a, z) is the Charlier polynomial.
+    hahn_p : (%, %, %, %, %) -> %
+        ++ hahn_p(n, a, b, bar_a, bar_b, z) is the continuous
+        ++ Hahn polynomial.
+    hahnQ : (%, %, %, %, %) -> %
+        ++ hahnQ(n, a, b, N, z) s the Hahn polynomial.
+    hahnR : (%, %, %, %, %) -> %
+        ++ hahnR(n, c, d, N, z) is the dual Hahn polynomial.
+    hahnS : (%, %, %, %, %) -> %
+        ++ hahnS(n, a, b, c, z) is the continuous dual Hahn
+        ++ polynomial.
+    hermiteH : (%, %) -> %
+        ++ hermiteH(n, z) is the Hermite polynomial.
+    jacobiP : (%, %, %, %) -> %
+        ++ jacobiP(n, a, b, z) is the Jacobi polynomial.
+    krawtchoukK : (%, %, %, %) -> %
+        ++ krawtchoukK(n, p, N, z) is the Krawtchouk polynomial.
+    laguerreL: (%, %, %) -> %
+        ++ laguerreL(n, a, z) is the Laguerre polynomial.
+    meixnerM : (%, %, %, %) -> %
+        ++ meixnerM(n, b, c, z) is the Meixner polynomial.
+    meixnerP : (%, %, %, %) -> %
+        ++ meixnerP(n, phi, lambda, z) is the Meixner-Pollaczek polynomial.
+    racahR : (%, %, %, %, %, %) -> %
+        ++ racahR(n, a, b, c, d, z) is the Racah polynomial.
+    wilsonW : (%, %, %, %, %, %) -> %
+        ++ wilsonW(n, a, b, c, d, z) is the Wilson polynomial.
+    if % has RetractableTo(Integer) then
+        hypergeometricF : (List %, List %, %) -> %
+            ++ hypergeometricF(la, lb, z) is the generalized hypergeometric
+            ++ function.
+        meijerG : (List %, List %, List %, List %, %) -> %
+            ++ meijerG(la, lb, lc, ld, z) is the meijerG function.
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

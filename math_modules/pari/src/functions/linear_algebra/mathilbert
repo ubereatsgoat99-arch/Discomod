@@ -1,0 +1,8 @@
+Function: mathilbert
+Section: linear_algebra
+C-Name: mathilbert
+Prototype: L
+Help: mathilbert(n): Hilbert matrix of order n.
+Doc: creates the \idx{Hilbert matrix} of order $n \geq 0$, i.e.~the square
+ matrix $H$ whose coefficient $H[i,j]$ is $1 / (i+j-1)$. This matrix is
+ ill-conditionned but its inverse has integer entries.

@@ -1,0 +1,15 @@
+Function: hyperellextremalmodels
+Section: elliptic_curves
+C-Name: hyperellextremalmodels
+Prototype: GG
+Help: hyperellextremalmodels(C,p): C being a hyperelliptic curve given by an
+ integral Weierstrass equation, compute a maximal chain of minimal Weierstrass
+ models at p. Return a vector [n, V] where n is the length of the chain of
+ minimal Weierstrass models at p, and V is vector of length 1 or 2 containing
+ the extremal models of the chain.
+Doc:
+ $C$ being a hyperelliptic curve given by an integral Weierstrass equation,
+ compute a maximal chain of minimal Weierstrass models at the prime number $p$.
+ Return a vector $[n, V]$ where $n$ is the length of the chain of minimal
+ Weierstrass models at $p$, and $V$ is vector of length $1$ or $2$ containing the
+ extremal models of the chain.

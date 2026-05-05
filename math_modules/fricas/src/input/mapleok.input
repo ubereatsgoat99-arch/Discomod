@@ -1,0 +1,956 @@
+)set mes auto off
+)set break resume
+in1012a:=integrate(log(abs(z^3-1))/(1+z)^2, z= 0..%plusInfinity,"noPole")
+
+in101a:=integrate((sqrt(z)^I)^I, z= 0..1,"noPole")
+
+
+in106a:=integrate(((I+z)^I)^I, z= 0..1,"noPole")
+
+in108a:=integrate(sqrt((1 + cos(z))*(1 + sin(z))),z=0..%plusInfinity,"noPole")
+--
+-- + infinity
+--
+
+in119a:=integrate(log(1/z+sqrt(1+1/z)), z=0..1,"noPole")
+
+in120a:=integrate(1/(1+1/z^6), z=0..%plusInfinity)
+
+in1029a:=integrate((I*z/(I*z+1))^(1/2), z= 0..%plusInfinity,"noPole")
+
+in1030a:=integrate(I*z/(I*z+1), z= 0..%plusInfinity,"noPole")
+
+in1066a:=integrate(acoth(z)*real(z), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1067a:=integrate(acoth(z)*z^(1/2), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1076a:=integrate(sin(z)*(1-cos(z)/(1-sin(z)^2)^(1/2))^2, z= 0..1,"noPole")
+
+in1084a:=integrate(atan(sin(z))+atan(1/sin(z)), z= 0..1,"noPole")
+
+in1107a:=integrate(-log(z)/(-1+z^(1/2))^3, z= 0..1/2*I,"noPole")
+
+in1108a:=integrate(log(z)/(-1+z^(1/2))^3, z= 0..1/2*I,"noPole")
+
+in1112a:=integrate((1-1/z)^(1/2), z= %pi..2*%pi)
+
+in1114a:=integrate(-z-(1/2*2^(1/2)+1/2*I*2^(1/2))*z^(1/2), z= 1..%plusInfinity,"noPole")
+
+in1118:=integrate(acot(z), z= 0..1/2*I)
+
+in1120a:=integrate((z^2)^(1/2), z= 1..2)
+
+in1130a:=integrate(3^log(z), z= -I..I,"noPole")
+--
+-- Argument not in domain of log.
+--
+
+in1149:=integrate(imag(z)*z^(1/6), z= -I..I)
+--
+-- Argument not in domain of root.
+--
+
+in1149:=integrate(imag(z)*z^(1/6), z= -%i..%i)
+--
+-- Symbolic imag(z) is 0...
+--
+
+in1150a:=integrate(1/z^(1/2), z= -I..I,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in1150c:=integrate(1/z^(1/2), z= -%i..%i,"noPole")
+
+in1161:=integrate(hermiteH(1, z), z= -I..I)
+
+in1161a:=integrate(hermiteH(1, z), z= -%i..%i)
+
+in1160:=integrate(hermiteH(2, z), z= -%i..%i)
+
+in1162:=integrate(laguerreL(1, z), z= -I..I)
+
+in1162:=integrate(laguerreL(1, z), z= -%i..%i)
+
+in1163:=integrate(legendreP(3, z), z= -I..I)
+
+in1163:=integrate(legendreP(3, z), z= -%i..%i)
+
+in1164:=integrate(legendreP(2, z), z= -I..I)
+
+in1164:=integrate(legendreP(2, z), z= -%i..%i)
+
+in1167a:=integrate((z^2)^(1/6), z= -3..-1)
+
+in1180:=integrate(z^(1/3)/(z^2+1), z= 0..10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)
+
+in1183a:=integrate(csc(z), z= 1-I..1+I,"noPole")
+
+-- quite slow to normalize
+-- in1185a:=integrate((z+1)^(1/2)/(1+z^4), z= 0..1)
+
+in1186a:=integrate((z^2+z)^(1/2)/(1+z^2)^2, z= 0..1)
+
+in1190a:=integrate(sin(z)^2*tan(z)^(1/2), z= 0..1,"noPole")
+
+in1191a:=integrate(sin(z)^2/tan(z)^(1/2), z= 0..1,"noPole")
+
+in1193a:=integrate(-sin(z)^2*cot(z-1), z= 0..1,"noPole")
+-- Wrong, should be:
+--
+--     + infinity
+--                    Type: Union(f1: OrderedCompletion Expression Integer,...)
+
+in1207:=integrate(sin(z)*cos(z)*tan(z)^(1/2), z= 0..1)
+
+in1207a:=integrate(sin(z)*cos(z)*tan(z)^(1/2), z= 0..1,"noPole")
+
+in1210a:=integrate(-sin(z)*cos(z)*cot(z-1), z= 0..1,"noPole")
+-- Wrong, should be:
+--
+--     + infinity
+--                    Type: Union(f1: OrderedCompletion Expression Integer,...)
+
+in1214a:=integrate(-sin(z)*tan(z)*csc(z-1), z= 0..1,"noPole")
+-- Wrong, should be:
+--
+--     + infinity
+--                    Type: Union(f1: OrderedCompletion Expression Integer,...)
+
+in1217a:=integrate(sin(z)*sec(z)*tan(z)^(1/2), z= 0..1,"noPole")
+
+in1218a:=integrate(sin(z)*sec(z)/tan(z)^(1/2), z= 0..1,"noPole")
+
+in1a:=integrate(log(abs(z^2-1))/(1+z)^2, z= 0..%plusInfinity,"noPole")
+
+in13:=integrate(cos(z)^2*sin(z)^n, z)
+
+in15ab:=integrate(log(sqrt(z)+z^5), z=0..a,"noPole")
+--
+-- Fishy, divergent at 0, but we have no sign for a
+--
+
+in20a:=integrate(log(sin(z)^2+cos(z)^2), z= 0..1,"noPole")
+
+in126a:=integrate(atan(1/cot(z)), z= 0..2*%pi,"noPole")
+--
+-- Has branch point inside.
+--
+
+in128a:=integrate(atan(sqrt(1-cos(z)^2)/(1+cos(z))), z= 0..1,"noPole")
+
+in134:=integrate(log(exp(z)), z= -I..I)
+--
+-- Possible branch point inside
+--
+
+in134a:=integrate(log(exp(z)), z= -%i..%i)
+
+in1221a:=integrate(sin(z)*csc(z)*acoth(1/z), z= 0..1,"noPole")
+
+in1228a:=integrate(sin(z)*csc(z)*tan(z)^(1/2), z= 0..1,"noPole")
+
+in1261a:=integrate(1/(sin(z)+cos(2*z)), z= -1..1,"noPole")
+--
+-- Has a pole.
+--
+
+in1273a:=integrate((1/(z-I))^(1/2), z= 0..%plusInfinity,"noPole")
+
+in1274a:=integrate(1/(1/(z-I))^(1/2), z= 0..%plusInfinity,"noPole")
+
+in1278a:=integrate((1+1/(I*z)^(1/2))^(1/2), z= 0..%plusInfinity,"noPole")
+
+in1284a:=integrate(log(1+2^(1/2)/z^(1/4)-1/z^(1/2)), z= 0..%plusInfinity,"noPole")
+--
+-- Argument not in domain of log.
+--
+
+in1314a:=integrate(log(1-z)*atanh(z^(1/2)), z= 0..1,"noPole")
+
+in1359a:=integrate((I*z)^(1/2)*(-I*z)^(1/2), z= %minusInfinity..%plusInfinity,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in1376a:=integrate(z*acoth(z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1377a:=integrate(z*acoth(1-z), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1378a:=integrate(z*acoth(1-(1-z)^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1392a:=integrate(acoth(z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1397a:=integrate(1/(-1+z^(1/2))^(1/2), z= 1..2,"noPole")
+
+in1398a:=integrate(acoth(1/z), z= 1..2,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1399a:=integrate(acoth(1/z^(1/2)), z= 1..2,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in143a:=integrate(sqrt(1+z)/(1+z^2), z= 0..1)
+
+in144:=integrate(1, z= I*infinity..%plusInfinity)
+
+in156a:=integrate(z^(2/3), z= 1..10)
+
+in159a:=integrate(log(z)/z^2, z= -I..-1,"noPole")
+--
+-- Argument not in domain of log.
+--
+
+in160:=integrate((-z^2-z)^sin(z), z)
+
+in1425a:=integrate(-(z^2+I*z+3)/(z^2+I*z+2), z= 0..%plusInfinity,"noPole")
+
+in1426a:=integrate(-I/(1+I*z^3)*z^3, z= 0..%plusInfinity,"noPole")
+
+in1428a:=integrate(-I/(1+I*z)*z, z= 0..%plusInfinity,"noPole")
+
+in1432:=integrate(-(z+I)*(-1+1/(z+I)), z= 0..%plusInfinity)
+
+in1433a:=integrate(-1/((I*z)^(1/2)-1)*(-2+(I*z)^(1/2)), z= 0..%plusInfinity,"noPole")
+--
+-- Has pole for positive I, otherwise non-real
+--
+
+in1434a:=integrate(-(1+(I*z)^(1/2))/(I*z)^(1/2), z= 0..%plusInfinity,"noPole")
+
+in1435a:=integrate(-1/(1+(I*z)^(1/2))*(I*z)^(1/2), z= 0..%plusInfinity,"noPole")
+
+in1436a:=integrate(-((I*z)^(1/2)-1)/(-2+(I*z)^(1/2)), z= 0..%plusInfinity,"noPole")
+--
+-- Has pole for positive I, otherwise non-real
+--
+
+in1440a:=integrate((1-(I*z)^(1/2))/(I*z)^(1/2), z= 0..%plusInfinity,"noPole")
+
+in1460:=integrate(z^2+I*z+3, z= 0..%plusInfinity)
+
+in1463a:=integrate(1-(I*z)^(1/2)/(1-I*z), z= 0..%plusInfinity,"noPole")
+--
+-- Has pole for positive I, otherwise non-real
+--
+
+in1464a:=integrate(1+1/(I*z)^(1/2), z= 0..%plusInfinity,"noPole")
+
+in2045:=integrate(atan(1/tan(z)), z= 0..2*%pi)
+--
+-- Has branch inside.
+--
+
+in1502a:=integrate(log(z)^2*log(-z), z= 0..%plusInfinity)
+--
+-- Argument not in domain of log.
+--
+
+in1512a:=integrate(log(z)*(1/(z-I))^(1/2), z= 1..%plusInfinity,"noPole")
+
+in1513a:=integrate(log(z)*(1/(z+I))^(1/2), z= 1..%plusInfinity,"noPole")
+
+in1514a:=integrate(log(z)/(I/(z-I))^(1/2), z= 1..%plusInfinity,"noPole")
+
+in1563a:=integrate(log(1-z^3)*(I*z)^(1/2), z= 0..1,"noPole")
+--
+-- Fails ATM.  Should be
+--
+--                16                +-+
+--           (log(--) + log(9) - 4)\|I
+--                 9
+--          --------------------------------------
+--                              3
+--               Type: Union(f2: List OrderedCompletion Expression Integer,...)
+
+in161:=integrate((-z^2)^(1/3), z)
+
+in163:=integrate(log(z)*abs(exp(z)/z), z)
+
+in166:=integrate((1+z)^z, z)
+
+in179:=integrate(1/(1+(3*z+1)^2), z)
+
+in1636a:=integrate(-z/(z-1)/(1/(z-I))^(1/2), z= 0..1,"noPole")
+
+in1638a:=integrate(-z/(z-1)/(1-I*z)^(1/2), z= 0..1,"noPole")
+
+in1639a:=integrate(-z/(z-1)/(1-I*z^2)^(1/2), z= 0..1,"noPole")
+
+in1712a:=integrate(-log(-z)*(-I*z)^(1/2), z= 0..1,"noPole")
+--
+-- Argument not in domain of log and sqrt.
+--
+
+in1720a:=integrate(-z^2/(z^2-1)*(1/(z-I))^(1/2), z= 0..1,"noPole")
+
+in1721a:=integrate(-z^2/(z^2-1)/(1/(z-I))^(1/2), z= 0..1,"noPole")
+
+in1723a:=integrate(-z^2/(z^2-1)*(1+I/z)^(1/2), z= 0..1,"noPole")
+
+in1724a:=integrate(-z^2/(z^2-1)*(1-(I*z)^(1/2))^(1/2), z= 0..1,"noPole")
+--
+-- When I ~= 1 divergent due to pole at z = 1
+--
+
+in1731:=integrate(-log(1-z^2)*atanh(z), z= 0..1)
+
+in1793a:=integrate((1-z^(1/2))^(1/2)*acoth(z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1794a:=integrate((1-z^(1/2))^(1/2)*acoth(1-z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1796a:=integrate((1+(1-z)^(1/2))^(1/2), z= 0..1,"noPole")
+
+in183:=integrate(1/z, z= I..2*I)
+
+
+in184:=integrate(exp(I*z), z= I..2*I)
+
+in184a:=integrate(exp(%i*z), z= %i..2*%i)
+
+in187a:=integrate(2^log(z), z= -I..I,"noPole")
+--
+-- Argument not in domain of log.
+--
+
+in187a:=integrate(2^log(z), z= -%i..%i,"noPole")
+
+in194a:=integrate(sqrt(z^2), z= 1..2)
+
+in1854a:=integrate(1/(z-1)/(1/(z-I))^(1/2), z= 0..1,"noPole")
+--
+-- Real only for I <= 0
+-- When I ~= 1 divergent due to pole at z = 1
+--
+
+in1856a:=integrate(1/(z-1)/(1-I*z)^(1/2), z= 0..1,"noPole")
+--
+-- Real only for I <= 1
+-- Divergent due to pole at z = 1
+--
+
+in1859a:=integrate(1/(z^2-1)*(1+1/z^3)^(1/2), z= 0..1,"noPole")
+--
+-- elliptic, ATM fails
+--
+
+in1863a:=integrate(1/(z^2-1)*(1/(z-I))^(1/2), z= 0..1,"noPole")
+--
+-- Real only for I <= 0
+-- When I ~= 1 divergent due to pole at z = 1
+--
+
+in1864a:=integrate(1/(z^2-1)*((1+z)/(1-z))^(1/3), z= 0..1)
+
+in1866a:=integrate(1/(z^2-1)*(1-I/z)^(1/2), z= 0..1,"noPole")
+--
+-- Real only for I <= 0
+-- When I ~= 1 divergent due to pole at z = 1
+--
+
+in1867a:=integrate(1/(z^2-1)*(1-(I*z)^(1/2))^(1/2), z= 0..1,"noPole")
+--
+-- Real only for I <= 1
+-- When I ~= 1 divergent due to pole at z = 1
+--
+
+in1869a:=integrate(1/(z^2-1)*(1-1/(I*z)^(1/2))^(1/2), z= 0..1,"noPole")
+--
+-- Real only for I < 0
+-- When I ~= 1 divergent due to pole at z = 1
+--
+
+in1870a:=integrate(1/(z^2-1)/(1+(I*z)^(1/2))^(1/2), z= 0..1,"noPole")
+--
+-- Real only for I >= 0
+-- When I ~= -1 divergent due to pole at z = 1
+--
+
+in1872a:=integrate(1/(z^2-1)/(I/(z+I))^(1/2), z= 0..1,"noPole")
+--
+-- Divergent due to pole at z = 1
+--
+
+in1933a:=integrate(atan(z)/z/(z*(1+z))^(1/2), z= 0..1,"noPole")
+
+in1945a:=integrate(acoth((1-z)/(1+z)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1946a:=integrate(acoth((1-z)/(1+z))*z, z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1947a:=integrate(acoth((1-z)/(1+z))*z^(1/2), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1950a:=integrate(acoth((1-z)/(1+z))/(1-z)^(1/2), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1952a:=integrate(acoth((1-z)/(1+z))*(I*z)^(1/2), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in1954a:=integrate(acoth((1-z)/(1+z))/(I*z)^(1/2), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in202a:=integrate(acsc(z), z= 0..1/2,"noPole")
+--
+-- Argument not in domain of acsc.
+--
+
+in206a:=integrate(sqrt(1-1/z), z= %pi..2*%pi)
+
+in211:=integrate(acos(sin(2*z))*cos(z), z= 0..4*%pi/3)
+--
+-- Branch cuts inside
+--
+
+in213a:=integrate(log(abs(1+1/(-z)^(1/3))), z= 0..1,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in216a:=integrate(1/(1/z-1)^(1/3), z= 0..1,"noPole")
+
+in2023a:=integrate((1-z)/(-1+z^(1/2)), z= 1..2,"noPole")
+
+in2024a:=integrate(log(1-1/z)+csc(z-1), z= 0..1,"noPole")
+--
+-- Argument of log < 0
+-- Divergent due to pole at z = 1
+--
+
+in2032a:=integrate(acoth(z)/z^(1/2), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2040a:=integrate(log(1-1/z^4)+cot(z), z= -1..1,"noPole")
+--
+-- Has a pole.
+--
+
+in2050a:=integrate(-csc(z-1)-1/z^(1/3), z= -1..1,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in2051a:=integrate((z^2+I*z-1)^(1/2)*z, z= -1..1,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in2053a:=integrate(atan(2*z-1), z= 0..infinity)
+
+in2053b:=integrate(atan(2*z-1), z= 0..%plusInfinity)
+
+in2054:=integrate(atan(1/z^(1/2))+1, z= -1..1)
+--
+-- Argument not in domain of sqrt.
+--
+
+in2056a:=integrate(z^(1/2)-acoth(1-z), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2058a:=integrate((z^2+I*z-3)^(1/2)+z, z= -1..1,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in2068a:=integrate(1/(I*z)^(1/2)-csch(z), z= 0..1,"noPole")
+
+in2071a:=integrate(1/(3+z)^3*acoth(z), z= -1..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2090a:=integrate(exp(z^(1/3))*(3+z)^9, z= -1..1,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in2094a:=integrate(asinh(z)-acoth(z), z= -1..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2096a:=integrate(log(z)^2, z= %minusInfinity..%plusInfinity)
+--
+-- Negative argument of log
+--
+
+in2098a:=integrate(1/z^(1/3)-z^2/(z-1)^2, z= -1..1,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in2105a:=integrate(-1/(z^2-I*z+2)^(1/2)/z, z= 0..1,"noPole")
+--
+--  - infinity
+--                    Type: Union(f1: OrderedCompletion Expression Integer,...)
+
+in2106a:=integrate(acos(z)+acoth(1-z), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2108a:=integrate((1-I/(1+I/z)^2)^(1/2), z= -1..1,"noPole")
+
+in2109a:=integrate((1+I*z)^(1/2)+cot(z-1), z= 0..1,"noPole")
+
+in2112a:=integrate(-cot(z-1)+log(1-1/z^4), z= -1..1,"noPole")
+
+in2115a:=integrate(-z/(z-1)+log(1-z^(1/3)), z= -1..1,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in2120a:=integrate(-z+1/(z^2+I*z-3)^(1/2), z= -1..1,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in2124a:=integrate(-1/z-1/(I/(z+I))^(1/2), z= -1..0,"noPole")
+
+in25:=integrate(cos(z), z= I..a)
+
+in25a:=integrate(cos(z), z= %i..a)
+
+in25b:=integrate(exp(I*z), z= I..I*infinity)
+
+in25c:=integrate(exp(%i*z), z= %i..I*infinity)
+
+in28a:=integrate(1/z, z=1..z,"noPole")
+
+in30:=integrate(sin(3*asin(1/(1+z^2))), z= 0..%plusInfinity)
+
+in32:=integrate(exp(-z), z= 0..%plusInfinity)
+
+in37:=integrate(atan(tan(1/z)), z= 0..1)
+--
+-- Has branch point inside.
+--
+
+in40:=integrate(atan(tan(z)), z= 0..%plusInfinity)
+--
+-- Has branch point inside.
+--
+
+in2157a:=integrate(acoth(z)-1/(1+z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2158a:=integrate(2*acoth(1-(1-z)^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2168a:=integrate(-csch(z-1)-(1+I*z)^(1/2), z= 0..1,"noPole")
+
+in2179a:=integrate((z^3-I*(1-z^4)^(1/2))^4, z= -1..1,"noPole")
+
+in2185a:=integrate(csch(z)+(z^2-I*z+1)^(1/2), z= 0..1,"noPole")
+
+in2195a:=integrate(1-acoth(1-(1-z)^(1/2)), z= -1..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2201a:=integrate(acoth(z)+%pi-asec(z-1), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in221:=integrate(log(z+sqrt(z^2-1)), z)
+
+in227a:=integrate(atan(sin(z))+atan(1/(sin(z))), z= 0..1,"noPole")
+
+in237a:=integrate(sin(z)*(1-cos(z)/sqrt(1-sin(z)^2))^2, z= 0..1,"noPole")
+--
+-- Should be 0
+--
+
+in2221:=integrate((z-I)*(-1+1/(z-I)), z= 0..%plusInfinity)
+
+in2243a:=integrate(-1/sinh(z-1)+1/(I*z)^(1/2), z= 0..1,"noPole")
+
+in2247a:=integrate(1/(z^2-I*z+2)^(1/2)+csc(z), z= 0..1,"noPole")
+
+in2254a:=integrate(cosh(z^(1/2))-acoth(1-z), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2270a:=integrate(log(z)*log(1/z)*(I*z)^(1/3), z= -1..1,"noPole")
+--
+-- Argument not in domain of log and sqrt.
+--
+
+in2274a:=integrate(acoth(1-z)-acosh(1/z), z= -1..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2275a:=integrate((z^2+I*z-3)^(1/2)*(3+z^2), z= -1..1,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in2276a:=integrate((1-tanh(log(1+z^(1/3))))^5, z= -1..1,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in2278a:=integrate(acoth(1-z)+log(abs(z-1)/z), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2279a:=integrate(acoth(1/(z^2-z+1)^(1/2)), z= -1..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2307a:=integrate(tan(z)-1/(z^2+I*z-3)^(1/2), z= -1..1,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in2311a:=integrate(-1/sinh(z-1)+1/(I*z)^(1/2), z= 0..%pi,"noPole")
+--
+-- Has a pole.
+--
+
+in2312:=integrate(sin(z)-1/(z^2+I*z-1)^(1/2), z= -1..1)
+--
+-- Argument not in domain of sqrt.
+--
+
+in2312a:=integrate(sin(z)-1/(z^2+I*z-1)^(1/2), z= -1..1,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in2324a:=integrate(cosh(z^(1/2)-1)+acoth(1-z), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2330a:=integrate(exp(-z)+1/(z^2+I*z-1)^(1/2), z= -1..1,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in2332a:=integrate(acoth(z^(1/2))*(1-z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2333a:=integrate(acoth(z)+1/(z^2+z+2)^(1/2), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2340a:=integrate(exp(I*(I*z)^(1/2))+cot(z-1), z= -1..1,"noPole")
+--
+--  - infinity
+--                    Type: Union(f1: OrderedCompletion Expression Integer,...)
+
+in2360a:=integrate(1/(1-I*z^2)^(1/2)-csch(z-1), z= -1..1,"noPole")
+--
+--  [ + infinity, + infinity]
+--               Type: Union(f2: List OrderedCompletion Expression Integer,...)
+
+in2367a:=integrate(log(1-z^2)-1/(I/(z-I))^(1/2), z= -1..1,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in2375a:=integrate(acoth(1-z^(1/2))+1/z^(1/3), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2376a:=integrate(log(1-z^(1/3)-z^(2/3)), z= 0..infinity,"noPole")
+--
+-- Argument not in domain of log.
+--
+
+in2378a:=integrate((z^2+I*z-3)^(1/2)-tanh(z-1), z= -1..1,"noPole")
+
+in2386a:=integrate(acoth(1-z)-(z^2-z+2)^(1/2), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2390a:=integrate((z^2-I*z-2)^(1/2)+1/sec(z-1), z= -1..1,"noPole")
+
+in2392a:=integrate(1/sec(z-1)+acoth(1-z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2404a:=integrate(1/(1+I*z^2)^(1/2)+acoth(z), z= -1..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2409a:=integrate(tan(z)+1/(I/(z+I))^(1/2), z= 0..1/2*%pi,"noPole")
+--
+--   + infinity
+--                    Type: Union(f1: OrderedCompletion Expression Integer,...)
+
+in248a:=integrate(log(z^I)^2, z= 0..1,"noPole")
+
+in248b:=integrate(log(z^%i)^2, z= 0..1,"noPole")
+
+in249a:=integrate((sin(z)/(cos(z)-1))^(1/3), z= 0..%pi,"noPole")
+--
+-- Power of negative number.
+--
+
+in251a:=integrate((-1)^z*exp(-z)*sin(z), z= 0..%plusInfinity,"noPole")
+--
+-- Argument not in domain of power.
+--
+
+in2434a:=integrate(acoth(z^(1/2))+log(abs(z-1)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2443a:=integrate(sech(z)+log(abs(1-1/z^(1/3))), z= -1..1,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in2462a:=integrate(log((1+(1-z)^(1/2))/z)+csch(z), z= -1..0,"noPole")
+--
+--  - infinity
+--                    Type: Union(f1: OrderedCompletion Expression Integer,...)
+
+in2469a:=integrate(1/(2+z)^2+1/(z^2-I*z-2)^(1/2), z= -1..1,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in2484a:=integrate(log(1-z^2)+sinh(z^(1/2)), z= 0..%plusInfinity,"noPole")
+--
+-- Argument not in domain of log.
+--
+
+in2485a:=integrate(log(1-z^(1/2))-acoth(z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2521a:=integrate(acoth(z^(1/2))+cos(z^(1/2)-1), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2524a:=integrate(log(abs(1+1/z^(1/3)))+log(1+1/z), z= -1..0,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in2527a:=integrate(1/(1+I*z^(1/3))+cosh(z), z= %minusInfinity..0,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in2533a:=integrate(log(abs(1-1/z^(1/3)))-log(1-1/z), z= -1..0,"noPole")
+--
+-- Argument not in domain of cube root.
+--
+
+in2566a:=integrate(log(1+(1-z)^(1/2))+acoth(1-z), z= -1..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2567a:=integrate(1/(I*z)^(1/3)*log(abs(z-1)), z= 0..1/2*%pi,"noPole")
+--
+-- Abs creates two branches
+--
+
+in2586a:=integrate(acoth(z^(1/2))+atan(z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2591a:=integrate(log(z)/(1-z^(1/2))^3-log(z)*log(-z), z= 0..1,"noPole")
+--
+-- Argument not in domain of log.
+--
+
+in2597a:=integrate((1+I/z)^(1/2)-log(1-1/z^2), z= 0..%plusInfinity,"noPole")
+--
+-- log of negative numbers
+--
+
+in2598a:=integrate(exp(-z^(1/2))+acoth(1-z^(1/2)), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2604a:=integrate(acoth(1-z^(1/2))+log(1+z^(1/3)), z= 1..2,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in271a:=integrate(1/sqrt((z^2-1)*(z^2-1)), z= 2..%plusInfinity,"noPole")
+
+in275c:=integrate(sqrt(z), z= -I..I,"noPole")
+--
+-- Argument not in domain of sqrt.
+--
+
+in275a:=integrate(1/(1+z), z= -I..I,"noPole")
+
+in275b:=integrate(1/(1+z), z= -%i..%i,"noPole")
+
+in276a:=integrate(log(1-z^(1/3)-z^(2/3)), z= 0..sqrt(5)-2,"noPole")
+
+in2634a:=integrate(1/(z^2+I*z-1)^(1/2)+log(abs(z-1)), z= -1..1,"noPole")
+
+in2656a:=integrate(acoth(1-(1-z)^(1/2))-log(1-1/z), z= -1..1,"noPole")
+--
+-- Argument not in domain of acoth and log.
+--
+
+in2664aa:=integrate(atanh(1/z)+(1+z^2)^(1/2), z= 0..%plusInfinity,"noPole")
+--
+-- Argument not in domain of atanh.
+--
+
+in2681a:=integrate((z^2-I*z-3)^(1/2)+%pi-acot(z-1), z= -1..1,"noPole")
+
+in2691a:=integrate(1/(z^2+I*z-1)^(1/2)+(1-I*z)^(1/2), z= -1..1,"noPole")
+
+in2720a:=integrate(acoth(1-(1-z)^(1/2))+atan(z-1), z= 0..1,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2724a:=integrate(log(1-1/z^3)-(1+1/z^2)^(1/2), z= 0..%plusInfinity,"noPole")
+--
+-- Argument not in domain of log.
+--
+
+in2732:=integrate(atan(1/3*3^(1/2)*(2*z-1)), z= 0..%plusInfinity)
+--
+--  - infinity
+--                    Type: Union(f1: OrderedCompletion Expression Integer,...)
+
+in2783a:=integrate(1/z^(1/3)+atanh(1/z^(1/2)), z= 0..%plusInfinity,"noPole")
+--
+-- Argument not in domain of atanh.
+--
+
+in2815a:=integrate((I*z)^(1/2)-(1+1/(I*z)^(1/2))^(1/2), z= -1..1,"noPole")
+--
+-- When I is real we get sqrt of negative numbers.
+--
+
+in285:=integrate(sqrt(1+sqrt(z-1)), z)
+
+in295a:=integrate(z*sqrt(1+sqrt(z^2-1)), z)
+
+in295ba:=integrate(z*sqrt(1+sqrt(z^2-1)), z= 1..sqrt(2),"noPole")
+
+integrate(1/sqrt(20+x^2+y^2), x = -5..5,"noPole")
+
+in291:=integrate(cos(2*atan(z-sqrt(2)))-sin(2*atan(z-sqrt(2))), z = 0..%plusInfinity)
+
+in2924a:=integrate(1/(I*z)^(1/2)+(1+1/(I*z)^(1/2))^(1/2), z= -1..1,"noPole")
+--
+-- When I is real we get sqrt of negative numbers.
+--
+
+in2963a:=integrate(cosh(-1+(1-z)^(1/2))+(z^2+I*z-3)^(1/2), z= -1..1,"noPole")
+--
+-- When I is real we get sqrt of negative numbers.
+--
+
+in2992a:=integrate(acoth(1-z^(1/2))+log(1+z^(1/3)), z= 1..%plusInfinity,"noPole")
+--
+-- Argument not in domain of acoth.
+--
+
+in2997a:=integrate(log(1+1/z^3)-log(abs(1+z)), z= %minusInfinity..%plusInfinity,"noPole")
+--
+-- Argument not in domain of log.
+--
+
+in3001a:=integrate(((I*z)^(1/2)-1)/(-2+(I*z)^(1/2)), z= 0..%plusInfinity,"noPole")
+--
+-- Real only for I >= 0.  Pole when I > 0.
+--
+
+in3008a:=integrate(exp(-z^(1/3))+atanh(1/z^(1/2)), z= 0..%plusInfinity,"noPole")
+--
+-- Argument not in domain of atanh.
+--
+
+in303a:=integrate(1/(1+cosh(n*z)^2), z= 0..1,"noPole")
+
+in314a:=integrate(1/(sin(z)-1/2), z= 0..1,"noPole")
+--
+-- Has a pole.
+--
+
+in317:=integrate((cos(z)^a)^(1/a), z= 0..%pi)
+--
+-- Has branch point inside.
+--
+
+in319a:=integrate(exp(-z)*atan(sin(z)/(1+cos(z))), z=0..%plusInfinity,"noPole")
+--
+--         1
+--         -
+--         2
+--                    Type: Union(f1: OrderedCompletion Expression Integer,...)
+--
+-- Has branch point inside.
+--

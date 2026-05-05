@@ -1,0 +1,96 @@
+)set break resume
+)expose UnittestCount UnittestAux Unittest
+
+testsuite "bugs2024"
+
+testcase "name clash"
+
+-- Bug occurred during initialization of RSIMP, so test must be
+-- before any other use of RSIMP
+
+a : Integer := 1
+testTrue("rsimp(1)$RootSimplification; true")
+
+testcase "simplifyExp"
+
+testEquals("simplifyExp(2*2^a)", "2^(a+1)")
+testEquals("simplifyExp(a*a^b)", "a^(b+1)")
+testEquals("simplifyExp((a^2)^b*a^2)", "(a^2)^(b+1)")
+testEquals("simplifyExp((a^b)^c*a^b)", "(a^b)^(c+1)")
+testEquals("simplifyExp((a^b)^c*a^(b-d)*a^d)", "(a^b)^(c+1)")
+
+testcase "error in has test"
+
+-- Used to produce system error: "The variable % is unbound."
+testTrue("not(SemiRng has AbelianGroup)")
+
+testcase "partial fractions"
+
+p1 := 1 + partialFraction(-3, 7)
+p2 := partialFraction(4, 7)
+testTrue("(p1 = p2)@Boolean")
+
+testEquals("numberOfFractionalTerms(partialFraction(7, 7))", "0")
+testEquals("numberOfFractionalTerms(partialFraction(-7, 7))", "0")
+
+testcase "radical solve"
+
+p1 := 64*z^4 + 64*z^3 + 32*z^2 - 8*z + 1
+rl1 := radicalSolve(p1)
+testEquals("eval(p1, first(rl1))", "0")
+rr1 := [rhs(s1) for s1 in rl1]
+testEquals("reduce(max, [height(k1) for k1 in kernels(rr1)])", "1")
+
+p2 := x^4 - 2729960418308000*x^3 - 395258439243352250000*x^2 - _
+        55499520947716391500000000*x - 345363656226658026765625000000
+
+rl2 := radicalSolve(p2);
+testEquals("eval(p2, first(rl2))", "0")
+rr2 := [rhs(s1) for s1 in rl2];
+testEquals("reduce(max, [height(k1) for k1 in kernels(rr2)])", "2")
+
+p3 := 8*x^3 + 12*x^2 + 6*x - 1
+rl3 := radicalSolve(p3)
+testEquals("eval(p3, first(rl3))", "0")
+
+testcase "riemannZeta"
+
+testTrue("(r1 := riemannZeta(1.0e-5); true)")
+eps := real(r1) + 1/2 + (1/2)*log(2*%pi)*1.0e-5
+testTrue("eps < 0 and -eps < 2.0e-10")
+
+eps := riemannZeta(2.0) - %pi^2/6
+testTrue("abs(imag(eps)) < 1.0e-20")
+testTrue("abs(real(eps)) < 1.0e-20")
+
+testcase "root manipulations"
+
+testEquals("rootSimp(sqrt(9*x^3*y))", "3*x*sqrt(x*y)")
+testEquals("rootFactor(sqrt(9*x^3*y))", "3*x*sqrt(x)*sqrt(y)")
+testEquals("rootFactor(2*sqrt(%pi)/(sqrt(2)*sqrt(2*%pi)))", "1")
+testEquals("rootFactor(sqrt(%pi)*sqrt(2*%pi))", "%pi*sqrt(2)")
+testEquals("rootFactor(sqrt(sqrt(6) + 1))", "sqrt(sqrt(2)*sqrt(3) + 1)")
+testEquals("rootPower(rootFactor(sqrt(sqrt(6))))", "2^(1/4)*3^(1/4)")
+testEquals("rootPower(rootSplit(sqrt(sqrt(2)*sqrt(3/2))))", "3^(1/4)")
+
+testcase "missing signature"
+
+pT := Polynomial(Fraction(Integer))
+mi(p : pT, n : INT) : pT == p*n
+testEquals("mi(((1/5)*x + 3), 5)", "x + 15")
+
+testcase "complex polygamma"
+
+v1 := polygamma(20, 1.0 + 10*%i)
+testTrue("sqrt(norm((v1 - (-0.0007485128_3671625794_037553"
+                           " - 0.0012164509_8918715708_087851*%i))/v1))"
+               " < 1.0e-14")
+
+testcase "toString with floats"
+
+testEquals("toString(3.7, 10)", "_"3.7000000000_"")
+testEquals("toString(4.3, 8)", "_"4.30000000_"")
+testEquals("toString(-3.7, 9)", "_"-3.700000000_"")
+testEquals("toString(2.7::DFLOAT, 8)", "_"2.70000000_"")
+
+statistics()

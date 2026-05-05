@@ -1,0 +1,675 @@
+)abbrev package SOLVEFOR PolynomialSolveByFormulas
+-- Examples of \spadtype{F} (fields with "^" : (%, Fraction Integer) -> %) are
+--     Expression Integer, Complex Float, RealClosure(K) and AlgebraicNumber
+-- If \spadtype{F} is Expression(RR), you should put \spadtype{RR} as
+-- the third argument to this package for simplification purposes.
+-- RealClosure(K) is unlikely to work here...
+++ Author: Stephen M. Watt, Barry Trager
+++ Description:
+++ This package factors the formulas out of the general solve code,
+++ allowing their recursive use over different domains.
+++ Care is taken to introduce few radicals so that radical extension
+++ domains can more easily simplify the results.
+
+PolynomialSolveByFormulas(UP, F, RR) : PSFcat == PSFdef where
+
+    UP : UnivariatePolynomialCategory F
+    F :  Field with "^": (%, Fraction Integer) -> %
+    RR : Join(PolynomialFactorizationExplicit, Comparable, CharacteristicZero)
+
+    L  ==> List
+
+    PSFcat == with
+        solve :      UP -> L F
+                ++ solve(u) \undocumented
+        particularSolution :  UP -> F
+                ++ particularSolution(u) \undocumented
+
+        linear :     UP -> L F
+                ++ linear(u) \undocumented
+        quadratic :  UP -> L F
+                ++ quadratic(u) \undocumented
+        cubic :      UP -> L F
+                ++ cubic(u) \undocumented
+        quartic :    UP -> L F
+                ++ quartic(u) \undocumented
+
+        -- Arguments give coefs from high to low degree.
+        linear :     (F, F)          -> L F
+                ++ linear(f, g) \undocumented
+        quadratic :  (F, F, F)       -> L F
+                ++ quadratic(f, g, h) \undocumented
+        cubic :      (F, F, F, F)    -> L F
+                ++ cubic(f, g, h, i) \undocumented
+        quartic :    (F, F, F, F, F) -> L F
+                ++ quartic(f, g, h, i, j) \undocumented
+
+        aLinear :    (F, F)          -> F
+                ++ aLinear(f, g) \undocumented
+        aQuadratic : (F, F, F)       -> F
+                ++ aQuadratic(f, g, h) \undocumented
+        aCubic :     (F, F, F, F)    -> F
+                ++ aCubic(f, g, h, j) \undocumented
+        aQuartic :   (F, F, F, F, F) -> F
+                ++ aQuartic(f, g, h, i, k) \undocumented
+
+    PSFdef == add
+
+        part(s : F) : F ==
+            s
+
+        -- if F is Expression(RR), then we can simplify "s^(1/2)" to
+        -- "a*b^(1/2)" by square-free factorization. Note that we should
+        -- the unit separately; and the sign of "a" is not important because
+        -- we will return both roots later.
+        sqrt2(s : F) : F ==
+            if F is Expression RR then
+                K ==> Kernel F
+                PP ==> SparseMultivariatePolynomial(RR, K)
+                res := froot(s, 2)$PolynomialRoots(IndexedExponents K, K, RR, PP, F)
+                res.coef * (res.radicand)^(1/res.exponent)
+            else
+                s^(1/2)
+
+        -----------------------------------------------------------------
+        -- Entry points and error handling
+        -----------------------------------------------------------------
+        cc ==> coefficient
+
+        -- local intsolve
+        intsolve(u : UP) : L(F) ==
+            u := (factorList squareFree u).1.factor
+            n := degree u
+            n = 1 => linear    (cc(u, 1), cc(u, 0))
+            n = 2 => quadratic (cc(u, 2), cc(u, 1), cc(u, 0))
+            n = 3 => cubic     (cc(u, 3), cc(u, 2), cc(u, 1), cc(u, 0))
+            n = 4 => quartic   (cc(u, 4), cc(u, 3), cc(u, 2), cc(u, 1), cc(u, 0))
+            error "All sqfr factors of polynomial must be of degree < 5"
+
+        solve u ==
+            ls := []$L(F)
+            for f in factorList squareFree u repeat
+               lsf := intsolve f.factor
+               for i in 1..(f.exponent) repeat ls := [: lsf, : ls]
+            ls
+
+        particularSolution u ==
+            u := (factorList squareFree u).1.factor
+            n := degree u
+            n = 1 => aLinear    (cc(u, 1), cc(u, 0))
+            n = 2 => aQuadratic (cc(u, 2), cc(u, 1), cc(u, 0))
+            n = 3 => aCubic     (cc(u, 3), cc(u, 2), cc(u, 1), cc(u, 0))
+            n = 4 => aQuartic   (cc(u, 4), cc(u, 3), cc(u, 2), cc(u, 1), cc(u, 0))
+            error "All sqfr factors of polynomial must be of degree < 5"
+
+        needDegree(n : Integer, u : UP) : Boolean ==
+            degree u = n => true
+            error concat("Polynomial must be of degree ", convert(n)@String)
+
+        needLcoef(cn : F) : Boolean ==
+            cn ~= 0 => true
+            error "Leading coefficient must not be 0."
+
+        needChar0() : Boolean ==
+            characteristic()$F = 0 => true
+            error "Formula defined only for fields of characteristic 0."
+
+        linear u ==
+            needDegree(1, u)
+            linear (coefficient(u, 1), coefficient(u, 0))
+
+        quadratic u ==
+            needDegree(2, u)
+            quadratic (coefficient(u, 2), coefficient(u, 1),
+                       coefficient(u, 0))
+
+        cubic u ==
+            needDegree(3, u)
+            cubic (coefficient(u, 3), coefficient(u, 2),
+                   coefficient(u, 1), coefficient(u, 0))
+
+        quartic u ==
+            needDegree(4, u)
+            quartic (coefficient(u, 4), coefficient(u, 3),
+                     coefficient(u, 2), coefficient(u, 1), coefficient(u, 0))
+
+        -----------------------------------------------------------------
+        -- The formulas
+        -----------------------------------------------------------------
+
+        -- local function for testing equality of radicals.
+        --  This function is necessary to detect at least some of the
+        --  situations like sqrt(9)-3 = 0 --> false.
+        equ(x : F, y : F) : Boolean ==
+            ( (recip(x-y)) case "failed" ) => true
+            false
+
+        linear(c1, c0) ==
+            needLcoef c1
+            [- c0/c1 ]
+
+        aLinear(c1, c0) ==
+            first linear(c1, c0)
+
+        quadratic(c2, c1, c0) ==
+            needLcoef c2; needChar0()
+            (c0 = 0) => cons(0$F, linear(c2, c1))
+            (c1 = 0) => [(-c0/c2)^(1/2), -(-c0/c2)^(1/2)]
+            D := sqrt2(c1^2 - 4*c2*c0)
+            [(-c1+D)/(2*c2), (-c1-D)/(2*c2)]
+
+        aQuadratic(c2, c1, c0) ==
+            needLcoef c2; needChar0()
+            (c0 = 0) => 0$F
+            (c1 = 0) => (-c0/c2)^(1/2)
+            D := part(c1^2 - 4*c2*c0)^(1/2)
+            (-c1+D)/(2*c2)
+
+        w3 : F := (-1 + (-3::F)^(1/2)) / 2::F
+
+        cubic(c3, c2, c1, c0) ==
+            needLcoef c3; needChar0()
+
+            -- case one root = 0, not necessary but keeps result small
+            (c0 = 0) => cons(0$F, quadratic(c3, c2, c1))
+            a1 := c2/c3;  a2 := c1/c3;  a3 := c0/c3
+
+            -- case x^3-a3 = 0, not necessary but keeps result small
+            (a1 = 0 and a2 = 0) =>
+                [ u*(-a3)^(1/3) for u in [1, w3, w3^2 ] ]
+
+            -- case x^3 + a1*x^2 + a1^2*x/3 + a3 = 0, the general for-
+            --   mula is not valid in this case, but solution is easy.
+            P := part(-a1/3::F)
+            equ(a1^2, 3*a2) =>
+              S := part((- a3 + (a1^3)/27::F)^(1/3))
+              [ P + S*u for u in [1, w3, w3^2] ]
+
+            -- general case
+            Q := part((3*a2 - a1^2)/9::F)
+            R := part((9*a1*a2 - 27*a3 - 2*a1^3)/54::F)
+            D := part(Q^3 + R^2)^(1/2)
+            S := part(R + D)^(1/3)
+            -- S = 0 is done in the previous case
+            [ P + S*u - Q/(S*u) for u in [1, w3, w3^2] ]
+
+        aCubic(c3, c2, c1, c0) ==
+            needLcoef c3; needChar0()
+            (c0 = 0) => 0$F
+            a1 := c2/c3;  a2 := c1/c3;  a3 := c0/c3
+            (a1 = 0 and a2 = 0) => (-a3)^(1/3)
+            P := part(-a1/3::F)
+            equ(a1^2, 3*a2) =>
+              S := part((- a3 + (a1^3)/27::F)^(1/3))
+              P + S
+            Q := part((3*a2 - a1^2)/9::F)
+            R := part((9*a1*a2 - 27*a3 - 2*a1^3)/54::F)
+            D := part(Q^3 + R^2)^(1/2)
+            S := part(R + D)^(1/3)
+            P + S - Q/S
+
+        quartic(c4, c3, c2, c1, c0) ==
+            needLcoef c4; needChar0()
+
+            -- case one root = 0, not necessary but keeps result small
+            (c0 = 0) => cons(0$F, cubic(c4, c3, c2, c1))
+            -- Make monic:
+            a1 := c3/c4; a2 := c2/c4; a3 := c1/c4; a4 := c0/c4
+
+            -- case x^4 + a4 = 0 <=> (x^2-sqrt(-a4))*(x^2+sqrt(-a4))
+            -- not necessary but keeps result small.
+            (a1 = 0 and a2 = 0 and a3 = 0) =>
+                append( quadratic(1, 0, (-a4)^(1/2)), _
+                        quadratic(1 , 0, -((-a4)^(1/2))) )
+
+            -- Translate w = x+a1/4 to eliminate a1:  w^4+p*w^2+q*w+r
+            p := part(a2-3*a1*a1/8::F)
+            q := part(a3-a1*a2/2::F + a1^3/8::F)
+            r := part(a4-a1*a3/4::F + a1^2*a2/16::F - 3*a1^4/256::F)
+            -- t0 := the cubic resolvent of x^3-p*x^2-4*r*x+4*p*r-q^2
+            -- The roots of the translated polynomial are those of
+            -- two quadratics. (What about rt=0 ?)
+            -- rt=0 can be avoided by picking a root ~= p of the cubic
+            -- polynomial above. This is always possible provided that
+            -- the input is squarefree. In this case the two other roots
+            -- are +(-) 2*r^(1/2).
+            if equ(q, 0)            -- this means p is a root
+              then t0 := part(2*(r^(1/2)))
+              else t0 := aCubic(1, -p, -4*r, 4*p*r - q^2)
+            rt    := part(t0 - p)^(1/2)
+            slist := append( quadratic( 1,  rt, (-q/rt + t0)/2::F ),
+                             quadratic( 1, -rt, ( q/rt + t0)/2::F ))
+            -- Translate back:
+            [s - a1/4::F for s in slist]
+
+        aQuartic(c4, c3, c2, c1, c0) ==
+            needLcoef c4; needChar0()
+            (c0 = 0) => 0$F
+            a1 := c3/c4; a2 := c2/c4; a3 := c1/c4; a4 := c0/c4
+            (a1 = 0 and a2 = 0 and a3 = 0) => (-a4)^(1/4)
+            p  := part(a2-3*a1*a1/8::F)
+            q  := part(a3-a1*a2/2::F + a1^2*a1/8::F)
+            r  := part(a4-a1*a3/4::F + a1^2*a2/16::F - 3*a1^4/256::F)
+            if equ(q, 0)
+              then t0 := part(2*(r^(1/2)))
+              else t0 := aCubic(1, -p, -4*r, 4*p*r - q^2)
+            rt := part(t0 - p)^(1/2)
+            s  := aQuadratic( 1,  rt, (-q/rt + t0)/2::F )
+            s - a1/4::F
+
+)abbrev package DEGRED DegreeReductionPackage
+++ This package \undocumented{}
+DegreeReductionPackage(R1, R2) : Cat == Capsule where
+    R1 : Ring
+    R2 : Join(Comparable, IntegralDomain)
+
+    I    ==> Integer
+    PI   ==> PositiveInteger
+    UP   ==> SparseUnivariatePolynomial
+    RE   ==> Expression R2
+
+    Cat == with
+        reduce :  UP R1    ->  Record(pol : UP R1, deg : PI)
+          ++ reduce(p) returns [q, d] such that p(x) = q(x^d)
+          ++ and d is maximal with this property
+        expand :  (RE, PI) ->  List RE
+          ++ expand(f, n) returns list of all solutions y to
+          ++ equation y^n = f
+        cyclotomic_roots :  PI -> List(RE)
+          ++ cyclotomic_roots(n) returns list of roots of
+          ++ n-th cyclotomic polynomial.
+
+    Capsule == add
+
+
+        degrees(u : UP R1) : List Integer ==
+            l : List Integer := []
+            while u ~= 0 repeat
+              l := concat(degree u, l)
+              u := reductum u
+            l
+        reduce(u : UP R1) ==
+            g := "gcd"/[d for d in degrees u]
+            u := divideExponents(u, g::PI)::(UP R1)
+            [u, g::PI]
+
+        import from Fraction Integer
+
+        rootOfUnity(j : I, n : I) : RE ==
+            j = 0 => 1
+            arg : RE := 2*j*pi()/(n::RE)
+            cos arg + (-1)^(1/2) * sin arg
+
+        even_part(gp : PI) : PI ==
+            g : NonNegativeInteger := gp
+            res : PI := 1
+            while even?(g) repeat
+                g := g quo 2
+                res := res*2
+            res
+
+        expand(s, g) ==
+            g = 1 => [s]
+            sr :=
+                s = -1 =>
+                    g2 := even_part(g)
+                    g2 = 1 => s
+                    s^(1/g2)
+                s^(1/g)
+            [rootOfUnity(i, g)*sr for i in 0..g-1]
+
+        cyclotomic_roots(n) ==
+            [rootOfUnity(i, n) for i in 0..(n - 1) | gcd(i, n) = 1]
+
+
+)abbrev package SOLVERAD RadicalSolvePackage
+++ Author: P.Gianni
+++ Date Created: Summer 1990
+++ Basic Functions:
+++ Related Constructors: SystemSolvePackage, FloatingRealPackage,
+++ FloatingComplexPackage
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ This package tries to find solutions
+++ expressed in terms of radicals for systems of equations
+++ of rational functions with coefficients in an integral domain R.
+RadicalSolvePackage(R) : Cat == Capsule where
+    R   :  Join(PolynomialFactorizationExplicit, Comparable,
+                CharacteristicZero)
+    PI ==> PositiveInteger
+    NNI==> NonNegativeInteger
+    Z  ==> Integer
+    B  ==> Boolean
+    ST ==> String
+    PR ==> Polynomial R
+    UP ==> SparseUnivariatePolynomial PR
+    RF ==> Fraction PR
+    RE ==> Expression R
+    EQ ==> Equation
+    SY ==> Symbol
+    SU ==> SuchThat(List RE, List Equation RE)
+    SUP==> SparseUnivariatePolynomial
+    L  ==> List
+    P  ==> Polynomial
+
+    SOLVEFOR ==> PolynomialSolveByFormulas(SUP RE, RE, R)
+    UPF2     ==> SparseUnivariatePolynomialFunctions2(PR, RE)
+
+    Cat ==> with
+
+        radicalSolve :     (RF, SY)      -> L EQ RE
+          ++ radicalSolve(rf, x) finds the solutions expressed in terms of
+          ++ radicals of the equation rf = 0 with respect to the symbol x,
+          ++ where rf is a rational function.
+        radicalSolve :       RF         -> L EQ RE
+          ++ radicalSolve(rf) finds the solutions expressed in terms of
+          ++ radicals of the equation rf = 0, where rf is a
+          ++ univariate rational function.
+        radicalSolve :    (EQ RF, SY)    -> L EQ RE
+          ++ radicalSolve(eq, x) finds the solutions expressed in terms of
+          ++ radicals of the equation of rational functions eq
+          ++ with respect to the symbol x.
+        radicalSolve :      EQ RF       -> L EQ RE
+          ++ radicalSolve(eq) finds the solutions expressed in terms of
+          ++ radicals of the equation of rational functions eq
+          ++ with respect to the unique symbol x appearing in eq.
+        radicalSolve :    (L RF, L SY)   -> L L EQ RE
+          ++ radicalSolve(lrf, lvar) finds the solutions expressed in terms of
+          ++ radicals of the system of equations lrf = 0 with
+          ++ respect to the list of symbols lvar,
+          ++ where lrf is a list of rational functions.
+        radicalSolve :       L RF       -> L L EQ RE
+          ++ radicalSolve(lrf) finds the solutions expressed in terms of
+          ++ radicals of the system of equations lrf = 0, where lrf is a
+          ++ list of rational functions.
+        radicalSolve :   (L EQ RF, L SY) -> L L EQ RE
+          ++ radicalSolve(leq, lvar) finds the solutions expressed in terms of
+          ++ radicals of the system of equations of rational functions leq
+          ++ with respect to the list of symbols lvar.
+        radicalSolve :     L EQ RF      -> L L EQ RE
+          ++ radicalSolve(leq) finds the solutions expressed in terms of
+          ++ radicals of the system of equations of rational functions leq
+          ++ with respect to all symbols appearing in leq.
+        radicalRoots :      (RF, SY)     -> L RE
+          ++ radicalRoots(rf, x) finds the roots expressed in terms of radicals
+          ++ of the rational function rf with respect to the symbol x.
+        radicalRoots :    (L RF, L SY)   -> L L RE
+          ++ radicalRoots(lrf, lvar) finds the roots expressed in terms of
+          ++ radicals of the list of rational functions lrf
+          ++ with respect to the list of symbols lvar.
+        contractSolve :    (EQ RF, SY)  -> SU
+          ++ contractSolve(eq, x) finds the solutions expressed in terms of
+          ++ radicals of the equation of rational functions eq
+          ++ with respect to the symbol x.  The result contains new
+          ++ symbols for common subexpressions in order to reduce the
+          ++ size of the output.
+        contractSolve :    (RF, SY)     -> SU
+          ++ contractSolve(rf, x) finds the solutions expressed in terms of
+          ++ radicals of the equation rf = 0 with respect to the symbol x,
+          ++ where rf is a rational function. The result contains  new
+          ++ symbols for common subexpressions in order to reduce the
+          ++ size of the output.
+        cyclotomic_case? :  UP -> Union(Integer, "failed")
+          ++ cyclotomic_case?(u) should be local but conditional
+        radical_solve : UP -> Union(List(RE), "failed")
+          ++ radical_solve(p) should be local but conditional
+    Capsule ==> add
+        import from DegreeReductionPackage(PR, R)
+        import from SOLVEFOR
+
+        SideEquations : List EQ RE := []
+        ContractSoln :  B := false
+
+        ---- Local Function Declarations ----
+        solveInner : (PR, SY, B) -> SU
+        linear :    UP -> List RE
+        quadratic : UP -> List RE
+        cubic :     UP -> List RE
+        quartic :   UP -> List RE
+        rad :       PI -> RE
+        wrap :      RE -> RE
+        New :       RE -> RE
+        makeEq : (List RE, L SY) -> L EQ RE
+        select :    L L RE      -> L L RE
+        isGeneric? :  (L PR, L SY)  ->  Boolean
+        findZeros   :   (L PR, L SY) -> L L RE
+
+
+        New s ==
+            s = 0 => 0
+            S := new()$Symbol ::PR::RF::RE
+            SideEquations := append([S = s], SideEquations)
+            S
+
+        linear u    == [(-coefficient(u, 0))::RE /(coefficient(u, 1))::RE]
+        quadratic u == quadratic(map(coerce, u)$UPF2)$SOLVEFOR
+        cubic u     == cubic(map(coerce, u)$UPF2)$SOLVEFOR
+        quartic u   == quartic(map(coerce, u)$UPF2)$SOLVEFOR
+        rad n       == n::Z::RE
+        wrap s      == (ContractSoln => New s; s)
+
+
+        ---- Exported Functions ----
+
+        sol_lin1(p : PR, vv : SY) : RE ==
+            (-coefficient(univariate(p, vv), 0)::RE)/
+              (leadingCoefficient univariate(p, vv))::RE
+
+        -- find the zeros of components in "generic" position --
+        find_gen_zeros(rlp : L PR, rlv : L SY, res : L L RE) : L L RE ==
+            pp := first(rlp)
+            rlp := rest(rlp)
+            v := first(rlv)
+            rlv := rest(rlv)
+            for r in reverse(radicalRoots(pp::RF, v)) repeat
+                res1 := [eval(sol_lin1(p, vv), kernel(v)@Kernel(RE), r)
+                           for vv in rlv for p in rlp]
+                res := cons(reverse(cons(r, res1)), res)
+            res
+
+        find_ngen_zeros(rlp : L PR, rlv : L SY, res : L L RE) : L L RE ==
+            for res1 in findZeros(rlp, rlv) repeat
+                res := cons(res1, res)
+            res
+
+        findZeros(rlp : L PR, rlv : L SY) : L L RE ==
+         parRes := [radicalRoots(p::RF, v) for p in rlp for v in rlv]
+         parRes := select parRes
+         res : L L RE := []
+         res1 : L RE
+         for par in parRes repeat
+           res1 := [par.first]
+           lv1 : L Kernel(RE) := [kernel rlv.first]
+           rlv1 := rlv.rest
+           p1 := par.rest
+           while p1 ~= [] repeat
+             res1 := cons(eval(p1.first, lv1, res1), res1)
+             p1 := p1.rest
+             lv1 := cons(kernel rlv1.first, lv1)
+             rlv1 := rlv1.rest
+           res := cons(res1, res)
+         res
+
+        radicalSolve(pol : RF, v : SY) ==
+          [equation(v::RE, r) for r in radicalRoots(pol, v)]
+
+        radicalSolve(p : RF) ==
+          zero? p =>
+             error "equation is always satisfied"
+          lv := removeDuplicates
+             concat(variables numer p, variables denom p)
+          empty? lv => error "inconsistent equation"
+          #lv>1 => error "too many variables"
+          radicalSolve(p, lv.first)
+
+        radicalSolve(eq : EQ RF) ==
+          radicalSolve(lhs eq -rhs eq)
+
+        radicalSolve(eq : EQ RF, v : SY) ==
+           radicalSolve(lhs eq - rhs eq, v)
+
+        radicalRoots(lp : L RF, lv : L SY) ==
+            -- Would be better to find solution
+            #lp = 1 and #lv > 1 =>
+                error "system does not have a finite number of solutions"
+            parRes := triangularSystems(lp, lv)$SystemSolvePackage(R)
+            rlv := reverse lv
+            gen_res : L L RE := []
+            ngen_res : L L RE := []
+            rpRes := [reverse res for res in parRes]
+            for pres in rpRes repeat
+                if isGeneric?(pres, rlv) then
+                    gen_res := find_gen_zeros(pres, rlv, gen_res)
+                else
+                    ngen_res := find_ngen_zeros(pres, rlv, ngen_res)
+            append(reverse(ngen_res), reverse(gen_res))
+
+        radicalSolve(lp : L RF, lv : L SY) ==
+          [makeEq(lres, lv) for lres in radicalRoots(lp, lv)]
+
+        radicalSolve(lp : L RF) ==
+          lv := "setUnion"/[setUnion(variables numer p,variables denom p)
+                          for p in lp]
+          [makeEq(lres, lv) for lres in radicalRoots(lp, lv)]
+
+        radicalSolve(le : L EQ RF, lv : L SY) ==
+          lp := [rhs p -lhs p for p in le]
+          [makeEq(lres, lv) for lres in radicalRoots(lp, lv)]
+
+        radicalSolve(le : L EQ RF) ==
+          lp := [rhs p -lhs p for p in le]
+          lv := "setUnion"/[setUnion(variables numer p,variables denom p)
+                          for p in lp]
+          [makeEq(lres, lv) for lres in radicalRoots(lp, lv)]
+
+        contractSolve(eq : EQ RF, v : SY)==
+           solveInner(numer(lhs eq - rhs eq), v, true)
+
+        contractSolve(pq : RF, v : SY) == solveInner(numer pq, v, true)
+
+        radicalRoots(pq : RF, v : SY) == lhs solveInner(numer pq, v, false)
+
+
+       -- test if the ideal is radical in generic position --
+        isGeneric?(rlp : L PR, rlv : L SY) : Boolean ==
+          "and"/[degree(f,x)=1 for f in rest rlp  for x in rest rlv]
+
+        ---- select  the univariate factors
+        select(lp : L L RE) : L L RE ==
+          lp=[] => list []
+          [:[cons(f, lsel) for lsel in select lp.rest] for f in lp.first]
+
+        ---- Local Functions ----
+       -- construct the equation
+        makeEq(nres : L RE, lv : L SY) : L EQ RE ==
+          [equation(x :: RE, r) for x in lv for r in nres]
+
+        if R has RetractableTo(Integer) then
+
+            cyclotomic_case?(u : UP) : Union(Integer, "failed") ==
+                iu : SparseUnivariatePolynomial(Integer) := 0
+                while not(u = 0) repeat
+                    cp := leadingCoefficient(u)
+                    not(ground?(cp)) => return "failed"
+                    c := ground(cp)
+                    icu := retractIfCan(c)@Union(Integer, "failed")
+                    icu case "failed" => return "failed"
+                    iu := iu + monomial(icu@Integer, degree(u))
+                    u := reductum(u)
+                cyclotomic?(iu)$CyclotomicUtilities
+
+        else
+
+            cyclotomic_case?(u : UP) : Union(Integer, "failed") == "failed"
+
+        if R has GcdDomain and R has RetractableTo(Integer) and
+           R has LinearlyExplicitOver(Integer) then
+
+            radical_solve(p : UP) : Union(List(RE), "failed") ==
+                radical_solve(map(coerce, p)$UPF2)$RootUtilities(R, RE)
+
+        else
+
+            radical_solve(p : UP) : Union(List(RE), "failed") == "failed"
+
+        solveInner(pq : PR, v : SY, contractFlag : B) ==
+            SideEquations := []
+            ContractSoln  := contractFlag
+            t := reduce(univariate(pq, v))
+            u := t.pol
+            (degree(u) = 1 and
+                    leadingCoefficient(u) = -coefficient(u, 0)) =>
+                [expand(1$RE, t.deg), []]
+            (degree(u) = 1 and
+                    leadingCoefficient(u) = coefficient(u, 0)) =>
+                [expand(-1$RE, t.deg), []]
+
+            lfactors := factorList
+               (factor pq)$MultivariateFactorize(SY, IndexedExponents SY, R, PR)
+
+            constants :  List PR     := []
+            unsolved :   List PR     := []
+            solutions :  List RE     := []
+
+            for f in lfactors repeat
+                ff := f.factor
+                not member?(v, variables (ff)) =>
+                    constants := cons(ff, constants)
+                u := univariate(ff, v)
+                t := reduce u
+                u := t.pol
+                n := degree u
+                l : List RE :=
+                    n = 1 => linear u
+                    n = 2 => quadratic u
+                    (iu := cyclotomic_case?(u)) case Integer =>
+                        T0 := cyclotomic_roots(t.deg*iu@Integer::PI)
+                        for i in 1..f.exponent repeat
+                            solutions := append(T0, solutions)
+                        []
+                    (lu := radical_solve(u)) case List(RE) => lu@List(RE)
+                    n = 3 => cubic u
+                    n = 4 => quartic u
+                    unsolved := cons(ff, unsolved)
+                    []
+                for s in l repeat
+                    if t.deg > 1 then s := wrap s
+                    T0 := expand(s, t.deg)
+                    for i in 1..f.exponent repeat
+                        solutions := append(T0, solutions)
+                    re := SideEquations
+            [solutions, SideEquations]$SU
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

@@ -1,0 +1,28 @@
+Function: algisisom
+Section: algebras
+C-Name: algisisom
+Prototype: iGGDG
+Help: algisisom(al,al2,{pl}): tests whether the central simple algebras al and
+ al2 are isomorphic. If pl is set, test isomorphism locally at the place pl
+ instead.
+Doc: Given central simple algebras \var{al} and \var{al2} output by
+ \tet{alginit} and defined over the same number field~$K$, tests
+ whether~\var{al} and \var{al2} are isomorphic as~$K$-algebras.
+ If \var{pl} is set, it should be a prime ideal of~$K$ or an integer between~$1$
+ and~$r_{1}+r_{2}$, and in that case tests whether \var{al} and \var{al2} are
+ locally isomorphic at the place \var{pl} instead.
+ \bprog
+ ? nf = nfinit(y^2-2);
+ ? al = alginit(nf, [1+y, -7]);
+ ? al2 = alginit(nf, [-1, 2*y-1]);
+ ? al3 = alginit(nf, [1-y, -7]);
+ ? algisisom(al,al2)
+ % = 1
+ ? algisisom(al,al3) \\ isomorphic over Q but not as K-algebras
+ % = 0
+ ? pr = idealprimedec(nf,2)[1];
+ ? algisisom(al,al3,pr)
+ % = 1 \\ isomorphic locally at the prime ideal pr
+ ? algisisom(al,al3,1)
+ % = 0 \\ not isomorphic locally at the first place at infinity
+ @eprog

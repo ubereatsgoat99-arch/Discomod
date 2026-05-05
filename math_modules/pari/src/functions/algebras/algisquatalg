@@ -1,0 +1,16 @@
+Function: algisquatalg
+Section: algebras
+C-Name: algisquatalg
+Prototype: G
+Help: algisquatalg(al): returns [a,b] if al was constructed as the quaternion
+ algebra (a,b)_F, and 0 otherwise.
+Doc: Given a central simple algebra \var{al} over a field $F$, output by
+ \tet{alginit}, returns the \typ{VEC} $[a,b]$ if \var{al} was constructed as a
+ quaternion algebra~$(a,b)_F$, and~$0$ otherwise.
+ \bprog
+ ? nf = nfinit(y^2-2);
+ ? pr = idealprimedec(nf,2)[1];
+ ? al = alginit(nf, [[pr],[1,0]]); \\ quaternion algebra from ramification
+ ? algisquatalg(al)
+ % = [y + 1, y + 1]
+ @eprog

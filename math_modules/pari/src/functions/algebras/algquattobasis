@@ -1,0 +1,19 @@
+Function: algquattobasis
+Section: algebras
+C-Name: algquattobasis
+Prototype: GG
+Help: algquattobasis(al,x): transforms the quaternion x expressed on the basis
+ (1,i,j,ij) to a column vector on the integral basis of the quaternion algebra al.
+Doc: Given an element \var{x} in the quaternion algebra \var{al} output by
+ \tet{alginit}, expressed on the basis~$(1,i,j,ij)$, transforms it to a column
+ vector on the integral basis of \var{al}. This function is provided for
+ convenience, as algebra functions do not support elements represented on this
+ basis. This is the inverse function of \tet{algbasistoquat}.
+ \bprog
+ ? nf = nfinit(y^2+1);
+ ? alg = alginit(nf, [2,3*y+1]);
+ ? algquattobasis(alg,[1,2,y,0]~)
+ % = [1, -1, 1, -2, -2, 2, 0, 0]~
+ ? algsqr(alg,algquattobasis(alg,[0,1,0,0]~)) \\ i^2==2
+ % = [2, 0, 0, 0, 0, 0, 0, 0]~
+ @eprog

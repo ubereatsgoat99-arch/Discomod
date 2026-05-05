@@ -1,0 +1,11 @@
+A = [4,3]~; H = [3,1; 0,2];
+matmodhnf(A, H)
+R = matmodhnf(A, H, &Q); [Q,R]
+
+matmodhnf([4, 3], H)
+matmodhnf(A, [3,2])
+R = matmodhnf([4, 3], H, &Q); [Q,R]
+
+B = [5,6; 1,2];
+matmodhnf(B, H)
+R = matmodhnf(B, H, &Q); [Q,R]

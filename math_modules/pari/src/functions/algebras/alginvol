@@ -1,0 +1,17 @@
+Function: alginvol
+Section: algebras
+C-Name: alginvol
+Prototype: DGDG
+Help: alginvol({al},{x}): element s(x) where s is the involution stored in al
+ (Hamilton quaternions if omitted).
+Doc: Given an element $x$ in \var{al} (Hamilton quaternions if omitted) with
+ stored involution~$s$, computes $s(x)$ in the algebra \var{al}.
+ If~$x$ is omitted, returns the matrix of~$s$.
+ For quaternion algebras, the stored involution is the quaternionic conjugation.
+ \bprog
+ ? al = alginit(nfinit(y), [-1,-1]);
+ ? a = algquattobasis(al, [1,2,3,4]~);
+ ? b = alginvol(al, a);
+ ? algbasistoquat(al, b)
+ % = [1, -2, -3, -4]~
+ @eprog

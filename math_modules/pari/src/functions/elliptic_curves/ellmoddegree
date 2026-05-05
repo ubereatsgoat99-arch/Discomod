@@ -1,0 +1,23 @@
+Function: ellmoddegree
+Section: elliptic_curves
+C-Name: ellmoddegree
+Prototype: G
+Help: ellmoddegree(e): e being an elliptic curve defined over Q output by
+ ellinit, compute the modular degree of e divided by the square of the
+ Manin constant.
+Doc: $e$ being an elliptic curve defined over $\Q$ output by \kbd{ellinit},
+ compute the modular degree of $e$ divided by the square of
+ the Manin constant $m$, which can be computed with \kbd{ellmaninconstant}.
+ In the vast majority of case, $m=1$.
+ \bprog
+ ? E = ellinit("11a1");
+ ? d = ellmoddegree(E); m = ellmaninconstant(E); [d,m,d*m^2]
+ %2 = [1,1,1]
+ ? E = ellinit("11a2");
+ ? d = ellmoddegree(E); m = ellmaninconstant(E); [d,m,d*m^2]
+ %4 = [5,1,5]
+ ? E = ellinit("11a3");
+ ? d = ellmoddegree(E); m = ellmaninconstant(E); [d,m,d*m^2]
+ %6 = [1/5,5,5]
+ @eprog
+ (\kbd{11a3} is the only known curve with Manin constant $\geq 5$).

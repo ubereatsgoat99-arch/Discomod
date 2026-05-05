@@ -1,0 +1,38 @@
+randmat(N)=
+{
+  my(M);
+  until(matdet(M),M=matrix(2,2,i,j,random(N)));
+  M;
+}
+
+test()=
+{
+  nf = nfinit(a^2+a+1);
+  my(V = [ [x^3-x, 8, 8], [x^4-1, 4, 4],
+           [3*x^6 + 15*x^5 - 2*x^4 + 1/2*x^3 - 12*x^2 + x - 1, 2, 2],
+           [4*x^6 - x^4 - 1/2*x^2 + 3, 4, 4],
+           [x^6 + x, 2, 2],
+           [x^5 - 13*x^3 + x, 4, 4],
+           [x^6 + 1/2*x^3 + 1, 4, 12],
+           [x^6 + 1, 8, 24],
+           [x^5 + x, 4, 4],
+           [x^8+3*x^4+1, 8, 8],
+           [x^7+3*x^4+x, 4, 12],
+           [x^12-33*x^8-33*x^4+1, 8, 8]]);
+
+    for(i=1,#V,
+      my(A,S,g,h,C1,C2,[f,n, n2]=V[i]);
+      g = hyperellchangecurve(f,[1, randmat(100),   random(100*x^(poldegree(f)\2))]);
+      h = hyperellchangecurve(f,[1, randmat(-100), random(-100*x^(poldegree(f)\2))]);
+      A = hyperellauto(f);
+      B = hyperellauto(f,nf);
+      S = hyperellisisom(g,h);
+      f = [f, 0];
+      C1 = apply(s->hyperellchangecurve(f, s)==f, A);
+      C2 = apply(s->hyperellchangecurve(g, s)==h, S);
+      C3 = apply(s->hyperellchangecurve(f, s)==f, B);
+      if (#C1!=n || #C2!=#C1 || #C3!=n2 ||
+         hammingweight(C1)!=#C1 || hammingweight(C2)!=#C2 || hammingweight(C3)!=#C3, error(f));
+    );
+}
+test();

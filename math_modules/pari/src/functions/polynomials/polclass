@@ -1,0 +1,203 @@
+Function: polclass
+Section: polynomials
+C-Name: polclass
+Prototype: GD0,L,Dn
+Help: polclass(D,{inv=0},{x='x}): return a polynomial generating the
+ Hilbert class field of Q(sqrt(D)) for the discriminant D<0.
+Doc:
+ Return a polynomial in $\Z[x]$ generating the Hilbert class field for the
+ imaginary quadratic discriminant $D$.  If $inv$ is 0 (the default),
+ use the modular $j$-function and return the classical Hilbert polynomial,
+ otherwise use a class invariant. The following invariants correspond to
+ the different values of $inv$, where $f$ denotes Weber's function
+ \kbd{weber}, $w_{p,q}$ denotes the double eta quotient given by
+ $w_{p,q} = \dfrac{ \eta(x/p)\*\eta(x/q) }{ \eta(x)\*\eta(x/{pq}) }$ and
+ $A_p$ denotes the Atkin modular invariant of level $p$.
+
+ The invariants $w_{p,q}$ are not allowed unless they satisfy the following
+ technical conditions ensuring they do generate the Hilbert class
+ field and not a strict subfield:
+
+ \item if $p\neq q$, we need them both non-inert and prime to the conductor of
+ $\Z[\sqrt{D}]$. Let $P, Q$ be prime ideals  above $p$ and $q$; if both are
+ unramified, we further require that $P^{\pm 1} Q^{\pm 1}$ be all distinct in
+ the class group of $\Z[\sqrt{D}]$; if both are ramified, we require that $PQ
+ \neq 1$ in the class group.
+
+ \item if $p = q$, we want it split and prime to the conductor and
+ the prime ideal above it must have order $\neq 1, 2, 4$ in the class group.
+
+ \noindent Invariants are allowed under the additional conditions on $D$
+ listed below.
+
+ \item 0 : $j$, no condition on $D$;
+
+ \item 1 : $f$, $D = 1 \mod 8$ and $D = 1,2 \mod 3$;
+
+ \item 2 : $f^{2}$, $D = 1 \mod 8$ and $D = 1,2 \mod 3$;
+
+ \item 3 : $f^{3}$, $D = 1 \mod 8$;
+
+ \item 4 : $f^{4}$, $D = 1 \mod 8$ and $D = 1,2 \mod 3$;
+
+ \item 5 : $\gamma_{2}= j^{1/3}$, $D = 1,2 \mod 3$;
+
+ \item 6 : $w_{2,3}$, $D = 1 \mod 8$ and $D = 1,2 \mod 3$;
+
+ \item 8 : $f^{8}$, $D = 1 \mod 8$ and $D = 1,2 \mod 3$;
+
+ \item 9 : $w_{3,3}$, $D = 1 \mod 2$ and $D = 1,2 \mod 3$;
+
+ \item 10: $w_{2,5}$, $D \neq 60 \mod 80$ and $D = 1,2 \mod 3$;
+
+ \item 14: $w_{2,7}$, $D = 1 \mod 8$;
+
+ \item 15: $w_{3,5}$, $D = 1,2 \mod 3$;
+
+ \item 21: $w_{3,7}$, $D = 1 \mod 2$ and $21$ does not divide $D$
+
+ \item 23: $w_{2,3}^{2}$, $D = 1,2 \mod 3$;
+
+ \item 24: $w_{2,5}^{2}$, $D = 1,2 \mod 3$;
+
+ \item 26: $w_{2,13}$, $D \neq 156 \mod 208$;
+
+ \item 27: $w_{2,7}^{2}$, $D\neq 28 \mod 112$;
+
+ \item 28: $w_{3,3}^{2}$, $D = 1,2 \mod 3$;
+
+ \item 35: $w_{5,7}$, $D = 1,2 \mod 3$;
+
+ \item 39: $w_{3,13}$, $D = 1 \mod 2$ and $D = 1,2 \mod 3$;
+
+ \item 103: $A_3$, $D = 0,1 \mod 3$, $D \neq 0 \mod 9$, and $D < -36$, or
+ $D=-15, -23$ or $-24$;
+
+ \item 105: $A_5$, $D = 0,1,4 \mod 5$, $D \neq 0 \mod 25$, except
+ $D = -4, -11, -16, -19, -20, -24, -36$, $-51, -64, -84, -91, -96, -99$.
+
+ \item 107: $A_7$, $(D\mid 7)\geq 0$, $D \neq 0 \mod 49$, except
+ $D = -3$, $-7$, $-12$, $-19$, $-20$, $-24$, $-27$, $-28$, $-40$,
+   $-48$, $-52$, $-75$, $-96$, $-115$, $-132$, $-160$, $-171$,
+   $-180$, $-187$, $-192$, $-195$.
+
+ \item 111: $A_{11}$, $(D\mid 11)\geq 0$, $D \neq 0 \mod 121$, $h(D)\geq 2$,
+ except
+ $D = -24$, $-32$, $-35$, $-40$, $-44$, $-51$, $-52$, $-72$,
+   $-84$, $-96$, $-112$, $-120$, $-123$, $-160$, $-195$, $-228$,
+   $-259$, $-288$, $-315$, $-340$, $-384$, $-403$,
+   $-420$, $-435$, $-448$, $-459$, $-468$, $-475$, $-480$, $-483$.
+
+ \item 113: $A_{13}$, $(D\mid 13)\geq 0$, $D \neq 0 \mod 169$, $h(D)\geq 2$,
+ except
+ $D = -35$, $-36$, $-40$, $-48$, $-51$, $-52$, $-64$, $-68$,
+   $-75$, $-88$, $-100$, $-120$, $-144$, $-147$, $-160$, $-168$,
+   $-192$, $-235$, $-276$, $-315$, $-352$, $-387$, $-420$, $-451$,
+   $-480$, $-532$, $-555$, $-576$, $-595$, $-612$, $-627$, $-640$,
+   $-651$, $-660$, $-667$, $-672$, $-675$.
+
+ \item 117: $A_{17}$, $(D\mid 17)\geq 0$, $D \neq 0 \mod 289$, $h(D)\geq 2$ ,
+ except
+ $D = -15$, $-32$, $-35$, $-36$, $-52$, $-59$, $-60$, $-64$, $-68$,
+   $-72$, $-84$, $-100$, $-115$, $-120$, $-123$, $-128$, $-132$,
+   $-168$, $-195$, $-208$, $-240$, $-256$, $-264$, $-280$, $-288$,
+   $-315$, $-372$, $-427$, $-480$, $-531$, $-580$, $-627$, $-672$,
+   $-715$, $-756$, $-795$, $-832$, $-900$, $-931$, $-960$, $-987$,
+   $-1012$, $-1035$, $-1056$, $-1075$, $-1092$, $-1107$, $-1120$,
+   $-1131$, $-1140$, $-1147$, $-1152$, $-1155$.
+
+ \item 119: $A_{19}$, $(D\mid 19)\geq 0$, $D \neq 0 \mod 361$, $h(D)\geq 3$,
+ except
+ $D = -76$, $-84$, $-116$, $-132$, $-136$, $-155$, $-160$, $-192$,
+   $-219$, $-240$, $-280$, $-288$, $-312$, $-336$, $-352$, $-355$,
+   $-360$, $-420$, $-483$, $-544$, $-603$, $-660$, $-715$, $-768$,
+   $-819$, $-868$, $-915$, $-960$, $-1003$, $-1044$, $-1120$, $-1155$,
+   $-1188$, $-1219$, $-1248$, $-1275$, $-1300$, $-1323$, $-1344$,
+   $-1363$, $-1380$, $-1395$, $-1408$, $-1419$, $-1428$, $-1435$,
+   $-1440$, $-1443$.
+
+ \item 123: $A_{23}$, $(D\mid 23)\geq 0$, $D \neq 0 \mod 529$, $D = -115$ or
+ $h(D)\geq 3$, except
+ $D = -23$, $-56$, $-76$, $-83$, $-84$, $-92$, $-120$, $-132$, $-160$,
+   $-168$, $-180$, $-195$, $-203$, $-224$, $-228$, $-240$, $-304$, $-352$,
+   $-360$, $-408$, $-435$, $-448$, $-480$, $-504$, $-516$, $-520$, $-528$,
+   $-595$, $-672$, $-747$, $-820$, $-891$, $-960$, $-1027$, $-1092$, $-1155$,
+   $-1216$, $-1275$, $-1332$, $-1387$, $-1440$, $-1491$, $-1540$, $-1632$,
+   $-1675$, $-1716$, $-1755$, $-1792$, $-1827$, $-1860$, $-1891$, $-1920$,
+   $-1947$, $-1972$, $-1995$, $-2016$, $-2035$, $-2052$, $-2067$, $-2080$,
+   $-2091$, $-2100$, $-2107$, $-2112$, $-2115$.
+
+ \item 129: $A_{29}$, $(D\mid 29)\geq 0$, $D \neq 0 \mod 841$, $D = -232$ or
+ $h(D)\geq 3$, except
+ $D = -80$, $-96$, $-107$, $-116$, $-120$, $-132$, $-168$, $-180$,
+   $-196$, $-204$, $-208$, $-216$, $-228$, $-260$, $-312$, $-315$, $-320$,
+   $-339$, $-352$, $-355$, $-371$, $-372$, $-400$, $-448$, $-480$, $-552$,
+   $-555$, $-616$, $-660$, $-672$, $-720$, $-760$, $-763$, $-792$, $-816$,
+   $-832$, $-840$, $-864$, $-963$, $-1060$, $-1155$, $-1248$, $-1339$, $-1428$,
+   $-1515$, $-1600$, $-1683$, $-1764$, $-1843$, $-1920$, $-1995$, $-2068$,
+   $-2139$, $-2208$, $-2275$, $-2340$, $-2403$, $-2464$, $-2580$, $-2635$,
+   $-2688$, $-2739$, $-2788$, $-2835$, $-2880$, $-2923$, $-2964$, $-3003$,
+   $-3040$, $-3075$, $-3108$, $-3139$, $-3168$, $-3195$, $-3220$, $-3243$,
+   $-3264$, $-3283$, $-3300$, $-3315$, $-3328$, $-3339$, $-3348$, $-3355$,
+   $-3360$, $-3363$.
+
+ \item 131: $A_{31}$, $(D\mid 31)\geq 0$, $D \neq 0 \mod 961$, $D = -403$ or
+ $h(D)\geq 3$, except
+ $D = -31$, $-55$, $-84$, $-96$, $-104$, $-108$, $-120$, $-124$, $-168$,
+   $-184$, $-192$, $-212$, $-220$, $-228$, $-240$, $-244$, $-275$, $-291$,
+   $-336$, $-340$, $-352$, $-363$, $-387$, $-395$, $-416$, $-420$, $-432$,
+   $-480$, $-520$, $-595$, $-600$, $-672$, $-708$, $-736$, $-792$, $-819$,
+   $-840$, $-880$, $-912$, $-928$, $-936$, $-952$, $-960$, $-1035$, $-1140$,
+   $-1243$, $-1344$, $-1443$, $-1540$, $-1635$, $-1728$, $-1819$, $-1908$,
+   $-1995$, $-2080$, $-2163$, $-2244$, $-2323$, $-2400$, $-2475$, $-2548$,
+   $-2619$, $-2688$, $-2755$, $-2820$, $-2944$, $-3003$, $-3060$, $-3115$,
+   $-3168$, $-3219$, $-3268$, $-3315$, $-3360$, $-3403$, $-3444$, $-3483$,
+   $-3520$, $-3555$, $-3588$, $-3619$, $-3648$, $-3675$, $-3700$, $-3723$,
+   $-3744$, $-3763$, $-3780$, $-3795$, $-3808$, $-3819$, $-3828$, $-3835$,
+   $-3840$, $-3843$.
+
+ The algorithm for computing the polynomial does not use the floating point
+ approach, which would evaluate a precise modular function in a precise
+ complex argument. Instead, it relies on (faster) Chinese remainders
+ modulo small primes, in which the class invariant is only defined
+ algebraically by the modular polynomial relating the modular function to $j$.
+ Any of the several roots of the modular polynomial may actually
+ be the class invariant and more precise assertions cannot be made.
+
+ For instance, while \kbd{polclass(D)} returns the minimal polynomial of
+ $j(\tau)$ with $\tau$ (any) quadratic integer for the discriminant $D$,
+ the polynomial returned by \kbd{polclass(D, 5)} can be the minimal polynomial
+ of any of $\gamma_{2} (\tau)$, $\zeta_{3} \gamma_{2} (\tau)$ or
+ $\zeta_{3}^{2} \gamma_{2} (\tau)$, the three roots of the modular polynomial
+ $j = \gamma_{2}^{3}$, in which $j$ has been specialised to $j (\tau)$.
+
+ The modular polynomial is given by
+ $j = {(f^{24}-16)^{3} \over f^{24}}$ for Weber's function $f$.
+
+ For the double eta quotients of level $N = p q$ and Atkin functions of
+ level $N = p$, all functions are covered
+ such that the modular curve $X_{0}^{+}(N)$ is of genus $0$ with function field
+ generated by a power of the double eta quotient $w$. (Note that the
+ function field of $X_{0}^{+}(N)$ is
+ generated by the functions invariant under $\Gamma^{0}(N)$ and the
+ Fricke--Atkin--Lehner involution.)
+ This ensures that the full Hilbert class field
+ is generated by class invariants from these double eta quotients.
+ Then the modular polynomial is of degree $2$ in $j$, and
+ of degree $\psi(N) = (p+1)(q+1)$ in $w$.
+
+ \bprog
+ ? polclass(-163)
+ %1 = x + 262537412640768000
+ ? polclass(-51, , 'z)
+ %2 = z^2 + 5541101568*z + 6262062317568
+ ? polclass(-151,1)
+ x^7 - x^6 + x^5 + 3*x^3 - x^2 + 3*x + 1
+ @eprog
+
+Function: _polclass_worker
+Section: programming/internals
+C-Name: polclass_worker
+Prototype: GGG
+Help: used by polclass
+Doc: used by polclass

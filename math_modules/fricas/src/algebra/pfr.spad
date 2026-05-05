@@ -1,0 +1,407 @@
+)abbrev domain PFR PartialFraction
+++ Author: Robert S. Sutor
+++ Date Created: 1986
+++ Related Constructors:
+++ Also See: ContinuedFraction
+++ AMS Classifications:
+++ Keywords: partial fraction, factorization, euclidean domain
+++ References:
+++ Description:
+++   The domain \spadtype{PartialFraction} implements partial fractions
+++   over a euclidean domain \spad{R}.  This requirement on the
+++   argument domain allows us to normalize the fractions.  Of
+++   particular interest are the 2 forms for these fractions.  The
+++   ``compact'' form has only one fractional term per prime in the
+++   denominator, while the ``p-adic'' form expands each numerator
+++   p-adically via the prime p in the denominator.  For computational
+++   efficiency, the compact form is used, though the p-adic form may
+++   be gotten by calling the function
+++   \spadfunFrom{padicFraction}{PartialFraction}.  For a general euclidean
+++   domain, it is not known how to factor the denominator.
+++   Thus the function \spadfunFrom{partialFraction}{PartialFraction} takes
+++   an element of \spadtype{Factored(R)} as its second argument.
+
+PartialFraction(R : EuclideanDomain) : Cat == Capsule where
+  FRR  ==> Factored R
+  SUPR ==> SparseUnivariatePolynomial R
+  NNI ==> NonNegativeInteger
+  fTerm ==> Record(num : R, d_fact : R, d_exp : NNI)
+  LfTerm ==> List fTerm
+
+  Cat == Join(Field, Algebra R) with
+    coerce : % -> Fraction R
+      ++ coerce(p) sums up the components of the partial fraction and
+      ++ returns a single fraction.
+
+    coerce : Fraction FRR -> %
+      ++ coerce(f) takes a fraction with numerator and denominator in
+      ++ factored form and creates a partial fraction.  It is
+      ++ necessary for the parts to be factored because it is not
+      ++ known in general how to factor elements of \spad{R} and
+      ++ this is needed to decompose into partial fractions.
+
+    compactFraction : % -> %
+      ++ compactFraction(p) normalizes the partial fraction \spad{p}
+      ++ to the compact representation. In this form, the partial
+      ++ fraction has only one fractional term per prime in the
+      ++ denominator.
+
+    numberOfFractionalTerms : % -> Integer
+      ++ numberOfFractionalTerms(p) computes the number of fractional
+      ++ terms in \spad{p}. This returns 0 if there is no fractional
+      ++ part.
+
+    fractionalTerms : % -> LfTerm
+      ++ fractionalTerms(p) extracts the fractional part of \spad{p}
+      ++ to a list of Record(num : R, den : Factored R).  This returns
+      ++ [] if there is no fractional part.
+
+    padicallyExpand : (R, R) -> SUPR
+      ++ padicallyExpand(p, x) is a utility function that expands
+      ++ the second argument \spad{x} ``p-adically'' in
+      ++ the first.
+
+    padicFraction : % -> %
+      ++ padicFraction(q) expands the fraction p-adically in the primes
+      ++ \spad{p} in the denominator of \spad{q}. For example,
+      ++ \spad{padicFraction(3/(2^2)) = 1/2 + 1/(2^2)}.
+      ++ Use \spadfunFrom{compactFraction}{PartialFraction} to return to compact form.
+
+    partialFraction : (R, FRR) -> %
+      ++ partialFraction(numer, denom) is the main function for
+      ++ constructing partial fractions. The second argument is the
+      ++ denominator and should be factored.
+
+    wholePart : % -> R
+      ++ wholePart(p) extracts the whole part of the partial fraction
+      ++ \spad{p}.
+
+    if R has UniqueFactorizationDomain then
+        partialFraction : Fraction R -> %
+          ++ partialFraction(f) is a user friendly interface for partial
+          ++ fractions when f is a fraction of UniqueFactorizationDomain.
+    group_terms : LfTerm -> LfTerm
+      ++ Should be local but conditional.
+
+  Capsule == add
+
+    -- some constructor assignments and macros
+
+    Ex     ==> OutputForm
+    QR     ==> Record(quotient : R, remainder : R)
+
+    Rep    := Record(whole : R, fract : LfTerm)
+
+    -- private function signatures
+
+    copypf : % -> %
+    multiplyFracTerms : (fTerm, fTerm) -> %
+    normalizeFracTerm : fTerm -> %
+    partialFractionNormalized : (R, FRR) -> %
+
+    -- private function definitions
+
+    copypf(a : %) : % == [a.whole, copy a.fract]$Rep
+
+    if R has OrderedSet then
+
+        compare(s : fTerm, t : fTerm) : Boolean ==
+            s.d_fact = t.d_fact => s.d_exp < t.d_exp
+            s.d_fact < t.d_fact
+
+        group_terms(l : LfTerm) : LfTerm ==
+            sort(compare, l)
+
+    else
+
+        exp_compare(s : fTerm, t : fTerm) : Boolean ==
+            s.d_exp > t.d_exp
+
+        group_terms(l : LfTerm) : LfTerm ==
+            res := []$LfTerm
+            while not(empty?(l)) repeat
+                t0 := first(l)
+                f0 := t0.d_fact
+                el0 := [t for t in l | t.d_fact = f0]
+                l := [t for t in l | t.d_fact ~= f0]
+                el0 := sort(exp_compare, el0)
+                res := concat(el0, res)
+            reverse!(res)
+
+    multiplyFracTerms(s : fTerm, t : fTerm) ==
+        sf := s.d_fact
+        se := s.d_exp
+        tf := t.d_fact
+        te := t.d_exp
+        sf = tf =>
+            normalizeFracTerm([s.num * t.num, sf, se + te]$fTerm)
+        i := extendedEuclidean(tf^te, sf^se, s.num * t.num)
+        i case "failed" => error "PartialFraction: not in ideal"
+        coefs := i@Record(coef1 : R, coef2 : R)
+        c : % := copypf(0$%)
+        if coefs.coef2 ~= 0$R then
+            c := normalizeFracTerm ([coefs.coef2, tf, te]$fTerm)
+        if coefs.coef1 ~= 0$R then
+            d := normalizeFracTerm ([coefs.coef1, sf, se]$fTerm)
+            c.whole := c.whole + d.whole
+            not(empty?(d.fract)) => c.fract := append(d.fract, c.fract)
+        c
+
+    normalizeFracTerm(s : fTerm) ==
+        qr : QR := divide(s.num, s.d_fact^s.d_exp)
+        qr.remainder = 0$R => [qr.quotient, []$LfTerm]
+        -- now make sure d_fact and num are coprime
+        f : R := s.d_fact
+        o_exp : NNI := s.d_exp
+        c_exp  : NNI := 0
+        q := divide(qr.remainder, f)
+        while q.remainder = 0$R and c_exp < o_exp repeat
+            c_exp := c_exp + 1
+            qr.remainder := q.quotient
+            q := divide(qr.remainder, f)
+        c_exp = o_exp => (qr.quotient + qr.remainder) :: %
+        [qr.quotient, [[qr.remainder, f, (o_exp - c_exp)::NNI]$fTerm]$LfTerm]
+
+    ordered_R? := R has OrderedSet
+
+    normalize_terms(wp : R, l : LfTerm) : % ==
+        pl := [normalizeFracTerm(el) for el in l]
+        frl := []$LfTerm
+        for pn in pl repeat
+            wp := wp + pn.whole
+            if not(empty?(pn.fract)) then
+                frl := cons(first(pn.fract), frl)
+        frl :=
+            ordered_R? => group_terms(reverse!(frl))
+            reverse!(frl)
+        [wp, frl]
+
+    partialFractionNormalized(nm : R, dn : FRR) ==
+        -- assume unit dn = 1
+        nm = 0$R   => 0$%
+        dn = 1$FRR => nm :: %
+        fl := factorList(dn)
+        dens := [i.factor^i.exponent for i in fl]
+        nu := multiEuclidean(dens, nm)
+        nu case "failed" =>
+            error "partialFractionNormalized: multiEuclidean failed"
+        normalize_terms(0, [[nn, i.factor, i.exponent] for nn in nu@List(R)
+                            for i in fl])
+
+    -- public function definitions
+
+    padicFraction(a : %) ==
+      b : % := compactFraction a
+      empty?(b.fract) => b
+      l : LfTerm := []
+      e, d : Integer
+      for s in b.fract repeat
+          e := s.d_exp
+          e = 1 => l := cons(s, l)
+          f := s.d_fact
+          d := degree(sp := padicallyExpand(f, s.num))
+          while (sp ~= 0$SUPR) repeat
+              l := cons([leadingCoefficient sp, f, (e - d)::NNI]$fTerm, l)
+              d := degree(sp := reductum sp)
+      [b.whole, group_terms(l)]$Rep
+
+    compactFraction(a : %) ==
+      -- only one power for each distinct denom will remain
+      2 > # a.fract => a
+      af : LfTerm := reverse a.fract
+      bf : LfTerm := []
+      bw : R := a.whole
+      f := (first af).d_fact
+      e := (first af).d_exp
+      s : fTerm := [(first af).num, f, e]$fTerm
+      for t in rest af repeat
+          f = t.d_fact =>
+              s.num := s.num + (t.num *
+                  (f ^$R (e - t.d_exp)::NNI))
+          b := normalizeFracTerm s
+          bw := bw + b.whole
+          if not(empty?(b.fract)) then bf := cons(first b.fract, bf)
+          f := t.d_fact
+          e := t.d_exp
+          s := [t.num, f, e]$fTerm
+      b := normalizeFracTerm s
+      [bw + b.whole, append(b.fract, bf)]$Rep
+
+    0 == [0$R, []$LfTerm]
+    1 == [1$R, []$LfTerm]
+    characteristic() == characteristic()$R
+
+    coerce(r : R) : % == [r, []$LfTerm]
+    coerce(n : Integer) : % == [(n :: R), []$LfTerm]
+    coerce(a : %) : Fraction R ==
+      q : Fraction R := (a.whole :: Fraction R)
+      s : fTerm
+      for s in a.fract repeat
+        q := q + (s.num / (s.d_fact^s.d_exp))
+      q
+    coerce(q : Fraction FRR) : % ==
+      u : R := (recip unit denom q):: R
+      r1 : R := u * expand numer q
+      partialFractionNormalized(r1, u * denom q)
+
+    a : % exquo b : % ==
+      b = 0$% => "failed"
+      b = 1$% => a
+      br : Fraction R := inv (b :: Fraction R)
+      a * partialFraction(numer br, (denom br) :: FRR)
+    recip a == (1$% exquo a)
+
+    numberOfFractionalTerms a == # a.fract
+    wholePart a == a.whole
+
+    fractionalTerms a == a.fract
+
+    partialFraction(nm : R, dn : FRR) ==
+      nm = 0$R => 0$%
+      -- move inv unit of den to numerator
+      u : R := unit dn
+      u := (recip u) :: R
+      partialFractionNormalized(u * nm, u * dn)
+
+    padicallyExpand(p : R, r : R) ==
+      -- expands r as a sum of powers of p, with coefficients
+      -- r = HornerEval(padicallyExpand(p, r), p)
+      qr : QR := divide(r, p)
+      qr.quotient = 0$R => qr.remainder :: SUPR
+      (qr.remainder :: SUPR) + monomial(1$R, 1$NonNegativeInteger)$SUPR *
+        padicallyExpand(p, qr.quotient)
+
+    a = b ==
+      empty?(a.fract) =>
+        empty?(b.fract) => a.whole = b.whole
+        false
+      empty?(b.fract) => false
+      (a :: Fraction R) = (b :: Fraction R)
+
+    - a ==
+      s : fTerm
+      l : LfTerm := []
+      for s in reverse a.fract repeat
+           l := cons([- s.num, s.d_fact, s.d_exp]$fTerm, l)
+      [- a.whole, l]
+
+    r : R * a : % ==
+      r = 0$R => 0$%
+      r = 1$R => a
+      normalize_terms(r * a.whole, [[r * s.num, s.d_fact, s.d_exp]
+                                    for s in a.fract])
+
+    n : Integer * a : % == (n :: R) * a
+
+    a + b ==
+      compactFraction
+          [a.whole + b.whole, group_terms(append(a.fract, copy b.fract))]$Rep
+
+    a : % * b : % ==
+      empty?(a.fract) => a.whole * b
+      empty?(b.fract) => b.whole * a
+      af : % := [0$R, a.fract]$Rep   --     a - a.whole
+      c : % := (a.whole * b) + (b.whole * af)
+      s, t : fTerm
+      for s in a.fract repeat
+        for t in b.fract repeat
+          c := c + multiplyFracTerms(s, t)
+      c
+
+    coerce(a : %) : Ex ==
+      empty?(a.fract) => a.whole :: Ex
+      s : fTerm
+      l : List Ex
+      if a.whole = 0 then l := [] else l := [a.whole :: Ex]
+      for s in a.fract repeat
+          den :=
+              s.d_exp = 1 => s.d_fact :: Ex
+              (s.d_fact :: Ex) ^ (s.d_exp ::Ex)
+          l := cons(s.num :: Ex / den, l)
+      # l = 1 => first l
+      reduce("+", reverse l)
+
+    if R has UniqueFactorizationDomain then
+        partialFraction f == partialFraction(numer f, factor denom f)
+
+)abbrev package PFRPAC PartialFractionPackage
+++ Author: Barry M. Trager
+++ Date Created: 1992
+++ BasicOperations:
+++ Related Constructors: PartialFraction
+++ Also See:
+++ AMS Classifications:
+++ Keywords: partial fraction, factorization, euclidean domain
+++ References:
+++ Description:
+++   The package \spadtype{PartialFractionPackage} gives an easier
+++   to use interface to \spadtype{PartialFraction}.
+++   The user gives a fraction of polynomials, and a variable and
+++   the package converts it to the proper datatype for the
+++   \spadtype{PartialFraction} domain.
+
+PartialFractionPackage(R) : Cat == Capsule where
+   R : Join(EuclideanDomain, PolynomialFactorizationExplicit,
+            CharacteristicZero)
+   INDE ==> IndexedExponents Symbol
+   PR ==> Polynomial R
+   FPR ==> Fraction PR
+   SUP ==> SparseUnivariatePolynomial
+   Cat == with
+      partialFraction : (FPR, Symbol) -> Any
+         ++ partialFraction(rf, var) returns the partial fraction decomposition
+         ++ of the rational function rf with respect to the variable var.
+      partialFraction : (PR, Factored PR, Symbol) -> Any
+         ++ partialFraction(num, facdenom, var) returns the partial fraction
+         ++ decomposition of the rational function whose numerator is num and
+         ++ whose factored denominator is facdenom with respect to the variable var.
+   Capsule == add
+      partialFraction(rf, v) ==
+         df := factor(denom rf)$MultivariateFactorize(Symbol, INDE, R, PR)
+         partialFraction(numer rf, df, v)
+
+      makeSup(p : PR, v : Symbol) : SparseUnivariatePolynomial FPR ==
+         up := univariate(p, v)
+         map((z1 : PR) : FPR +-> z1::FPR, up
+            )$UnivariatePolynomialCategoryFunctions2(PR, SUP PR, FPR, SUP FPR)
+
+      partialFraction(p, facq, v) ==
+         up := UnivariatePolynomial(v, FPR)
+         fup := Factored up
+         fcont := makeSup(unit facq, v) pretend up
+         nflist : fup := fcont*(*/[primeFactor(makeSup(u.factor, v) pretend up,_
+                                   u.exponent) for u in factorList facq])
+         pfup := partialFraction(makeSup(p, v) pretend up, nflist
+                                )$PartialFraction(up)
+         coerce(pfup)$AnyFunctions1(PartialFraction up)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

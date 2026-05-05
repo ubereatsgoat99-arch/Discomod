@@ -1,0 +1,81 @@
+
+
+SUBDIRS = @fricas_src_subdirs@
+
+subdir = src/
+
+.PHONY: all all-ax all-src all-clef all-sman
+
+all: all-ax
+
+all-ax all-src: copy-helpfiles stamp
+	@echo finished $(builddir)
+
+stamp: @fricas_src_all@
+	-rm -f stamp
+	$(STAMP) stamp
+
+all-clef: all-lib
+	@$(mkinstalldirs) $(fricas_target_bindir)
+	cd clef && ${MAKE}
+all-sman: all-lib
+	$(mkinstalldirs) $(fricas_target_bindir)
+	cd sman && ${MAKE}
+
+util-ht:
+	$(mkinstalldirs) $(fricas_target_datadir)
+	cd doc && ${MAKE} util-ht
+
+all-hyper: all-lib all-sman all-graph
+	$(mkinstalldirs) $(fricas_target_bindir)
+	$(mkinstalldirs) $(fricas_target_datadir)
+	cd hyper && ${MAKE}
+all-doc: all-hyper all-fricassys
+	cd doc && ${MAKE}
+copy-helpfiles:
+	cd doc && ${MAKE} copy-helpfiles
+all-lib:
+	$(mkinstalldirs) $(fricas_target_libdir)
+	@cd lib && ${MAKE}
+all-lisp: all-lib
+	cd lisp && $(MAKE) all-lisp
+all-boot: all-lisp
+	@cd boot && ${MAKE}
+all-interpsys: all-boot
+	@echo 25 making interp
+	cd interp && ${MAKE} all-interpsys
+
+all-fricassys: all-etc
+	cd interp && $(MAKE) all-fricassys
+all-algebra: all-interpsys util-ht
+	@ echo 30b running find-algebra-files
+	(cd $(srcdir)/algebra; \
+	  . ../scripts/find-algebra-files) \
+	    > algebra/tmp-extract-spad.mk
+	$(srcdir)/../config/move-if-change \
+	   algebra/tmp-extract-spad.mk algebra/extract-spad.mk
+	cd algebra && ${MAKE}
+all-input: all-fricassys
+	cd input && ${MAKE}
+all-etc: all-algebra
+	cd etc && ${MAKE}
+all-graph: all-lib
+	cd graph && ${MAKE}
+
+all-aldor: all-fricassys all-algebra
+	cd aldor && ${MAKE}
+
+clean-local:
+	-rm -f stamp
+	if test -f doc/Makefile ; then \
+	    (cd doc && ${MAKE} clean) \
+	fi
+	-rm doc/util-ht
+
+distclean-local: clean-local
+	if test -f hyper/Makefile ; then \
+	    (cd hyper && ${MAKE} distclean) \
+	fi
+	if test -f doc/Makefile ; then \
+	    (cd doc && ${MAKE} distclean) \
+	fi

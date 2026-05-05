@@ -1,0 +1,670 @@
+)abbrev domain BOP BasicOperator
+++ Basic system operators
+++ Author: Manuel Bronstein
+++ Date Created: 22 March 1988
+++ Description:
+++   A basic operator is an object that can be applied to a list of
+++   arguments from a set, the result being a kernel over that set.
+++ Keywords: operator, kernel.
+BasicOperator() : Exports == Implementation where
+  O   ==> OutputForm
+  P   ==> AssociationList(Symbol, None)
+  L   ==> List Record(key : Symbol, entry : None)
+  SEX ==> InputForm
+
+  Exports ==> OrderedSet with
+    name      : % -> Symbol
+      ++ name(op) returns the name of op.
+    properties : % -> P
+      ++ properties(op) returns the list of all the properties
+      ++ currently attached to op.
+    copy      : % -> %
+      ++ copy(op) returns a copy of op.
+    operator  : Symbol -> %
+      ++ operator(f) makes f into an operator with arbitrary arity.
+    operator  : (Symbol, NonNegativeInteger) -> %
+      ++ operator(f, n) makes f into an n-ary operator.
+    arity     : % -> Union(NonNegativeInteger, "failed")
+      ++ arity(op) returns n if op is n-ary, and
+      ++ "failed" if op has arbitrary arity.
+    nullary?  : % -> Boolean
+      ++ nullary?(op) tests if op is nullary.
+    unary?    : % -> Boolean
+      ++ unary?(op) tests if op is unary.
+    nary?     : % -> Boolean
+      ++ nary?(op) tests if op has arbitrary arity.
+    weight    : % -> NonNegativeInteger
+      ++ weight(op) returns the weight attached to op.
+    weight    : (%, NonNegativeInteger) -> %
+      ++ weight(op, n) attaches the weight n to op.
+    equality   : (%, (%, %) -> Boolean) -> %
+      ++ equality(op, foo?) attaches foo? as the "%equal?" property
+      ++ to op. If op1 and op2 have the same name, and one of them
+      ++ has an "%equal?" property f, then \spad{f(op1, op2)} is called to
+      ++ decide whether op1 and op2 should be considered equal.
+    comparison : (%, (%, %) -> Boolean) -> %
+      ++ comparison(op, foo?) attaches foo? as the "%less?" property
+      ++ to op. If op1 and op2 have the same name, and one of them
+      ++ has a "%less?" property f, then \spad{f(op1, op2)} is called to
+      ++ decide whether \spad{op1 < op2}.
+    display    : % -> Union(List O -> O, "failed")
+      ++ display(op) returns the "%display" property of op if
+      ++ it has one attached, and "failed" otherwise.
+    display    : (%, List O -> O)      -> %
+      ++ display(op, foo) attaches foo as the "%display" property
+      ++ of op. If op has a "%display" property f, then \spad{op(a1,...,an)}
+      ++ gets converted to OutputForm as \spad{f(a1, ..., an)}.
+    display    : (%, O -> O)           -> %
+      ++ display(op, foo) attaches foo as the "%display" property
+      ++ of op. If op has a "%display" property f, then \spad{op(a)}
+      ++ gets converted to OutputForm as \spad{f(a)}.
+      ++ Argument op must be unary.
+    input      : (%, List SEX -> SEX)  -> %
+      ++ input(op, foo) attaches foo as the "%input" property
+      ++ of op. If op has a "%input" property f, then \spad{op(a1,...,an)}
+      ++ gets converted to InputForm as \spad{f(a1, ..., an)}.
+    input      : % -> Union(List SEX -> SEX, "failed")
+      ++ input(op) returns the "%input" property of op if
+      ++ it has one attached, "failed" otherwise.
+    is?        : (%, Symbol) -> Boolean
+      ++ is?(op, s) tests if the name of op is s.
+    has?       : (%, Symbol) -> Boolean
+      ++ has?(op, s) tests if property s is attached to op.
+    assert     : (%, Symbol) -> %
+      ++ assert(op, s) attaches property s to op.
+      ++ Argument op is modified "in place", i.e. no copy is made.
+    deleteProperty! : (%, Symbol) -> %
+      ++ deleteProperty!(op, s) unattaches property s from op.
+      ++ Argument op is modified "in place", i.e. no copy is made.
+    property      : (%, Symbol) -> Union(None, "failed")
+      ++ property(op, s) returns the value of property s if
+      ++ it is attached to op, and "failed" otherwise.
+    setProperty   : (%, Symbol, None) -> %
+      ++ setProperty(op, s, v) attaches property s to op,
+      ++ and sets its value to v.
+      ++ Argument op is modified "in place", i.e. no copy is made.
+    setProperties : (%, P) -> %
+      ++ setProperties(op, l) sets the property list of op to l.
+      ++ Argument op is modified "in place", i.e. no copy is made.
+
+  Implementation ==> add
+    -- if narg < 0 then the operator has variable arity.
+    Rep := Record(opname : Symbol, narg : SingleInteger, props : P)
+
+    import from P
+    import from SingleInteger
+    import from NonNegativeInteger
+    import from Set(Symbol)
+
+    -- some internal properties
+    LESS?   := "%less?"::Symbol
+    EQUAL?  := "%equal?"::Symbol
+    WEIGHT  := '%weight
+    DISPLAY := '%display
+    SEXPR   := '%input
+
+
+    oper : (Symbol, SingleInteger, P) -> %
+
+    is?(op, s)           == name(op) = s
+    name op              == op.opname
+    properties op        == op.props
+    setProperties(op, l) == (op.props := l; op)
+    operator s           == oper(s, -1::SingleInteger, table())
+    operator(s, n)       == oper(s, n::Integer::SingleInteger, table())
+    property(op, name)   == search(name, op.props)
+    assert(op, s)        == setProperty(op, s, NIL$Lisp)
+    has?(op, name)       == key?(name, op.props)
+    oper(se, n, prop)    == [se, n, prop]
+    weight(op, n)        == setProperty(op, WEIGHT, n pretend None)
+    nullary? op          == zero?(op.narg)
+    unary? op            == ((op.narg) = 1)
+    nary? op             == negative?(op.narg)
+    equality(op, func)   == setProperty(op, EQUAL?, func pretend None)
+    comparison(op, func) == setProperty(op, LESS?, func pretend None)
+    display(op : %, f : O -> O)        == display(op, (l1 : List(O)) : O +-> f first l1)
+    deleteProperty!(op, name)     == (remove!(name, properties op); op)
+    setProperty(op, name, valu)    == (op.props.name := valu; op)
+    coerce(op : %) : OutputForm        == name(op)::OutputForm
+    input(op : %, f : List SEX -> SEX) == setProperty(op, SEXPR, f pretend None)
+    display(op : %, f : List O -> O)   == setProperty(op, DISPLAY, f pretend None)
+
+    display op ==
+      (u := property(op, DISPLAY)) case "failed" => "failed"
+      (u@None) pretend (List O -> O)
+
+    input op ==
+      (u := property(op, SEXPR)) case "failed" => "failed"
+      (u@None) pretend (List SEX -> SEX)
+
+    arity op ==
+      negative?(n := op.narg) => "failed"
+      convert(n)@Integer :: NonNegativeInteger
+
+    copy op ==
+      oper(name op, op.narg,
+          table([[r.key, r.entry] for r in entries(properties op)@L]$L))
+
+-- property EQUAL? contains a function f: (BOP, BOP) -> Boolean
+-- such that f(o1, o2) is true iff o1 = o2
+    op1 = op2 ==
+      (EQ$Lisp)(op1, op2) => true
+      name(op1) ~= name(op2) => false
+      op1.narg ~= op2.narg => false
+      set(keys properties op1) ~=$Set(Symbol) set(keys properties op2) => false
+      (func := property(op1, EQUAL?)) case None =>
+                   ((func@None) pretend ((%, %) -> Boolean)) (op1, op2)
+      true
+
+-- property WEIGHT allows one to change the ordering around
+-- by default, every operator has weight 1
+    weight op ==
+      (w := property(op, WEIGHT)) case "failed" => 1
+      (w@None) pretend NonNegativeInteger
+
+-- property LESS? contains a function f: (BOP, BOP) -> Boolean
+-- such that f(o1, o2) is true iff o1 < o2
+    op1 < op2 ==
+      (w1 := weight op1) ~= (w2 := weight op2) => w1 < w2
+      op1.narg ~= op2.narg => op1.narg < op2.narg
+      name(op1) ~= name(op2) => name(op1) < name(op2)
+      n1 := #(k1 := set(keys(properties op1))$Set(Symbol))
+      n2 := #(k2 := set(keys(properties op2))$Set(Symbol))
+      n1 ~= n2 => n1 < n2
+      not zero?(n1 := #(d1 := difference(k1, k2))) =>
+        n1 ~= (n2 := #(d2 := difference(k2, k1))) => n1 < n2
+        inspect(d1) < inspect(d2)
+      (func := property(op1, LESS?)) case None =>
+                   ((func@None) pretend ((%, %) -> Boolean)) (op1, op2)
+      (func := property(op1, EQUAL?)) case None =>
+              not(((func@None) pretend ((%, %) -> Boolean)) (op1, op2))
+      false
+
+)abbrev package BOP1 BasicOperatorFunctions1
+++ Tools to set/get common properties of operators
+++ Author: Manuel Bronstein
+++ Date Created: 28 Mar 1988
+++ Description:
+++   This package exports functions to set some commonly used properties
+++   of operators, including properties which contain functions.
+++ Keywords: operator.
+BasicOperatorFunctions1(A : SetCategory) : Exports == Implementation where
+  OP   ==> BasicOperator
+
+  Exports ==> with
+    evaluate        : (OP, List A)      -> Union(A, "failed")
+      ++ evaluate(op, [a1,...,an]) checks if op has an "%eval"
+      ++ property f. If it has, then \spad{f(a1, ..., an)} is returned, and
+      ++ "failed" otherwise.
+    evaluate        : (OP, List A -> A) -> OP
+      ++ evaluate(op, foo) attaches foo as the "%eval" property
+      ++ of op. If op has an "%eval" property f, then applying op
+      ++ to \spad{(a1, ..., an)} returns the result of \spad{f(a1, ..., an)}.
+    evaluate        : (OP, A -> A)      -> OP
+      ++ evaluate(op, foo) attaches foo as the "%eval" property
+      ++ of op. If op has an "%eval" property f, then applying op
+      ++ to a returns the result of \spad{f(a)}. Argument op must be unary.
+    evaluate        : OP                -> Union(List A -> A, "failed")
+      ++ evaluate(op) returns the value of the "%eval" property of
+      ++ op if it has one, and "failed" otherwise.
+    derivative      : (OP, List (List A -> A)) -> OP
+      ++ derivative(op, [foo1, ..., foon]) attaches [foo1, ..., foon] as
+      ++ the "%diff" property of op. If op has a "%diff" property
+      ++ \spad{[f1, ..., fn]} then applying a derivation D to \spad{op(a1, ..., an)}
+      ++ returns \spad{f1(a1, ..., an) * D(a1) + ... + fn(a1, ..., an) * D(an)}.
+    derivative      : (OP, A -> A) -> OP
+      ++ derivative(op, foo) attaches foo as the "%diff" property
+      ++ of op. If op has a "%diff" property f, then applying a
+      ++ derivation D to op(a) returns \spad{f(a) * D(a)}. Argument op must be unary.
+    derivative      : OP -> Union(List(List A -> A), "failed")
+      ++ derivative(op) returns the value of the "%diff" property of
+      ++ op if it has one, and "failed" otherwise.
+    constantOperator : A -> OP
+      ++ constantOperator(a) returns a nullary operator op
+      ++ such that \spad{op()} always evaluate to \spad{a}.
+    constantOpIfCan : OP -> Union(A, "failed")
+      ++ constantOpIfCan(op) returns \spad{a} if op is the constant
+      ++ nullary operator always returning \spad{a}, "failed" otherwise.
+
+  Implementation ==> add
+
+    EVAL    := '%eval
+    CONST   := '%constant
+    DIFF    := '%diff
+
+    evaluate(op : OP, func : A -> A) == evaluate(op, (l1 : List(A)) : A +-> func first l1)
+
+    evaluate op ==
+      (func := property(op, EVAL)) case "failed" => "failed"
+      (func@None) pretend (List A -> A)
+
+    evaluate(op : OP, args : List A) ==
+      (func := property(op, EVAL)) case "failed" => "failed"
+      ((func@None) pretend (List A -> A)) args
+
+    evaluate(op : OP, func : List A -> A) ==
+      setProperty(op, EVAL, func pretend None)
+
+    derivative op ==
+      (func := property(op, DIFF)) case "failed" => "failed"
+      ((func@None) pretend List(List A -> A))
+
+    derivative(op : OP, grad : List(List A -> A)) ==
+      setProperty(op, DIFF, grad pretend None)
+
+    derivative(op : OP, f : A -> A) ==
+      unary? op or nary? op =>
+        derivative(op, [(l1 : List(A)) : A +-> f first l1]$List(List A -> A))
+      error "Operator is not unary"
+
+    cdisp   : (OutputForm, List OutputForm) -> OutputForm
+    csex    : (InputForm,  List InputForm) -> InputForm
+    eqconst? : (OP, OP) -> Boolean
+    constOp : A -> OP
+
+    cdisp(a, l) == a
+    csex(a, l)  == a
+
+    eqconst?(a, b) ==
+      (va := property(a, CONST)) case "failed" => not has?(b, CONST)
+      ((vb := property(b, CONST)) case None) and
+         ((va@None) pretend A) = ((vb@None) pretend A)
+    opconst : OP
+    if A has Comparable then
+      ltconst? : (OP, OP) -> Boolean
+      ltconst?(a, b) ==
+        (va := property(a, CONST)) case "failed" => has?(b, CONST)
+        ((vb := property(b, CONST)) case None) and
+           smaller?((va@None) pretend A, (vb@None) pretend A)
+      opconst :=
+        comparison(equality(operator('constant, 0), eqconst?), ltconst?)
+    else
+      opconst := equality(operator('constant, 0), eqconst?)
+
+    constOp a ==
+      setProperty(display(copy opconst,
+        (l1 : List(OutputForm)) : OutputForm +-> cdisp(a::OutputForm, l1)),
+                                                  CONST, a pretend None)
+
+    constantOpIfCan op ==
+      is?(op, 'constant) and
+        ((u := property(op, CONST)) case None) => (u@None) pretend A
+      "failed"
+
+    if A has ConvertibleTo InputForm then
+      constantOperator a == input(constOp a,  (l1 : List(InputForm)) : InputForm +-> csex(convert a, l1))
+    else
+      constantOperator a == constOp a
+
+)abbrev package COMMONOP CommonOperators
+++ Provides commonly used operators
+++ Author: Manuel Bronstein
+++ Date Created: 25 Mar 1988
+++ Description:
+++ This package exports the elementary operators, with some semantics
+++ already attached to them. The semantics that is attached here is not
+++ dependent on the set in which the operators will be applied.
+++ Keywords: operator.
+CommonOperators() : Exports == Implementation where
+  OP  ==> BasicOperator
+  O   ==> OutputForm
+  POWER ==> '%power
+  ALGOP ==> '%alg
+  EVEN  ==> 'even
+  ODD   ==> 'odd
+  DUMMYVAR ==> '%dummyVar
+
+  Exports ==> with
+    operator : Symbol -> OP
+        ++ operator(s) returns an operator with name s, with the
+        ++ appropriate semantics if s is known. If s is not known,
+        ++ the result has no semantics.
+
+  Implementation ==> add
+    dpi        : List O -> O
+    dbeta      : List O -> O
+    dgamma     : List O -> O
+    dquote     : List O -> O
+    dexp       : O -> O
+    dfact      : O -> O
+    startUp    : Boolean -> Void
+    setDummyVar : (OP, NonNegativeInteger) -> OP
+
+    brandNew? : Boolean := true
+
+    opalg   := operator('rootOf, 2)$OP
+    oproot  := operator('nthRoot, 2)
+    oppi    := operator('pi, 0)
+    oplog   := operator('log, 1)
+    opexp   := operator('exp, 1)
+    opabs   := operator('abs, 1)
+    opsin   := operator('sin, 1)
+    opcos   := operator('cos, 1)
+    optan   := operator('tan, 1)
+    opcot   := operator('cot, 1)
+    opsec   := operator('sec, 1)
+    opcsc   := operator('csc, 1)
+    opasin  := operator('asin, 1)
+    opacos  := operator('acos, 1)
+    opatan  := operator('atan, 1)
+    opacot  := operator('acot, 1)
+    opasec  := operator('asec, 1)
+    opacsc  := operator('acsc, 1)
+    opsinh  := operator('sinh, 1)
+    opcosh  := operator('cosh, 1)
+    optanh  := operator('tanh, 1)
+    opcoth  := operator('coth, 1)
+    opsech  := operator('sech, 1)
+    opcsch  := operator('csch, 1)
+    opasinh := operator('asinh, 1)
+    opacosh := operator('acosh, 1)
+    opatanh := operator('atanh, 1)
+    opacoth := operator('acoth, 1)
+    opasech := operator('asech, 1)
+    opacsch := operator('acsch, 1)
+    opbox   := operator('%box, 1)$OP
+    oppren  := operator('%paren, 1)$OP
+    opquote := operator('%quote)$OP
+    opdiff  := operator('%diff, 3)
+    opsi    := operator('Si, 1)
+    opci    := operator('Ci, 1)
+    opshi   := operator('Shi, 1)
+    opchi   := operator('Chi, 1)
+    opei    := operator('Ei, 1)
+    opli    := operator('li, 1)
+    operf   := operator('erf, 1)
+    operfi  := operator('erfi, 1)
+    opli2   := operator('dilog, 1)
+    opfis   := operator('fresnelS, 1)
+    opfic   := operator('fresnelC, 1)
+    opGamma     := operator('Gamma, 1)
+    opGamma2    := operator('Gamma2, 2)
+    opBeta      := operator('Beta, 2)
+    opBeta3     := operator('Beta3, 3)
+    opdigamma   := operator('digamma, 1)
+    oppolygamma := operator('polygamma, 2)
+    opBesselJ   := operator('besselJ, 2)
+    opBesselY   := operator('besselY, 2)
+    opBesselI   := operator('besselI, 2)
+    opBesselK   := operator('besselK, 2)
+    opAiryAi    := operator('airyAi,  1)
+    opAiryAiPrime := operator('airyAiPrime,  1)
+    opAiryBi    := operator('airyBi , 1)
+    opAiryBiPrime := operator('airyBiPrime,  1)
+    opLambertW := operator('lambertW,  1)
+    opPolylog := operator('polylog, 2)
+    opWeierstrassP := operator('weierstrassP, 3)
+    opWeierstrassPPrime := operator('weierstrassPPrime, 3)
+    opWeierstrassSigma := operator('weierstrassSigma, 3)
+    opWeierstrassZeta := operator('weierstrassZeta, 3)
+    -- arbitrary arity
+    opHypergeometricF := operator('hypergeometricF)$BasicOperator
+    opMeijerG := operator('meijerG)$BasicOperator
+
+    opWhittakerM := operator('whittakerM, 3)$OP
+    opWhittakerW := operator('whittakerW, 3)$OP
+    opAngerJ := operator('angerJ, 2)$OP
+    opWeberE := operator('weberE, 2)$OP
+    opStruveH := operator('struveH, 2)$OP
+    opStruveL := operator('struveL, 2)$OP
+    opHankelH1 := operator('hankelH1, 2)$OP
+    opHankelH2 := operator('hankelH2, 2)$OP
+    opLommelS1 := operator('lommelS1, 3)$OP
+    opLommelS2 := operator('lommelS2, 3)$OP
+    opKummerM := operator('kummerM, 3)$OP
+    opKummerU := operator('kummerU, 3)$OP
+    opLegendreP := operator('legendreP, 3)$OP
+    opLegendreQ := operator('legendreQ, 3)$OP
+    opKelvinBei := operator('kelvinBei, 2)$OP
+    opKelvinBer := operator('kelvinBer, 2)$OP
+    opKelvinKei := operator('kelvinKei, 2)$OP
+    opKelvinKer := operator('kelvinKer, 2)$OP
+    opEllipticK := operator('ellipticK, 1)$OP
+    opEllipticE := operator('ellipticE, 1)$OP
+    opEllipticE2 := operator('ellipticE2, 2)$OP
+    opEllipticF := operator('ellipticF, 2)$OP
+    opEllipticPi := operator('ellipticPi, 3)$OP
+    opJacobiSn := operator('jacobiSn, 2)$OP
+    opJacobiCn := operator('jacobiCn, 2)$OP
+    opJacobiDn := operator('jacobiDn, 2)$OP
+    opJacobiZeta := operator('jacobiZeta, 2)$OP
+    opJacobiTheta := operator('jacobiTheta, 2)$OP
+    opWeierstrassPInverse := operator('weierstrassPInverse, 3)$OP
+    opLerchPhi := operator('lerchPhi, 3)$OP
+    opRiemannZeta := operator('riemannZeta, 1)$OP
+
+    -- orthogonal polynomials
+    opCharlierC := operator('charlierC, 3)$OP
+    op_hahn_p := operator('hahn_p, 5)$OP
+    op_hahnQ := operator('hahnQ, 5)$OP
+    op_hahnR := operator('hahnR, 5)$OP
+    op_hahnS := operator('hahnS, 5)$OP
+    opHermiteH := operator('hermiteH, 2)$OP
+    opJacobiP := operator('jacobiP, 4)$OP
+    op_krawtchoukK := operator('krawtchoukK, 4)$OP
+    opLaguerreL := operator('laguerreL, 3)$OP
+    opMeixnerM := operator('meixnerM, 4)$OP
+    op_meixnerP := operator('meixnerP, 4)$OP
+    op_racahR := operator('racahR, 6)$OP
+    op_wilsonW := operator('wilsonW, 6)$OP
+
+    op_log_gamma := operator('%logGamma, 1)$OP
+    op_eis := operator('%eis, 1)$OP
+    op_erfs := operator('%erfs, 1)$OP
+    op_erfis := operator('%erfis, 1)$OP
+
+    opint   := operator('integral, 3)
+    -- arbitrary arity
+    opiint  := operator('%iint)$BasicOperator
+    opdint  := operator('%defint, 5)
+    opfact  := operator('factorial, 1)
+    opperm  := operator('permutation, 2)
+    opbinom := operator('binomial, 2)
+    oppow   := operator(POWER, 2)
+    opsum   := operator('summation, 3)
+    opdsum  := operator('%defsum, 5)
+    opprod  := operator('product, 3)
+    opdprod := operator('%defprod, 5)
+
+    oprootsum := operator('%root_sum, 3)
+    opfloor := operator('floor, 1)
+    opceil := operator('ceil, 1)
+    op_fractionPart := operator('fractionPart, 1)
+    opreal := operator('real, 1)
+    opimag := operator('imag, 1)
+    opconjugate := operator('conjugate, 1)
+    oparg := operator('arg, 1)
+    opsign := operator('sign, 1)
+    op_unitStep := operator('unitStep, 1)
+    op_diracDelta := operator('diracDelta, 1)
+    -- arbitrary arity
+    opmax := operator('max)$BasicOperator
+    opmin := operator('min)$BasicOperator
+
+    algop   := [oproot, opalg]$List(OP)
+    rtrigop := [opsin, opcos, optan, opcot, opsec, opcsc,
+                         opasin, opacos, opatan, opacot, opasec, opacsc]
+    htrigop := [opsinh, opcosh, optanh, opcoth, opsech, opcsch,
+                   opasinh, opacosh, opatanh, opacoth, opasech, opacsch]
+    trigop  := concat(rtrigop, htrigop)
+    elemop  := concat(trigop, [oppi, oplog, opexp])
+    primop  := [opei, opli, opsi, opci, opshi, opchi, operf, operfi, opli2,
+                   opint, opdint, opfis, opfic, opiint]
+    combop  := [opfact, opperm, opbinom, oppow,
+                                         opsum, opdsum, opprod, opdprod]
+    specop  := [opGamma, opGamma2, opBeta, opBeta3, opdigamma, oppolygamma,
+               opfloor, opceil, opreal, opimag, opsign, opabs, opmax, opmin,
+                   op_fractionPart, op_unitStep,
+                 op_diracDelta, oparg, opconjugate, op_log_gamma,
+                   op_eis, op_erfs, op_erfis,
+                opBesselJ, opBesselY, opBesselI, opBesselK, opAiryAi, opAiryBi,
+                 opAiryAiPrime, opAiryBiPrime, opLambertW, opPolylog,
+                  opWeierstrassP, opWeierstrassPPrime, opWeierstrassZeta,
+                   opWeierstrassSigma, opHypergeometricF, opMeijerG, _
+    opWhittakerM, _
+    opWhittakerW, _
+    opAngerJ, _
+    opWeberE, _
+    opStruveH, _
+    opStruveL, _
+    opHankelH1, _
+    opHankelH2, _
+    opLommelS1, _
+    opLommelS2, _
+    opKummerM, _
+    opKummerU, _
+    opLegendreP, _
+    opLegendreQ, _
+    opKelvinBei, _
+    opKelvinBer, _
+    opKelvinKei, _
+    opKelvinKer, _
+    opEllipticK, _
+    opEllipticE, _
+    opEllipticE2, _
+    opEllipticF, _
+    opEllipticPi, _
+    opJacobiSn, _
+    opJacobiCn, _
+    opJacobiDn, _
+    opJacobiZeta, _
+    opJacobiTheta, _
+    opLerchPhi, _
+    opRiemannZeta, _
+    opCharlierC, _
+    op_hahn_p, op_hahnQ, op_hahnR, op_hahnS, _
+    opHermiteH, _
+    opJacobiP, _
+    op_krawtchoukK, _
+    opLaguerreL, _
+    opMeixnerM, op_meixnerP, _
+    op_racahR, _
+    op_wilsonW, _
+    opWeierstrassPInverse _
+    ]
+
+    anyop   := [oppren, opdiff, opbox, opquote]
+    allop   := concat(concat(concat(concat(concat(
+                            algop, elemop), primop), combop), specop), anyop)
+
+    -- odd and even single argument operators, must be maintained current!
+    evenop := [opcos, opsec, opcosh, opsech, opabs, op_diracDelta]
+    oddop  := [opsin, opcsc, optan, opcot, opasin, opacsc, opatan,
+               opsinh, opcsch, optanh, opcoth, opasinh, opacsch, opatanh,
+                opacoth, opsi, opshi, operf, operfi, opfis, opfic,
+                 opsign, opreal, opimag]
+
+-- operators whose second argument is a dummy variable
+    dummyvarop1 := [opdiff, opalg, opint, oprootsum, opsum, opprod]
+-- operators whose second and third arguments are dummy variables
+    dummyvarop2 := [opdint, opdsum, opdprod]
+
+    operator s ==
+      if brandNew? then startUp false
+      for op in allop repeat
+        is?(op, s) => return copy op
+      operator(s)$OP
+
+    dpi l    == '%pi::O
+    dfact x  == postfix("!"::Symbol::O, (ATOM(x)$Lisp => x; paren x))
+    dquote l == prefix(quote(first(l)::O), rest l)
+    dgamma l == prefix('Gamma::O, l)
+    dbeta(l) == prefix('Beta::O, l)
+    dEllipticE2(l : List O) : O == prefix('ellipticE::O, l)
+
+    setDummyVar(op, n) == setProperty(op, DUMMYVAR, n pretend None)
+
+    dexp x ==
+      e := '%e::O
+      x = 1::O => e
+      e ^ x
+
+    inputdefsum(a: List InputForm): InputForm ==
+        seg: InputForm := convert([convert('SEGMENT)$InputForm, a.4, a.5])$InputForm
+        eq: InputForm := convert([convert('equation)$InputForm, a.2, seg])
+        convert([convert('sum)$InputForm, a.1, eq])
+
+    inputdefprod(a: List InputForm): InputForm ==
+        seg: InputForm := convert([convert('SEGMENT)$InputForm, a.4, a.5])$InputForm
+        eq: InputForm := convert([convert('equation)$InputForm, a.2, seg])
+        convert([convert('product)$InputForm, a.1, eq])
+
+    startUp b ==
+      brandNew? := b
+      display(oppren, paren)
+      display(opbox, commaSeparate)
+      display(oppi, dpi)
+      display(opexp, dexp)
+      display(opBeta3, dbeta)
+      setProperty(opBeta3, 'disp_name, ('Beta::O) pretend None)
+      display(opGamma2, dgamma)
+      setProperty(opGamma2, 'disp_name, ('Gamma::O) pretend None)
+      display(opEllipticE2, dEllipticE2)
+      display(opfact, dfact)
+      display(opquote, dquote)
+      display(opperm, (z1 : List O) : O +-> supersub('A::O, z1))
+      display(opbinom, (z1 : List O) : O +-> binomial(first z1, second z1))
+      display(oppow, (z1 : List O) : O +-> first(z1) ^ second(z1))
+      display(opsum, (z1 : List O) : O +-> sum(first z1, second z1, third z1))
+      display(opprod, (z1 : List O) : O +-> prod(first z1, second z1, third z1))
+      display(opint, (z1 : List O) : O +-> int(first z1 * hconcat('d::O, second z1),
+                                                   empty(), third z1))
+      input(oppren, (z1 : List InputForm) : InputForm +-> convert concat(convert("("::Symbol)@InputForm,
+                            concat(z1, convert(")"::Symbol)@InputForm)))
+      input(oppow, (z1 : List InputForm) : InputForm +-> convert concat(convert("^"::Symbol)@InputForm, z1))
+      input(oproot,
+            (z1 : List InputForm) : InputForm +-> convert [convert("^"::Symbol)@InputForm, first z1, 1 / second z1])
+      input(opdsum, inputdefsum)
+      input(opdprod, inputdefprod)
+
+      for op in algop   repeat assert(op, ALGOP)
+      for op in rtrigop repeat assert(op, 'rtrig)
+      for op in htrigop repeat assert(op, 'htrig)
+      for op in trigop  repeat assert(op, 'trig)
+      for op in elemop  repeat assert(op, 'elem)
+      for op in primop  repeat assert(op, 'prim)
+      for op in combop  repeat assert(op, 'comb)
+      for op in specop  repeat assert(op, 'special)
+      for op in anyop   repeat assert(op, 'any)
+      for op in evenop  repeat assert(op, EVEN)
+      for op in oddop   repeat assert(op, ODD)
+      for op in dummyvarop1 repeat setDummyVar(op, 1)
+      for op in dummyvarop2 repeat setDummyVar(op, 2)
+      assert(oppren, 'linear)
+      void
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-- SPAD files for the functional world should be compiled in the
+-- following order:
+--
+--   OP  kl  expr function

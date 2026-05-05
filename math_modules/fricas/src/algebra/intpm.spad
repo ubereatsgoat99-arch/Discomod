@@ -1,0 +1,175 @@
+)abbrev package INTPM PatternMatchIntegration
+++ Author: Manuel Bronstein
+++ Date Created: 5 May 1992
+++ Description:
+++ \spadtype{PatternMatchIntegration} provides functions that use
+++ the pattern matcher to find some indefinite and definite integrals
+++ involving special functions and found in the literature.
+PatternMatchIntegration(R, F) : Exports == Implementation where
+  R : Join(Comparable, RetractableTo Integer, GcdDomain,
+           LinearlyExplicitOver Integer)
+  F : Join(AlgebraicallyClosedField, TranscendentalFunctionCategory,
+           FunctionSpace R)
+
+  N   ==> NonNegativeInteger
+  Z   ==> Integer
+  SY  ==> Symbol
+  K   ==> Kernel F
+  PAT ==> Pattern Z
+  RES ==> PatternMatchResult(Z, F)
+  OFE ==> OrderedCompletion F
+
+  Exports ==> with
+    splitConstant : (F, SY) -> Record(const : F, nconst : F)
+      ++ splitConstant(f, x) returns \spad{[c, g]} such that
+      ++ \spad{f = c * g} and \spad{c} does not involve \spad{t}.
+    if R has ConvertibleTo Pattern Integer and
+       R has PatternMatchable Integer then
+         if F has SpecialFunctionCategory then
+           pmintegrate : (F, SY, OFE, OFE) -> Union(F, "failed")
+             ++ pmintegrate(f, x = a..b) returns the integral of
+             ++ \spad{f(x)dx} from a to b
+             ++ if it can be found by the built-in pattern matching rules.
+
+  Implementation ==> add
+    import from PatternMatch(Z, F, F)
+    import from ElementaryFunctionSign(R, F)
+    import from FunctionSpaceAssertions(R, F)
+    import from TrigonometricManipulations(R, F)
+    import from FunctionSpaceAttachPredicates(R, F, F)
+
+    mkalist   : RES -> AssociationList(SY, F)
+
+    pm := new()$SY
+    pmw := new pm
+    pmm := new pm
+    pms := new pm
+    pmc := new pm
+    pma := new pm
+    pmb := new pm
+
+    c := optional(pmc::F)
+    w := suchThat(optional(pmw::F),
+      (x1 : F) : Boolean+->empty? variables x1)
+    s := suchThat(optional(pms::F),
+      (x1 : F) : Boolean+->empty? variables x1 and real? x1)
+    m := suchThat(optional(pmm::F), (x1 : F) : Boolean+->_
+                    (zz := retractIfCan(x1)@Union(Z,"failed");
+                    zz case Z => zz >= 0; false))
+
+    spi := sqrt(pi()$F)
+    half := 1::F / 2::F
+    spio2 := sqrt(pi()$F / 2::F)
+    s2opi := sqrt(2::F / pi()$F)
+
+    mkalist res == construct destruct res
+
+    splitConstant(f, x) ==
+      not member?(x, variables f) => [f, 1]
+      (retractIfCan(f)@Union(K, "failed")) case K => [1, f]
+      (u := isTimes f) case List(F) =>
+        cc := nc := 1$F
+        for g in u::List(F) repeat
+          rec := splitConstant(g, x)
+          cc  := cc * rec.const
+          nc  := nc * rec.nconst
+        [cc, nc]
+      (u := isPlus f) case List(F) =>
+        rec := splitConstant(first(u@List(F)), x)
+        cc  := rec.const
+        nc  := rec.nconst
+        for g in rest(u::List(F)) repeat
+          rec := splitConstant(g, x)
+          if rec.nconst = nc then cc := cc + rec.const
+          else if rec.nconst = -nc then cc := cc - rec.const
+          else return [1, f]
+        [cc, nc]
+      if (v := isPower f) case Record(val : F, exponent : Z) then
+        vv := v@Record(val : F, exponent : Z)
+        (vv.exponent ~= 1) =>
+          rec := splitConstant(vv.val, x)
+          return [rec.const ^ vv.exponent, rec.nconst ^ vv.exponent]
+      error "splitConstant: should not happen"
+
+    if R has ConvertibleTo Pattern Integer and
+       R has PatternMatchable Integer then
+
+         if F has SpecialFunctionCategory then
+           match1    : (F, SY, F, F) -> List F
+           formula1  : (F, SY, F, F) -> Union(F, "failed")
+
+-- tries only formula (1) of the Geddes & al, AAECC 1 (1990) paper
+           formula1(f, x, t, cc) ==
+             empty?(l := match1(f, x, t, cc)) => "failed"
+             mw := first l
+             zero?(ms := third l) or ((sgs := sign ms) case "failed")=> "failed"
+             ((sgz := sign(z := (mw + 1) / ms)) case "failed") or (sgz@Z < 0)
+                => "failed"
+             mmi := retract(mm := second l)@Z
+             sgs * (last l) * ms^(- mmi - 1) *
+                 eval(differentiate(Gamma(x::F), x, mmi::N), [kernel(x)@K], [z])
+
+-- returns [w, m, s, c] or []
+-- matches only formula (1) of the Geddes & al, AAECC 1 (1990) paper
+-- c*t^w*log(t)^m*exp(-t^s)
+           match1(f, x, t, cc) ==
+             res0 := new()$RES
+             pat := cc * log(t)^m * exp(-t^s)
+             not failed?(res := patternMatch(f, convert(pat)@PAT, res0)) =>
+               l := mkalist res
+               [0, l.pmm, l.pms, l.pmc]
+             pat := cc * t^w * exp(-t^s)
+             not failed?(res := patternMatch(f, convert(pat)@PAT, res0)) =>
+               l := mkalist res
+               [l.pmw, 0, l.pms, l.pmc]
+             pat := cc / t^w * exp(-t^s)
+             not failed?(res := patternMatch(f, convert(pat)@PAT, res0)) =>
+               l := mkalist res
+               [- l.pmw, 0, l.pms, l.pmc]
+             pat := cc * t^w * log(t)^m * exp(-t^s)
+             not failed?(res := patternMatch(f, convert(pat)@PAT, res0)) =>
+               l := mkalist res
+               [l.pmw, l.pmm, l.pms, l.pmc]
+             pat := cc / t^w * log(t)^m * exp(-t^s)
+             not failed?(res := patternMatch(f, convert(pat)@PAT, res0)) =>
+               l := mkalist res
+               [- l.pmw, l.pmm, l.pms, l.pmc]
+             empty()
+
+           pmintegrate(f, x, a, b) ==
+               whatInfinity(a) = 0 and zero?(retract(a)@F)
+                                   and ((whatInfinity b) = 1) =>
+                   formula1(f, x, constant(x::F),
+                            suchThat(c, (x1 : F) : Boolean+->freeOf?(x1, x)))
+               "failed"
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

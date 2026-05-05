@@ -1,0 +1,14 @@
+if echo ab | grep -E '(a|b)b' > /dev/null 2>&1 ; then
+    EGREP='grep -E'
+else
+    EGREP=egrep
+fi
+$EGREP '^\)abbrev (domain|package|category)' *.spad | sort | uniq | \
+awk -F: '{
+  chunk=$2;
+  split(chunk,part," ");
+  spadname=part[3];
+  print spadname".spad: $(srcdir)/"$1;
+  print "\t$(unpack_file) \""chunk"\" < $< > $@" ;
+  print "";
+}'

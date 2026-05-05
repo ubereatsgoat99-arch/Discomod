@@ -1,0 +1,30 @@
+Function: ellisisom
+Section: elliptic_curves
+C-Name: ellisisom
+Prototype: GG
+Help: ellisisom(E,F): return 0 if the elliptic curves E and F defined over the
+ same number field are not isomorphic, otherwise return [u,r,s,t] suitable for
+ ellchangecurve, mapping E to F.
+Doc:
+ return $0$ if the elliptic curves $E$ and $F$ defined over the same number
+ field are not isomorphic, otherwise return \kbd{[u,r,s,t]} suitable for
+ \kbd{ellchangecurve}, mapping $E$ to $F$.
+
+ \bprog
+ ? E = ellinit([1,2]);
+ ? ellisisom(E, ellinit([1,3]))
+ %2 = 0
+ ? F = ellchangecurve(E, [-1,1,3,2]);
+ ? ellisisom(E,F)
+ %4 = [1, 1, -3, -2]
+ @eprog
+
+ \bprog
+ ? nf = nfinit(a^3-2); E = ellinit([a^2+1,2*a-5], nf);
+ ? F = ellchangecurve(E,Mod([a, a+1, a^2, a^2+a-3], nf.pol));
+ ? v = ellisisom(E,F)
+ %3 = [Mod(-a, a^3 - 2), Mod(a + 1, a^3 - 2), Mod(-a^2, a^3 - 2),
+       Mod(-a^2 - a + 3, a^3 - 2)]
+ ? ellchangecurve(E,v) == F
+ %4 = 1
+ @eprog

@@ -1,0 +1,85 @@
+Function: polgalois
+Section: number_fields
+C-Name: polgalois
+Prototype: Gp
+Help: polgalois(T): Galois group of the polynomial T (see manual for group
+ coding). Return [n, s, k, name] where n is the group order, s the signature,
+ k the index and name is the GAP4 name of the transitive group.
+Doc: \idx{Galois} group of the nonconstant
+ polynomial $T\in\Q[X]$. In the present version \vers, $T$ must be irreducible
+ and the degree $d$ of $T$ must be less than or equal to 7. If the
+ \tet{galdata} package has been installed, degrees 8, 9, 10 and 11 are also
+ implemented. By definition, if $K = \Q[x]/(T)$, this computes the action of
+ the Galois group of the Galois closure of $K$ on the $d$ distinct roots of
+ $T$, up to conjugacy (corresponding to different root orderings).
+
+ The output is a 4-component vector $[n,s,k,name]$ with the
+ following meaning: $n$ is the cardinality of the group, $s$ is its signature
+ ($s=1$ if the group is a subgroup of the alternating group $A_{d}$, $s=-1$
+ otherwise) and name is a character string containing name of the transitive
+ group according to the GAP 4 transitive groups library by Alexander Hulpke.
+
+ $k$ is the numbering of the group among all
+ transitive subgroups of $S_{d}$, as given in ``The transitive groups of
+ degree up to eleven'', G.~Butler and J.~McKay, \emph{Communications in
+ Algebra}, vol.~11, 1983, pp.~863--911 (group $k$ is denoted $T_{k}$ there).
+ Specifically, for polynomials of degree $d\leq 7$, the groups are coded as
+ follows, using standard notations
+ \smallskip
+ In degree 1: $S_{1}=[1,1,1]$.
+ \smallskip
+ In degree 2: $S_{2}=[2,-1,1]$.
+ \smallskip
+ In degree 3: $A_{3}=C_{3}=[3,1,1]$, $S_{3}=[6,-1,2]$.
+ \smallskip
+ In degree 4: $C_{4}=[4,-1,1]$, $V_{4}=[4,1,2]$, $D_{4}=[8,-1,3]$, $A_{4}=[12,1,4]$,
+ $S_{4}=[24,-1,5]$.
+ \smallskip
+ In degree 5: $C_{5}=[5,1,1]$, $D_{5}=[10,1,2]$, $M_{20}=[20,-1,3]$,
+ $A_{5}=[60,1,4]$, $S_{5}=[120,-1,5]$.
+ \smallskip
+ In degree 6: $C_{6}=[6,-1,1]$, $S_{3}=[6,-1,2]$, $D_{6}=[12,-1,3]$, $A_{4}=[12,1,4]$,
+ $G_{18}=[18,-1,5]$, $A_{4}\times C_{2}=[24,-1,6]$, $S_{4}^{+}=[24,1,7]$,
+ $S_{4}^{-}=[24,-1,8]$, $G_{36}^{-}=[36,-1,9]$, $G_{36}^{+}=[36,1,10]$,
+ $S_{4}\times C_{2}=[48,-1,11]$, $A_{5}=PSL_{2}(5)=[60,1,12]$, $G_{72}=[72,-1,13]$,
+ $S_{5}=PGL_{2}(5)=[120,-1,14]$, $A_{6}=[360,1,15]$, $S_{6}=[720,-1,16]$.
+ \smallskip
+ In degree 7: $C_{7}=[7,1,1]$, $D_{7}=[14,-1,2]$, $M_{21}=[21,1,3]$,
+ $M_{42}=[42,-1,4]$, $PSL_{2}(7)=PSL_{3}(2)=[168,1,5]$, $A_{7}=[2520,1,6]$,
+ $S_{7}=[5040,-1,7]$.
+ \smallskip
+ For compatibility with older PARI/GP versions, when \kbd{new\_galois\_format} is
+ set to $0$, the numbering is different for $d\leq 7$, the groups are coded as
+ follows, using standard notations:
+ \smallskip
+ In degree 1: $S_{1}=[1,1,1]$.
+ \smallskip
+ In degree 2: $S_{2}=[2,-1,1]$.
+ \smallskip
+ In degree 3: $A_{3}=C_{3}=[3,1,1]$, $S_{3}=[6,-1,1]$.
+ \smallskip
+ In degree 4: $C_{4}=[4,-1,1]$, $V_{4}=[4,1,1]$, $D_{4}=[8,-1,1]$, $A_{4}=[12,1,1]$,
+ $S_{4}=[24,-1,1]$.
+ \smallskip
+ In degree 5: $C_{5}=[5,1,1]$, $D_{5}=[10,1,1]$, $M_{20}=[20,-1,1]$,
+ $A_{5}=[60,1,1]$, $S_{5}=[120,-1,1]$.
+ \smallskip
+ In degree 6: $C_{6}=[6,-1,1]$, $S_{3}=[6,-1,2]$, $D_{6}=[12,-1,1]$, $A_{4}=[12,1,1]$,
+ $G_{18}=[18,-1,1]$, $S_{4}^{-}=[24,-1,1]$, $A_{4}\times C_{2}=[24,-1,2]$,
+ $S_{4}^{+}=[24,1,1]$, $G_{36}^{-}=[36,-1,1]$, $G_{36}^{+}=[36,1,1]$,
+ $S_{4}\times C_{2}=[48,-1,1]$, $A_{5}=PSL_{2}(5)=[60,1,1]$, $G_{72}=[72,-1,1]$,
+ $S_{5}=PGL_{2}(5)=[120,-1,1]$, $A_{6}=[360,1,1]$, $S_{6}=[720,-1,1]$.
+ \smallskip
+ In degree 7: $C_{7}=[7,1,1]$, $D_{7}=[14,-1,1]$, $M_{21}=[21,1,1]$,
+ $M_{42}=[42,-1,1]$, $PSL_{2}(7)=PSL_{3}(2)=[168,1,1]$, $A_{7}=[2520,1,1]$,
+ $S_{7}=[5040,-1,1]$.
+ \smallskip
+
+ \misctitle{Warning} The method used is that of resolvent polynomials and is
+ sensitive to the current precision. The precision is updated internally but,
+ in very rare cases, a wrong result may be returned if the initial precision
+ was not sufficient.
+Variant: \fun{GEN}{polgalois0}{GEN T, long ngf, long prec} where $ngf$ is either
+ $0$ for the traditional format and $1$ for the new Galois format.
+ Alternatively, in library mode, to force the use of the older format for
+ compatibility purpose, set the global variable \tet{new_galois_format} to $0$.

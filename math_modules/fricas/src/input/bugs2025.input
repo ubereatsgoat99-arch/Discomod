@@ -1,0 +1,98 @@
+)set break resume
+)expose UnittestCount UnittestAux Unittest
+
+testsuite "bugs2025"
+
+testcase "coercion to AN"
+
+p4 := legendre(4)$PolynomialNumberTheoryFunctions
+a4 := rootOf(p4)$EXPR(INT)
+-- coercion used to fail
+testEquals("a4::AN", "rootOf(p4)")
+
+testcase "FourierSeries"
+
+fS := FourierSeries(Fraction(Integer), Integer)
+
+one := 1$fS
+testEquals("one*one", "one")
+
+s := makeSin(1, 2)$fS
+c := makeCos(1, 2)$fS
+
+testEquals("s^2 + c^2", "4*one")
+testEquals("(2*one - s)*(2*one + s)", "c^2")
+
+c3 := makeCos(3, 1)$fS
+
+testEquals("2*c3 + 3*c", "c^3")
+testEquals("s*c3", "c3*s")
+testEquals("(c*s)*c3", "c*(s*c3)")
+
+testcase "interpreter where"
+
+testEquals("t where (macro s == 1; macro t == 2)", "2")
+testEquals("s where s ==> 1", "1")
+
+testcase "multiple assignment"
+
+cnt := 0$Integer
+get_list(t) == (free cnt; cnt := cnt + t; [1, 2, 3])
+use_list(t) == ([a, b, c] := get_list(t); b)
+
+res := use_list(3)
+testEquals("res", "2")
+testEquals("cnt", "3")
+res := use_list(3)
+testEquals("cnt", "6")
+
+testcase "macros in parse"
+
+ii := parse("xx==>5;yy:=xx+3")$InputForm
+s := devaluate(Polynomial(Integer))$Lisp
+testEquals("devaluate(typeOf(2*xx))$Lisp", "s")
+testEquals("interpret_in_new_env(ii)$InputForm", "8")
+testEquals("devaluate(typeOf(2*yy))$Lisp", "s")
+
+testcase "record and union tags"
+
+r := [1, 2]$Record(a : Integer, b : Integer)
+a := b
+testEquals("r.a", "1")
+a := c
+testEquals("r.a", "1")
+
+uT := Union(i : Integer, s : String)
+u := 7::uT
+i := s
+testEquals("u.i", "7")
+i := j
+testEquals("u.i", "7")
+
+testcase "recursion in typeOf()"
+
+testLibraryError("typeOf()")
+
+testcase "strange types"
+eci := Expression(Complex(Integer))::OutputForm
+ex := ((%i*t - 1)*z*(z^2 - 3))/(sqrt(2)*(%i*t + 1))
+testEquals("typeOf(ex)::OutputForm", "eci")
+
+ex := (t + sqrt(2))*(%i*t + 1)
+testEquals("typeOf(ex)::OutputForm", "eci")
+
+ex := (t + sqrt(2))/(%i*t + 1)
+testEquals("typeOf(ex)::OutputForm", "eci")
+
+ex := sqrt(2)*((t - 1)/(%i*t + 1))
+testEquals("typeOf(ex)::OutputForm", "eci")
+
+testcase "Pade C-fraction"
+
+st1 := coefficients(taylor(exp(x), x = 0))::Stream(FRAC(INT));
+pCF := PadeContinuousFraction(FRAC(INT), 'x)
+cs := pade_stream(st1, monomial(1, 1))$pCF;
+testEquals("entries(complete(first(cs, 5)))", _
+          "[1, -x, (1/2)*x, -(1/6)*x, (1/6)*x]")
+
+statistics()

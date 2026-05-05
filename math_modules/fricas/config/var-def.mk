@@ -1,0 +1,169 @@
+## ---------------------------------
+## -- Standard Autoconf variables --
+## ---------------------------------
+
+SHELL = @SHELL@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+bindir = @bindir@
+# sbindir = @sbindir@
+# libexecdir = @libexecdir@
+# datarootdir = @datarootdir@
+# datadir = @datadir@
+# sysconfdir = @sysconfdir@
+# sharedstatedir = @sharedstatedir@
+# localstatedir = @localstatedir@
+# includedir = @includedir@
+# oldincludedir = @oldincludedir@
+# docdir = @docdir@
+# infodir = @infodir@
+# htmldir = @htmldir@
+# dvidir = @dvidir@
+# pdfdir = @pdfdir@
+# psdir = @psdir@
+libdir = @libdir@
+# lispdir = @lispdir@
+# localedir = @localedir@
+
+
+host = @host@
+host_alias = @host_alias@
+build = @build@
+build_alias = @build_alias@
+target = @target@
+target_alias = @target_alias@
+
+srcdir = @srcdir@
+abs_srcdir = @abs_srcdir@
+top_srcdir = @top_srcdir@
+abs_top_srcdir = @abs_top_srcdir@
+
+# Notice that there is a bug in Autoconf 2.59 whereby the variable
+# top_builddir is not defined.  So avoid to use it directly.  Use
+# abs_top_builddir.
+builddir = @builddir@
+abs_builddir = @abs_builddir@
+top_builddir = @top_builddir@
+abs_top_builddir = @abs_top_builddir@
+datadir = @datadir@
+
+
+AR = @AR@
+CC = @CC@
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
+OBJEXT = @OBJEXT@
+EXEEXT = @EXEEXT@
+
+AUTOCONF = autoconf
+AWK = @AWK@
+TARGET_AWK = @AWK_FOR_TARGET@
+INSTALL = @INSTALL@
+install_sh = @install_sh@
+install_sh_DATA = $(install_sh) -c -m 644
+install_sh_PROGRAM = $(install_sh) -c
+install_sh_script = $(install_sh) -c
+INSTALL_DATA = @INSTALL_DATA@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_SCRIPT = @INSTALL_SCRIPT@
+## FIXME:  The test done with Autoconf-2.60 and later concludes
+##         that "ln -s" is unusable on msys, and therefore defaults to
+##         "cp -p", but that default is unusable for us.  For our
+##         purpose "ln -s" is just fine on that platform.  Consequently
+##         we are explicitly overriding that value here.
+LN_S = ln -s
+mkinstalldirs = $(top_srcdir)/config/mkinstalldirs
+PATCH = @PATCH@
+RANLIB = @RANLIB@
+TAR = @TAR@
+TOUCH = @TOUCH@
+
+## Normally, Automake will substitute the value for this variable.
+## But, we don't have Automake yet.  So we punt on it.
+MKDIR_P = mkdir -p
+
+STAMP = echo timestamp >
+
+## ---------------------
+## -- FriCAS variables --
+## ---------------------
+
+## Absolute path to the toplevel source directory for FriCAS.  This is
+## almost like Autoconf-standard abs_top_srcdir except that, it retains
+## the same syntactic values in subdirectories.
+
+## Where The FriCAS distribution main source files are kept.
+## Notice, this is the src/ directory within the toplevel source
+## directory
+
+fricas_top_srcdir = @fricas_top_srcdir@
+
+fricas_src_srcdir = $(fricas_top_srcdir)/src
+fricas_src_datadir = $(fricas_src_srcdir)/share
+fricas_src_algdir = $(fricas_src_srcdir)/algebra
+
+## Where tools for the build machine are built
+fricas_builddir = @fricas_builddir@
+fricas_build_bindir = @fricas_build_bindir@
+
+fricas_configdir = $(abs_top_builddir)/config
+fricas_c_macros = $(fricas_configdir)/fricas_c_macros.h
+
+LATEX = @LATEX@
+
+## Staging directory for the target DESTDIR
+fricas_targetdir = @fricas_targetdir@
+fricas_target_bindir = $(fricas_targetdir)/bin
+fricas_target_libdir = $(fricas_targetdir)/lib
+fricas_target_srcdir = $(fricas_targetdir)/src
+fricas_target_docdir = $(fricas_targetdir)/doc
+fricas_target_datadir = $(fricas_targetdir)/share
+
+
+FRICAS_X11_CFLAGS = @X_CFLAGS@
+FRICAS_X11_LDFLAGS = @X_LIBS@ @X_PRE_LIBS@ -lX11 @X_EXTRA_LIBS@
+
+fricas_includes = -I$(fricas_src_srcdir)/include -I$(fricas_configdir)
+
+fricas_build_helper = $(abs_top_srcdir)/src/scripts/build_helper
+
+## Where the staging build directory is found
+FRICAS = @FRICAS@
+export FRICAS
+
+## Old FriCAS ENV variables
+
+VERSION = @PACKAGE_STRING@
+
+CCF=@CCF@
+LDF=-g
+
+## -------------------------------------------
+## -- Files generated for the build machine --
+## -------------------------------------------
+unpack_file = $(fricas_src_srcdir)/scripts/unpack_file
+
+FRICAS_LISP = @FRICAS_LISP@
+# Extension of the output file name returned by compile-file
+LISPOBJEXT = @fricas_fasl_type@
+FASLEXT = @fricas_fasl_type2@
+FRICAS_LISP_FLAVOR=@fricas_lisp_flavor@
+FRICAS_LISP_VERSION=@fricas_lisp_version@
+
+##
+
+## GCL command to end a session.
+BYE=quit
+
+## Clear suffix-based implicit rule table.
+.SUFFIXES:
+
+PREGENERATED=@PREGENERATED@
+PACKAGE_VERSION = @PACKAGE_VERSION@
+PACKAGE_YEAR = @PACKAGE_YEAR@
+PACKAGE_TARNAME = @PACKAGE_TARNAME@
+PACKAGE_NAME = @PACKAGE_NAME@
+PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+PACKAGE_URL = @PACKAGE_URL@

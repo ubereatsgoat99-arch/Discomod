@@ -1,0 +1,36 @@
+Function: algeichlerbasis
+Section: algebras
+C-Name: algeichlerbasis
+Prototype: GG
+Help: algeichlerbasis(al,N): basis of Eichler order of level N in al.
+Doc: Given a central simple algebra~\var{al} output by~\tet{alginit} and a
+ nonzero integral ideal~\var{N} of the center~\var{nf} of~\var{al}, returns a
+ $\Z$-basis of an Eichler order of level~\var{N} in~\var{al}.
+ More precisely, at all primes dividing~\var{N}, the order ${\cal O}$ stored in
+ \var{al} must be maximal and the algebra~\var{al} must be unramified (not
+ checked), and the function returns a suborder of ${\cal O}$ that is an Eichler
+ suborder of~${\cal O}$ locally at all primes dividing~\var{N}.
+ Here an Eichler order means the stabiliser of a line modulo $\var{pr}^{m}$
+ for every exact divisor $\var{pr}^{m}$ of~\var{N}. In quaternion algebras
+ (degree~$2$), Eichler orders in this sense are exactly the intersections of
+ pairs of maximal orders.
+
+ The level \var{N} is factored by this function, but can be given by a
+ factorization matrix.
+
+ \bprog
+ ? nf = nfinit(y);
+ ? al = alginit(nf, [-1,-1]);
+ ? B = algeichlerbasis(al, 3^27);
+ ? matdet(B) == 3^27 \\ B has the expected index
+ % = 1
+ ? alt = algtableinit(algmultable(al),3); \\ maximal order mod 3
+ ? alB = algsubalg(alt, matimage(Mod(B,3)))[1]; \\ image of Eichler order
+ ? algdim(alB)
+ % = 3
+ ? [J,dec] = algsimpledec(alB);
+ ? #J \\ 1-dimensional radical
+ % = 1
+ ? #dec \\ semisimplification F3 x F3
+ % = 2
+ @eprog

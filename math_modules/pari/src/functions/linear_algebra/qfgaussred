@@ -1,0 +1,59 @@
+Function: qfgaussred
+Section: linear_algebra
+C-Name: qfgaussred0
+Prototype: GD0,L,
+Help: qfgaussred(q,{flag=0}): square reduction of the symmetric matrix q.
+ flag=0: returns a square matrix A such that q(x) = sum_i A[i,i] (x[i] +
+ sum_{j != i} A[i,j] x[j])^2; flag=1 return [U,V] where U is a square matrix
+ and V a vector such that q = U~ * matdiagonal(V) * U
+
+Doc:
+ \idx{decomposition into squares} of the
+ quadratic form represented by the symmetric matrix $q$. If $\fl=0$ (default),
+ the result is a matrix $M$ whose diagonal entries are the coefficients of the
+ squares, and the off-diagonal entries on each line represent the bilinear
+ forms. More precisely, if $(a_{ij})$ denotes the output, one has
+ $$ q(x) = \sum_{i} a_{i,i} (x_{i} + \sum_{j \neq i} a_{i,j} x_{j})^{2} $$
+ \bprog
+ ? qfgaussred([0,1;1,0])
+ %1 =
+ [1/2 1]
+
+ [-1 -1/2]
+ @eprog\noindent This means that $2xy = (1/2)(x+y)^{2} - (1/2)(x-y)^{2}$.
+ Singular matrices are supported, in which case some diagonal coefficients
+ vanish:
+ \bprog
+ ? qfgaussred([1,1;1,1])
+ %2 =
+ [1 1]
+
+ [1 0]
+ @eprog\noindent This means that $x^{2} + 2xy + y^{2} = (x+y)^{2}$.
+
+ If $\fl=1$, return \kbd{[U,V]} where $U$ is a square matrix and $V$ a vector,
+ such that if \kbd{D=matdiagonal(V)}, $q = {^{t}} U D U$. More
+ precisely
+ $$ q(x) = \sum_{i} D_{i} (\sum_{j} U_{i,j} x_{j})^{2} $$
+ and the matrix $M$ is recovered as $M = U + D - 1$.
+ \bprog
+ ? q = [0,1;1,0];
+ ? [U,V] = qfgaussred(q,1); D = matdiagonal(V);
+ ? U~*D*U
+ %5 =
+ [0 1]
+
+ [1 0]
+ ? U+D-1
+ %6 =
+ [1/2    1]
+
+ [ -1 -1/2]
+ @eprog
+Variant: See also the functions \fun{GEN}{qfgaussred}{GEN a}
+ (for \kbd{qfgaussred(a,0)}),
+ \fun{GEN}{qfgaussred2}{GEN a} (for \kbd{qfgaussred0(a,1)}). Finally,
+ the function
+ \fun{GEN}{qfgaussred_positive}{GEN q} assumes that $q$ is
+ positive definite and is a little faster; returns \kbd{NULL} if a vector
+ with negative norm occurs (non positive matrix or too many rounding errors).

@@ -1,0 +1,109 @@
+fricas_c_runtime_extra = @fricas_c_runtime_extra@
+
+# this is where to put the various commands
+OUTLIB=	$(fricas_target_libdir)
+
+BITMAPS = mouse11.bitmap mouse11.mask sdown3d.bitmap sdown3dpr.bitmap \
+	sdown.bitmap sup3d.bitmap sup3dpr.bitmap sup.bitmap ht_icon
+
+SCRIPTS=${OUTLIB}/htsearch ${OUTLIB}/presea
+
+BINFILES= $(fricas_target_bindir)/hypertex$(EXEEXT) \
+		$(fricas_target_bindir)/htadd$(EXEEXT) \
+		${OUTLIB}/hthits$(EXEEXT) ${OUTLIB}/ex2ht$(EXEEXT)
+
+
+HEADERS_src = extent.h hterror.h hyper.h keyin.h lex.h \
+	parse.h parse-types.h token.h
+
+HEADERS = $(addprefix $(srcdir)/, $(HEADERS_src) $(BITMAPS)) $(fricas_c_macros)
+
+
+build_libdir = $(abs_top_builddir)/src/lib
+
+hypertex_sources = addfile.c cond.c dialog.c display.c event.c extent1.c \
+		extent2.c form-ext.c group.c halloc.c hash.c hterror.c \
+		htinp.c hyper.c initx.c input.c item.c keyin.c lex.c \
+		macro.c mem.c parse.c parse-aux.c parse-input.c \
+		parse-paste.c parse-types.c ReadBitmap.c scrollbar.c \
+		show-types.c spadint.c titlebar.c
+
+hypertex_objects = $(hypertex_sources:.c=.$(OBJEXT))
+hypertex_LDADD = -L$(build_libdir) -lspad $(fricas_c_runtime_extra)
+hypertex_DEPENDENCIES = $(build_libdir)/libspad.a
+
+htadd_sources = addfile.c halloc.c hash.c htadd.c hterror.c lex.c
+htadd_objects = $(htadd_sources:.c=.$(OBJEXT))
+# FIXME: remove extra dependency
+htadd_LDADD = -L$(build_libdir) -lspad $(fricas_c_runtime_extra)
+htadd_DEPENDENCIES = $(build_libdir)/libspad.a
+
+
+hthits_sources = hthits.c
+hthits_objects = $(hthits_sources:.c=.$(OBJEXT))
+hthits_LDADD = -L$(build_libdir) -lspad
+hthits_DEPENDENCIES = $(build_libdir)/libspad.a
+
+ex2ht_sources = ex2ht.c
+ex2ht_objects = $(ex2ht_sources:.c=.$(OBJEXT))
+ex2ht_LDADD = -L$(build_libdir) -lspad
+ex2ht_DEPENDENCIES = $(build_libdir)/libspad.a
+
+
+subdir = src/hyper/
+
+.PHONY: all all-hyper
+.SUFFIXES:
+.SUFFIXES: .c .o .h
+
+all: all-ax
+
+all-ax all-hyper: stamp
+	@ echo finished $(builddir)
+
+stamp: ${SCRIPTS} ${BINFILES}
+	-rm -f stamp
+	$(STAMP) stamp
+
+clean-local:
+	-rm -f $(hypertex_objects)
+	-rm -f $(htadd_objects)
+	-rm -f $(htsearch_objects)
+	-rm -f $(hthits_objects)
+	-rm -f $(ex2ht_objects)
+	-rm -f stamp
+	-rm -f $(BINFILES)
+
+distclean-local: clean-local
+
+.PRECIOUS: %.$(OBJEXT)
+
+%.$(OBJEXT): $(srcdir)/%.c $(HEADERS)
+	$(CC) $(CFLAGS) ${CCF} $(fricas_includes) $(FRICAS_X11_CFLAGS) \
+	    -I$(srcdir) -c -o $@ $<
+
+${OUTLIB}/htsearch: $(srcdir)/htsearch
+	cp $< $@
+	chmod a+x $@
+
+${OUTLIB}/presea: $(srcdir)/presea.in
+	sed 's,@TARGET_AWK@,${TARGET_AWK},' $< > $@
+	chmod a+x $@
+
+${OUTLIB}/ex2ht$(EXEEXT): $(ex2ht_objects) $(ex2ht_DEPENDENCIES)
+	${CC} $(ex2ht_objects) -o $@ $(ex2ht_LDADD) $(FRICAS_X11_LDFLAGS) \
+	    $(LDFLAGS) -lm
+
+$(fricas_target_bindir)/htadd$(EXEEXT): $(htadd_objects) $(htadd_DEPENDENCIES)
+	${CC} $(htadd_objects) -o $@ $(htadd_LDADD) $(FRICAS_X11_LDFLAGS) \
+	    $(LDFLAGS) -lm
+
+${OUTLIB}/hthits$(EXEEXT): $(hthits_objects) $(hthits_DEPENDENCIES)
+	${CC} $(hthits_objects) -o $@ $(hthits_LDADD) $(FRICAS_X11_LDFLAGS) \
+	    $(LDFLAGS) -lm
+
+
+$(fricas_target_bindir)/hypertex$(EXEEXT): $(hypertex_objects) $(hypertex_DEPENDENCIES)
+	${CC} $(hypertex_objects) -o $@ $(hypertex_LDADD) $(FRICAS_X11_LDFLAGS) \
+	    $(LDFLAGS) -lm
+

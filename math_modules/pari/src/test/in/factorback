@@ -1,0 +1,6 @@
+\\ ERRORS
+factorback(Vecsmall([1,2]),[3,4])
+factorback('x,[3,4])
+factorback([1,2,3],[3,4])
+factorback([1,2],'x)
+

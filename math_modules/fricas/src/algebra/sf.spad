@@ -1,0 +1,653 @@
+-- Author: Michael Monagan, Stephen M. Watt
+)abbrev category REAL RealConstant
+++ Author:
+++ Basic Functions:
+++ Related Constructors:
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ References:
+++ Description:
+++ The category of real numeric domains, i.e. convertible to floats.
+RealConstant() : Category ==
+  Join(ConvertibleTo DoubleFloat, ConvertibleTo Float)
+
+
+)abbrev category RNS RealNumberSystem
+++ Author: Michael Monagan and Stephen M. Watt
+++ Date Created: January 1988
+++ Basic Operations: abs, ceiling, wholePart, floor, fractionPart, norm, round, truncate
+++ Related Constructors:
+++ Keywords: real numbers
+++ Description:
+++ The real number system category is intended as a model for the real
+++ numbers.  The real numbers form an ordered normed field.  Note that
+++ we have purposely not included \spadtype{DifferentialRing} or the elementary
+++ functions (see \spadtype{TranscendentalFunctionCategory}) in the definition.
+RealNumberSystem() : Category ==
+  Join(Field, OrderedRing, RealConstant, RetractableTo Integer,
+       RetractableTo Fraction Integer, RadicalCategory,
+        ConvertibleTo(Pattern(Float)), PatternMatchable(Float)) with
+    norm : % -> %
+      ++ norm x returns the same as absolute value.
+    ceiling : % -> %
+      ++ ceiling x returns the small integer \spad{>= x}.
+    floor : % -> %
+      ++ floor x returns the largest integer \spad{<= x}.
+    wholePart  : % -> Integer
+      ++ wholePart x returns the integer part of x.
+    fractionPart : % -> %
+      ++ fractionPart x returns the fractional part of x.
+    truncate : % -> %
+      ++ truncate x returns the integer between x and 0 closest to x.
+    round : % -> %
+      ++ round x computes the integer closest to x.
+
+ add
+   characteristic() == 0
+   fractionPart x           == x - truncate x
+   truncate x          == (negative? x => -floor(-x); floor x)
+   round x          == (negative? x => truncate(x-1/2::%); truncate(x+1/2::%))
+   norm x           == abs x
+   coerce(x : Fraction Integer) : % == numer(x)::% / denom(x)::%
+   convert(x : %) : Pattern(Float)  == convert(x)@Float :: Pattern(Float)
+
+   floor x ==
+      x1 := (wholePart x) :: %
+      x = x1 => x
+      x < 0 => (x1 - 1)
+      x1
+
+   ceiling x ==
+      x1 := (wholePart x)::%
+      x = x1 => x
+      x >= 0 => (x1 + 1)
+      x1
+
+   patternMatch(x, p, l) ==
+     generic? p => addMatch(p, x, l)
+     constant? p =>
+       (r := retractIfCan(p)@Union(Float, "failed")) case Float =>
+         convert(x)@Float = r@Float => l
+         failed()
+       failed()
+     failed()
+
+
+)abbrev category FPS FloatingPointSystem
+++ Author:
+++ Basic Operations: approximate, base, bits, digits, exponent, float,
+++    mantissa, order, precision
+++ Related Constructors:
+++ Keywords: float, floating point
+++ Description:
+++ This category is intended as a model for floating point systems.
+++ A floating point system is a model for the real numbers.  In fact,
+++ it is an approximation in the sense that not all real numbers are
+++ exactly representable by floating point numbers.
+++ A floating point system is characterized by the following:
+++
+++   1: \spadfunFrom{base}{FloatingPointSystem} of the \spadfunFrom{exponent}{FloatingPointSystem}.
+++          (actual implementations are usually binary or decimal)
+++   2: \spadfunFrom{precision}{FloatingPointSystem} of the \spadfunFrom{mantissa}{FloatingPointSystem} (arbitrary or fixed)
+++   3: rounding error for operations
+--++   4:  when, and what happens if exponent overflow/underflow occurs
+++
+++ Because a Float is an approximation to the real numbers, even though
+++ it is defined to be a join of a Field and OrderedRing, some of
+++ the attributes do not hold.  In particular associative("+")
+++ does not hold.  Algorithms defined over a field need special
+++ considerations when the field is a floating point system.
+FloatingPointSystem() : Category == Join(RealNumberSystem(), Approximate,
+                                         ConvertibleTo String) with
+   "/" : (%, Integer) -> %
+      ++ x / i computes the division from x by an integer i.
+   float : (Integer, Integer) -> %
+      ++ float(a, e) returns \spad{a * base() ^ e}.
+   float : (Integer, Integer, PositiveInteger) -> %
+      ++ float(a, e, b) returns \spad{a * b ^ e}.
+   order : % -> Integer
+      ++ order x is the order of magnitude of x.
+      ++ Note: \spad{base ^ order x <= |x| < base ^ (1 + order x)}.
+   base : () -> PositiveInteger
+      ++ base() returns the base of the \spadfunFrom{exponent}{FloatingPointSystem}.
+   exponent : % -> Integer
+      ++ exponent(x) returns the \spadfunFrom{exponent}{FloatingPointSystem} part of x.
+   mantissa : % -> Integer
+      ++ mantissa(x) returns the mantissa part of x.
+  -- round?: () -> B
+  --    ++ round?() returns the rounding or chopping.
+   toString : % -> String
+      ++ \spad{toString(x)} returns the string representation of x.
+   toString : (%, NonNegativeInteger) -> String
+      ++ \spad{toString(x, n)} returns a string representation of x
+      ++ truncated to n decimal digits.
+   bits : () -> PositiveInteger
+      ++ bits() returns ceiling's precision in bits.
+   digits : () -> PositiveInteger
+      ++ digits() returns ceiling's precision in decimal digits.
+   precision : () -> PositiveInteger
+      ++ precision() returns the precision in digits base.
+
+   if % has arbitraryPrecision then
+      bits : PositiveInteger -> PositiveInteger
+        ++ bits(n) set the \spadfunFrom{precision}{FloatingPointSystem} to n bits.
+      digits : PositiveInteger -> PositiveInteger
+        ++ digits(d) set the \spadfunFrom{precision}{FloatingPointSystem} to d digits.
+      precision : PositiveInteger -> PositiveInteger
+        ++ precision(n) set the precision in the base to n decimal digits.
+      increasePrecision : Integer -> PositiveInteger
+        ++ increasePrecision(n) increases the current
+        ++ \spadfunFrom{precision}{FloatingPointSystem} by n decimal digits.
+      decreasePrecision : Integer -> PositiveInteger
+        ++ decreasePrecision(n) decreases the current
+        ++ \spadfunFrom{precision}{FloatingPointSystem} precision by n decimal digits.
+   if not (% has arbitraryExponent) then
+    --  overflow: (()->Exit) -> Void
+    --    ++ overflow() returns the Exponent overflow of float
+    --  underflow: (()->Exit) -> Void
+    --    ++ underflow() returns the Exponent underflow of float
+    --  maxExponent: () -> Integer
+    --    ++ maxExponent() returns the max Exponent of float
+      if not (% has arbitraryPrecision) then
+         min : () -> %
+          ++ min() returns the minimum floating point number.
+         max : () -> %
+          ++ max() returns the maximum floating point number.
+ add
+   float(ma, ex) == float(ma, ex, base())
+   digits() == max(1, 4004 * (bits()-1) quo 13301)::PositiveInteger
+
+   toString x == convert(x)@String
+
+   toString(x : %, n : NonNegativeInteger) : String ==
+       fixed_mr([mantissa(x), exponent(x)], n,
+                [false, false, "fixed", 0, underscore()$Character]
+               )$FloatingPointConvertion
+
+
+)if false
+\section{domain DFLOAT DoubleFloat}
+Greg Vanuxem has added some functionality to allow the user to modify
+the printed format of floating point numbers. The format of the numbers
+follows the common lisp format specification for floats. First we include
+Greg's email to show the use of this feature:
+
+\begin{verbatim}
+(1) -> a := matrix [ [0.5978, 0.2356], [0.4512, 0.2355] ]
+
+        +0.5978  0.2356+
+   (1)  |              |
+        +0.4512  0.2355+
+                               Type : Matrix DoubleFloat
+(2) -> doubleFloatFormat("~,4,,F")
+
+   (2)  "~A"
+                               Type : String
+(3) -> a
+
+        +0.5978  0.2356+
+   (3)  |              |
+        +0.4512  0.2355+
+                               Type : Matrix DoubleFloat
+
+\end{verbatim}
+So it is clear that he has added a new function called
+{\tt doubleFloatFormat} which takes a string argument that
+specifies the common lisp format control string (\"{}\~{},4,,F\"{}).
+For reference we quote from the common lisp manual \cite{1}.
+On page 582 we find:
+
+\begin{quote}
+A format directive consists of a tilde (\~{}), optional prefix
+parameters separated by commas, optional colon (: ) and at-sign (@)
+modifiers, and a single character indicating what kind of directive this is.
+The alphabetic case of the directive character is ignored. The prefix
+parameters are generally integers, notated as optionally signed decimal
+numbers.
+
+X3J13 voted in June 1987 (80) to specify that if both colon and at-sign
+modifiers are present, they may appear in either order; thus \~{}: @R
+and \~{}@: R mean the same thing. However, it is traditional to put the
+colon first, and all examples in the book put colon before at-signs.
+\end{quote}
+
+\noindent
+On page 588 we find:
+
+\begin{quote}
+\~{}F
+
+{\sl Fixed-format floating-point}. The next {\sl arg} is printed as a
+floating point number.
+
+The full form is {\sl \~{}w, d, k, overfowchar, padchar}F. The parameter
+{\sl w} is the width of the filed to be printed; {\sl d} is the number
+of digits to print after the decimal point; {\sl k} is a scale factor
+that defaults to zero.
+
+Exactly {\sl w} characters will be output. First, leading copies of the
+character {\sl padchar} (which defaults to a space) are printed, if
+necessary, to pad the field on the left. If the {\sl arg} is negative,
+then a minus sign is printed; if the {\sl arg} is not negative, then
+a plus signed is printed if and only if the @ modifier was specified.
+Then a sequence of digits, containing a single embedded decimal point,
+is printed; this represents the magnitude of the value of {\sl arg}
+times $10^k$, rounded to {\sl d} fractional digits. (When rounding up
+and rounding down would produce printed values equidistant from the
+scaled value of {\sl arg}, then the implementation is free to use
+either one. For example, printing the argument 6.375 using the format
+\~{}4.2F may correctly produce either 6.37 or 6.38.) Leading zeros are
+not permitted, except that a single zero digit is output before the
+decimal point if the printed value is less than 1, and this single zero
+digit is not output after all if $w = d + 1$.
+
+If it is impossible to print the value in the required format in the
+field of width {\sl w}, then one of two actions is taken. If the
+parameter {\sl overflowchar} is specified, then {\sl w} copies of that
+parameter are printed instead of the scaled value of {\sl arg}. If the
+{\sl overflowchar} parameter is omitted, then the scaled value is
+printed using more than {\sl w} characters, as many more as may be
+needed.
+
+If the {\sl w} parameter is omitted, then the field is of variable width.
+In effect, a value is chosen for {\sl w} in such a way that no leading pad
+characters need to be printed and exactly {\sl d} characters will follow
+the decimal point. For example, the directive \~{}, 2F will print exactly
+two digits after the decimal point and as many as necessary before the
+decimal point.
+
+If the parameter {\sl d} is omitted, then there is no constraint on the
+number of digits to appear after the decimal point. A value is chosen
+for {\sl d} in such a way that as many digits as possible may be printed
+subject to the width constraint imposed by the parameter {\sl w} and the
+constraint that no trailing zero digits may appear in the fraction, except
+that if the fraction to be printed is zero, then a single zero digit should
+appear after the decimal point if permitted by the width constraint.
+
+If both {\sl w} and {\sl d} are omitted, then the effect is to print the
+value using ordinary free-format output; {\tt prin1} uses this format
+for any number whose magnitude is either zero or between $10^{-3}$
+(inclusive) and $10^7$ (exclusive).
+
+If {\sl w} is omitted, then if the magnitude of {\sl arg} is so large
+(or, if {\sl d} is also omitted, so small) that more than 100 digits
+would have to be printed, then an implementation is free, at its
+discretion, to print the number using exponential notation instead,
+as if by the directive \~{}E (with all parameters of \~{}E defaulted,
+not taking their valued from the \~{}F directive).
+
+If {\sl arg} is a rational number, then it is coerced to be a
+{\tt single-float} and then printed. (Alternatively, an implementation
+is permitted to process a rational number by any other method that has
+essentially the same behavior but avoids such hazards as loss of
+precision or overflow because of the coercion. However, note that if
+{\sl w} and {\sl d} are unspecified and the number has no exact decimal
+representation, for example 1/3, some precision cutoff must be chosen
+by the implementation; only a finite number of digits may be printed.)
+
+If {\sl arg} is a complex number or some non-numeric object, then it
+is printed using the format directive {\sl \~{}w}D, thereby printing
+it in decimal radix and a minimum field width of {\sl w}. (If it is
+desired to print each of the real part and imaginary part of a
+complex number using a \~{}F directive, then this must be done explicitly
+with two \~{}F directives and code to extract the two parts of the
+complex number.)
+
+\end{quote}
+)endif
+
+
+)abbrev domain DFLOAT DoubleFloat
+++ Author: Michael Monagan
+++ Date Created: January 1988
+++ Basic Operations: exp1, hash, log2, log10, rationalApproximation, / , ^
+++ Related Constructors:
+++ Keywords: small float
+++ Description:  \spadtype{DoubleFloat} is intended to make accessible
+++ hardware floating point arithmetic in \Language{}, either native double
+++ precision, or IEEE. On most machines, there will be hardware support for
+++ the arithmetic operations:
+++ \spadfunFrom{+}{DoubleFloat}, \spadfunFrom{*}{DoubleFloat},
+++ \spadfunFrom{/}{DoubleFloat} and possibly also the
+++ \spadfunFrom{sqrt}{DoubleFloat} operation.
+++ The operations \spadfunFrom{exp}{DoubleFloat},
+++ \spadfunFrom{log}{DoubleFloat}, \spadfunFrom{sin}{DoubleFloat},
+++ \spadfunFrom{cos}{DoubleFloat},
+++ \spadfunFrom{atan}{DoubleFloat} are normally coded in
+++ software based on minimax polynomial/rational approximations.
+++ Some general comments about the accuracy of the operations:
+++ the operations \spadfunFrom{+}{DoubleFloat},
+++ \spadfunFrom{*}{DoubleFloat}, \spadfunFrom{/}{DoubleFloat} and
+++ \spadfunFrom{sqrt}{DoubleFloat} are expected to be fully accurate.
+++ The operations \spadfunFrom{exp}{DoubleFloat},
+++ \spadfunFrom{log}{DoubleFloat}, \spadfunFrom{sin}{DoubleFloat},
+++ \spadfunFrom{cos}{DoubleFloat} and
+++ \spadfunFrom{atan}{DoubleFloat} are not expected to be
+++ fully accurate.  In particular, \spadfunFrom{sin}{DoubleFloat}
+++ and \spadfunFrom{cos}{DoubleFloat}
+++ will lose all precision for large arguments.
+++
+++ The \spadtype{Float} domain provides an alternative to the \spad{DoubleFloat} domain.
+++ It provides an arbitrary precision model of floating point arithmetic.
+++ This means that accuracy problems like those above are eliminated
+++ by increasing the working precision where necessary.  \spadtype{Float}
+++ provides some special functions such as
+++ \spadfunFrom{erf}{DoubleFloatSpecialFunctions2}, the error function
+++ in addition to the elementary functions.  The disadvantage of
+++ \spadtype{Float} is that it is much more expensive than small floats
+++ when the latter can be used.
+-- I've put some timing comparisons in the notes for the Float
+-- domain about the difference in speed between the two domains.
+DoubleFloat() : Join(FloatingPointSystem, DifferentialRing, OpenMath,
+   TranscendentalFunctionCategory, SpecialFunctionCategory, _
+   ConvertibleTo(InputForm), Hashable) with
+      exp1 : () -> %
+        ++ exp1() returns the natural log base \spad{2.718281828...}.
+      log2 :  % -> %
+        ++ log2(x) computes the logarithm with base 2 for x.
+      log10 : % -> %
+        ++ log10(x) computes the logarithm with base 10 for x.
+      atan : (%, %) -> %
+        ++ atan(x, y) computes the arc tangent from x with phase y.
+      qlog : % -> %
+        ++ qlog(x) computes natural logarithm of x.  It assumes that
+        ++ \spad{x > 0}.
+      qsqrt : % -> %
+        ++ qsqrt(x) computes square root of x.  It assumes that
+        ++ \spad{x >= 0}.
+      doubleFloatFormat : String -> String
+        ++ change the output format for doublefloats using lisp format strings
+      rationalApproximation : (%, NonNegativeInteger) -> Fraction Integer
+        ++ rationalApproximation(f, n) computes a rational approximation
+        ++ r to f with relative error \spad{< 10^(-n)}.
+      rationalApproximation : (%, NonNegativeInteger, NonNegativeInteger) -> Fraction Integer
+         ++ rationalApproximation(f, n, b) computes a rational
+         ++ approximation r to f with relative error \spad{< b^(-n)}
+         ++ (that is, \spad{|(r-f)/f| < b^(-n)}).
+
+ == add
+   format : String := "~A"
+   MER ==> Record(MANTISSA : Integer, EXPONENT : Integer)
+
+   manexp : % -> MER
+
+   doubleFloatFormat(s : String) : String ==
+     ss : String := format
+     format := s
+     ss
+
+   OMwrite(dev : OpenMathDevice, x : %, wholeObj : Boolean) : Void ==
+     if wholeObj then
+       OMputObject(dev)
+     OMputFloat(dev, convert x)
+     if wholeObj then
+       OMputEndObject(dev)
+
+   max_SF ==> MOST_-POSITIVE_-DOUBLE_-FLOAT$Lisp
+
+   checkComplex(x : %) : % == c_to_r(x)$Lisp
+
+   base()           == FLOAT_-RADIX(0$%)$Lisp
+   mantissa x       == manexp(x).MANTISSA
+   exponent x       == manexp(x).EXPONENT
+   precision()      == FLOAT_-DIGITS(0$%)$Lisp
+   bits()           ==
+     base() = 2 => precision()
+     base() = 16 => 4*precision()
+     wholePart(precision()*log2(base()::%))::PositiveInteger
+   max()            == max_SF
+   min()            == MOST_-NEGATIVE_-DOUBLE_-FLOAT$Lisp
+   order(a) == precision() + exponent a - 1
+   0                == FLOAT(0$Lisp, max_SF)$Lisp
+   1                == FLOAT(1$Lisp, max_SF)$Lisp
+   -- rational approximation to e accurate to 23 digits
+   exp1()           == (FLOAT(534625820200, max_SF)$Lisp pretend %) /
+                         (FLOAT(196677847971, max_SF)$Lisp pretend %)
+   pi()             == FLOAT(PI$Lisp, max_SF)$Lisp
+
+   convert(x : %) : String ==
+       FORMAT(NIL$Lisp, format, x)$Lisp pretend String
+
+   coerce(x : %) : OutputForm ==
+       x >= 0 => message(convert(x)@String)
+       - (coerce(-x)@OutputForm)
+
+   convert(x : %) : InputForm == convert(x pretend DoubleFloat)$InputForm
+   x < y            == less_DF(x, y)$Lisp
+   - x              == minus_DF(x)$Lisp
+   x + y            == add_DF(x, y)$Lisp
+   x : % - y : %        == sub_DF(x, y)$Lisp
+   x : % * y : %        == mul_DF(x, y)$Lisp
+   i : Integer * x : %  == mul_DF_I(x, i)$Lisp
+   max(x, y)         == max_DF(x, y)$Lisp
+   min(x, y)         == min_DF(x, y)$Lisp
+   x = y            == eql_DF(x, y)$Lisp
+   x : % / i : Integer  == div_DF_I(x, i)$Lisp
+   sqrt x           == checkComplex sqrt_DF(x)$Lisp
+   qsqrt x          == qsqrt_DF(x)$Lisp
+   log10 x          == checkComplex LOG10(x)$Lisp
+   x : % ^ i : Integer == expt_DF_I(x, i)$Lisp
+   x : % ^ y : %       == checkComplex expt_DF(x, y)$Lisp
+   coerce(i : Integer) : % == FLOAT(i, max_SF)$Lisp
+   exp x            == exp_DF(x)$Lisp
+   log x            == checkComplex log_DF(x)$Lisp
+   qlog x           == qlog_DF(x)$Lisp
+   log2 x           == checkComplex LOG2(x)$Lisp
+   sin x            == sin_DF(x)$Lisp
+   cos x            == cos_DF(x)$Lisp
+   tan x            == tan_DF(x)$Lisp
+   cot x            == COT(x)$Lisp
+   sec x            == 1/cos(x)
+   csc x            == 1/sin(x)
+   asin x           == checkComplex ASIN(x)$Lisp -- can be complex
+   acos x           == checkComplex ACOS(x)$Lisp -- can be complex
+   atan x           == atan_DF(x)$Lisp
+   acsc x           == asin(1/x)
+
+   pi_half : % := pi()/(2::%)
+
+   acot x           ==
+       0 < x =>
+           not(x < 1) => atan(1/x)
+           pi_half - atan(x)
+       not(-1 < x) => pi() - atan(-1/x)
+       pi_half + atan(-x)
+
+   asec x           == acos(1/x)
+   sinh x           == sinh_DF(x)$Lisp
+   cosh x           == cosh_DF(x)$Lisp
+   tanh x           == tanh_DF(x)$Lisp
+   csch x           == 1/sinh(x)
+   coth x           == 1/tanh(x)
+   sech x           == 1/cosh(x)
+   asinh x          == ASINH(x)$Lisp
+   acosh x          == checkComplex ACOSH(x)$Lisp -- can be complex
+   atanh x          == checkComplex ATANH(x)$Lisp -- can be complex
+   acsch x          == asinh(1/x)
+   acoth x          == atanh(1/x)
+   asech x          == acosh(1/x)
+   x : % / y : %        == div_DF(x, y)$Lisp
+   negative? x      == negative?_DF(x)$Lisp
+   zero? x          == zero?_DF(x)$Lisp
+   hashUpdate!(hs, s) == update!(hs, SXHASH(s)$Lisp)$HashState
+   recip(x)         == (zero? x => "failed"; 1 / x)
+   differentiate x  == 0
+
+   SFSFUN           ==> DoubleFloatSpecialFunctions()
+   sfx              ==> x pretend DoubleFloat
+   sfy              ==> y pretend DoubleFloat
+   sfz              ==> z pretend DoubleFloat
+   besselI(x, y)     == besselI(sfx, sfy)$SFSFUN pretend %
+   besselJ(x, y)     == besselJ(sfx, sfy)$SFSFUN pretend %
+   besselK(x, y)     == besselK(sfx, sfy)$SFSFUN pretend %
+   besselY(x, y)     == besselY(sfx, sfy)$SFSFUN pretend %
+
+   SFSFUN2 ==> DoubleFloatSpecialFunctions2
+   Beta(x, y)       == Beta(sfx, sfy)$SFSFUN2 pretend %
+   Gamma(x)         == Gamma(sfx)$SFSFUN2 pretend %
+   airyAi(x)        == airyAi(sfx)$SFSFUN2 pretend %
+   airyAiPrime(x)   == airyAiPrime(sfx)$SFSFUN2 pretend %
+   airyBi(x)        == airyBi(sfx)$SFSFUN2 pretend %
+   airyBiPrime(x)   == airyBiPrime(sfx)$SFSFUN2 pretend %
+   digamma(x) == polygamma(0, sfx)$SFSFUN2 pretend %
+
+   import from DoubleFloat
+
+   polygamma(x, y)   ==
+       if (n := retractIfCan(sfx)@Union(Integer, "failed")) case Integer _
+          and n >= 0 then
+           polygamma(qcoerce(n@Integer)@NonNegativeInteger,
+                     sfy)$SFSFUN2 pretend %
+       else error "polygamma: first argument should be a nonnegative integer"
+
+   FSFUN ==> FloatSpecialFunctions
+
+   lambertW(x) == lambertW(sfx)$FSFUN pretend %
+
+   ELIPIDF ==> DoubleFloatEllipticIntegrals
+
+   ellipticF(x, y) == ellipticF(sfx, sfy)$ELIPIDF pretend %
+   ellipticK(x) == ellipticK(sfx)$ELIPIDF pretend %
+   ellipticE(x, y) == ellipticE(sfx, sfy)$ELIPIDF pretend %
+   ellipticE(x) == ellipticE(sfx)$ELIPIDF pretend %
+   ellipticPi(x, y, z) == ellipticPi(sfx, sfy, sfz)$ELIPIDF pretend %
+
+   FELFUN ==> FloatEllipticFunctions
+   bfx ==> convert(x pretend DoubleFloat)@Float
+   bfy ==> convert(y pretend DoubleFloat)@Float
+   bfz ==> convert(z pretend DoubleFloat)@Float
+   to_sf(x) ==>
+       obits := bits()$Float
+       try
+           bits(68)
+           convert(x)@DoubleFloat pretend %
+       finally
+           bits(obits)
+   jacobiSn(x, y) == to_sf(jacobiSn(bfx, bfy)$FELFUN)
+   jacobiCn(x, y) == to_sf(jacobiCn(bfx, bfy)$FELFUN)
+   jacobiDn(x, y) == to_sf(jacobiDn(bfx, bfy)$FELFUN)
+   weierstrassP(x, y, z) == to_sf(weierstrassP(bfx, bfy, bfz)$FELFUN)
+   weierstrassPPrime(x, y, z) ==
+       to_sf(weierstrassPPrime(bfx, bfy, bfz)$FELFUN)
+
+   wholePart x            == TRUNCATE(x)$Lisp
+   float(ma, ex, b)   == ma*(b::%)^ex
+   convert(x : %) : DoubleFloat == x pretend DoubleFloat
+   convert(x : %) : Float == convert(x pretend DoubleFloat)$Float
+   rationalApproximation(x, d) == rationalApproximation(x, d, 10)
+
+   atan(x, y) ==
+      x = 0 =>
+         y > 0 => pi()/2
+         y < 0 => -pi()/2
+         0
+      -- Only count on first quadrant being on principal branch.
+      theta := atan abs(y/x)
+      if x < 0 then theta := pi() - theta
+      if y < 0 then theta := - theta
+      theta
+
+   retract(x : %) : Fraction(Integer) ==
+     rationalApproximation(x, (precision() - 1)::NonNegativeInteger, base())
+
+   retractIfCan(x:%):Union(Fraction Integer, "failed") ==
+     rationalApproximation(x, (precision() - 1)::NonNegativeInteger, base())
+
+   retract(x : %) : Integer ==
+     x = ((n := wholePart x)::%) => n
+     error "Not an integer"
+
+   retractIfCan(x:%):Union(Integer, "failed") ==
+     x = ((n := wholePart x)::%) => n
+     "failed"
+
+   sign(x : %) : Integer == retract FLOAT_-SIGN(x, 1)$Lisp
+   sign(x : %) : % == FLOAT_-SIGN(x, 1)$Lisp
+   abs x   == abs_DF(x)$Lisp
+
+   conjugate x == x
+
+   manexp(x) ==
+      zero? x => [0, 0]
+      s := sign x; x := abs x
+      if x > max()$% then return [s*mantissa(max())+1, exponent max()]
+      me : Record(man : %, exp : Integer) := MANEXP(x)$Lisp
+      two53 := base()^precision()
+      [s*wholePart(two53 * me.man ), me.exp-precision()]
+
+   rationalApproximation(f, d, b) ==
+      -- this algorithm expresses f as n / d where d = BASE ^ k
+      -- then all arithmetic operations are done over the integers
+      (nu, ex) := manexp f
+      BASE := base()
+      ex >= 0 => (nu * BASE ^ (ex::NonNegativeInteger))::Fraction(Integer)
+      de : Integer := BASE^((-ex)::NonNegativeInteger)
+      b < 2 => error "base must be > 1"
+      tol := b^d
+      s := nu; t := de
+      p0 : Integer := 0; p1 : Integer := 1; q0 : Integer := 1; q1 : Integer := 0
+      repeat
+         (q, r) := divide(s, t)
+         p2 := q*p1+p0
+         q2 := q*q1+q0
+         r = 0 or tol*abs(nu*q2-de*p2) < de*abs(p2) => return(p2/q2)
+         (p0, p1) := (p1, p2)
+         (q0, q1) := (q1, q2)
+         (s, t) := (t, r)
+
+   x : % ^ r : Fraction Integer ==
+      zero? x =>
+         zero? r => 1
+         negative? r => error "division by 0"
+         0
+      zero? r or (x = 1) => 1
+      (r = 1) => x
+      n := numer r
+      d := denom r
+      negative? x =>
+         odd? d =>
+            odd? n => return -((-x)^r)
+            return ((-x)^r)
+         error "negative root"
+      d = 2 => sqrt(x) ^ n
+      x ^ (n::% / d::%)
+
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+)if false
+\begin{thebibliography}{99}
+\bibitem{1} Steele, Guy L. Jr. ``Common Lisp The Language''
+Second Edition 1990 ISBN 1-55558-041-6 Digital Press
+\end{thebibliography}
+)endif

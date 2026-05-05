@@ -1,0 +1,31 @@
+Function: nfsnf
+Section: number_fields
+C-Name: nfsnf0
+Prototype: GGD0,L,
+Help: nfsnf(nf,x,{flag=0}): if x=[A,I,J], outputs D=[d_1,...d_n] Smith normal
+ form of x. If flag is nonzero return [D,U,V], where UAV = Id.
+Doc: given a torsion $\Z_{K}$-module $x$ attached to the square integral
+ invertible pseudo-matrix $(A,I,J)$, returns an ideal list
+ $D=[d_{1},\dots,d_{n}]$ which is the \idx{Smith normal form} of $x$. In other
+ words, $x$ is isomorphic to $\Z_{K}/d_{1}\oplus\cdots\oplus\Z_{K}/d_{n}$
+ and $d_{i}$
+ divides $d_{i-1}$ for $i\ge2$. If $\fl$ is nonzero return $[D,U,V]$, where
+ $UAV$ is the identity.
+
+ See \secref{se:ZKmodules} for the definition of integral pseudo-matrix;
+ briefly, it is input as a 3-component row vector $[A,I,J]$ where
+ $I = [b_{1},\dots,b_{n}]$ and $J = [a_{1},\dots,a_{n}]$ are two ideal lists,
+ and $A$ is a square $n\times n$ matrix with columns $(A_{1},\dots,A_{n})$,
+ seen as elements in $K^{n}$ (with canonical basis $(e_{1},\dots,e_{n})$).
+ This data defines the $\Z_{K}$ module $x$ given by
+ $$ (b_{1}e_{1}\oplus\cdots\oplus b_{n}e_{n})
+  / (a_{1}A_{1}\oplus\cdots\oplus a_{n}A_{n}) \enspace, $$
+ The integrality condition is $a_{i,j} \in b_{i} a_{j}^{-1}$ for all $i,j$.
+ If it
+ is not satisfied, then the $d_{i}$ will not be integral. Note that every
+ finitely generated torsion module is isomorphic to a module of this form and
+ even with $b_{i}=Z_{K}$ for all $i$.
+
+Variant: Also available:
+
+ \fun{GEN}{nfsnf}{GEN nf, GEN x} ($\fl = 0$).

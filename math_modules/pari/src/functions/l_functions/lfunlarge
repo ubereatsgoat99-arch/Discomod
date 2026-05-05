@@ -1,0 +1,20 @@
+Function: _parsumprimefun_worker
+Section: programming/internals
+C-Name: parsumprimefun_worker
+Prototype: GGGGGG
+Help: _parsumprimefun_worker(gk,s,zerf,data,vW,f): auxiliary
+Doc: auxiliary
+
+Function: _parsqf_worker
+Section: programming/internals
+C-Name: parsqf_worker
+Prototype: GGG
+Help: _parsqf_worker(gk,vR,data): auxiliary.
+Doc: auxiliary
+
+Function: _serh_worker
+Section: programming/internals
+C-Name: serh_worker
+Prototype: GGGGG
+Help: _serh_worker(gk,V,a,ns,gprec): auxiliary.
+Doc: auxiliary

@@ -1,0 +1,1080 @@
+)if false
+\documentclass{article}
+\usepackage{axiom}
+\begin{document}
+\title{\$SPAD/src/algebra matcat.spad}
+\author{Johannes Grabmeier, Oswald Gschnitzer, Clifton J. Williamson}
+\maketitle
+\begin{abstract}
+\end{abstract}
+\eject
+\tableofcontents
+\eject
+\section{Overview over constructors related to matrices}
+\subsection{Categories}
+We define three categories for matrices:
+\begin{description}
+\item[\spadtype{MatrixCategory}] is the category of all matrices, and
+\item[\spadtype{RectangularMatrixCategory}] is the category of all matrices of
+  given dimension.
+\item[\spadtype{SquareMatrixCategory}] inherits from the latter.
+\end{description}
+Implementations that are independent of a particular representation of a matrix
+should be put into \spadtype{MatrixCategory}.
+
+Note however that a domain in \spadtype{RectangularMatrixCategory} is not
+automatically a domain in \spadtype{MatrixCategory}.  The precise reasons for
+this choice are unclear, but we note that domains in
+\spadtype{DirectProductCategory(n, R)}, which are expected as parameters of
+\spadtype{RectangularMatrixCategory}, do not satisfy
+\spadtype{FiniteLinearAggregate R} as required in \spadtype{MatrixCategory}.
+Another reason is that \spadtype{RectangularMatrixCategory} does not export
+multiplication of matrices, but I doubt that this is a good reason.  If it
+were, at least \spadtype{SquareMatrixCategory} should inherit from
+\spadtype{MatrixCategory}.
+\subsection{Domains}
+There are essentially three domains corresponding to these categories:
+\begin{description}
+\item[\spadtype{Matrix}] for all matrices,
+\item[\spadtype{RectangularMatrix}] for matrices of fixed dimension, and
+\item[\spadtype{SquareMatrix}] for square matrices of fixed dimension.
+\end{description}
+The domain \spadtype{IMATRIX} is unused.
+
+Note that all three domains share the same representation, inherited from
+\spadtype{Matrix}.  Thus, most algorithms are only implemented for
+\spadtype{Matrix}.  However, they are mostly defined not directly there, but
+rather in separate packages.
+\subsection{Packages}
+\begin{description}
+\item[\spadtype{MatrixLinearAlgebraFunctions}] is the top-level package, that
+  calls the packages below as appropriate.
+\item[\spadtype{InnerMatrixLinearAlgebraFunctions}] contains implementations
+  that work over a \spadtype{Field}, and
+\item[\spadtype{InnerMatrixQuotientFieldFunctions}] contains implementations
+  that work over a quotient field.
+\end{description}
+Therefore, implementations that rely on the representation of matrices used in
+\spadtype{Matrix} should be put into these packages.  The various definitions
+of \spadfun{determinant} are a good example to look at.
+
+)endif
+
+)abbrev category MATOPC MatrixOperationsCategory
+++ Description: This category declares common operation for various
+++ kinds of matrices.  This saves duplicate declarations in more
+++ specialized categories.
+MatrixOperationsCategory(R, Row, Col) : Category == Definition where
+  R : BasicType
+  Row : Type
+  Col : Type
+  Definition ==> with
+    --% Predicates
+
+    square?  : % -> Boolean
+      ++ \spad{square?(m)} returns true if m is a square matrix
+      ++ (i.e. if m has the same number of rows as columns) and
+      ++ false otherwise.
+    if R has AbelianMonoid then
+      diagonal? : % -> Boolean
+        ++ \spad{diagonal?(m)} returns true if the matrix m is square and
+        ++ diagonal (i.e. all entries of m not on the diagonal are zero) and
+        ++ false otherwise.
+      zero? : % -> Boolean
+        ++ \spad{zero?(m)} returns true if m is a zero matrix and
+        ++ false otherwise
+
+    symmetric? : % -> Boolean
+        ++ \spad{symmetric?(m)} returns true if the matrix m is square and
+        ++ symmetric (i.e. \spad{m[i, j] = m[j, i]} for all i and j) and false
+        ++ otherwise.
+    if R has AbelianGroup then
+        antisymmetric? : % -> Boolean
+          ++ \spad{antisymmetric?(m)} returns true if the matrix m is
+          ++ square and antisymmetric (i.e. \spad{m[i, j] = -m[j, i]} for
+          ++ all i and j) and false otherwise.
+
+    --% Arithmetic
+
+    if R has AbelianMonoid then
+
+       "+": (%, %) -> %
+          ++ \spad{x + y} is the sum of the matrices x and y.
+          ++ Error: if the dimensions are incompatible.
+
+    if R has AbelianGroup then
+
+        "-" : (%,%) -> %
+          ++ \spad{x - y} is the difference of the matrices x and y.
+          ++ Error: if the dimensions are incompatible.
+    if R has AbelianGroup then
+        "-" :  %    -> %
+          ++ \spad{-x} returns the negative of the matrix x.
+        "*" : (Integer, %) -> %
+          ++ \spad{n * x} is an integer multiple.
+
+    if R has SemiRng then
+        "*": (%,%) -> %
+          ++ \spad{x * y} is the product of the matrices x and y.
+          ++ Error: if the dimensions are incompatible.
+        "*": (R,%) -> %
+          ++ \spad{r*x} is the left scalar multiple of the scalar r and the
+          ++ matrix x.
+        "*": (%,R) -> %
+          ++ \spad{x * r} is the right scalar multiple of the scalar r and the
+          ++ matrix x.
+
+    if R has IntegralDomain then
+      "exquo": (%,R) -> Union(%,"failed")
+        ++ \spad{exquo(m, r)} computes the exact quotient of the elements
+        ++ of m by r, returning \spad{"failed"} if this is not possible.
+    if R has Field then
+      "/": (%,R) -> %
+        ++ \spad{m/r} divides the elements of m by r. Error: if \spad{r = 0}.
+
+    --% Linear algebra
+
+    if R has EuclideanDomain then
+      rowEchelon : % -> %
+        ++ \spad{rowEchelon(m)} returns the row echelon form of the matrix m.
+      columnSpace : % -> List Col
+        ++ \spad{columnSpace(m)} returns a sublist of columns of the matrix m
+        ++ forming a basis of its column space.
+    if R has IntegralDomain then
+      rank : % -> NonNegativeInteger
+        ++ \spad{rank(m)} returns the rank of the matrix m.
+      nullity : % -> NonNegativeInteger
+        ++ \spad{nullity(m)} returns the nullity of the matrix m. This is
+        ++ the dimension of the null space of the matrix m.
+      nullSpace : % -> List Col
+        ++ \spad{nullSpace(m)} returns a basis for the null space of
+        ++ the matrix m.  Note: null space is considered as vector space
+        ++ over quotient field of the ring.
+    map : (R -> R, %) -> %
+      ++ \spad{map(f, a)} returns b, where \spad{b(i, j) = a(i, j)}
+      ++ for all i, j.
+
+)abbrev category MATCAT MatrixCategory
+++ Authors: Grabmeier, Gschnitzer, Williamson
+++ Date Created: 1987
+++ Basic Operations:
+++ Related Domains: Matrix(R)
+++ Also See:
+++ AMS Classifications:
+++ Keywords: matrix, linear algebra
+++ Examples:
+++ References:
+++ Description:
+++   \spadtype{MatrixCategory} is a general matrix category which allows
+++   different representations and indexing schemes.  Rows and
+++   columns may be extracted with rows returned as objects of
+++   type Row and columns returned as objects of type Col.
+++   A domain belonging to this category will be shallowly mutable.
+++   The index of the 'first' row may be obtained by calling the
+++   function \spadfun{minRowIndex}.  The index of the 'first' column may
+++   be obtained by calling the function \spadfun{minColIndex}.  The index of
+++   the first element of a Row is the same as the index of the
+++   first column in a matrix and vice versa.
+MatrixCategory(R, Row, Col) : Category == Definition where
+  R : AbelianMonoid
+  Row : FiniteLinearAggregate R
+  Col : FiniteLinearAggregate R
+
+  I ==> Integer
+  NNI ==> NonNegativeInteger
+  UR ==> Union(R, "one")
+
+  Definition ==> Join(TwoDimensionalArrayCategory(R, Row, Col),
+      MatrixOperationsCategory(R, Row, Col),
+      shallowlyMutable, finiteAggregate) with
+
+     --% Creation
+
+     zero : (NonNegativeInteger, NonNegativeInteger) -> %
+       ++ \spad{zero(m, n)} returns an m-by-n zero matrix.
+     matrix : List List R -> %
+       ++ \spad{matrix(l)} converts the list of lists l to a matrix, where the
+       ++ list of lists is viewed as a list of the rows of the matrix.
+     matrix: (NNI, NNI, (I,I) -> R) -> %
+       ++ \spad{matrix(n,m,f)} constructs an \spad{n * m} matrix with
+       ++ the \spad{(i,j)} entry equal to \spad{f(i,j)}.
+     scalarMatrix : (NonNegativeInteger, R) -> %
+       ++ \spad{scalarMatrix(n, r)} returns an n-by-n matrix with r's on the
+       ++ diagonal and zeroes elsewhere.
+     diagonalMatrix : List R -> %
+       ++ \spad{diagonalMatrix(l)} returns a diagonal matrix with the elements
+       ++ of l on the diagonal.
+     diagonalMatrix : List % -> %
+       ++ \spad{diagonalMatrix([m1, ..., mk])} creates a block diagonal matrix
+       ++ M with block matrices {\em m1}, ..., {\em mk} down the diagonal,
+       ++ with 0 block matrices elsewhere.
+       ++ More precisely: if \spad{ri := nrows mi}, \spad{ci := ncols mi},
+       ++ then m is an (r1+..+rk) by (c1+..+ck) matrix with entries
+       ++ \spad{m.i.j = ml.(i-r1-..-r(l-1)).(j-c1-..-c(l-1))}, if
+       ++ \spad{(r1+..+r(l-1)) < i <= r1+..+rl} and
+       ++ \spad{(c1+..+c(l-1)) < i <= c1+..+cl},
+       ++ \spad{m.i.j = 0} otherwise.
+     if R has SemiRng then
+       kroneckerProduct : (%, %) -> %
+         ++ kroneckerProduct(a, b) calculates the Kronecker product
+         ++ of the matrices a and b.
+         ++ This corresponds to tensor product of corresponding operators.
+       kroneckerProduct : List(%) -> %
+         ++ kroneckerProduct([a1, a2, ..., an]) calculates the
+         ++ Kronecker product of the matrices a1, a2, ..., an.
+         ++ This corresponds to tensor product of corresponding operators.
+
+     kroneckerSum : (%, %) -> %
+       ++ kroneckerSum(a, b) calculates the Kronecker sum
+       ++ of the matrices a and b.
+     kroneckerSum : List(%) -> %
+       ++ kroneckerSum([a1, a2, ..., an]) calculates the
+       ++ Kronecker sum of the matrices a1, a2, ..., an.
+     coerce : Col -> %
+       ++ \spad{coerce(col)} converts the column col to a column matrix.
+     transpose : Row -> %
+       ++ \spad{transpose(r)} converts the row r to a row matrix.
+
+     --% Arithmetic
+
+     if R has SemiRng then
+       "*": (%,Col) -> Col
+         ++ \spad{x * c} is the product of the matrix x and the column
+         ++ vector c.  Error: if the dimensions are incompatible.
+       "*": (Row,%) -> Row
+         ++ \spad{r * x} is the product of the row vector r and the matrix x.
+         ++ Error: if the dimensions are incompatible.
+       -- "^" : (%, PositveInteger) -> %
+       positivePower : (%, Integer) -> %
+         ++ \spad{positivePower(x, n)} computes a positive integral power of
+         ++ the matrix x.  Error: if the matrix is not square.
+       if R has Monoid then
+         "^": (%, NonNegativeInteger) -> %
+           ++ \spad{x ^ n} computes a non-negative integral power of the
+           ++ matrix x.  Error: if the matrix is not square.
+--% Linear algebra
+
+     if R has CommutativeRing then
+       determinant : % -> R
+         ++ \spad{determinant(m)} returns the determinant of the matrix m.
+         ++ Error: if the matrix is not square.
+       minordet : % -> R
+         ++ \spad{minordet(m)} computes the determinant of the matrix m using
+         ++ minors. Error: if the matrix is not square.
+       Pfaffian : % -> R
+         ++ \spad{Pfaffian(m)} returns the Pfaffian of the matrix m.
+         ++ Error: if the matrix is not antisymmetric.
+     if R has Field then
+       inverse : % -> Union(%,"failed")
+         ++ \spad{inverse(m)} returns the inverse of the matrix m.
+         ++ If the matrix is not invertible, "failed" is returned.
+         ++ Error: if the matrix is not square.
+       "^": (%,Integer) -> %
+         ++ \spad{m^n} computes an integral power of the matrix m.
+         ++ Error: if matrix is not square or if the matrix
+         ++ is square but not invertible.
+     kronecker_prod1 : (%, Integer, List(List(NNI)), List(%), NNI,
+                        NNI, UR) -> Void
+       ++ Should be local but conditional.
+
+   add
+     minr ==> minRowIndex
+     maxr ==> maxRowIndex
+     minc ==> minColIndex
+     maxc ==> maxColIndex
+     mini ==> minIndex
+     maxi ==> maxIndex
+
+     import from Integer
+
+--% Predicates
+
+     square? x == nrows x = ncols x
+
+     diagonal? x ==
+       not square? x => false
+       for i in minr x .. maxr x repeat
+         for j in minc x .. maxc x | (j - minc x) ~= (i - minr x) repeat
+           not zero? qelt(x, i, j) => return false
+       true
+
+     symmetric? x ==
+       (nRows := nrows x) ~= ncols x => false
+       mr := minRowIndex x; mc := minColIndex x
+       for i in 0..(nRows - 1) repeat
+         for j in (i + 1)..(nRows - 1) repeat
+           qelt(x, mr + i, mc + j) ~= qelt(x, mr + j, mc + i) => return false
+       true
+
+     if R has AbelianGroup then
+         antisymmetric? x ==
+             (nRows := nrows x) ~= ncols x => false
+             mr := minRowIndex x; mc := minColIndex x
+             for i in 0..(nRows - 1) repeat
+                 for j in i..(nRows - 1) repeat
+                     qelt(x, mr + i, mc + j) ~= -qelt(x, mr + j, mc + i) =>
+                         return false
+             true
+
+--% Creation of matrices
+
+     zero(rows, cols) == new(rows, cols, 0)
+
+     matrix(l : List List R) ==
+       empty?(l) => qnew(0, 0)
+       -- error check: this is a top level function
+       rows : NonNegativeInteger := 1; cols := # first l
+       for ll in rest l repeat
+         cols ~= # ll => error "matrix: rows of different lengths"
+         rows := rows + 1
+       ans := qnew(rows, cols)
+       for i in minr(ans)..maxr(ans) for ll in l repeat
+         for j in minc(ans)..maxc(ans) for r in ll repeat
+           qsetelt!(ans, i, j, r)
+       ans
+
+     matrix(n,m,f) ==
+       mat := qnew(n, m)
+       for i in minr mat..maxr mat repeat
+         for j in minc mat..maxc mat repeat
+           qsetelt!(mat,i,j,f(i,j))
+       mat
+
+     maybe_1 : UR :=
+         R has SemiRing => 1
+         "one"
+
+     get_dims(l : List(%)) : List(List(NNI)) ==
+        [[nrows(a), ncols(a)] for a in l]
+
+     Ops ==>
+
+         zero?(x) ==
+             for i in minr(x)..maxr(x) repeat
+                 for j in minc(x)..maxc(x) repeat
+                     if qelt(x, i, j) ~= 0 then return false
+             true
+
+         scalarMatrix(n, r) ==
+             ans := zero(n, n)
+             for i in minr(ans)..maxr(ans) for j in minc(ans)..maxc(ans) repeat
+                 qsetelt!(ans, i, j, r)
+             ans
+
+         diagonalMatrix(l : List R) ==
+             n := #l; ans := zero(n, n)
+             for i in minr(ans)..maxr(ans) for j in minc(ans)..maxc(ans) _
+                 for r in l repeat qsetelt!(ans, i, j, r)
+             ans
+
+         if R has SemiRng then
+             kronecker_prod1(res : %, k : Integer, dl : List(List(NNI)),
+               l : List(%), r_off : NNI, c_off : NNI, mu : UR) : Void ==
+                 dp := first(dl)
+                 nr := dp(1)
+                 nc := dp(2)
+                 a := first(l)
+                 k = 1 =>
+                     mu case "one" =>
+                         error "kronecker_prod1: impossible"
+                     m := mu@R
+                     for i in 1..nr repeat
+                         r_off := r_off + 1
+                         c_ind := c_off + 1
+                         for j in 1..nc repeat
+                             qsetelt!(res, r_off, c_ind,  m*qelt(a, i, j))
+                             c_ind := c_ind + 1
+                 dl := rest(dl)
+                 l := rest(l)
+                 r_step := reduce(_*$NNI, [rc(1) for rc in dl])
+                 c_step := reduce(_*$NNI, [rc(2) for rc in dl])
+                 for i in 1..nr repeat
+                     c_off1 := c_off
+                     for j in 1..nc repeat
+                         aij := qelt(a, i, j)
+                         mm :=
+                             mu case "one" => aij
+                             mu@R * aij
+                         kronecker_prod1(res, k - 1, dl, l, r_off, c_off1, mm)
+                         c_off1 := c_off1 + c_step
+                     r_off := r_off + r_step
+
+             kroneckerProduct(l : List(%)) : % ==
+                 k := #l
+                 k = 0 =>
+                     maybe_1 case R => new(1, 1, maybe_1@R)
+                     error "need 1"
+                 k = 1 => copy(first(l))
+                 dl := get_dims(l)
+                 nr := reduce(_*$NNI, [rc(1) for rc in dl])
+                 nc := reduce(_*$NNI, [rc(2) for rc in dl])
+                 res := zero(nr, nc)$%
+                 kronecker_prod1(res, k, dl, l, 0, 0, "one")
+                 res
+
+             kroneckerProduct(a : %, b : %) == kroneckerProduct([a, b])
+
+         kroneckerSum(l : List(%)) : % ==
+             k := #l
+             k = 0 => zero(1, 1)
+             k = 1 => copy(first(l))
+             dl : List NNI := []
+             nr : NNI
+             for a in l repeat
+                 nr := nrows(a)
+                 nc := ncols(a)
+                 nr ~= nc => error "kroneckerSum: nonsquare matrix"
+                 dl := cons(nr, dl)
+             dl := reverse!(dl)
+             nrs := reduce(_*$NNI, [nr for nr in dl])
+             res := zero(nrs, nrs)$%
+             n0 : Integer := 1
+             for a in l repeat
+                 off0 : NNI := 0
+                 nr := dl(1)
+                 dl := rest(dl)
+                 n2 := reduce(_*$NNI, dl, 1)
+                 step0 := nr*n2
+                 for m in 1..n0 repeat
+                     off_r := off0 + 1
+                     for i in 1..nr repeat
+                         for l in 1..n2 repeat
+                             ind_c := off0 + l
+                             for j in 1..nr repeat
+                                 vv := qelt(res, off_r, ind_c) + qelt(a, i, j)
+                                 qsetelt!(res, off_r, ind_c, vv)
+                                 ind_c := ind_c + n2
+                             off_r := off_r + 1
+                     off0 := off0 + step0
+                 n0 := n0*nr
+             res
+
+         kroneckerSum(a : %, b : %) == kroneckerSum([a, b])
+
+         diagonalMatrix(list : List %) ==
+           rows : NonNegativeInteger := 0
+           cols : NonNegativeInteger := 0
+           for mat in list repeat
+             rows := rows + nrows mat
+             cols := cols + ncols mat
+           ans := zero(rows, cols)
+           loR := minr ans; loC := minc ans
+           for mat in list repeat
+             hiR := loR + nrows(mat) - 1; hiC := loC + ncols(mat) - 1
+             for i in loR..hiR for k in minr(mat)..maxr(mat) repeat
+               for j in loC..hiC for l in minc(mat)..maxc(mat) repeat
+                 qsetelt!(ans, i, j, qelt(mat, k, l))
+             loR := hiR + 1; loC := hiC + 1
+           ans
+
+     -- Specialize to get more efficient code
+     if % is Matrix(R) then
+         Ops
+     else if % is DoubleFloatMatrix and R is DoubleFloat then
+         Ops
+     else
+         Ops
+
+     coerce(v : Col) ==
+       x := qnew(#v, 1)
+       one := minc(x)
+       for i in minr(x)..maxr(x) for k in mini(v)..maxi(v) repeat
+         qsetelt!(x, i, one, qelt(v, k))
+       x
+
+     transpose(v : Row) ==
+       x := qnew(1, #v)
+       one := minr(x)
+       for j in minc(x)..maxc(x) for k in mini(v)..maxi(v) repeat
+         qsetelt!(x, one, j, qelt(v, k))
+       x
+
+--% Arithmetic
+
+     x + y ==
+       ((r := nrows x) ~= nrows y) or ((c := ncols x) ~= ncols y) =>
+         error "can't add matrices of different dimensions"
+       ans := qnew(r, c)
+       for i in minr(x)..maxr(x) repeat
+         for j in minc(x)..maxc(x) repeat
+           qsetelt!(ans, i, j, qelt(x, i, j) + qelt(y, i, j))
+       ans
+
+     if R has AbelianGroup then
+         x - y ==
+             ((r := nrows x) ~= nrows y) or ((c := ncols x) ~= ncols y) =>
+                 error "can't subtract matrices of different dimensions"
+             ans := qnew(r, c)
+             for i in minr(x)..maxr(x) repeat
+                 for j in minc(x)..maxc(x) repeat
+                     qsetelt!(ans, i, j, qelt(x, i, j) - qelt(y, i, j))
+             ans
+
+         - x == map((r1 : R) : R +-> - r1, x)
+         m : Integer * x : % == map((r1 : R) : R +-> m * r1, x)
+
+     if R has SemiRng then
+         a : R * x : % == map((r1 : R) : R +-> a * r1, x)
+         x : % * a : R == map((r1 : R) : R +-> r1 * a, x)
+
+         x : % * y : % ==
+             (ncols x ~= nrows y) =>
+                 error "can't multiply matrices of incompatible dimensions"
+             ans := qnew(nrows x, ncols y)
+             for i in minr(x)..maxr(x) repeat
+                 for j in minc(y)..maxc(y) repeat
+                     entry :=
+                         sum : R := 0
+                         for k in minr(y)..maxr(y)
+                                         for l in minc(x)..maxc(x) repeat
+                             sum := sum + qelt(x, i, l) * qelt(y, k, j)
+                         sum
+                     qsetelt!(ans, i, j, entry)
+             ans
+
+         positivePower(x : %, n : Integer) : % ==
+             n = 1 => x
+             odd? n => x * positivePower(x, n - 1)
+             y := positivePower(x, n quo 2)
+             y * y
+
+     if R has Monoid then
+         x : % ^ n : NonNegativeInteger ==
+             not((nn := nrows x) = ncols x) => error "^: matrix must be square"
+             zero? n => scalarMatrix(nn, 1)
+             positivePower(x, n)
+
+     --if R has ConvertibleTo InputForm then
+       --convert(x: %): InputForm ==
+         --convert [convert('matrix)@InputForm,
+                  --convert listOfLists x]$List(InputForm)
+
+     if Col has shallowlyMutable then
+
+       x : % * v : Col ==
+         ncols(x) ~= #v =>
+           error "can't multiply matrix A and vector v if #cols A ~= #v"
+         w : Col := new(nrows x, 0)
+         for i in minr(x)..maxr(x) for k in mini(w)..maxi(w) repeat
+           w.k :=
+             sum : R := 0
+             for j in minc(x)..maxc(x) for l in mini(v)..maxi(v) repeat
+               sum := sum + qelt(x, i, j) * v(l)
+             sum
+         w
+
+     if Row has shallowlyMutable then
+
+       v : Row * x : % ==
+         nrows(x) ~= #v =>
+           error "can't multiply vector v and matrix A if #rows A ~= #v"
+         w : Row := new(ncols x, 0)
+         for j in minc(x)..maxc(x) for k in mini(w)..maxi(w) repeat
+           w.k :=
+             sum : R := 0
+             for i in minr(x)..maxr(x) for l in mini(v)..maxi(v) repeat
+               sum := sum + qelt(x, i, j) * v(l)
+             sum
+         w
+
+)if false
+
+\subsection{columnSpace}
+\verb|columnSpace| extracts from the columns of $M$ a basis for the space they
+generate.  The columns of $M$ that generate the space correspond to those
+columns in the row echelon form of $M$ whose last non-zero entry is the first
+non-zero entry in a row.  As an example, let $M$ be the matrix
+\begin{verbatim}
+         +2  1  0  2+
+         |          |
+         |2  0  3  0|
+         |          |
+         +2  1  0  1+
+\end{verbatim}
+Its row-echelon form is
+\begin{verbatim}
+         +2  0   3   0+
+         |            |
+         |0  1  - 3  0|
+         |            |
+         +0  0   0   1+
+\end{verbatim}
+And indeed, \verb|@[[2, 2, 2], [1, 0, 1], [2, 0, 1]]| is a $\mathbb Q$-basis of the
+column space.  Reversing the extracted columns is not strictly necessary, but
+makes the result look more natural.
+
+Note that selecting the non-zero rows of the row echelon form of the transposed
+matrix would give another basis of the column space.
+
+)endif
+
+     if R has EuclideanDomain then
+        columnSpace M ==
+            M2 := rowEchelon M
+            basis : List Col := []
+            n : Integer := ncols M
+            m : Integer := nrows M
+            indRow : Integer := 1
+            for k in 1..n while indRow <= m repeat
+                if not zero?(M2.(indRow, k)) then
+                    basis := cons(column(M, k), basis)
+                    indRow := indRow + 1
+            reverse! basis
+
+)if false
+
+\subsection{Pfaffian}
+We compute the Pfaffian of an antisymmetric matrix using an algorithm by
+G\"unter Ziegler\cite{1}.  I did not check whether we really need commutative
+multiplication.
+
+\verb|B0| could be dubbed \emph{skew symmetric unit matrix}:
+
+)endif
+
+     if R has CommutativeRing then
+        B0(n : PositiveInteger) : % ==
+            matrix [[(if i = j+1 and odd? j _
+                      then -1 _
+                      else if i = j-1 and odd? i _
+                           then 1 _
+                           else 0) for j in 1..n] for i in 1..n]
+
+)if false
+
+\verb|PfChar| is the \emph{Pfaffian-characteristic polynomial} denoted $\tilde
+P_A$ in Rote's article.  Note that there is a misprint in the article,
+Formula~(22), the generating function for alternating clow sequences with head
+$1$ according to length, should read
+\begin{equation}
+  G(\lambda)=\lambda^2+a_{12}+rB_0s\lambda^{-2}+rB_0MB_0s\lambda^{-4}+
+             rB_0MB_0MB_0s\lambda^{-6}+\dots,
+\end{equation}
+i.e., the coefficient of $\lambda^2$ is $+1$, not $-1$.
+
+With this definition, we have (Equation~(23) in Rote's article)
+\begin{equation}
+  \tilde P_A(\lambda) = G(\lambda) \tilde P_M(\lambda),
+\end{equation}
+where we split $A$ as follows:
+\begin{equation}
+  A=\left(
+  \begin{array}{cc|c}
+    0       & a_{12} & r\\
+    -a_{12} & 0      & -s^t\\
+    \hline
+    -r^t    & s      & M
+  \end{array}\right).
+\end{equation}
+)endif
+
+        SUPR ==> SparseUnivariatePolynomial R
+        PfChar(A : %) : SUPR ==
+            n := nrows A
+            (n = 2) => monomial(1$R, 2)$SUPR + qelt(A, 1, 2)::SUPR
+            M := subMatrix(A, 3, n, 3, n)
+            r := subMatrix(A, 1, 1, 3, n)
+            s := subMatrix(A, 3, n, 2, 2)
+
+            p := PfChar M
+            d := degree(p)$SUPR
+
+            B := B0((n-2)::PositiveInteger)
+            C := r*B
+            g : List R := [qelt(C*s, 1, 1), qelt(A, 1, 2), 1]
+            if d >= 4 then
+                B := M*B
+                for i in 4..d by 2 repeat
+                    C := C*B
+                    g := cons(qelt(C*s, 1, 1), g)
+            g := reverse! g
+
+            res : SUPR := 0
+            for i in 0..d by 2 for j in 2..d+2 repeat
+                c := coefficient(p, i)
+                for e in first(g, j) for k in 2..-d by -2 repeat
+                    res := res + _
+                           monomial(c * e, (k+i)::NonNegativeInteger)$SUPR
+
+            res
+
+        -- The Pfaffian is the constant term of the
+        -- \emph{Pfaffian-characteristic polynomial}:
+        Pfaffian A ==
+            if antisymmetric? A
+            then if odd? nrows A
+                 then 0
+                 else PfChar(A).0
+            else error "Pfaffian: only defined for antisymmetric square matrices!"
+
+
+     if R has IntegralDomain then
+       x exquo a ==
+         ans := qnew(nrows x, ncols x)
+         for i in minr(x)..maxr(x) repeat
+           for j in minc(x)..maxc(x) repeat
+             entry :=
+               (r := (qelt(x,i,j) exquo a)) case "failed" =>
+                 return "failed"
+               r@R
+             qsetelt!(ans, i, j, entry)
+         ans
+
+     if R has Field then
+       x / r == map((r1 : R) : R +-> r1 / r, x)
+
+       x : % ^ n : Integer ==
+         not((nn:= nrows x) = ncols x) => error "^: matrix must be square"
+         zero? n => scalarMatrix(nn, 1)
+         positive? n => positivePower(x, n)
+         (xInv := inverse x) case "failed" =>
+           error "^: matrix must be invertible"
+         positivePower(xInv@%, -n)
+
+
+)abbrev category RMATCAT RectangularMatrixCategory
+++ Authors: Grabmeier, Gschnitzer, Williamson
+++ Date Created: 1987
+++ Basic Operations:
+++ Related Domains: RectangularMatrix(m, n, R)
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++   \spadtype{RectangularMatrixCategory} is a category of matrices of fixed
+++   dimensions.  The dimensions of the matrix will be parameters of the
+++   domain.  Domains in this category will be R-modules and will be
+++   non-mutable.
+RectangularMatrixCategory(m, n, R, Row, Col) : Category == Definition where
+  m, n : NonNegativeInteger
+  R   : Join(SemiRng, AbelianMonoid)
+  Row : DirectProductCategory(n, R)
+  Col : DirectProductCategory(m, R)
+
+  Definition ==> Join(BiModule(R, R), HomogeneousAggregate(R),
+      MatrixOperationsCategory(R, Row, Col), finiteAggregate) with
+
+    if R has Finite then Finite
+
+    if R has CommutativeRing then Module(R)
+
+    --% Matrix creation
+
+    matrix : List List R -> %
+      ++ \spad{matrix(l)} converts the list of lists l to a matrix, where the
+      ++ list of lists is viewed as a list of the rows of the matrix.
+
+--% Size inquiries
+
+    minRowIndex : % -> Integer
+      ++ \spad{minRowIndex(m)} returns the index of the 'first' row of the
+      ++ matrix m.
+    maxRowIndex : % -> Integer
+      ++ \spad{maxRowIndex(m)} returns the index of the 'last' row of the
+      ++ matrix m.
+    minColIndex : % -> Integer
+      ++ \spad{minColIndex(m)} returns the index of the 'first' column of the
+      ++ matrix m.
+    maxColIndex : % -> Integer
+      ++ \spad{maxColIndex(m)} returns the index of the 'last' column of the
+      ++ matrix m.
+    nrows : % -> NonNegativeInteger
+      ++ \spad{nrows(m)} returns the number of rows in the matrix m.
+    ncols : % -> NonNegativeInteger
+      ++ \spad{ncols(m)} returns the number of columns in the matrix m.
+
+--% Part extractions
+
+    listOfLists : % -> List List R
+      ++ \spad{listOfLists(m)} returns the rows of the matrix m as a list
+      ++ of lists.
+    elt : (%, Integer, Integer) -> R
+      ++ \spad{elt(m, i, j)} returns the element in the \spad{i}th row and
+      ++ \spad{j}th column of the matrix m.
+      ++ Error: if indices are outside the proper
+      ++ ranges.
+    qelt : (%, Integer, Integer) -> R
+      ++ \spad{qelt(m, i, j)} returns the element in the \spad{i}th row and
+      ++ \spad{j}th column of
+      ++ the matrix m. Note: there is NO error check to determine if indices are
+      ++ in the proper ranges.
+    elt : (%, Integer, Integer, R) -> R
+      ++ \spad{elt(m, i, j, r)} returns the element in the \spad{i}th row and
+      ++ \spad{j}th column of the matrix m, if m has an \spad{i}th row and a
+      ++ \spad{j}th column, and returns r otherwise.
+    row : (%, Integer) -> Row
+      ++ \spad{row(m, i)} returns the \spad{i}th row of the matrix m.
+      ++ Error: if the index is outside the proper range.
+    column : (%, Integer) -> Col
+      ++ \spad{column(m, j)} returns the \spad{j}th column of the matrix m.
+      ++ Error: if the index is outside the proper range.
+
+--% Map and Zip
+
+    map : ((R, R) -> R, %, %) -> %
+      ++ \spad{map(f, a, b)} returns c, where c is such that
+      ++ \spad{c(i, j) = f(a(i, j), b(i, j))} for all \spad{i}, j.
+
+   add
+
+     if R has Finite then
+         size() == (size()$R)^(m*n)
+
+         random() == matrix [[random()$R for i in 1..n] for j in 1..m]
+
+         lookup x ==
+             s := size()$R
+             pow : Integer := 1
+             l := listOfLists(x)
+             res : Integer := 1
+             for r in l repeat
+                 for c in r repeat
+                     res := res + (lookup(c)$R-1)*pow
+                     pow := pow*s
+             res::PositiveInteger
+
+         index i ==
+             s := size()$R
+             old := divide(i-1, s)
+             res : List List R := []
+
+             for i in 1..m repeat
+                 row : List R := []
+                 for j in 1..n repeat
+                     el : R := index((old.remainder + 1)::PositiveInteger)$R
+                     row := cons(el, row)
+                     old := divide(old.quotient, s)
+                 res := cons(reverse! row, res)
+
+             matrix reverse! res
+
+     nrows x == m
+     ncols x == n
+     square? x == m = n
+
+     diagonal? x ==
+       not square? x => false
+       for i in minRowIndex x .. maxRowIndex x repeat
+         for j in minColIndex x .. maxColIndex x
+           | (j - minColIndex x) ~= (i - minRowIndex x) repeat
+             not zero? qelt(x, i, j) => return false
+       true
+
+     symmetric? x ==
+       m ~= n => false
+       mr := minRowIndex x; mc := minColIndex x
+       for i in 0..(n - 1) repeat
+         for j in (i + 1)..(n - 1) repeat
+           qelt(x, mr + i, mc + j) ~= qelt(x, mr + j, mc + i) => return false
+       true
+
+     if R has AbelianGroup then
+         antisymmetric? x ==
+             (nRows := nrows x) ~= ncols x => false
+             mr := minRowIndex x; mc := minColIndex x
+             for i in 0..(nRows - 1) repeat
+                 for j in i..(nRows - 1) repeat
+                     qelt(x, mr + i, mc + j) ~= -qelt(x, mr + j, mc + i) =>
+                         return false
+             true
+
+
+)abbrev category SMATCAT SquareMatrixCategory
+++ Authors: Grabmeier, Gschnitzer, Williamson
+++ Date Created: 1987
+++ Basic Operations:
+++ Related Domains: SquareMatrix(ndim, R)
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++   \spadtype{SquareMatrixCategory} is a general square matrix category which
+++   allows different representations and indexing schemes.  Rows and
+++   columns may be extracted with rows returned as objects of
+++   type Row and columns returned as objects of type Col.
+SquareMatrixCategory(ndim, R, Row, Col) : Category == Definition where
+  ndim : NonNegativeInteger
+  R    : Join(SemiRng, AbelianMonoid)
+  Row  : DirectProductCategory(ndim, R)
+  Col  : DirectProductCategory(ndim, R)
+  I ==> Integer
+
+  Definition ==> Join(SemiRng, AbelianMonoid, BiModule(R, R), TwoSidedRecip,
+                      RectangularMatrixCategory(ndim, ndim, R, Row, Col), _
+                      FullyRetractableTo R) with
+    if R has SemiRing then SemiRing
+    if R has Ring then
+        DifferentialExtension R
+        FullyLinearlyExplicitOver R
+    scalarMatrix : R -> %
+      ++ \spad{scalarMatrix(r)} returns an n-by-n matrix with r's on the
+      ++ diagonal and zeroes elsewhere.
+    diagonalMatrix : List R -> %
+      ++ \spad{diagonalMatrix(l)} returns a diagonal matrix with the elements
+      ++ of l on the diagonal.
+    diagonal : % -> Row
+      ++ \spad{diagonal(m)} returns a row consisting of the elements on the
+      ++ diagonal of the matrix m.
+    trace : % -> R
+      ++ \spad{trace(m)} returns the trace of the matrix m. This is the sum
+      ++ of the elements on the diagonal of the matrix m.
+    diagonalProduct : % -> R
+      ++ \spad{diagonalProduct(m)} returns the product of the elements on the
+      ++ diagonal of the matrix m.
+    "*": (%,Col) -> Col
+      ++ \spad{x * c} is the product of the matrix x and the column vector c.
+      ++ Error: if the dimensions are incompatible.
+    "*": (Row,%) -> Row
+      ++ \spad{r * x} is the product of the row vector r and the matrix x.
+      ++ Error: if the dimensions are incompatible.
+
+--% Linear algebra
+
+    if R has CommutativeRing then
+      Algebra R
+      determinant : % -> R
+        ++ \spad{determinant(m)} returns the determinant of the matrix m.
+      minordet : % -> R
+        ++ \spad{minordet(m)} computes the determinant of the matrix m
+        ++ using minors.
+      Pfaffian : % -> R
+         ++ \spad{Pfaffian(m)} returns the Pfaffian of the matrix m.
+         ++ Error: if the matrix is not antisymmetric.
+
+    if R has Field then
+      inverse : % -> Union(%,"failed")
+        ++ \spad{inverse(m)} returns the inverse of the matrix m, if that
+        ++ matrix is invertible and returns "failed" otherwise.
+      "^": (%,Integer) -> %
+        ++ \spad{m^n} computes an integral power of the matrix m.
+        ++ Error: if the matrix is not invertible.
+
+   add
+    minr ==> minRowIndex
+    maxr ==> maxRowIndex
+    minc ==> minColIndex
+    maxc ==> maxColIndex
+    mini ==> minIndex
+    maxi ==> maxIndex
+
+    positivePower : (%, Integer) -> %
+    positivePower(x, n) ==
+      (n = 1) => x
+      odd? n => x * positivePower(x, n - 1)
+      y := positivePower(x, n quo 2)
+      y * y
+
+    if R has Monoid then
+        x : % ^ n : NonNegativeInteger ==
+            zero? n => scalarMatrix 1
+            positivePower(x, n)
+
+    coerce(r : R) == scalarMatrix r
+
+    differentiate(x : %, d : R -> R) == map(d, x)
+
+    diagonal x ==
+      v : Vector(R) := new(ndim, 0)
+      for i in minr x .. maxr x
+        for j in minc x .. maxc x
+          for k in minIndex v .. maxIndex v repeat
+            qsetelt!(v, k, qelt(x, i, j))
+      directProduct v
+
+    retract(x : %) : R ==
+      diagonal? x => retract diagonal x
+      error "Not retractable"
+
+    retractIfCan(x:%):Union(R, "failed") ==
+      diagonal? x => retractIfCan diagonal x
+      "failed"
+
+    if R has Ring then
+
+        equation2R : Vector % -> Matrix R
+
+        equation2R v ==
+            ans : Matrix(Col) := new(ndim, #v, 0)
+            for i in minr ans .. maxr ans repeat
+                for j in minc ans .. maxc ans repeat
+                    qsetelt!(ans, i, j, column(qelt(v, j), i))
+            reducedSystem ans
+
+        reducedSystem(x : Matrix %) : Matrix(R) ==
+            empty? x => new(ndim*ndim*nrows(x), ncols(x), 0)
+            reduce(vertConcat, [equation2R row(x, i)
+                               for i in minr x .. maxr x])$List(Matrix R)
+
+        reducedSystem(m : Matrix %, v : Vector %
+                     ) : Record(mat : Matrix R, vec : Vector R) ==
+            vh : Vector(R) :=
+                empty? v => new(0, 0)
+                rh := reducedSystem(v::Matrix %)@Matrix(R)
+                column(rh, minColIndex rh)
+            [reducedSystem(m)@Matrix(R), vh]
+
+    trace x ==
+      tr : R := 0
+      for i in minr(x)..maxr(x) for j in minc(x)..maxc(x) repeat
+        tr := tr + x(i, j)
+      tr
+
+    diagonalProduct x ==
+      pr : R := x(minr(x), minc(x))
+      for i in (minr(x) + 1)..maxr(x) for j in (minc(x) + 1)..maxc(x) repeat
+        pr := pr * x(i, j)
+      pr
+
+    if R has Field then
+
+      x : % ^ n : Integer ==
+        zero? n => scalarMatrix 1
+        positive? n => positivePower(x, n)
+        (xInv := inverse x) case "failed" =>
+          error "^: matrix must be invertible"
+        positivePower(xInv@%, -n)
+
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+)if false
+\begin{thebibliography}{99}
+\bibitem{1} G. Rote, Division-free algorithms for the determinant and the
+  Pfaffian, in : H. Alt (Ed.), Computational Discrete Mathematics, in : Lecture
+  Notes in Comput. Sci., vol. 2122, Springer, Berlin, 2001, pp. 119--135.
+  MR1911585 (2003g : 65062), \url{http://page.mi.fu-berlin.de/rote/Papers/abstract/Division-free+algorithms+for+the+determinant+and+the+Pfaffian : +algebraic+and+combinatorial+approaches.html}
+\end{thebibliography}
+)endif

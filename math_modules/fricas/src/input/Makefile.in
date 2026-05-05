@@ -1,0 +1,214 @@
+
+subdir = src/input/
+
+IN=$(fricas_src_srcdir)/input
+
+.PHONY: all all-ax all-input
+
+all: all-ax
+
+check: regress
+
+all-ax all-input: regress outs
+	@echo 1 finished $(srcdir)
+
+%.spad: ${IN}/%.spad
+	cp $< $@
+
+bugs2008.output: ExportType.spad
+
+regress: regression-tests
+
+clean-local:
+	-rm -f *.output ts_file.dat
+	-rm -rf *.NRLIB ts_kaf
+	-rm -f redo.input
+	-rm -f sieve.asy sieve.lsp simple.asy simple.lsp
+	-rm -f *.fn *.data *.lib *.$(LISPOBJEXT)
+
+distclean-local: clean-local
+
+
+.SUFFIXES:
+.SUFFIXES: .input .output
+
+TESTSYS=$(fricas_target_bindir)/FRICASsys
+
+SKIP= antoine.output \
+      bouquet.output   \
+      cdraw.output   \
+      conformal.output coordsys.output  \
+      draw2dSF.output  drawalg.output   drawcfun.output  \
+      drawcurv.output  drawcx.output    drawex.output    draw.output      \
+      drawpoly.output  drawx.output     dropt.output     \
+      explot2d.output  explot3d.output  \
+      grdef.output     \
+      images1.output   images2.output   \
+      images3.output   images5.output   \
+      images6.output   images7.output   \
+      images8.output   knot.output      \
+      matrox.output    \
+      mountain.output  mult2d.output    mult3d.output    \
+      ntube.output     parpcurv.output  parscurv.output  \
+      parsurf.output   plotfile.output  \
+      plotlist.output  ribbon.output    \
+      ribbons.output   rk4draw.output  \
+      tetra.output     tknot.output     \
+      vectors.output
+
+OUTS= algaggr.output   algfacob.output  \
+      allfact.output   arith.output     \
+      arrows.output    \
+      bags.output      \
+      bug6357.output   \
+      calculus2.output cardinal.output  \
+      clifford.output  coercels.output  \
+      collect.output   contfrac.output  \
+      cycles.output    \
+      danzwill.output  \
+      dhtri.output     \
+      divisor.output   \
+      dpol.output      \
+      efi.output       eigen.output     elemfun.output   \
+      elemnum.output   elfuts.output    \
+      elt.output       \
+      errortrap.output \
+      eval.output      \
+      exprpoly.output  \
+      ffdemo.output    \
+      fixed.output \
+      float.output     \
+      fnla.output      \
+      fr.output        function.output  \
+      genups.output    \
+      gonshor.output   \
+      grpthry.output   heat.output      \
+      i_bugs.output \
+      ico.output       ideal.output     \
+      infprod.output   \
+      is.output        \
+      jet.output       knot2.output     \
+      kuipers.output   \
+      linalg.output    lindep.output    \
+      lodesys.output   \
+      loop.output      \
+      lupfact.output   \
+      mapleok.output   \
+      marcbench.output \
+      matrix22.output  matrix.output    \
+      mfinfact.output  \
+      mset.output      \
+      multiple.output  \
+      newton.output    nlode.output     \
+      noonburg.output  \
+      ode.output       \
+      octonion.output  \
+      padic.output     \
+      pat.output       patmatch.output  perm.output      \
+      pmint.output     \
+      polycoer.output  \
+      radff.output     reclos.output    reductio.output \
+      repa6.output     \
+      robidoux.output  \
+      ruleset.output   rules.output     \
+      r21bugsbig.output r21bugs.output  \
+      scherk.output    \
+      scope.output     \
+      series2.output   skew.output      solvetra.output  \
+      space3.output    \
+      streams.output   stream2.output   \
+      synonym.output   tanatan.output   \
+      test.output      triglim.output   \
+      tsetcatbutcher.output tsetcatchemical.output tsetcatvermeer.output  \
+      tree.output      \
+      tutchap2.output  tutchap3.output  tutchap4.output  \
+      tutchap67.output \
+      unittest.output \
+      view2d.output    viewdef.output   \
+      zimmer.output
+
+REGRESS0 = agcd.output array.output bezout.output bugs2007.output \
+      bugs2008.output  bugs2009.output  bugs2010.output \
+      bugs2011.output  bugs2012.output  bugs2013.output  bugs2014.output \
+      bugs2015.output  bugs2016.output  bugs2017.output  bugs2018.output \
+      bugs2019.output  bugs2020.output  bugs2021.output  bugs2022.output \
+      bugs2023.output  bugs2024.output  bugs2025.output  bugs2026.output \
+      charpol.output cyldec.output derham.output \
+      dirichlet.output discrgrp.output distro.output \
+      ellip.output eltuniseg.output expps.output \
+      files.output fftst.output finite.output \
+      finstruc.output free_mod.output fun.output \
+      gpresent.output \
+      integ.output intlocp.output isprime.output \
+      limit.output linalg2.output lll.output \
+      lode.output lodo2.output lodof.output lodof2.output \
+      mantepse.output matcat.output matop.output mts.output ncalg.output \
+      ord.output ore.output \
+      pgcd.output polylift.output polop.output psgenfcn.output \
+      rsimp.output series3.output ssolve.output \
+      table.output tensor.output vsbasis.output
+
+ifeq (@BUILD_ALDOR_INTERFACE@,yes)
+
+ALDOR_REGRESS = aldor1.output aldor2.output
+
+else
+
+ALDOR_REGRESS =
+
+endif
+
+REGRESS = $(REGRESS0) $(ALDOR_REGRESS)
+
+check: regression-tests
+	awk -f $(srcdir)/check_result $(REGRESS)
+
+READINS = conformal.input eltunisegtests.input
+
+${READINS}: %.input : $(srcdir)/%.input
+	cp $< $@
+
+fixed.output: conformal.input
+eltuniseg.output: eltunisegtests.input
+
+.PHONY: regression-tests
+regression-tests: ${REGRESS}
+
+outs : ${OUTS}
+
+${OUTS} ${REGRESS0} : %.output: $(srcdir)/%.input
+	( \
+	echo running test file $* ; \
+	echo ')set message test on' > tmp$$$$.input; \
+	echo ')set message auto off' >> tmp$$$$.input ; \
+	echo ')read $<' >> tmp$$$$.input ; \
+	echo ')quit' >> tmp$$$$.input ; \
+	echo ')read "tmp'$$$$'.input"' | \
+	FRICAS_INITFILE='' ${TESTSYS} > $*.output 2>&1 ; \
+	rm tmp$$$$.input )
+
+ifeq (@BUILD_ALDOR_INTERFACE@,yes)
+
+%.as: ${IN}/%.as
+	cp $< $@
+
+aldor1.output: sieve.as
+
+aldor2.output: simple.as
+
+ALDOR_ARGS = -O -Fasy -Flsp -lfricas -Y ../aldor/al \
+             -I $(fricas_top_srcdir)/src/aldor/aldor
+
+${ALDOR_REGRESS}: %.output: $(srcdir)/%.input Makefile
+	( \
+	echo running aldor test file $* ; \
+	echo ')set message test off' > tmp$$$$.input; \
+	echo ')set message auto on' >> tmp$$$$.input ; \
+	echo ')set compiler args "$(ALDOR_ARGS)"' > tmp$$$$.input ; \
+	echo 'systemCommand "read $<"' >> tmp$$$$.input ; \
+	echo ')lisp (quit)' >> tmp$$$$.input ; \
+	echo ')read "tmp'$$$$'.input"' | \
+	ALDOR_COMPILER='@ALDOR@' FRICAS_INITFILE='' ${TESTSYS} > $*.output 2>&1 ; \
+	rm tmp$$$$.input )
+
+endif

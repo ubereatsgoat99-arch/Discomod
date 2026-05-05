@@ -1,0 +1,87 @@
+INTERPSYS=$(fricas_build_bindir)/interpsys
+
+subdir = src/etc/
+
+.PHONY: all
+all: all-ax
+
+# If the directory ${PREGENERATED}/target/algebra exists, there is nothing
+# to do since this directory will have been copied already.
+# Note that the value of ${PREGENERATED} must be an absolute directory.
+all-ax: stamp stamp-databases
+	@echo finished $(builddir)
+
+stamp-databases:
+	test -d ${PREGENERATED}/target/algebra && $(STAMP) stamp-databases \
+          || ${MAKE} do-stamp-databases
+
+stamp: $(fricas_target_libdir)/summary \
+		$(fricas_target_libdir)/copyright \
+		$(fricas_target_bindir)/fricas \
+		$(fricas_target_bindir)/fricas-readline \
+                $(fricas_target_libdir)/SPADEDIT \
+                $(fricas_target_libdir)/command.list
+	$(STAMP) stamp
+
+# The databases are built in this Makefile even though the prerequisites
+# are actually made during the previous step in the algebra directory.
+# This allows us to use a simple wildcard to express the fact that
+# all of the 'algebra/*.NRLIB/*.$(FASLEXT)' files are required in
+# order to build the databases. If any of these are changed,
+# the databases must be re-built.
+
+do-stamp-databases: ../algebra/*.NRLIB/*.$(FASLEXT)
+	@ echo 4 rebuilding databases...
+	(cd ../algebra ; \
+           echo ')boot make_databases([], true)' | \
+               DAASE='$(fricas_src_datadir)' \
+               FRICAS=$(FRICAS) FRICAS_INITFILE='' ${INTERPSYS} )
+	cp ../algebra/*.daase $(fricas_targetdir)/algebra
+	cp ../algebra/libdb.text $(fricas_targetdir)/algebra
+	cp ../algebra/comdb.text $(fricas_targetdir)/algebra
+	-mkdir $(fricas_targetdir)/algebra/USERS.DAASE \
+             $(fricas_targetdir)/algebra/DEPENDENTS.DAASE
+	cp ../algebra/USERS.DAASE/index.KAF \
+                   $(fricas_targetdir)/algebra/USERS.DAASE
+	cp ../algebra/DEPENDENTS.DAASE/index.KAF \
+                   $(fricas_targetdir)/algebra/DEPENDENTS.DAASE
+	-rm -f stamp-databases
+	$(STAMP) stamp-databases
+
+$(fricas_target_libdir)/summary: $(srcdir)/summary
+	cp $< $@
+
+$(fricas_target_libdir)/copyright: $(srcdir)/../../LICENSE.txt
+	cp $< $@
+
+$(fricas_target_libdir)/SPADEDIT: $(srcdir)/SPADEDIT
+	cp $< $@
+	chmod +x $@
+
+$(fricas_target_libdir)/command.list: $(srcdir)/gen-cpl.lisp \
+   stamp-databases
+	echo ")read $(abs_srcdir)/gen-cpl.lisp" > gen-cpl.in
+	echo ')lisp (do_command_list "'$@'")' >> gen-cpl.in
+	(DD=$(fricas_targetdir); \
+        if test -d ${PREGENERATED}/target/algebra ; then \
+            DD=${PREGENERATED}/target ; \
+        fi ; \
+	cat gen-cpl.in | \
+        DAASE=$$DD FRICAS=$(FRICAS) \
+        FRICAS_INITFILE='' ${INTERPSYS} )
+
+$(fricas_target_bindir)/fricas: $(srcdir)/fricas
+	cp $< $@
+	chmod +x $@
+
+$(fricas_target_bindir)/fricas-readline: $(srcdir)/fricas-readline
+	cp $< $@
+	chmod +x $@
+
+clean-local:
+	-rm -f stamp stamp-databases stamp-do-databases
+	-rm -f $(fricas_target_libdir)/summary
+	-rm -f $(fricas_target_libdir)/copyright
+	-rm -f gen-cpl.in gen-cpl.$(FASLEXT) gen-cpl.data
+
+distclean-local: clean-local

@@ -1,0 +1,183 @@
+
+subdir = src/interp/
+
+DOC=$(fricas_target_docdir)/src/interp
+
+fricas_debug_compiler=@fricas_debug_compiler@
+fricas_quiet_flags = @fricas_quiet_flags@
+fricas_image_flags = @fricas_image_flags@
+FRICAS_SAVE_EXEC = @FRICAS_SAVE_EXEC@
+
+LISP_ID_STRING=$(FRICAS_LISP_FLAVOR) $(FRICAS_LISP_VERSION)
+
+# Command to translate Boot to Common Lisp
+BOOT_TO_LISP = $(fricas_build_helper) \
+	       --translate_boot --debug=$(fricas_debug_compiler) \
+	       --use=$(BOOTSYS) --output=$@ $<
+
+# Command to translate Common Lisp to native object code
+COMPILE_LISP = $(fricas_build_helper) \
+	       --compile_lisp --debug=$(fricas_debug_compiler) \
+	       --use=$(LOADSYS) --output=$@ $<
+
+BOOTSYS= $(fricas_build_bindir)/bootsys
+
+LOADSYS= $(fricas_build_bindir)/lisp$(EXEEXT)
+SAVESYS= $(fricas_build_bindir)/interpsys$(EXEEXT)
+FRICASSYS= $(fricas_target_bindir)/FRICASsys$(EXEEXT)
+
+OBJ_files= macros setq \
+	buildom cattable clam clammed \
+	compress cparse cstream database \
+	format g-boot g-cndata g-error g-opt \
+	g-timer	g-util i-analy \
+	i-coerce i-coerfn i-eval i-funsel i-intern \
+	i-map i-output i-resolv	i-spec1 i-spec2 i-syscmd \
+	i-toplev incl interop int-top lisplib macex match \
+	msg msgdb m_util nformat nlib nrunfast \
+	nrungo nrunopt pf2sex pile \
+	posit ptrees rulesets scan \
+	serror server setvars sfsfun simpbool slam \
+	termrw trace \
+	daase br_sup s_supp gdata ncomp \
+	parse postpar setvart s-parser scwrap2
+
+OCOBJ_files= apply c-doc c-util category compiler \
+	define functor info iterator modemap nruncomp \
+	package	htcheck
+
+BROBJ_files= bc-matrix bc-misc bc-solve ht-util htsetvar \
+	br-con br-data br-op1 br-op2 \
+	br-search br-util br-saturn
+
+ASCOMP_files= hashcode as foam_l
+
+# hashcode must be before interop
+ALL_OBJ_files = vmlisp ${ASCOMP_files} ${OBJ_files} ax ${BROBJ_files} \
+                ${OCOBJ_files}
+
+ALL_OBJS = $(patsubst %, %.$(LISPOBJEXT), $(ALL_OBJ_files))
+
+.PRECIOUS:	${SAVESYS}
+.PRECIOUS:	${FRICASSYS}
+
+.SUFFIXES:
+.SUFFIXES: .boot .clisp .lisp
+
+.PHONY: all all-ax all-interpsys all-fricassys
+
+all: all-ax
+
+all-ax: stamp
+	@echo finished $(srcdir)
+
+stamp:  remove-stamp build-images
+	$(STAMP) stamp
+
+.PHONY: remove-stamp
+remove-stamp:
+	-rm -f stamp
+
+.PHONY: build-images
+build-images: remove-stamp all-interpsys
+
+all-interpsys: $(SAVESYS)
+
+.PRECIOUS: %.clisp
+%.clisp: $(srcdir)/%.boot
+	$(BOOT_TO_LISP)
+
+.PRECIOUS: %.$(LISPOBJEXT)
+%.$(LISPOBJEXT): %.clisp
+	$(COMPILE_LISP)
+
+# Compile the part of the interpreter written in Common Lisp
+.PRECIOUS: %.lisp
+%.$(LISPOBJEXT): $(srcdir)/%.lisp
+	$(COMPILE_LISP)
+
+clean-local:
+	rm -f *.fn *.data *.lib *.$(LISPOBJEXT)
+	rm -f *.clisp \
+	  makedep.lisp makedep2.lisp makedep2.lst makeint.lisp \
+	  exposed.lsp
+
+distclean-local: clean-local
+
+${SAVESYS} ${FRICASSYS}: makeint.lisp \
+    ${ALL_OBJS} util.$(LISPOBJEXT) \
+    ${LOADSYS} \
+    $(fricas_targetdir)/algebra/exposed.$(FASLEXT) \
+    $(fricas_src_datadir)/doc/msgs/s2-us.msgs
+
+makeint.lisp: ../boot/lobj_lst
+	@ echo 5 invoking make in `pwd` with parms:
+	@ echo SRC= $(fricas_src_srcdir)
+	@ echo BYE=${BYE}
+	cp $(fricas_src_datadir)/doc/msgs/s2-us.msgs \
+		 $(fricas_target_datadir)/msgs/s2-us.msgs
+	echo '(load #-:ecl "util" #+:ecl "$(srcdir)/util.lisp")' >> makeint.lisp
+	@ echo '(in-package "BOOT")' >> makeint.lisp
+	@ echo '(progn (setq boot::|$$build_date|    "${BUILD_DATE}")' \
+	       '       (setq boot::|$$build_version| "${VERSION}")' \
+	       '       (setq boot::|$$lisp_id_string| "${LISP_ID_STRING}"))' \
+	     >> makeint.lisp
+	echo '#+:ecl(setf fricas-lisp::*fricas-initial-lisp-objects*' \
+             '(append fricas-lisp::*fricas-initial-lisp-objects*' \
+             ' (quote (' >> makeint.lisp
+	cat ../boot/lobj_lst >> makeint.lisp
+	echo '))))' >> makeint.lisp
+	echo '(build-interpsys' \
+	  '(quote ($(patsubst %, "%", ${ALL_OBJS}))))' >> makeint.lisp
+	@ echo '(in-package "BOOT")' >> makeint.lisp
+	echo '#-:ecl(|clearClams|)' >> makeint.lisp
+	@ echo '#+:GCL (setq compiler::*suppress-compiler-notes* t)' >> makeint.lisp
+	@ echo '#+:GCL (si::gbc-time 0)' >> makeint.lisp
+
+${SAVESYS}:
+	echo '#+gcl(setq si::*optimize-maximum-pages* nil)' \
+	     '(load "makeint.lisp") #-:ecl(BOOT::reclaim)' \
+             '#+:ecl(FRICAS-LISP::make-program "$@" nil)' \
+             '#+:gcl(progn (setq si::*code-block-reserve* "")(si::gbc t)(setq si::*code-block-reserve* (make-array 10000000 :element-type (quote character) :static t) si::*optimize-maximum-pages* t))' \
+             '#-:ecl(BOOT::spad-save "$@" t t)' | \
+           DAASE='$(fricas_src_datadir)' ${BOOTSYS}
+	ls $@
+	@ echo 6 ${SAVESYS} created
+
+.PHONY: all-fricassys
+
+all-fricassys: ${FRICASSYS}
+
+${FRICASSYS}: ../etc/stamp-databases
+	echo '(defparameter FRICAS-LISP::*building-fricassys* t)' \
+	   '#+gcl(setq si::*optimize-maximum-pages* nil)' \
+	   '(load "makeint.lisp") #-:ecl(BOOT::reclaim)' \
+           '#+:gcl(progn (setq si::*code-block-reserve* "")(si::gbc t)(setq si::*code-block-reserve* (make-array 10000000 :element-type (quote character) :static t) si::*optimize-maximum-pages* t))' \
+	   '#+:cmu (setf (ext:search-list "libspad:")' \
+	   '(list "${FRICAS}/lib/" "${libdir}/fricas/target/${target}/lib/"))' \
+	   '#+:cmu (setq ext:*top-level-auto-declare* t)' \
+	   '#+:cmu (setq *compile-verbose* nil)' \
+	   '#+:cmu (setq *compile-print* nil)' \
+	   '#+:cmu (declaim (optimize (ext:inhibit-warnings 3)))' \
+	   '#+:ecl(FRICAS-LISP::make-program "$@" nil)' \
+	   '#-:ecl(BOOT::spad-save "$@" t $(FRICAS_SAVE_EXEC))' \
+             | DAASE="$(fricas_targetdir)" ${BOOTSYS}
+	if test x"$(FRICAS_SAVE_EXEC)" = xnil ; then \
+	    echo '#! /bin/sh' > $@ ; \
+	    echo '$(FRICAS_LISP) $(fricas_image_flags) $${FRICAS}/bin/FRICASsys.core $(fricas_quiet_flags) "$$@"' >> $@ ; \
+	    chmod a+x $@ ; \
+	fi
+	@ echo 6a ${FRICASSYS} created
+
+exposed.lsp: $(fricas_src_algdir)/exposed.lsp
+	@ echo 615 making $@ from $<
+	cp $< $@
+
+$(fricas_targetdir)/algebra/exposed.$(FASLEXT) : exposed.lsp
+	@ echo 616 making $@ from exposed.lsp
+	echo '(progn  (compile-file "exposed.lsp" :output-file' \
+	      ' "$(fricas_targetdir)/algebra/exposed.$(FASLEXT)") (${BYE}))' \
+		| ${LOADSYS}
+
+clammed.clisp: $(srcdir)/clammed.boot
+	echo '(progn (boottran::bootclam "$<" "$@") (${BYE}))' | ${BOOTSYS}

@@ -1,0 +1,68 @@
+Function: _def_factorlimit
+Class: default
+Section: default
+C-Name: sd_factorlimit
+Prototype:
+Help:
+Doc: \kbd{gp} precomputes a list of
+ all primes less than \kbd{primelimit} at initialization time (and can quickly
+ generate more primes on demand, up to the square of that bound). Let $N$
+ be an integer. The command \kbd{factor}$(N)$ factors the integer, starting
+ by trial division by all primes up to some bound (which depends on the size
+ of $N$ and less than $2^{19}$ is any case), then moving on to more advanced
+ algorithms. When additionally $D$ is an integer, \kbd{factor}$(N, D)$ uses
+ \emph{only} trial division by primes less than $D$. In both case, trial
+ division is sped up by precomputations involving primes up to another bound
+ called \kbd{factorlimit}. Trial division up to a larger bound is possible,
+ but will be slower than for bounds lower than \kbd{factorlimit} and will
+ slow down factorization on average. If \kbd{factorlimit} is larger than
+ \kbd{primelimit}, then \kbd{primelimit} is increased to match
+ \kbd{factorlimit}.
+
+ In the present version, precomputations are only used on startup and
+ changing either \kbd{primelimit} or \kbd{factorlimit} will not recompute
+ new tables. Changing \kbd{primelimit} has no effect, while changing
+ \kbd{factorlimit} affects the behavior in factorizations.
+
+ The default value is $2^{20}$, which is the default \kbd{primelimit}.
+ This default is only used on startup: changing it will not recompute a new
+ table.
+
+ Note that the precomputations are expensive both in terms of time and space,
+ although softly linear in the bound, and the ones attached to
+ \kbd{factorlimit} more so. So neither should be taken too large. Here are
+ sample timings: in the first column are the increasing
+ values of \kbd{primelimit}, in the second column is the startup time
+ keeping \kbd{factorlimit} at its default value, and the third column
+ is the startup time with $\kbd{factorlimit} = \kbd{primelimit}$.
+ \bprog
+ 2^20:      40 ms         40 ms
+ 2^23:      40 ms        230 ms
+ 2^26:     140 ms      2,410 ms
+ 2^29:     810 ms     27,240 ms
+ 2^32:   6,040 ms    293,660 ms
+ @eprog\noindent The final $2^{32}$ for \kbd{factorlimit} requires a 10GB
+ stack. On the other hand,
+ here are timings trying \kbd{factor}$(p, D)$ for some random $1000$-bit prime
+ (so we are in the worst case of performing trial division in a setting where
+ it cannot succeed)
+ and increasing values of $D$. We use a \kbd{primelimit} of $2^{32}$;
+ the first column corresponds to the values of $D$, the second to the times for
+ the default \kbd{factorlimit} and the third to fifth for \kbd{factorlimit}
+ matching $D$, $D/2$ and $D/4$ respectively.
+ \bprog
+ 2^20:       1 ms        1 ms        6 ms        18 ms
+ 2^23:      72 ms       18 ms       21 ms        63 ms
+ 2^26:     296 ms       50 ms      176 ms       233 ms
+ 2^29:   1,911 ms      266 ms    1,023 ms     1,404 ms
+ 2^32:  15,505 ms    2,406 ms    6,954 ms    15,264 ms
+ @eprog\noindent As expected, matching \kbd{factorlimit}'s fast trial
+ division to the desired trial division bound $D$ is optimal if we do not
+ take precomputation time into account. But this data
+ also shows that if you need to often trial divide above 4 \kbd{factorlimit},
+ then you should not bother and can just as well stick with the default value:
+ the extra efficiency up to \kbd{factorlimit} is negligible compared to the
+ naive trial division that will follow. Whereas the increase in memory usage
+ and startup time are \emph{very} noticeable.
+
+ The default value is $2^{20}$.

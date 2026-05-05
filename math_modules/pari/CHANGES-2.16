@@ -1,0 +1,288 @@
+Bug numbers refer to the BTS at http://pari.math.u-bordeaux.fr/Bugs/
+Done for version 2.17.0 (released 30/09/2024):
+  Fixed
+     1- rare SEGV in sumnumrat [#2566]
+     2- gp -p N did not check for N < 2^32
+     3- nflist([6,8],12167) -> SEGV [#2567]
+     4- nflist([6,1],1229312), nflist([6,10],36192256) -> duplicate fields
+AP   5- variable leak in algsplit
+     6- mfslashexpansion: possible extra rational factor [#2572]
+     7- nfeltsign: possible wrong result
+
+  Added
+BA   1- [libpari] Flm_sqr
+
+  Changed
+BA   1- qflll(,1), qfllgram(,1): disable FLATTER algorithm.
+     2- tunings of forprime over "short" intervals (use sieve more frequently)
+Done for version 2.16.2 (released 02/08/2024):
+  Fixed
+XR   1- rare oo-loop in nfdisc [#2510]
+PB   2- polcoeff(polmodular(2, 0, ffgen([7,2])^0),0).mod -> incorrect [#2533]
+BA   3- rnfconductor(...,[P, B]) -> wrong result [#2534]
+     4- vecsearch(t_LIST,) would raise a type error [#2535]
+     5- subcycloiwasawa(x^2+87,3) -> SEGV
+     6- forprimestep and variants with initial value negative [#2531]
+     7- when converting a t_QFB to a vector of given length, remove discriminant
+     8- \o3 [tex2mail]: support \*
+     9- rnfpolredabs didn't always return a canonical model [#2538]
+    10- weber(I/2+1/3,2) -> SEGV
+BA  11- [mpi] setting datadir or path in .gprc caused crashes
+    12- imprecise sqrtnr [#2543]
+    13- idealstar(nf,id,,MOD). Need to store MOD in the structure, otherwise
+        exceptions may occur [#2549]
+BA  14- ellsaturation was leaking variable numbers
+    15- rnfelttrace(rnf, t_POL in rnf.pol variable): wrong [#2509]
+    16- rnfeltnorm(rnf, t_POL in rnf.pol variable): wrong [#2509]
+    17- b=9/10; hypergeom([b+2, b], 2*b, 2/3): wrong [#2551]
+    18- overflows not tested in subcycloiwasawa [#2552]
+    19- randomprime([1,2], Mod(1,2)) -> 3
+BA  20- b;a;gcd(Mod(1,a^2+1),Mod(1,b^2+Mod(-a,a^2+1))) -> wrong result [#2553]
+    21- idealismaximal(nf, <some elt>) -> impossible inverse [#2556]
+    22- polynomial coefs which are exact 0 should not be printed [#2558]
+    23- f = Mod(Mod(1,3), Mod(a^2+2,3))*x^3; (1/f) * O(x^2) -> O(x^0) instead of
+        Mod(Mod(0, 3), Mod(1, 3)*a^2 + Mod(2, 3))*x^-2 + O(x^-1) [#2558]
+BA  24- hgmeulerfactor could return wrong result [#2557]
+    25- (Mod(0,2)+O(x)) * (1+O(x)) -> Mod(0, 2)*x + O(x^2) [#2559]
+BA  26- z = ffgen(11^5)^0; fflog(z, z, 1) ->SEGV [#2562]
+
+  Changed
+BA   1- plotell renamed to plotarc
+     2- lfun for degree 1 L-functions: use Riemann-Siegel when imag(s) is large
+     3- zetahurwitz, lerchzeta: use Tyagi's method when imag(s) is large
+     4- forprimestep: allow modulus not fitting in an unsigned long
+     5- specify how Vec(v, n) truncates v when #v > |n|. Changes previous
+        behaviour when n < 0: Vec([1,2,3], -2) -> [2,3]  (was [1,2])
+        Same for Vecrev, Vecsmall, Col, and Colrev.
+BA   6- allow abs(+oo), abs(-oo)
+BA   7- [libpari] gp_embedded : make interface more similar to GP
+BA   8- [libpari] callback cb_pari_display_hist (used by gp_embedded)
+     9- [libpari] the diffptr low level interface is gone (table of difference
+        of primes), replaced by a table of 32bit primes (pari_PRIMES).
+        The byteptr type and following functions / macros are gone: initprimes,
+        init_primepointer_geq, init_primepointer_gt, init_primepointer_leq,
+        init_primepointer_lt NEXT_PRIME_VIADIFF, PREC_PRIME_VIADIFF,
+        NEXT_PRIME_VIADIFF_CHECK.
+    10- bnfisintnorm: add flag to return solution in factored form
+
+  Added
+BA   1- GP function mapapply
+BA   2- GP function qfcholesky
+BA   3- [libpari] pari_err_display, gp_display_hist, str_display_hist
+     4- allow vecmin and vecmax to handle t_LIST
+     5- support 'rnf' structure in nfnewprec
+     6- [libpari] rnfnewprec, rnfnewprec_shallow
+BA   7- [examples] gp_embedded.c, like minigp.c but using gp_embedded
+     8- new GP default 'factorlimit'
+XR   9- new GP function bnrstarkunit
+    10- [libpari] bid_get_MOD
+    11- [libpari] Z_to_famat, Q_to_famat
+BA  12- new GP function hyperellordinate
+BA  13- [libpari] closure_callgen0
+WvW 14- new GP function qfcvp
+BA  15- new GP function ellmaninconstant
+BA  16- new GP function nfweilheight
+BA  17- [libpari] Qp_psi
+NM  18- [libpari] FlxqX_eval
+    19- [libpari] Qp_zetahurwitz
+    20- [libpari] PRIMES_search
+HC  21- psi: support for derivative and t_PADIC
+    22- [libpari] ZM2_sqr
+BA  23- [libpari] FpXQX_roots_mult
+BA  24- [libpari] ZXX_pvalrem, ZXV_pvalrem
+BA  25- [libpari] pari_breakloop
+
+Done for version 2.16.1 (released 04/01/2024):
+  Fixed
+BA   1- lfunan(lfunetaquo([12,1;13*12,1]),1) -> stack overflow [#2457]
+BA   2- FpM_intersect could return a Flm [#2459]
+     3- ifactor_sign: ifac_isprime could be called on input with tiny divisors
+BA   4- nfcompositum could return non-monic polynomials [#2461]
+BA   5- gammamellininvinit(vector(9,i,1)) -> SEGV
+     6- incorrect sanity check in rnfeltdown ("not in base field") [#2464]
+HC   7- precision loss in gammamellininv [#2462]
+BA   8- [pthread] parselect could crash
+BA   9- rare infinite loop in ellsaturation
+BA  10- quadunitindex(8461,2)->1 instead of 3 [#2466]
+BA  11- chinese(Mod(1,3)*(x^2+x+2),Mod(1,5)*(x-1)) -> incorrect leading term
+BA  12- lindep([0,x]) -> SEGV
+BA  13- [libpari] RgX_div_by_X_x: wrong variable number
+    14- incorrect results in bnrisprincipal if bitprecision too low [#2474]
+MS  15- hyperellratpoints(2*x^3+x^2-x,1000) -> wrong result [#2475]
+BA  16- ellisogeny over a nf -> inconsistent variables error
+BA  17- w=3;quadgen(5) -> print x instead of w [#2477]
+BA  18- FpX_convol: wrong result for mixed degree
+LGr 19- parsum was inefficient
+    20- mateigen(,1): eigenvalues were given as t_VEC or t_COL. Use t_COL.
+BA  21- ellcard over small finite field: potential oo-loop [#2483]
+BA  22- ellisomat/nf could miss isogenies of degree dividing the conductor
+    23- mfcoef(mftwist(f,D), ...) wrong result [#2484]
+    24- sumeulerrat / prodeulerrat: slow if s not an integer [#2433]
+    25- 'path' broken when initial or trailing ':'
+    26- snfrank([1],0) -> 1 [instead of 0].
+    27- snfrank(vector of polynomials, 0) -> error
+    28- division of t_POLs with compatible domains Mod(1,2)/(2*x+1) -> Mod(1,2)
+    29- strjoin([1]) -> memory corruption
+    30- qfbclassno(684) -> oo loop [#2491]
+    31- gcd(x-1,(x-1)/x) -> 1/x
+PMo 32- mftonew was wrong on oldspace -> remove mfbd layer
+BA  33- rnf.p did not work
+    34- expm1(tiny negative t_REAL) -> stack overflow [#2494]
+    35- expm1(huge t_REAL) -> junk [#2494]
+BA  36- hyperellratpoints(9*x^2,3) -> SEGV
+    37- lambertw for 2-adics (also fix documentation)
+BA  38- plotbox, plotrbox did not clip properly
+BA  39- ellheight for non-minimal curve over a number field -> wrong result
+    40- for x >= 0, x^(a/b) was using (x^(1/b))^a instead of x^q*x^(r/b),
+        with a = qb + r.
+    41- hypergeom(t_POL parameters, z) -> type error [#2515]
+    42- polrootsreal(0E10*x + 0E10) -> SEGV [#2516]
+BA  43- memory leak when using member functions and ~ arguments. [#2513]
+    44- idealstar(nf,id,,MOD).cyc was not reduced modulo MOD
+    45- changed qfbred to use standard normalization (same as qfbredsl2)
+
+  Changed
+HC   1- dirpowerssum: allow functions with t_VEC output
+HC   2- dirpowerssum: add optional flag 'both' [also in library mode]
+BA   3- [libpari] RgX_halfgcd now only return the matrix. Use RgX_halfgcd_all
+BA   4- [libpari] ec_bmodel, ec_phi2 now take a variable number
+BA   5- ellisomat: when E/nf has CM by an quadratic order included in nf,
+        return the discriminant of the order instead of an error [#2231]
+BA   6- ZX_compositum_disjoint: renamed to ZX_composedsum
+     7- allow t_INTMOD Mod(m,N) as a Conrey label for the character m mod N
+     8- nfroots: return a t_COL instead of a t_VEC (same as other 'roots' fun)
+     9- qfbsolve: call qfbcornacchia when the argument is prime (and disc < 0)
+BA  10- [libpari] rename qfb_apply_ZM -> qfb_ZM_apply,
+                         qf_apply_RgM -> qf_RgM_apply,
+                         qf_apply_ZM -> qf_ZM_apply
+    11- rnfinit(nf, [T,lim]); try to fix maximal order if wrong [#2494]
+BA  12- [libpari] change prec to be a number of bits, instead of lg
+BA  13- [libpari] suminf_bitprec, intnumromb_bitprec: use suminf, intnumromb
+        ellL1_bitprec, ellanalyticrank_bitprec: use ellL1, ellanalyticrank
+
+  Added
+     1- [libpari] nfeltembed_i
+BA   2- [libpari] Flx_extresultant_pre, FlxqX_resultant_pre
+BA   3- [libpari] gc_stoi, gc_utoi, gc_utoipos
+BA   4- [libpari] F2xX_shift
+BA   5- [libpari] Flx_Fl_mul_pre
+BA   6- [libpari] Flx_halfgcd_all, Flx_halfgcd_all_pre, FpX_halfgcd_all,
+        FlxqX_halfgcd_all, FlxqX_halfgcd_all_pre, FpXQX_halfgcd_all,
+        F2xqX_halfgcd_all, FFX_halfgcd_all, RgX_halfgcd_all
+     7- [libpari] modRr_i
+BA   8- [libpari] random_Fq
+     9- [libpari] maxprimelim
+BA  10- [libpari] FlxqX_div_by_X_x, FlxqX_div_by_X_x_pre
+BA  11- [libpari] Fl_2gener_pre_i, Fp_2gener_i, Fl2_sqrt_pre, Flxq_sqrt_pre
+BA  12- [libpari] Fq_elljissupersingular
+BA  13- [libpari] FpXQ_ellcard_supersingular, Fq_ellcard_supersingular
+BA  14- [libpari] Fp_ellj_to_a4a6
+BA  15- [libpari] ec_half_deriv_2divpol
+BA  16- New GP functions polisclass, elliscm
+BA  17- [libpari] elljsupersingular_FpXQ
+BA  18- New GP function ellsupersingularj
+BA  19- [libpari] Flx_composedsum, FlxV_composedsum
+                  FpX_composedsum, FpXV_composedsum FlxqX_composedsum
+BA  20- [libpari] Flx_convol, Flx_composedprod, FpX_composedprod
+BA  21- [libpari] RgV_F2v_extract_shallow
+    22- [libpari] Fp_double
+    23- [libpari] convenience function veclast
+    24- allow snfrank(D,0) for snfrank(D)
+    25- [libpari] dbg_fill_stack() [#2361]
+    26- allow erfc(t_SER)
+    27- allow hypergeom(N,D,t_PADIC)
+BA  28- n#: primorial of n
+    29- allow bernpol(k, a) [ = B_k(a) ]
+BA  30- allow Qfb(a*x^2+b*x+c) and Qfb([a,b0;b1,c])
+BA  31- New GP function parforstep
+BA  32- New GP function polfromroots
+BA  33- digits: support for negative bases but positive digits.
+AP  34- alginit: new flag value for lazy factorization
+BA  35- [libpari] F2xqXV_prod, F2xqV_roots_to_pol, FFV_roots_to_pol
+BA  36- [libpari] RgM_div
+BA  37- [libpari] ZV_max_expi, ZM_max_expi
+BA  38- [libpari] ZM_merge_factor
+BA  39- [libpari] RgM_Cholesky
+BA  40- [libpari] hash_keys_GEN
+    41- support kB or KB, MB, GB and TB as units for memory sizes (2^10,
+        2^20, 2^30 and 2^40 bytes)
+BA  42- [libpari] lg2prec, prec2lg
+BA  43- New GP function ellisisom
+BA  44- allow qfsolve([Q,F]) where F factorization of disc(Q)
+BA  45- New GP function plotell
+
+  Removed
+     1- [graphic] support for Qt4
+
+Done for version 2.16.0 (released 25/02/2023):
+  Fixed
+BA   1- ploth long help was misformatted
+     2- polredbest(y^4 - y^3 - 1/4, 1) -> Error [#2414]
+     3- mathnf over polynomial rings: wrong when rank not maximal [#2415]
+BA   4- seralgdep(Ser([0,1,0,u]*Mod(1,(u^2+u+1)*Mod(1,2)),y),2,2) -> SEGV
+     5- polroots(4*x^3+4*x^2+28*x+144) -> overflow [#2418]
+     6- conversion to float of t_QUAD with t_FRAC components [#2419]
+     7- bnfinit(x^3-810693844986180*x-30702939461011257135364,1).fu
+        -> wrong result or SEGV [#2420]
+     8- [1,2]*[3,4] -> strange error message about qfbcomp
+     9- obscure oo loop in solve when solution ~ 0 [#2412]
+    10- polcyclo(huge n, t_PADIC of positive valuation) -> overflow
+    11- charpoly over R or C was unstable [#2406]
+    12- polredbest: rare error "inconsistent concatenation" [#2423]
+    13- hypergeom([0,0],[1],2) -> SEGV [#2425]
+    14- fromdigitsu(v, B) actually computed fromdigitsu(v, |B|)
+    15- powers(t_INT, ...) was very slow
+    16- factor(prod(i=1,20,nextprime(2^i)), 131) would include 131 instead of
+        stopping at 67
+    17- sumeulerrat(x^2/(1+x),2) -> FPE [#2433]
+    18- lambertw(10^1000) -> overflow [#2429]
+    19- rare infinite loop in idealtwoelt [#2437]
+BA  20- nfisisom(16*x^4+1,16*x^4+1) -> error [#2432]
+    21- forprimestep(p=a,b,q,) overflow when a > primelimit and q large [#2439]
+BA  22- lfun([bnrinit(bnfinit(y^2+1),12),[[2,0],[6,0]]],2) -> error
+    23- lfunthetacost(polcyclo(43)): silent overflow
+BA  24- ellcard(ellinit([1,1]*ffgen([41,16])))-> impossible inverse [#2441]
+    25- wrong result (missing content) in idealred(nf, [id, elt])
+    26- det(integer matrix) -> inconsistent exact division [#2445]
+BA  27- fft([],[]) -> SEGV, fft([1],[1]) -> SEGV
+BA  28- nfrootsof1(x^0) -> oo-loop
+BA  29- hgmalpha did not check its input
+BA  30- hyperellchangecurve([],[]) -> SEGV
+BA  31- hyperellchangecurve(x^0,[1,matid(2),0]) -> SEGV
+BA  32- rnfeltnorm(x,x) -> SEGV
+BA  33- polylogmult(1,[],-1) -> SEGV
+    34- ellheight(non-integral E) -> crash [#2448]
+    35- content(1,y) -> pol_1(y) instead of t_INT 1
+    36- s=taylor(1/((x-1)*(y-1)),x); taylor(s,y) -> invalid object [#2452]
+    37- avoid crashing when sumnumsidi diverges (0 bits of accuracy) [#2454]
+
+  Changed
+     1- binomial(negative t_INT, t_INT): use Loeb's definition
+     2- normalize t_RFRAC so that leading coeff of denoimator is "positive";
+        compare: 1/(1-x) and 1/(x-1)
+     3- t_SER: valser, evalvalser, setvalser need to be used instead of
+               valp, evalvalp, setvalp
+     4- mathess over R or C: use maximal pivot instead of first non-zero
+     5- default 'parisize' is now 8M on both 32bit and 64bit architectures
+     6- default 'realprecision' is now 38 on both 32bit and 64bit architectures
+     7- default 'realbitprecision' is now 128 on both 32bit and 64bit
+        architectures
+     8- default 'primelimit' is now 2^20 [instead of 500000]
+     9- allow fromdigits(t_COL or t_VECSMALL, B)
+    10- [libpari] cgetalloc arguments swapped to mirror cgetg's definition
+    11- simplified lfunabelianrelinit (absolute equation is now optional)
+    12- quadclassnoF_fact and uquadclassnoF_fact now return h(D)/h(d),
+        like quadclassnoF.
+
+  Added
+PMo  1- new syntax for forvec loops
+BA   2- [GP] genus2igusa
+     3- printf numerical conversions: support complex numbers [#2431]
+     4- libpari vecsmall_counting_indexsort, vecsmall_counting_sort
+        vecsmall_counting_uniq
+BA   5- [riscv64] add riscv64 assembly kernel
+BA   6- lfuncreate([bnr, subg]): Dedekind zeta for the corresponding Abelian
+        extension.
+
+  Removed
+BA   1- [GP] lfunabelianrelinit. Use lfunfinit([bnr, subgroup]) instead.

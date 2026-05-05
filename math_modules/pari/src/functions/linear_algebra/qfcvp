@@ -1,0 +1,51 @@
+Function: qfcvp
+Section: linear_algebra
+C-Name: qfcvp0
+Prototype: GGDGDGD0,L,
+Help: qfcvp(x,t,{B},{m},{flag=0}): Let x be a square and symmetric
+ matrix representing a positive definite quadratic form and t be a vector of
+ the same dimension. This function deals with the vectors of whose squared
+ distance to t is less than B, enumerated using the Fincke-Pohst algorithm,
+ storing at most m vectors (no limit if m is omitted). The function searches
+ for the closest vectors to t if B is omitted or <= 0. The precise behavior
+ depends on flag. 0: returns at most m vectors (unless m omitted), returns
+ [N,M,V] where N is the number of vectors enumerated, M the maximum squared
+ distance among these, and V lists the vectors. 1: ignores m and returns the
+ first vector whose squared distance to t is less than B.
+Doc: \var{cvp} in the function name refers to the \emph{Closest Vector Problem}.
+ Let $x$ be a square and symmetric matrix of dimension $d$ representing
+ a positive definite quadratic form and $t$ be a vector of the same dimension
+ $d$. This function deals with the vectors whose squared distance to $t$ is
+ less than $B$, enumerated using the Fincke-Pohst algorithm, storing at most
+ $m$ vectors. There is no limit if $m$ is omitted: beware that this may be a
+ huge vector! The vectors are returned in no particular order.
+
+ The behavior is undefined if $x$ is not positive definite (a ``precision too
+ low'' error is most likely, although more precise error messages are
+ possible). The precise behavior depends on $\fl$.
+
+ \item If $\fl=0$ (default), return $[N, M, V]$, where $N$ is the number of
+ vectors enumerated (possibly larger than $m$), $M \leq B$ is the maximum
+ squared distance found, and $V$ is a matrix whose columns are found vectors.
+ The function returns the \emph{closest} vectors to $t$ if $B$ is omitted
+ or $\leq 0$, i.e., the ones realizing the mininum distance.
+
+ \item If $\fl=1$, ignore $m$ and return $[M,v]$, where $v$ is a vector at
+ squared distance $M \leq B$. If no vector has distance $\leq B$, return $[]$.
+ If no explicit $B$ is provided, we use the length of a vector of smallest
+ length in an LLL-reduced basis for $x$.
+
+ In these two cases, $x$ must have integral \emph{small} entries: more
+ precisely, we definitely must have $d\cdot \|x\|_{\infty}^{2} < 2^{53}$ but
+ even that may not be enough. The implementation uses low precision floating
+ point computations for maximal speed and gives incorrect results when $x$
+ has large entries. That condition is checked in the code and the routine
+ raises an error if large rounding errors occur.
+
+ \bprog
+ ? M = [2,1;1,2]; t = [1/2, -1/2];
+ ? qfcvp(M, t, 0)
+ %2 = [2, 0.5000000000000000000, [0, 1; 0, -1]]
+ ? qfcvp(M, t, 1.5)
+ %3 = [4, 1.5000000000000000000, [1, 0, 1, 0; 0, 0, -1, -1]]
+ @eprog

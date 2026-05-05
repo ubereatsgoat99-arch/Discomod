@@ -1,0 +1,1026 @@
+)abbrev package FACTFUNC FactoredFunctions
+++ Author: Manuel Bronstein
+++ Date Created: 2 Feb 1988
+++ Description: computes various functions on factored arguments.
+-- not visible to the user
+FactoredFunctions(M : IntegralDomain) : Exports == Implementation where
+  N ==> NonNegativeInteger
+
+  Exports ==> with
+    nthRoot : (Factored M, N) -> Record(exponent : N, coef : M, radicand : List M)
+      ++ nthRoot(f, n) returns \spad{(p, r, [r1, ..., rm])} such that
+      ++ the nth-root of f is equal to \spad{r * pth-root(r1 * ... * rm)},
+      ++ where r1, ..., rm are distinct factors of f,
+      ++ each of which has an exponent smaller than p in f.
+    log : Factored M -> List Record(coef : N, logand : M)
+      ++ log(f) returns \spad{[(a1, b1), ..., (am, bm)]} such that
+      ++ the logarithm of f is equal to \spad{a1*log(b1) + ... + am*log(bm)}.
+
+  Implementation ==> add
+    nthRoot(ff, n) ==
+      coeff : M       := 1
+      radi : List(M)  := (((unit ff) = 1) => empty(); [unit ff])
+      lf := factorList ff
+      d : N :=
+        empty? radi => gcd(concat(n, [t.exponent for t in lf]))::N
+        1
+      n             := n quo d
+      for term in lf repeat
+        qr    := divide(term.exponent quo d, n)
+        coeff := coeff * term.factor ^ qr.quotient
+        not zero?(qr.remainder) =>
+          radi := concat!(radi, term.factor ^ qr.remainder)
+      [n, coeff, radi]
+
+    log ff ==
+      concat([1, unit ff],
+             [[term.exponent, term.factor] for term in factorList ff])
+
+)abbrev package POLYROOT PolynomialRoots
+++ Author: Manuel Bronstein
+++ Date Created: 15 July 1988
+++ Description: computes n-th roots of quotients of
+++ multivariate polynomials
+-- not visible to the user
+PolynomialRoots(E, V, R, P, F) : Exports == Implementation where
+  E : OrderedAbelianMonoidSup
+  V : OrderedSet
+  R : IntegralDomain
+  P : PolynomialCategory(R, E, V)
+  F : Field with
+    numer : % -> P
+        ++ numer(x) \undocumented
+    denom : % -> P
+        ++ denom(x) \undocumented
+    coerce : P -> %
+        ++ coerce(p) \undocumented
+
+  N   ==> NonNegativeInteger
+  Z   ==> Integer
+  Q   ==> Fraction Z
+  REC ==> Record(exponent : N, coef : F, radicand : F)
+
+  Exports ==> with
+    rroot : (R, N) -> REC
+      ++ rroot(f, n) returns \spad{[m, c, r]} such
+      ++ that \spad{f^(1/n) = c * r^(1/m)}.
+    qroot : (Q, N) -> REC
+      ++ qroot(f, n) returns \spad{[m, c, r]} such
+      ++ that \spad{f^(1/n) = c * r^(1/m)}.
+    if R has GcdDomain then froot : (F, N) -> REC
+      ++ froot(f, n) returns \spad{[m, c, r]} such
+      ++ that \spad{f^(1/n) = c * r^(1/m)}.
+    nthr : (P, N) -> Record(exponent : N, coef : P, radicand : List P)
+        ++ nthr(p, n) should be local but conditional
+
+  Implementation ==> add
+    import from FactoredFunctions Z
+    import from FactoredFunctions P
+
+    rsplit : List P -> Record(coef : R, poly : P)
+    zroot : (Z, N) -> Record(exponent : N, coef : Z, radicand : Z)
+
+    zroot(x, n) ==
+      zero? x or (x = 1) => [1, x, 1]
+      s := nthRoot(squareFree x, n)
+      [s.exponent, s.coef, */s.radicand]
+
+    -- returns [d, b] such that d divides n and b^(n/d) = x
+    -- with d as small as possible
+    iroot(x : Z, n : N) : Record(exponent : N, coef : Z) ==
+        x = 1 => [1, 1]
+        e : Z := 1
+        nn : Z := n
+        p : Z := 2
+        while p <= nn repeat
+            not ((nn rem p) = 0) =>
+                p := nextPrime(p)$IntegerPrimesPackage(Z)
+            if (ru := perfectNthRoot(x,
+                             qcoerce(p)@N)$IntegerRoots(Z)) case Z then
+                x := ru::Z
+                e := e*p
+                nn := nn quo p
+            else
+                p := nextPrime(p)$IntegerPrimesPackage(Z)
+        [(n quo e)::N, x]
+
+    if R has imaginary : () -> R then
+      czroot : (Z, N) -> REC
+
+      czroot(x, n) ==
+        rec := zroot(x, n)
+        rec.exponent = 2 and rec.radicand < 0 =>
+          [rec.exponent, rec.coef * imaginary()::P::F, (-rec.radicand)::F]
+        [rec.exponent, rec.coef::F, rec.radicand::F]
+
+      qroot(x, n) ==
+        sn := czroot(numer x, n)
+        sd := czroot(denom x, n)
+        m  := lcm(sn.exponent, sd.exponent)::N
+        [m, sn.coef / sd.coef,
+                    (sn.radicand ^ (m quo sn.exponent)) /
+                                (sd.radicand ^ (m quo sd.exponent))]
+    else
+      qroot(x, n) ==
+        sn := zroot(numer x, n)
+        sd := zroot(denom x, n)
+        m  := lcm(sn.exponent, sd.exponent)::N
+        [m, sn.coef::F / sd.coef::F,
+                    (sn.radicand ^ (m quo sn.exponent))::F /
+                                (sd.radicand ^ (m quo sd.exponent))::F]
+
+    if R has RetractableTo Fraction Z then
+      rroot(x, n) ==
+        (r := retractIfCan(x)@Union(Fraction Z,"failed")) case "failed"
+          => [n, 1, x::P::F]
+        qroot(r@Q, n)
+
+    else
+      if R has RetractableTo Z then
+        rroot(x, n) ==
+          (r := retractIfCan(x)@Union(Z,"failed")) case "failed"
+            => [n, 1, x::P::F]
+          qroot(r@Z::Q, n)
+      else
+        rroot(x, n) == [n, 1, x::P::F]
+
+    rsplit l ==
+      r := 1$R
+      p := 1$P
+      for q in l repeat
+        if (u := retractIfCan(q)@Union(R, "failed")) case "failed"
+          then p := p * q
+          else r := r * u@R
+      [r, p]
+
+    if R has GcdDomain then
+      if R has RetractableTo Z then
+        nthr(x, n) ==
+            (r := retractIfCan(x)@Union(Z,"failed")) case Z =>
+                rec := zroot(r@Z, n)
+                [rec.exponent, rec.coef::P, [rec.radicand::P]]
+            c := content(x)
+            (r := retractIfCan(c)@Union(Z,"failed")) case Z =>
+                rec := iroot(r@Z, n)
+                rec.exponent = n => nthRoot(squareFree(x), n)
+                cp := c::P
+                xu := x exquo cp
+                rec2 := nthRoot(squareFree(xu::P), n)
+                rec.exponent = 1 =>
+                    [rec2.exponent, rec.coef::P*rec2.coef,
+                       rec2.radicand]
+                l := lcm(rec.exponent, rec2.exponent)
+                e := qcoerce(l quo rec.exponent)@N
+                e2 := qcoerce(l quo rec2.exponent)@N
+                rad2 := [ri^e2 for ri in rec2.radicand]
+                [qcoerce(l)@N, rec2.coef,
+                      cons((rec.coef::P)^e, rad2)]
+            nthRoot(squareFree(x), n)
+
+      else nthr(x, n) == nthRoot(squareFree x, n)
+
+      froot(x, n) ==
+        zero? x or (x = 1) => [1, x, 1]
+        sn := nthr(numer x, n)
+        sd := nthr(denom x, n)
+        pn := rsplit(sn.radicand)
+        pd := rsplit(sd.radicand)
+        rn := rroot(pn.coef, sn.exponent)
+        rd := rroot(pd.coef, sd.exponent)
+        m := lcm([rn.exponent, rd.exponent, sn.exponent, sd.exponent])::N
+        [m, (sn.coef::F / sd.coef::F) * (rn.coef / rd.coef),
+             ((rn.radicand ^ (m quo rn.exponent)) /
+                    (rd.radicand ^ (m quo rd.exponent))) *
+                           (pn.poly ^ (m quo sn.exponent))::F /
+                                    (pd.poly ^ (m quo sd.exponent))::F]
+
+
+)abbrev package ALGMANIP AlgebraicManipulations
+++ Author: Manuel Bronstein
+++ Date Created: 28 Mar 1988
+++ Description:
+++ AlgebraicManipulations provides functions to simplify and expand
+++ expressions involving algebraic operators.
+++ Keywords: algebraic, manipulation.
+AlgebraicManipulations(R, F) : Exports == Implementation where
+  R : IntegralDomain
+  F : Join(Field, ExpressionSpace) with
+    numer  : % -> SparseMultivariatePolynomial(R, Kernel %)
+        ++ numer(x) \undocumented
+    denom  : % -> SparseMultivariatePolynomial(R, Kernel %)
+        ++ denom(x) \undocumented
+    coerce : SparseMultivariatePolynomial(R, Kernel %) -> %
+        ++ coerce(x) \undocumented
+
+  N  ==> NonNegativeInteger
+  Z  ==> Integer
+  OP ==> BasicOperator
+  SY ==> Symbol
+  K  ==> Kernel F
+  P  ==> SparseMultivariatePolynomial(R, K)
+  RF ==> Fraction P
+  REC ==> Record(ker : List K, exponent : List Z)
+
+  Exports ==> with
+    rootSplit : F -> F
+      ++ rootSplit(f) transforms every radical of the form
+      ++ \spad{(a/b)^(1/n)} appearing in f into \spad{a^(1/n) / b^(1/n)}.
+      ++ This transformation is not in general valid for all
+      ++ complex numbers \spad{a} and b.
+    ratDenom  : F -> F
+      ++ ratDenom(f) rationalizes the denominators appearing in f
+      ++ by moving all the algebraic quantities into the numerators.
+    ratDenom  : (F, F) -> F
+      ++ ratDenom(f, a) removes \spad{a} from the denominators in f
+      ++ if \spad{a} is an algebraic kernel.
+    ratDenom  : (F, List F) -> F
+      ++ ratDenom(f, [a1, ..., an]) removes the ai's which are
+      ++ algebraic kernels from the denominators in f.
+    ratDenom  : (F, List K) -> F
+      ++ ratDenom(f, [a1, ..., an]) removes the ai's which are
+      ++ algebraic from the denominators in f.
+    ratPoly  : F -> SparseUnivariatePolynomial F
+      ++ ratPoly(f) returns a polynomial p such that p has no
+      ++ algebraic coefficients, and \spad{p(f) = 0}.
+    if R has Join(Comparable, GcdDomain, RetractableTo Integer)
+      and F has FunctionSpace(R) then
+        if R has UniqueFactorizationDomain then
+            rootFactor : F -> F
+              ++ rootFactor(f) transforms every radical of the form
+              ++ \spad{(a1*...*am)^(1/n)} appearing in f into
+              ++ \spad{a1^(1/n)*...*am^(1/n)}.
+              ++ This transformation is not in general valid for all
+              ++ complex numbers \spad{a} and b.
+        rootPower  : F -> F
+          ++ rootPower(f) transforms every radical power of the form
+          ++ \spad{(a^(1/n))^m} into a simpler form if \spad{m} and
+          ++ \spad{n} have a common factor.
+        rootProduct : F -> F
+          ++ rootProduct(f) combines every product of the form
+          ++ \spad{(a^(1/n))^m * (a^(1/s))^t} into a single power
+          ++ of a root of \spad{a}, and transforms every radical power
+          ++ of the form \spad{(a^(1/n))^m} into a simpler form.
+        rootSimp   : F -> F
+          ++ rootSimp(f) transforms every radical of the form
+          ++ \spad{(a * b^(q*n+r))^(1/n)} appearing in f into
+          ++ \spad{b^q * (a * b^r)^(1/n)}.
+          ++ This transformation is not in general valid for all
+          ++ complex numbers b.
+        rootKerSimp : (OP, F, N) -> F
+          ++ rootKerSimp(op, f, n) should be local but conditional.
+
+  Implementation ==> add
+
+    import from PolynomialCategoryQuotientFunctions(IndexedExponents K, K, R, P, F)
+    import from BasicOperator
+    import from Fraction(SparseUnivariatePolynomial(F))
+    import from List(F)
+    import from List(Z)
+
+    ALGOP := '%alg
+
+    innerRF    : (F, List K) -> F
+    rootExpand : (List(K), List(F), K) -> F
+    algkernels : List K -> List K
+    rootkernels : List K -> List K
+
+    dummy := kernel(new()$SY)$K
+
+    ratDenom x                == innerRF(x, algkernels tower x)
+    ratDenom(x : F, l : List K) : F == innerRF(x, algkernels l)
+    ratDenom(x : F, y : F)        == ratDenom(x, [y])
+    ratDenom(x : F, l : List F)   == ratDenom(x, [retract(y)@K for y in l
+                                                 ]$List(K))
+    algkernels(l) == select((z1 : K) : Boolean +-> has?(operator z1, ALGOP), l)
+    rootkernels l == select!((z1 : K) : Boolean +->
+                                is?(operator z1, 'nthRoot), l)
+
+    ratPoly x ==
+      numer univariate(denom(ratDenom inv(dummy::P::F - x))::F, dummy)
+
+    rootSplit x ==
+        lk0 := rootkernels(tower(x))
+        lk : List(K) := []
+        lv : List(F) := []
+        for k in lk0 repeat
+            v := rootExpand(lk, lv, k)
+            lk := cons(k, lk)
+            lv := cons(v, lv)
+        eval(x, lk, lv)
+
+    rootExpand(lk : List(K), lv : List(F), k : K) : F ==
+      x  := first argument k
+      n  := second argument k
+      op := operator k
+      x := eval(x, lk, lv)
+      op(numer(x)::F, n) / op(denom(x)::F, n)
+
+-- all the kernels in ll must be algebraic
+    innerRF(x, ll) ==
+      empty?(l := sort!((z1 : K, z2 : K) : Boolean +-> z1 > z2, kernels x)$List(K)) or
+        empty? setIntersection(ll, tower x) => x
+      lk := empty()$List(K)
+      while not member?(k := first l, ll) repeat
+        lk := concat(k, lk)
+        empty?(l := rest l) =>
+          return eval(x, lk, [map((z1 : F) : F +-> innerRF(z1, ll), kk) for kk in lk])
+      q := univariate(eval(x, lk,
+                 [map((z1 : F) : F +-> innerRF(z1, ll), kk) for kk in lk]), k, minPoly k)
+      map((z1 : F) : F +-> innerRF(z1, ll), q) (map((z1 : F) : F +-> innerRF(z1, ll), k))
+
+    if R has Join(Comparable, GcdDomain, RetractableTo Integer)
+     and F has FunctionSpace(R) then
+      import from PolynomialRoots(IndexedExponents K, K, R, P, F)
+
+      sroot  : (K, List K, List F) -> F
+      inroot : (OP, F, N) -> F
+      radeval : (P, K) -> F
+      breakup : List K -> List REC
+
+      if R has UniqueFactorizationDomain and R has CharacteristicZero
+        and R has PolynomialFactorizationExplicit then
+
+          MPfact := MultivariateFactorize(K, IndexedExponents K,
+                       R, P)
+
+          fp_root(fp : Factored(P), op : OP, n : N) : F ==
+              res : F := 1
+              if (u := unit(fp)) ~= 1 then
+                  res := kernel(op, [u::F, n::F])::F
+              for fr in factorList(fp) repeat
+                  ne : N := fr.exponent rem n
+                  ng := gcd(ne, n)
+                  nn := (n exquo ng)::Z
+                  ne := (ne exquo ng)::Z::N
+                  ce : N := fr.exponent quo n
+                  rr :=
+                      nn > 1 => kernel(op, [(fr.factor^ne)::F, nn::F])::F
+                      1$F
+                  res := res*((fr.factor)^ce)::F*rr
+              res
+
+          pol_root(p : P, op : OP, n : N) : F ==
+              cp : R := content(p)$P
+              pp := (p exquo cp::P)::P
+              fp_root(factor(pp)$MPfact, op, n)
+                *fp_root(map(x +-> x::P, factor(cp)
+                            )$FactoredFunctions2(R, P), op, n)
+
+          root_factor_k(lk : List(K), lv : List(F), k : K) : F ==
+              x  := first argument k
+              nf  := second argument k
+              n := (retract(nf)@Z)::N
+              op := operator k
+              x := eval(x, lk, lv)
+              pol_root(numer(x), op, n)/pol_root(denom(x), op, n)
+
+          rootFactor x ==
+              lk0 := rootkernels(tower(x))
+              lk : List(K) := []
+              lv : List(F) := []
+              for k in lk0 repeat
+                  v := root_factor_k(lk, lv, k)
+                  lk := cons(k, lk)
+                  lv := cons(v, lv)
+              eval(x, lk, lv)
+
+      if R has RadicalCategory then
+        rootKerSimp(op, x, n) ==
+          (r := retractIfCan(x)@Union(R, "failed")) case R =>
+             nthRoot(r@R, n)::F
+          inroot(op, x, n)
+      else
+        rootKerSimp(op, x, n) == inroot(op, x, n)
+
+      -- l is a list of nth-roots, returns a list of records of the form
+      -- [[a^(1/n1), a^(1/n2), ...], [n1, n2, ...]]
+      -- such that the whole list covers l exactly
+      breakup l ==
+        empty? l => empty()
+        k := first l
+        a := first(arg := argument(k))
+        n := retract(second arg)@Z
+        expo := empty()$List(Z)
+        others := same := empty()$List(K)
+        for kk in rest l repeat
+          if (a = first(arg := argument kk)) then
+            same := concat(kk, same)
+            expo := concat(retract(second arg)@Z, expo)
+          else others := concat(kk, others)
+        ll := breakup others
+        concat([concat(k, same), concat(n, expo)], ll)
+
+      rootProduct x ==
+        for rec in breakup rootkernels tower x repeat
+          k0 := first(l := rec.ker)
+          if not empty? rest l then
+            n  := lcm(rec.exponent)
+            k  := kernel(operator k0, [first argument k0, n::F], height k0)$K
+            lv := [k::F^(n quo m)::N for m in rec.exponent]
+            x := eval(x, l, lv)
+        rootPower x
+
+      rootPower1(x : F, lk : List(K), nlk : List(F)) : F ==
+          x := eval(x, lk, nlk)
+          for k in kernels(x) repeat
+              if is?(operator k, 'nthRoot) then
+                  x := radeval(numer x, k) / radeval(denom x, k)
+          x
+
+      rootPower x ==
+          lk : List(K):= []
+          nlk : List(F) := []
+          for k in tower x repeat
+              -- Here we assume that 'rootPower1' will not mess
+              -- dummy arguments
+              nargs := map(k1 +-> rootPower1(k1, lk, nlk), argument k)
+              nk := (operator k)(nargs)
+              lk := cons(k, lk)
+              nlk := cons(nk, nlk)
+          rootPower1(x, lk, nlk)
+
+-- 'k' is a nthRoot kernel: 'a^(1/n)'.  This function
+-- replaces '(a^(1/n))^m' in 'p' by a power of a simpler radical of 'a' if
+-- n and m have a common factor.  If 'a' itself is a nthRoot kernel
+-- 'b^(1/l)', then 'k' is replaced by simpler radical of 'b'.
+      radeval(p, k) ==
+        a := first(arg := argument k)
+        n := (retract(second arg)@Integer)::NonNegativeInteger
+        ans : F := 0
+        q := univariate(p, k)
+        -- Check if 'a' itself is nthRoot.
+        ka1 := retractIfCan(a)@Union(K, "failed")
+        if ka1 case K and is?(ka1@K, 'nthRoot) then
+            ka := ka1@K
+            arg := argument ka
+            a := first arg
+            n := n * (retract(second arg)@Integer::NonNegativeInteger)
+            k := kernel(operator ka, [a, n::F], height ka)
+        while (d := degree q) > 0 repeat
+            term :F :=
+                g := gcd(d, n)
+                (g = n) => a^(d quo g)
+                (g = 1) => monomial(1, k, d)::F
+                monomial(1, kernel(operator k, [a, (n quo g)::F], height k),
+                         d quo g)::F
+            ans := ans + leadingCoefficient(q)::F * term
+            q := reductum q
+        leadingCoefficient(q)::F + ans
+
+      inroot(op, x, n) ==
+        (x = 1) => x
+        (x ~= -1) and (((num := numer x) = 1) or (num = -1)) =>
+          inv inroot(op, (num * denom x)::F, n)
+        (u := isExpt(x, op)) case "failed" => kernel(op, [x, n::F])
+        pr := u@Record(var : K, exponent : Integer)
+        q := pr.exponent /$Fraction(Z)
+                                (n * retract(second argument(pr.var))@Z)
+        qr := divide(numer q, denom q)
+        x  := first argument(pr.var)
+        x ^ qr.quotient * rootKerSimp(op, x, denom(q)::N) ^ qr.remainder
+
+      sroot(k, lk, nlk) ==
+        narg1 := eval(first(arg := argument(k)), lk, nlk)
+        pr := froot(narg1, (retract(second arg)@Z)::N)
+        pr.coef * rootKerSimp(operator k, pr.radicand, pr.exponent)
+
+      rootSimp x ==
+        tk := rootkernels tower x
+        lk : List K := []
+        nlk : List F := []
+        for k in tk repeat
+            nk := sroot(k, lk, nlk)
+            lk := cons(k, lk)
+            nlk := cons(nk, nlk)
+        eval(x, lk, nlk)
+
+)abbrev package SIMPAN SimplifyAlgebraicNumberConvertPackage
+++ Package to allow simplify to be called on AlgebraicNumbers
+++ by converting to EXPR(INT)
+SimplifyAlgebraicNumberConvertPackage() : with
+  simplify : AlgebraicNumber -> Expression(Integer)
+        ++ simplify(an) applies simplifications to an
+ == add
+  simplify(a : AlgebraicNumber) ==
+    simplify(a::Expression(Integer))$TranscendentalManipulations(Integer, Expression Integer)
+
+)abbrev package TRMANIP TranscendentalManipulations
+++ Transformations on transcendental objects
+++ Author: Bob Sutor, Manuel Bronstein
+++ Description:
+++   TranscendentalManipulations provides functions to simplify and
+++   expand expressions involving transcendental operators.
+++ Keywords: transcendental, manipulation.
+TranscendentalManipulations(R, F) : Exports == Implementation where
+  R : Join(Comparable, GcdDomain)
+  F : Join(FunctionSpace R, TranscendentalFunctionCategory)
+
+  Z       ==> Integer
+  K       ==> Kernel F
+  P       ==> SparseMultivariatePolynomial(R, K)
+  UP      ==> SparseUnivariatePolynomial P
+  POWER   ==> '%power
+  POW     ==> Record(val : F, exponent : Z)
+  PRODUCT ==> Record(coef : Z, var : K)
+  FPR     ==> Fraction Polynomial R
+
+  Exports ==> with
+    expand     : F -> F
+      ++ expand(f) performs the following expansions on f: \begin{items}
+      ++ \item 1. logs of products are expanded into sums of logs.
+      ++ \item 2. trigonometric and hyperbolic trigonometric functions
+      ++ of sums are expanded into sums of products of trigonometric
+      ++ and hyperbolic trigonometric functions.
+      ++ \item 3. formal powers of the form \spad{(a/b)^c} are expanded into
+      ++ \spad{a^c * b^(-c)}.
+      ++ \end{items}
+    simplify   : F -> F
+      ++ simplify(f) performs the following simplifications on f: \begin{items}
+      ++ \item 1. rewrites trigs and hyperbolic trigs in terms
+      ++ of \spad{sin} , \spad{cos}, \spad{sinh}, \spad{cosh}.
+      ++ \item 2. rewrites \spad{sin^2} and \spad{sinh^2} in terms
+      ++ of \spad{cos} and \spad{cosh},
+      ++ \item 3. rewrites \spad{exp(a)*exp(b)} as \spad{exp(a+b)}.
+      ++ \item 4. rewrites \spad{(a^(1/n))^m * (a^(1/s))^t} as a single
+      ++ power of a single radical of \spad{a}.
+      ++ \end{items}
+    htrigs     : F -> F
+      ++ htrigs(f) converts all the exponentials in f into
+      ++ hyperbolic sines and cosines.
+    simplifyExp : F -> F
+      ++ simplifyExp(f) performs the following simplifications on f:
+      ++ \begin{items}
+      ++ \item 1. rewrites \spad{exp(a)*exp(b)} as \spad{exp(a+b)}.
+      ++ \item 2. rewrites \spad{a^b*a^c} as \spad{a^(b+c)}.
+      ++ \item 3. rewrites \spad{exp(a)/exp(b)} as \spad{exp(a-b)}.
+      ++ \item 4. rewrites \spad{a^b/a^c} as \spad{a^(b-c)}.
+      ++ \end{items}
+    simplifyLog : F -> F
+      ++ simplifyLog(f) converts every \spad{log(a) - log(b)} appearing in f
+      ++ into \spad{log(a/b)}, every \spad{log(a) + log(b)} into \spad{log(a*b)}
+      ++ and every \spad{n*log(a)} into \spad{log(a^n)}.
+    expandPower : F -> F
+      ++ expandPower(f) converts every power \spad{(a/b)^c} appearing
+      ++ in f into \spad{a^c * b^(-c)}.
+    expandLog  : F -> F
+      ++ expandLog(f) converts every \spad{log(a/b)} appearing in f into
+      ++ \spad{log(a) - log(b)}, and every \spad{log(a*b)} into
+      ++ \spad{log(a) + log(b)}.
+    cos2sec    : F -> F
+      ++ cos2sec(f) converts every \spad{cos(u)} appearing in f into
+      ++ \spad{1/sec(u)}.
+    cosh2sech  : F -> F
+      ++ cosh2sech(f) converts every \spad{cosh(u)} appearing in f into
+      ++ \spad{1/sech(u)}.
+    cot2trig   : F -> F
+      ++ cot2trig(f) converts every \spad{cot(u)} appearing in f into
+      ++ \spad{cos(u)/sin(u)}.
+    coth2trigh : F -> F
+      ++ coth2trigh(f) converts every \spad{coth(u)} appearing in f into
+      ++ \spad{cosh(u)/sinh(u)}.
+    csc2sin    : F -> F
+      ++ csc2sin(f) converts every \spad{csc(u)} appearing in f into
+      ++ \spad{1/sin(u)}.
+    csch2sinh  : F -> F
+      ++ csch2sinh(f) converts every \spad{csch(u)} appearing in f into
+      ++ \spad{1/sinh(u)}.
+    sec2cos    : F -> F
+      ++ sec2cos(f) converts every \spad{sec(u)} appearing in f into
+      ++ \spad{1/cos(u)}.
+    sech2cosh  : F -> F
+      ++ sech2cosh(f) converts every \spad{sech(u)} appearing in f into
+      ++ \spad{1/cosh(u)}.
+    sin2csc    : F -> F
+      ++ sin2csc(f) converts every \spad{sin(u)} appearing in f into
+      ++ \spad{1/csc(u)}.
+    sinh2csch  : F -> F
+      ++ sinh2csch(f) converts every \spad{sinh(u)} appearing in f into
+      ++ \spad{1/csch(u)}.
+    tan2trig   : F -> F
+      ++ tan2trig(f) converts every \spad{tan(u)} appearing in f into
+      ++ \spad{sin(u)/cos(u)}.
+    tanh2trigh : F -> F
+      ++ tanh2trigh(f) converts every \spad{tanh(u)} appearing in f into
+      ++ \spad{sinh(u)/cosh(u)}.
+    tan2cot    : F -> F
+      ++ tan2cot(f) converts every \spad{tan(u)} appearing in f into
+      ++ \spad{1/cot(u)}.
+    tanh2coth  : F -> F
+      ++ tanh2coth(f) converts every \spad{tanh(u)} appearing in f into
+      ++ \spad{1/coth(u)}.
+    cot2tan    : F -> F
+      ++ cot2tan(f) converts every \spad{cot(u)} appearing in f into
+      ++ \spad{1/tan(u)}.
+    coth2tanh  : F -> F
+      ++ coth2tanh(f) converts every \spad{coth(u)} appearing in f into
+      ++ \spad{1/tanh(u)}.
+    removeCosSq : F -> F
+      ++ removeCosSq(f) converts every \spad{cos(u)^2} appearing in f into
+      ++ \spad{1 - sin(u)^2}, and also reduces higher
+      ++ powers of \spad{cos(u)} with that formula.
+    removeSinSq : F -> F
+      ++ removeSinSq(f) converts every \spad{sin(u)^2} appearing in f into
+      ++ \spad{1 - cos(u)^2}, and also reduces higher powers of
+      ++ \spad{sin(u)} with that formula.
+    removeCoshSq : F -> F
+      ++ removeCoshSq(f) converts every \spad{cosh(u)^2} appearing in f into
+      ++ \spad{1 - sinh(u)^2}, and also reduces higher powers of
+      ++ \spad{cosh(u)} with that formula.
+    removeSinhSq : F -> F
+      ++ removeSinhSq(f) converts every \spad{sinh(u)^2} appearing in f into
+      ++ \spad{1 - cosh(u)^2}, and also reduces higher powers
+      ++ of \spad{sinh(u)} with that formula.
+    if R has PatternMatchable(R) and R has ConvertibleTo(Pattern(R)) and F has ConvertibleTo(Pattern(R)) and F has PatternMatchable R then
+      expandTrigProducts : F -> F
+        ++ expandTrigProducts(e) replaces \spad{sin(x)*sin(y)} by
+        ++ \spad{(cos(x-y)-cos(x+y))/2}, \spad{cos(x)*cos(y)} by
+        ++ \spad{(cos(x-y)+cos(x+y))/2}, and \spad{sin(x)*cos(y)} by
+        ++ \spad{(sin(x-y)+sin(x+y))/2}.  Note: this operation uses
+        ++ pattern matcher, so it is relatively expensive.  To avoid
+        ++ getting into an infinite loop the transformations are applied
+        ++ at most ten times.
+
+  Implementation ==> add
+    import from FactoredFunctions(P)
+    import from PolynomialCategoryLifting(IndexedExponents K, K, R, P, F)
+    import
+      PolynomialCategoryQuotientFunctions(IndexedExponents K, K, R, P, F)
+
+    smpexp    : P -> F
+    termexp   : P -> F
+    exlog     : P -> F
+    smplog    : P -> F
+    smpexpand : P -> F
+    smp2htrigs : P -> F
+    kerexpand : K -> F
+    expandpow : (K, F -> F) -> F
+    logexpand : K -> F
+    sup2htrigs : (UP, F) -> F
+    supexp    : (UP, F, F, Z) -> F
+    ueval     : (F, Symbol, F -> F) -> F
+    ueval2    : (F, Symbol, F -> F) -> F
+    t2t       : F -> F
+    c2t       : F -> F
+    c2s       : F -> F
+    s2c       : F -> F
+    s2c2      : F -> F
+    th2th     : F -> F
+    ch2th     : F -> F
+    ch2sh     : F -> F
+    sh2ch     : F -> F
+    sh2ch2    : F -> F
+    simplify0 : F -> F
+    simplifyLog1 : F -> F
+    logArgs   : List F -> F
+    opexp := operator(operator('exp)$CommonOperators)$F
+    oplog := operator(operator('log)$CommonOperators)$F
+
+    import from F
+    import from List F
+
+    if R has PatternMatchable R and R has ConvertibleTo Pattern R and F has ConvertibleTo(Pattern(R)) and F has PatternMatchable R then
+      XX : F := coerce new()$Symbol
+      YY : F := coerce new()$Symbol
+      sinCosRule : RewriteRule(R, R, F) :=
+        rule(cos(XX)*sin(YY), (sin(XX+YY)-sin(XX-YY))/2::F)
+      sinSinRule : RewriteRule(R, R, F) :=
+        rule(sin(XX)*sin(YY), (cos(XX-YY)-cos(XX+YY))/2::F)
+      cosCosRule : RewriteRule(R, R, F) :=
+        rule(cos(XX)*cos(YY), (cos(XX-YY)+cos(XX+YY))/2::F)
+      expandTrigProducts(e : F) : F ==
+        applyRules([sinCosRule, sinSinRule, cosCosRule], e, 10)$ApplyRules(R, R, F)
+
+    logArgs(l : List F) : F ==
+      -- This function will take a list of Expressions (implicitly a sum) and
+      -- add them up, combining log terms.  It also replaces n*log(x) by
+      -- log(x^n).
+      import from K
+      sum  : F := 0
+      arg  : F := 1
+      for term in l repeat
+        is?(term, 'log) =>
+          arg := arg * simplifyLog(first(argument(first(kernels(term)))))
+        -- Now look for multiples, including negative ones.
+        prod : Union(PRODUCT, "failed") := isMult(term)
+        (prod case PRODUCT) and is?(prod.var, 'log) =>
+            arg := arg * simplifyLog ((first argument(prod.var))^(prod.coef))
+        sum := sum+term
+      sum+log(arg)
+
+    simplifyLog(e : F) : F ==
+      simplifyLog1(numerator e)/simplifyLog1(denominator e)
+
+    simplifyLog1(e : F) : F ==
+      freeOf?(e, 'log) => e
+
+      -- Check for n*log(u)
+      prod : Union(PRODUCT, "failed") := isMult(e)
+      (prod case PRODUCT) and is?(prod.var, oplog) =>
+        log simplifyLog ((first argument(prod.var))^(prod.coef))
+
+      termList : Union(List(F),"failed") := isTimes(e)
+      -- I'm using two variables, termList and terms, to work round a
+      -- bug in the old compiler.
+      not (termList case "failed") =>
+        -- We want to simplify each log term in the product and then multiply
+        -- them together.  However, if there is a constant or arithmetic
+        -- expression (i.e. something which looks like a Polynomial) we would
+        -- like to combine it with a log term.
+        terms : List F := [simplifyLog(term) for term in termList@List(F)]
+        exprs : List F := []
+        nterms : List F := []
+        for term in terms repeat
+          if retractIfCan(term)@Union(FPR,"failed") case FPR then
+            exprs := cons(term, exprs)
+          else
+            nterms := cons(term, nterms)
+        terms := nterms
+        if not empty? exprs then
+          foundLog := false
+          i : NonNegativeInteger := 0
+          while (not(foundLog) and (i < #terms)) repeat
+            i := i+1
+            if is?(terms.i, 'log) then
+              args : List F := argument(retract(terms.i)@K)
+              setelt!(terms, i, log simplifyLog1(first(args)^(*/exprs)))
+              foundLog := true
+          -- The next line deals with a situation which shouldn't occur,
+          -- since we have checked whether we are freeOf log already.
+          if not foundLog then terms := append(exprs, terms)
+        */terms
+
+      terms : Union(List(F),"failed") := isPlus(e)
+      not (terms case "failed") => logArgs(terms)
+
+      expt : Union(POW, "failed") := isPower(e)
+      (expt case POW) and not (expt.exponent = 1) =>
+        simplifyLog(expt.val)^(expt.exponent)
+
+      kers : List K := kernels e
+      not(((#kers) = 1)) => e -- Have a constant
+      (operator first kers) [simplifyLog(u) for u in argument first kers]
+
+
+    if R has RetractableTo Integer then
+      simplify x == rootProduct(simplify0 x)$AlgebraicManipulations(R, F)
+
+    else simplify x == simplify0 x
+
+    expandpow(k, f) ==
+      a := f first(arg := argument k)
+      b := f second arg
+      ne : F := (((numer a) = 1) => 1; numer(a)::F ^ b)
+      de : F := (((denom a) = 1) => 1; denom(a)::F ^ (-b))
+      ne * de
+
+    TERM ==> Record(degree : NonNegativeInteger, f : F, base : F, expt : F)
+    powersimp : (List TERM) -> List TERM
+    powersimpAux : (List TERM, List F) -> List TERM
+
+    termexp p ==
+      lk := variables p
+      empty? lk => p::F
+      l : List TERM := []
+      for k in lk repeat
+        d := degree(p, k)
+        args := argument k
+        if is?(k, opexp) then
+          base := exp(1)
+          expt := simplifyExp(d * first args)
+          d := 1
+          f := exp expt
+        else if is?(k, POWER) then
+          base := simplifyExp first args
+          expt := simplifyExp(d * second args)
+          d := 1
+          f := base^expt
+        else
+          base := kernel(operator k, [simplifyExp u for u in args])
+          expt := 1::F
+          f := base
+        l := cons([d, f, base, expt], l)
+      coef := leadingCoefficient(p)::F
+      l := cons([1, coef, coef, 1::F], l)
+      l := powersimp l
+      -- powersimp might produce new power kernels, opening new simplification
+      -- opportunities, so run it in a loop until no new kernels occur.
+      repeat
+        lnew := powersimp l
+        # l = # lnew => break
+        l := lnew
+      res : F := 1
+      for item in lnew repeat
+        res := res * (item.f)^(item.degree)
+      res
+
+    expandPower f ==
+      l := select((z1 : K) : Boolean +-> is?(z1, POWER)$K, kernels f)$List(K)
+      eval(f, l, [expandpow(k, expandPower) for k in l])
+
+    powersimp(l : List TERM) : List TERM ==
+      -- lbase is the list of bases of pure powers in l, powersimpAux
+      -- will recurse on it, starting with the most complicated one,
+      -- because complex kernel can "absorb" simpler kernel, for example
+      -- (a^b)^c * (a^b) => (a^b)^(c+1)
+      lbase := removeDuplicates! [x.base for x in l | not one? x.expt]
+      lbase := sort!((a, b) +-> height a >= height b, lbase)
+      powersimpAux(l, lbase)
+
+    powersimpAux(l : List TERM, lbase : List F) : List TERM ==
+      empty? lbase => l
+      base := first lbase
+      expt : F := 0
+      lrest : List TERM := []
+      for item in l repeat
+        item.base = base =>
+          expt := expt + item.degree * item.expt
+        item.f = base =>
+          expt := expt + (item.degree)::F
+        -- the possibility that    (item.f)^(item.degree) = base ^ n
+        -- for a certain integer 'n' is not considered yet,
+        -- for example a^4 * (a^2)^b will not simplify to (a^2)^(b+2)
+        (item.f)^(item.degree) = base =>
+          expt := expt + 1::F
+        lrest := cons(item, lrest)
+      expt := simplifyExp expt
+      cons([1, base^expt, base, expt], powersimpAux(lrest, rest lbase))
+
+    t2t x         == sin(x) / cos(x)
+    c2t x         == cos(x) / sin(x)
+    c2s x         == inv sin x
+    s2c x         == inv cos x
+    s2c2 x        == 1 - cos(x)^2
+    th2th x       == sinh(x) / cosh(x)
+    ch2th x       == cosh(x) / sinh(x)
+    ch2sh x       == inv sinh x
+    sh2ch x       == inv cosh x
+    sh2ch2 x      == cosh(x)^2 - 1
+    ueval(x, s, f) == eval(x, s, f)
+    ueval2(x, s, f) == eval(x, s, 2, f)
+    cos2sec x     == ueval(x, 'cos, (z1 : F) : F +-> inv sec z1)
+    sin2csc x     == ueval(x, 'sin, (z1 : F) : F +-> inv csc z1)
+    csc2sin x     == ueval(x, 'csc, c2s)
+    sec2cos x     == ueval(x, 'sec, s2c)
+    tan2cot x     == ueval(x, 'tan, (z1 : F) : F +-> inv cot z1)
+    cot2tan x     == ueval(x, 'cot, (z1 : F) : F +-> inv tan z1)
+    tan2trig x    == ueval(x, 'tan, t2t)
+    cot2trig x    == ueval(x, 'cot, c2t)
+    cosh2sech x   == ueval(x, 'cosh, (z1 : F) : F +-> inv sech z1)
+    sinh2csch x   == ueval(x, 'sinh, (z1 : F) : F +-> inv csch z1)
+    csch2sinh x   == ueval(x, 'csch, ch2sh)
+    sech2cosh x   == ueval(x, 'sech, sh2ch)
+    tanh2coth x   == ueval(x, 'tanh, (z1 : F) : F +-> inv coth z1)
+    coth2tanh x   == ueval(x, 'coth, (z1 : F) : F +-> inv tanh z1)
+    tanh2trigh x  == ueval(x, 'tanh, th2th)
+    coth2trigh x  == ueval(x, 'coth, ch2th)
+    removeCosSq x == ueval2(x, 'cos, (z1 : F) : F +-> 1 - (sin z1)^2)
+    removeSinSq x == ueval2(x, 'sin, s2c2)
+    removeCoshSq x== ueval2(x, 'cosh, (z1 : F) : F +-> 1 + (sinh z1)^2)
+    removeSinhSq x== ueval2(x, 'sinh, sh2ch2)
+    expandLog x   == smplog(numer x) / smplog(denom x)
+    expand x      == (smpexpand numer x) / (smpexpand denom x)
+    smpexpand p   == map(kerexpand, (r1 : R) : F +-> r1::F, p)
+    smplog p      == map(logexpand, (r1 : R) : F +-> r1::F, p)
+    smp2htrigs p  == map((k1 : K) : F +-> htrigs(k1::F), (r1 : R) : F +-> r1::F, p)
+
+    simplifyExp x ==
+        f := smpexp numer x / smpexp denom x
+        p := numer f
+        q := denom f
+        not (monomial? p and monomial? q) => f
+        -- currently only fraction of monomials are simplified, e.g:
+        -- (exp(a)*b^c*d^e*...)/(exp(f)*b^g*h^i*...)
+        lk1 := variables p
+        lk2 := variables q
+        term : P := 1
+        for k2 in lk2 repeat
+            op := operator k2
+            args := argument k2
+            h := height k2
+            if op = opexp then
+                for k1 in lk1 repeat
+                    if is?(k1, opexp) then
+                        term := term * kernel(op, [-(args.1)], h)::P
+                        break
+            if is?(op, POWER) then
+                for k1 in lk1 repeat
+                    if is?(k1, POWER) and args.1 = first argument k1 then
+                        term := term * kernel(op, [args.1, -(args.2)], h)::P
+                        break
+        termexp(p*term)/termexp(q*term)
+
+    htrigs f ==
+      (m := mainKernel f) case "failed" => f
+      op  := operator(k := m@K)
+      arg := [htrigs x for x in argument k]$List(F)
+      num := univariate(numer f, k)
+      den := univariate(denom f, k)
+      op = opexp =>
+        g1 := cosh(a := first arg) + sinh(a)
+        g2 := cosh(a) - sinh(a)
+        supexp(num, g1, g2, b:= (degree num)::Z quo 2)/supexp(den, g1, g2, b)
+      sup2htrigs(num, g1:= op arg) / sup2htrigs(den, g1)
+
+    supexp(p, f1, f2, bse) ==
+      ans : F := 0
+      while p ~= 0 repeat
+        g := htrigs(leadingCoefficient(p)::F)
+        if ((d := degree(p)::Z - bse) >= 0) then
+             ans := ans + g * f1 ^ d
+        else ans := ans + g * f2 ^ (-d)
+        p := reductum p
+      ans
+
+    sup2htrigs(p, f) ==
+      (map(smp2htrigs, p)$SparseUnivariatePolynomialFunctions2(P, F)) f
+
+    exlog p == +/[r.coef * log(r.logand::F) for r in log squareFree p]
+
+    logexpand k ==
+      nullary?(op := operator k) => k::F
+      is?(op, 'log) =>
+         exlog(numer(x := expandLog first argument k)) - exlog denom x
+      op [expandLog x for x in argument k]$List(F)
+
+    kerexpand k ==
+      nullary?(op := operator k) => k::F
+      is?(op, POWER) => expandpow(k, expand)
+      arg := first argument k
+      is?(op, 'sec) => inv expand cos arg
+      is?(op, 'csc) => inv expand sin arg
+      is?(op, 'log) =>
+         exlog(numer(x := expand arg)) - exlog denom x
+      num := numer arg
+      den := denom arg
+      (b := (reductum num) / den) ~= 0 =>
+        a := (leadingMonomial num) / den
+        is?(op, 'exp) => exp(expand a) * expand(exp b)
+        is?(op, 'sin) =>
+           sin(expand a) * expand(cos b) + cos(expand a) * expand(sin b)
+        is?(op, 'cos) =>
+           cos(expand a) * expand(cos b) - sin(expand a) * expand(sin b)
+        is?(op, 'tan) =>
+          ta := tan expand a
+          tb := expand tan b
+          (ta + tb) / (1 - ta * tb)
+        is?(op, 'cot) =>
+          cta := cot expand a
+          ctb := expand cot b
+          (cta * ctb - 1) / (ctb + cta)
+        op [expand x for x in argument k]$List(F)
+      op [expand x for x in argument k]$List(F)
+
+    smpexp p ==
+      ans : F := 0
+      while p ~= 0 repeat
+        ans := ans + termexp leadingMonomial p
+        p   := reductum p
+      ans
+
+    -- this now works in 3 passes over the expression:
+    --   pass1 rewrites trigs and htrigs in terms of sin, cos, sinh, cosh
+    --   pass2 rewrites sin^2 and sinh^2 in terms of cos and cosh.
+    --   pass3 groups exponentials together
+    simplify0 x ==
+      simplifyExp eval(eval(x,
+          ['tan, 'cot, 'sec, 'csc,
+           'tanh, 'coth, 'sech, 'csch],
+              [t2t, c2t, s2c, c2s, th2th, ch2th, sh2ch, ch2sh]),
+                ['sin, 'sinh], [2, 2], [s2c2, sh2ch2])
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-- SPAD files for the functional world should be compiled in the
+-- following order:
+--
+--   op  kl  function  funcpkgs  MANIP  combfunc
+--   algfunc  elemntry  constant  funceval  fe

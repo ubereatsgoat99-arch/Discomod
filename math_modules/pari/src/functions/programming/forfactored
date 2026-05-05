@@ -1,0 +1,69 @@
+Function: forfactored
+Section: programming/control
+C-Name: forfactored
+Prototype: vV=GGI
+Help: forfactored(N=a,b,seq): the sequence is evaluated, N is of the form
+ [n, factor(n)], n going from a up to b.
+Doc: evaluates \var{seq}, where
+ the formal variable $N$ is $[n, \kbd{factor}(n)]$ and $n$ goes from
+ $a$ to $b$; $a$ and $b$ must be integers. Nothing is done if $a>b$.
+
+ This function is only implemented for $|a|, |b| < 2^{64}$ ($2^{32}$ on a 32-bit
+ machine). It uses a sieve and runs in time $O(\sqrt{|b|} + b-a)$. It should
+ be at least 3 times faster than regular factorization as long as the interval
+ length $b-a$ is much larger than $\sqrt{|b|}$ and get relatively faster as
+ the bounds increase. The function slows down somewhat
+ if $\kbd{primelimit} < \sqrt{|b|}$. With a \kbd{primelimit} of $10^{6}$ (the
+ default), we have
+
+ \bprog
+ ? B = 10^9; for (N = B, B+10^6, factor(N))
+ time = 1,117 ms.
+ ? forfactored (N = B, B+10^6, [n,fan] = N)
+ time = 833 ms.
+
+ ? B = 10^12; for (N = B, B+10^6, factor(N))
+ time = 3,822 ms.
+ ? forfactored (N = B, B+10^6, [n,fan] = N)
+ time = 1,418 ms.
+
+ ? B = 10^15; for (N = B, B+10^6, factor(N))
+ time = 16,933 ms.
+ ? forfactored (N = B, B+10^6, [n,fan] = N)
+ time = 1,601 ms.
+
+ ? B = 10^18; for (N = B, B+10^6, factor(N))
+ time = 46,943 ms.
+ ? forfactored (N = B, B+10^6, [n,fan] = N)
+ time = 4,584 ms.
+ @eprog\noindent In the last two timings, \kbd{primelimit} is respectively
+ less then much less than $\sqrt{B}$. Starting gp with a \kbd{primelimit}
+ larger than $\sqrt{10^{18} + 10^{6}}$, say $2.10^{9}$ we obtain
+ \bprog
+ ? B = 10^15; forfactored (N = B, B+10^6, [n,fan] = N)
+ time = 1,591 ms. \\ little change
+ ? B = 10^18; forfactored (N = B, B+10^6, [n,fan] = N)
+ time = 3,204 ms. \\ noticeable speedup
+ @eprog\noindent
+ In any case $\sqrt{B+10^{6}}$ is much larger than the interval length $10^{6}$
+ so \kbd{forfactored} gets relatively slower for that reason as well.
+
+ Note that all PARI multiplicative functions accept the \kbd{[n,fan]}
+ argument natively:
+ \bprog
+ ? s = 0; forfactored(N = 1, 10^7, s += moebius(N)*eulerphi(N)); s
+ time = 3,675 ms.
+ %1 = 6393738650
+ ? s = 0; for(N = 1, 10^7, s += moebius(N)*eulerphi(N)); s
+ time = 8,399 ms. \\ slower, we must factor N. Twice.
+ %2 = 6393738650
+ @eprog
+
+ The following loops over the fundamental dicriminants less than $X$:
+ \bprog
+ ? X = 3*10^8;
+ ? forfactored(d=1,X, if (isfundamental(d),));
+ time = 1min, 2,089 ms.
+ ? for(d=1,X, if (isfundamental(d),))
+ time = 1min, 43,281 ms.
+ @eprog

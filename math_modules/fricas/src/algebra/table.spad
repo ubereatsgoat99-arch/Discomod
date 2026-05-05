@@ -1,0 +1,216 @@
+)abbrev domain HASHTBL HashTable
+++ Author: Stephen M. Watt
+++ Date Created: 1985
+++ Basic Operations:
+++ Related Domains: Table, EqTable, StringTable
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++   This domain provides access to the underlying Lisp hash tables.
+++   By varying the hashfn parameter, tables suited for different
+++   purposes can be obtained.
+
+HashTable(Key, Entry, hashfn) : Exports == Implementation where
+    Key : SetCategory
+    Entry : Type
+    hashfn : String --  Union("EQ", "EQUAL")
+
+    Exports ==> Join(TableAggregate(Key, Entry), finiteAggregate)
+
+    Implementation ==> add
+        Pair ==> Record(key : Key, entry : Entry)
+        Ex   ==> OutputForm
+        failMsg : None := GENSYM()$Lisp
+
+)if false
+
+Originally we were implementing equality here via
+
+\begin{verbatim}
+        t1 = t2              == EQ(t1, t2)$Lisp
+\end{verbatim}
+but this is wrong : we do not want that the internal order of the keys matters.
+Not implementing equality here means that equality comes from
+[[TableAggregate]], which is fine.
+
+)endif
+
+        keys t               == HKEYS(t)$Lisp
+        # t                  == HCOUNT(t)$Lisp
+        setelt!(t, k, e)     == HPUT(t, k, e)$Lisp
+        remove!(k : Key, t : %) ==
+          r : None := HGET2(t, k, failMsg)$Lisp
+          not EQ(r, failMsg)$Lisp =>
+            HREM(t, k)$Lisp
+            r pretend Entry
+          "failed"
+
+        empty() ==
+            MAKE_HASHTABLE(INTERN(hashfn)$Lisp)$Lisp
+
+        search(k : Key, t : %)  ==
+            r : None := HGET2(t, k, failMsg)$Lisp
+            not EQ(r, failMsg)$Lisp => r pretend Entry
+            "failed"
+
+)abbrev domain INTABL InnerTable
+++ Author: Barry Trager
+++ Date Created: 1992
+++ Basic Operations:
+++ Related Domains: HashTable, AssociationList, Table
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++   This domain is used to provide a conditional "add" domain
+++   for the implementation of \spadtype{Table}.
+
+InnerTable(Key : SetCategory, Entry : Type, addDom) : Exports ==
+       Implementation where
+    addDom : Join(TableAggregate(Key, Entry), finiteAggregate)
+    Exports ==> Join(TableAggregate(Key, Entry), finiteAggregate)
+    Implementation ==> addDom
+
+)abbrev domain TABLE Table
+++ Author: Stephen M. Watt, Barry Trager
+++ Date Created: 1985
+++ Basic Operations:
+++ Related Domains: HashTable, EqTable, StringTable, AssociationList
+++ Also See:
+++ AMS Classifications:
+++ Keywords:
+++ Examples:
+++ References:
+++ Description:
+++   This is the general purpose table type.
+++   The keys are hashed to look up the entries.
+++   This creates a \spadtype{HashTable} if equal for the Key
+++   domain is consistent with Lisp EQUAL otherwise an
+++   \spadtype{AssociationList}
+
+Table(Key : SetCategory, Entry : Type) : Exports == Implementation where
+    Exports ==> Join(TableAggregate(Key, Entry), finiteAggregate)
+
+    Implementation ==> InnerTable(Key, Entry,
+        if hashable(Key)$Lisp then HashTable(Key, Entry, "EQUAL")
+          else AssociationList(Key, Entry))
+
+)abbrev domain EQTBL EqTable
+++ Author: Stephen M. Watt
+++ Basic Operations:
+++ Related Domains: HashTable, Table, StringTable
+++ Also See:
+++ AMS Classifications:
+++ Keywords: equation
+++ Examples:
+++ References:
+++ Description:
+++   This domain provides tables where the keys are compared using
+++   \spadfun{eq?}.  Thus keys are considered equal only if they
+++   are the same instance of a structure.
+EqTable(Key : SetCategory, Entry : Type) ==
+      HashTable(Key, Entry, "EQ")
+
+)abbrev domain STRTBL StringTable
+++ Author: Stephen M. Watt
+++ Basic Operations:
+++ Related Domains: Table
+++ Also See:
+++ AMS Classifications:
+++ Keywords: equation
+++ Examples:
+++ References:
+++ Description:
+++   This domain provides tables where the keys are strings.
+++   A specialized hash function for strings is used.
+StringTable(Entry : Type) ==
+    HashTable(String, Entry, "EQUAL")
+
+)abbrev domain GSTBL GeneralSparseTable
+++ Author: Stephen M. Watt
+++ Date Created: 1986
+++ Basic Operations:
+++ Related Domains: Table
+++ Also See:
+++ AMS Classifications:
+++ Keywords: equation
+++ Examples:
+++ References:
+++ Description:
+++   A sparse table has a default entry, which is returned if no other
+++   value has been explicitly stored for a key.
+GeneralSparseTable(Key, Entry, Tbl, dent) : TableAggregate(Key, Entry) == Impl
+  where
+    Key : SetCategory
+    Entry : BasicType
+    Tbl :  TableAggregate(Key, Entry)
+    dent : Entry
+
+    Impl ==> Tbl add
+        Rep := Tbl
+
+        elt(t : %, k : Key) ==
+            (u := search(k, t)$Rep) case "failed" => dent
+            u@Entry
+
+        setelt!(t : %, k : Key, e : Entry) ==
+            e = dent => (remove!(k, t); e)
+            setelt!(t, k, e)$Rep
+
+        search(k : Key, t : %) ==
+            (u := search(k, t)$Rep) case "failed" => dent
+            u
+
+)abbrev domain STBL SparseTable
+++ Author: Stephen M. Watt
+++ Date Created: 1986
+++ Basic Operations:
+++ Related Domains: Table
+++ Also See:
+++ AMS Classifications:
+++ Keywords: equation
+++ Examples:
+++ References:
+++ Description:
+++   A sparse table has a default entry, which is returned if no other
+++   value has been explicitly stored for a key.
+
+SparseTable(Key : SetCategory, Ent : BasicType, dent : Ent) ==
+        GeneralSparseTable(Key, Ent, Table(Key, Ent), dent)
+
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

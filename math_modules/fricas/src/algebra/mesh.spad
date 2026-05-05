@@ -1,0 +1,94 @@
+)abbrev package MESH MeshCreationRoutinesForThreeDimensions
+++ Author: Jim Wen
+++ Keywords:
+++ Examples:
+++ References:
+++ Description: This package generates meshes for 3D plots.
+MeshCreationRoutinesForThreeDimensions() : Exports == Implementation where
+
+  I       ==> Integer
+  PI      ==> PositiveInteger
+  SF      ==> DoubleFloat
+  L       ==> List
+  SEG     ==> Segment
+  FnPt    ==> (SF, SF) -> Point(SF)
+  DROP    ==> DrawOption
+  POINT   ==> Point(SF)
+  SPACE3  ==> ThreeSpace(SF)
+  COMPPROP ==> SubSpaceComponentProperty
+
+  Exports ==> with
+    meshPar2Var : (SPACE3, FnPt, SEG(SF), SEG(SF), L(DROP)) -> SPACE3
+      ++ meshPar2Var(sp, f, s1, s2, l) adds a surface component to
+      ++ the space sp.  The surface is built from curves obtained
+      ++ by evaluating f on a uniformly distributed rectangular
+      ++ lattice of points in the product of s1 and s2.  Number
+      ++ of points of the lattice depends on list of options l.
+
+  Implementation ==> add
+    import from ViewDefaultsPackage()
+    import from SubSpaceComponentProperty()
+    import from DrawOptionFunctions0
+    import from SPACE3
+
+    -- parameterized equations of two variables
+    meshPar2Var(sp : SPACE3, ptFun : FnPt, uSeg : SEG(SF),
+                vSeg : SEG(SF), opts : L(DROP)) : SPACE3 ==
+      -- the issue of open and closed needs to be addressed, here, we are
+      -- defaulting to open (which is probably the correct default)
+      -- the user should be able to override that (optional argument?)
+      llp : L L POINT := []
+      uNum : PI  := var1Steps(opts, var1StepsDefault())
+      vNum : PI  := var2Steps(opts, var2StepsDefault())
+      ustep := (low(uSeg) - high(uSeg))/uNum
+      vstep := (low(vSeg) - high(vSeg))/vNum
+      someV := high(vSeg)
+      for iv in vNum..0 by -1 repeat
+        if zero? iv then someV := low(vSeg)
+        -- hack: get last number in segment within segment
+        lp : L POINT := []
+        someU := high(uSeg)
+        for iu in uNum..0 by -1 repeat
+          if zero? iu then someU := low(uSeg)
+          -- hack: get last number in segment within segment
+          pt := ptFun(someU, someV)
+          lp := concat(pt, lp)
+          someU := someU + ustep
+        llp := concat(lp, llp)
+        someV := someV + vstep
+      -- now llp contains a list of lists of points
+      -- for a surface that is a result of a function of 2 variables,
+      -- the main component is open and each sublist is open as well
+      aProp : COMPPROP:= new(false, false)
+      mesh(sp, llp, [aProp for l in llp], aProp)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

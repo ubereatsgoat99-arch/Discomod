@@ -1,0 +1,212 @@
+)set break resume
+)expose UnittestCount UnittestAux Unittest
+
+testsuite "bugs2018"
+
+testcase "leading coefficient in MULTSQFR"
+
+pol := ((a+c)^2*d + b)^4*(d - b)^2*((a - c)^8*d - b);
+
+flist := factors(squareFree(pol))
+
+testEquals("flist(1).factor", "d - b")
+testEquals("flist(1).exponent", "2")
+testEquals("flist(2).factor", "(a+c)^2*d + b")
+testEquals("flist(2).exponent", "4")
+
+testcase "simplify nested radicals in rootPower"
+
+testEquals("rootPower(sqrt sqrt 2)", "2^(1/4)")
+testEquals("rootPower(((sqrt 7)^(1/5))^4)", "7^(2/5)")
+
+testcase "'exquo' in FR"
+
+testTrue("(factor(5) exquo factor(3)) case _"failed_"")
+
+testcase "'construct' in MRING"
+
+T := MonoidRing(Integer, Integer)
+R := Record(k : Integer, c : Integer)
+testTrue("(s := construct([[2, 1]::R, [3, 2]::R])$T; true)")
+e1 := construct([[2, 1]::R])$T
+e2 := construct([[3, 2]::R])$T
+testEquals("e1 + e2", "s")
+
+testcase "'leaf?'"
+
+testTrue("not(leaf?([]))")
+testTrue("leaf?([1])")
+
+testcase "recursion in 'has'"
+
+E := DirectProduct(3, NNI)
+a1 := unitVector(1)$E
+testEquals("subtractIfCan(a1, a1)", "0")
+
+testcase "'^' for Factored"
+
+testEquals("factor(6)^0", "1")
+
+testcase "stack overflow in SparseUnivariateTaylorSeries"
+
+R ==> Record(k : NNI, c : INT)
+S ==> Stream R
+
+h(r : R) : R == [r.k + 1, 2 * r.c]$R
+s : S := stream(h, [1, 1]$R)
+s1 := series(s)$SparseUnivariateTaylorSeries(INT, 'x, 0)
+testEquals("s1.10", "512")
+
+testcase "factor"
+
+pF := PrimeField(7)
+testEquals("#factors(factor(univariate((l^2 + 4*l + 1)::POLY(pF), l)))",
+           "1")
+
+testEquals("eigenvalues(matrix([[4, 3],[1, 1]])$Matrix(pF))", "[6]")
+
+ev2 := eigenvalues(matrix([[2, 3],[1, 2]])$Matrix(pF))
+testEquals("#ev2", "1")
+testEquals("coefficients(rhs(ev2(1)::SuchThat(Symbol, POLY(pF))))",
+           "[1, 3, 1]")
+
+testcase "'makeFR' with zero factors in arguments"
+
+testEquals("makeFR(0, [[_"nil_", 2, 3]])$FR(INT)", "0")
+
+testEquals("makeFR(1, [[_"nil_", 0, 3]])$FR(INT)", "0")
+
+testcase "'map' for Factored"
+
+fl := factorList map(x+->x+3, factor(6))
+testTrue("fl.first.flag case _"nil_"")
+testEquals("fl.first.factor", "4")
+
+testcase "'remove' with _"failed_""
+
+li10 := [recip(i::IntegerMod 10) for i in 0..9]
+lir := [1, 7, 3, 9]
+f : Union(IntegerMod(10),"failed") := "failed"
+testEquals("remove(f, li10)", "lir")
+testEquals("remove(_"failed_"::_"failed_", li10)", "lir")
+testEquals("remove(f, li10)$List(Union(IntegerMod(10),_"failed_"))", "lir")
+
+testcase "case with variable type"
+
+pF := PF(7)
+m := matrix([[1, 2], [3, 5]])$Matrix(pF)
+le := eigenvalues(m)
+tcl(l) == first(l) case SuchThat(Symbol, POLY(pF))
+testTrue("first(le) case SuchThat(Symbol, POLY(pF))")
+testTrue("tcl(le)")
+
+testcase "special matrices"
+
+am := matrix([[3.0, 4.0], [5.0, 7.0]])$DoubleFloatMatrix
+testEquals("row(am, 0)", "[[3.0, 4.0]]$DoubleFloatVector")
+testEquals("column(am, 1)", "[[4.0, 7.0]]$DoubleFloatVector")
+testEquals("copy(am)", "am")
+testEquals("map(x +-> x, am)", "am")
+testEquals("map((x, y) +-> x + y, am, am)", "2*am")
+testEquals("map((x, y) +-> x + y, am, am, 0)", "2*am")
+
+testcase "0 and 1 as signature"
+
+testTrue("Integer has 0 : () -> %")
+testTrue("Integer has 1 : () -> %")
+
+testcase "sqrt in Z_p"
+
+F := PrimeField(nextPrime 273845092384750923487509234587)
+x : F := 78345093845709384750923478509238475
+y : F := sqrt(x)
+testEquals("y^2", "x")
+x := 8596703498567034985679679876::F
+testEquals("sqrt(x)^2", "x")
+
+x := 8596703498567034985679::F
+testLibraryError("sqrt(x)")
+
+testcase "limit of Fresnel functions"
+
+testEquals("limit(fresnelC(x), x=%plusInfinity)", "1/2")
+testEquals("limit(fresnelS(x), x=%minusInfinity)", "-1/2")
+
+i1 := integrate(cos(x*y)/sqrt(x), x=0..%plusInfinity, "noPole")
+testEquals("i1", "1/sqrt(2*y/%pi)")
+
+testcase "min and max for aggregates"
+
+testEquals("max([1, 2, 3, 4])", "4")
+testEquals("max([1, 2, 5, 3])", "5")
+testEquals("min([1, -2, 5, 1])", "-2")
+
+testcase "gcdDecomposition"
+
+d1 := gcdDecomposition(vector[4, 8])$GcdBasis(Integer)
+testEquals("d1.basis", "vector([2])")
+testEquals("d1.transform", "matrix([[2, 3]])")
+
+testcase "InputForm"
+
+str := "x"
+if1 := str::InputForm
+testEquals("interpret(if1)", "str")
+
+s_sym := z[y]
+y := 5
+if2 := (s_sym)::InputForm
+testEquals("interpret(if2) - s_sym", "0")
+
+s_sym2 := subscript('abc, [(3^2)$OUTFORM, x])
+if3 := s_sym2::InputForm
+testEquals("interpret(if3) - s_sym2", "0")
+
+p := product(1/k, k=1..n)
+ip := p::InputForm
+testEquals("interpret(ip) - p", "0")
+
+su := sum(1/factorial(k), k=1..n+m)
+isu := su::InputForm
+testEquals("interpret(isu) - su", "0")
+
+inf := %infinity
+iinf := inf::InputForm
+testEquals("interpret(iinf)$InputFormFunctions1(OnePointCompletion Integer)", "inf")
+
+inf := %minusInfinity
+iinf := inf::InputForm
+testEquals("interpret(iinf)$InputFormFunctions1(OrderedCompletion Integer)", "inf")
+
+inf := %plusInfinity
+iinf := inf::InputForm
+testEquals("interpret(iinf)$InputFormFunctions1(OrderedCompletion Integer)", "inf")
+
+testcase "equality for signed zero"
+
+z := 0$DoubleFloat
+mz := -z
+testTrue("(z = mz)@Boolean")
+)set output algebra on
+
+testcase "pattern matching"
+
+substE := rule (('y-'m)*sqrt('x)/'s == ('y-'m)*'e)
+
+testEquals("substE((y-m)*sqrt(x)/s)", "(y - m)*e")
+
+testcase "'children' in BinaryRecursiveAggregate"
+
+testTrue("empty? children binarySearchTree [1]")
+
+testcase "'children' in URAGG and Stream"
+
+testTrue("empty? children [1]")
+
+testTrue("empty? children([1]@Stream Integer)")
+
+testcase "fix infinite loop for 'leaves' in List"
+
+testEquals("leaves [1]", "[1]")
+
+statistics()

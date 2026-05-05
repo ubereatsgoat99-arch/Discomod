@@ -1,0 +1,10 @@
+Function: qfcholesky
+Section: linear_algebra
+C-Name: qfcholesky
+Prototype: Gp
+Help: qfcholesky(M): given a square symmetric matrix M, returns R the upper
+ triangular matrix such that R~*R = M, or [] if there is no solution (eventually
+ due to insufficient precision).
+Doc: given a square symmetric \typ{MAT} $M$, returns $R$ the upper triangular
+ matrix such that $^{t}{}R\*R = M$, or $[]$ if there is no solution (eventually
+ due to insufficient precision).

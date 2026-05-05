@@ -1,0 +1,47 @@
+Function: mapapply
+Section: programming/specific
+C-Name: mapapply
+Prototype: WGGDG
+Help: mapapply(~M,x,f,{u}): applies the closure f to the image of x by the
+ map M and returns the evaluation of f.
+Doc: applies the closure $f$ to the image $y$ of $x$ by the map $M$
+ and returns the evaluation $f(y)$. The closure $f$ is allowed to
+ modify the components of $y$ in place. If $M$ is not defined at $x$, and
+ the optional argument \kbd{u} (for \var{undefined}) is present and is
+ a closure of arity $0$, returns the evaluation $u()$.
+
+ To apply $f$ to \emph{all} entries (values) of $M$, use \kbd{apply}$(f, M)$
+ instead. There are two main use-cases:
+
+ \item performing a computation on a value directly, without using
+ \kbd{mapget}, avoiding a copy:
+ \bprog
+ ? M = Map(); mapput(~M, "a", mathilbert(2000));
+ ? matsize(mapget(M, "a"))   \\ Slow because mapget(M, "a") copies the value
+ %2 = [2000, 2000]
+ time = 101 ms.
+ ? mapapply(~M, "a", matsize) \\ Fast
+ time = 0 ms.
+ %3 = [2000, 2000]
+ @eprog
+
+ \item modifying a value in place, for example to append an element to a value
+ in a map of lists. This requires to use \kbd{\til} in the function
+ declaration. In the following \kbd{maplistput}, $M$ is a map of lists and we
+ append $v$ to the list \kbd{mapget(M,k)}, except this is done in place !
+ When the map is undefined at $k$, we use the $u$(ndefined) argument
+ \kbd{()->List(v)} to convert $v$ to a list then insert it in the map:
+ \bprog
+ ? maplistput(~M, k, v) = mapapply(~M, k, (~y)->listput(~y,v), ()->List(v));
+
+ ? M = Map();
+ %2 = Map([;])
+ ? maplistput(~M, "a", 1); M
+ %3 = Map(["a", List([1])])
+ ? maplistput(~M, "a", 2); M
+ %4 = Map(["a", List([1, 2])])
+ ? maplistput(~M, "b", 3); M
+ %5 = Map(["a", List([1, 2]); "b", List([3])])
+ ? maplistput(~M, "a", 4); M
+ %6 = Map(["a", List([1, 2, 4]); "b", List([])])
+ @eprog

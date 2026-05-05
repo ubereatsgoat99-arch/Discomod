@@ -1,0 +1,2 @@
+extern void scalePoint(viewTriple *);
+extern int spadAction(void);

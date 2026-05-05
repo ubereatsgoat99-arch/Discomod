@@ -1,0 +1,69 @@
+fricas_c_runtime_extra = @fricas_c_runtime_extra@
+
+subdir = src/sman/
+
+# this is where to put the various commands
+OUT=	$(fricas_target_bindir)
+OUTLIB=	$(fricas_target_libdir)
+
+build_libdir = $(abs_top_builddir)/src/lib
+
+bin_PROGRAMS = session$(EXEEXT) \
+		spadclient$(EXEEXT) \
+		sman$(EXEEXT)
+
+session_sources = session.c
+session_objects = $(session_sources:.c=.$(OBJEXT))
+session_LDADD = -L$(build_libdir) -lspad $(fricas_c_runtime_extra)
+session_DEPENDENCIES = $(build_libdir)/libspad.a
+
+spadclient_sources = spadclient.c
+spadclient_objects = $(spadclient_sources:.c=.$(OBJEXT))
+spadclient_LDADD = -L$(build_libdir) -lspad $(fricas_c_runtime_extra)
+spadclient_DEPENDENCIES = $(build_libdir)/libspad.a
+
+sman_sources = sman.c
+sman_objects = $(sman_sources:.c=.$(OBJEXT))
+sman_LDADD = -L$(build_libdir) -lspad $(fricas_c_runtime_extra)
+sman_DEPENDENCIES = $(build_libdir)/libspad.a
+
+
+
+.PHONY: all all-sman
+
+all: all-ax
+
+all-ax all-sman: stamp
+
+stamp:	$(OUTLIB)/session$(EXEEXT) \
+		$(OUTLIB)/spadclient$(EXEEXT) \
+		$(OUT)/sman$(EXEEXT)
+	-rm -f stamp
+	$(STAMP) stamp
+
+.PRECIOUS: %.$(OBJEXT)
+
+%.$(OBJEXT): $(srcdir)/%.c
+	$(CC) -c ${CCF} $(CFLAGS) $(fricas_includes) -I$(srcdir) -o $@ $<
+
+${OUTLIB}/session$(EXEEXT): $(session_objects) $(session_DEPENDENCIES)
+	$(CC) $(session_objects) $(session_LDADD) ${LDF} $(LDFLAGS) -o $@
+
+${OUTLIB}/spadclient$(EXEEXT): $(spadclient_objects) $(spadclient_DEPENDENCIES)
+	$(CC) $(spadclient_objects) $(spadclient_LDADD) ${LDF} $(LDFLAGS) -o $@
+
+spadclient.$(OBJEXT): $(fricas_configdir)/fricas_c_macros.h
+
+${OUT}/sman$(EXEEXT): $(sman_objects) $(sman_DEPENDENCIES)
+	$(CC) $(sman_objects) $(sman_LDADD) ${LDF} $(LDFLAGS) -o $@
+
+$(sman_objects): $(srcdir)/sman.h $(fricas_c_macros)
+
+clean-local:
+	-rm -f $(session_objects) $(sman_objects) $(spadclient_objects)
+	-rm -f stamp
+	-rm -f $(OUTLIB)/session$(EXEEXT)
+	-rm -f $(OUTLIB)/spadclient$(EXEEXT)
+	-rm -f $(OUT)/sman$(EXEEXT)
+
+distclean-local: clean-local

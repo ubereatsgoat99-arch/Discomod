@@ -1,0 +1,325 @@
+# (Patch) Subject: Re: aldor/axiom interoperability
+# http://article.gmane.org/gmane.comp.mathematics.axiom.devel/19315/match=broadbery
+
+
+VPATH=@srcdir@
+MAKEFLAGS += -Wwarn-undefined-variables
+ALDOR=@ALDOR@
+ALDOR_FOREIGNSTYLE=|@ALDOR_foreignStyle@|
+subdir=src/aldor/
+
+###################################################################
+# WARNING: THE FOLLOWING DOCUMENTATION MIGHT BE INCORRECT.
+#
+# This Makefile is only responsible to prepare the stage for the
+# actual compilation of libfricas.al.
+# The main output is the file cliques.mk which is a Makefile that
+# will be included in Makefile2.
+# cliques.mk basically contains for each domain from the FriCAS library
+# its (recursive) dependencies on other domains. In fact, that is
+# not exactly true since several domains are grouped together in
+# cliques due to a lot of interdependencies in the FriCAS library.
+# Fortunately, there are only a few cliques left that have more
+# than one element. Most interdependencies are broken by the types
+# that appear in initlist.as.
+# Furthermore, cliques.mk contains a number of dependencies for and on
+# a number of basic aldor files and, in particular, the files
+# axlit.as and axextend.as. The latter two files extend various
+# FriCAS domains so that Aldor can interpret literals etc.
+# Naturally, these files depend on existing FriCAS types and thus
+# must occur somewhere in the middle of the FriCAS type hierarchy,
+# i.e., compilation order.
+#
+# The whole Makefile is about to find out where axlit and axextend
+# live in the compilation order and find out about the cliques of
+# the FriCAS library.
+###################################################################
+
+# For the compilation of libfricas.al we must use the compiled form of
+# the database. Since the variable DAASE is already set in var-def.mk,
+# we explicitly override it here for the call of FRICASsys.
+INTERPSYS = DAASE=$(fricas_targetdir) FRICAS_INITFILE='' $(fricas_target_bindir)/FRICASsys
+
+default: fricas.as al/libfricas.al runtimefiles
+
+clean-local:
+	rm -f domains.mk mkinit* initlist.lst initlist.ap
+	rm -f easylist.lsp mkeasy.lsp
+	rm -f libfricas.lst aldordepfiles domaindepfiles
+	rm -rf tmp init_ap gendeps ap ao al lib lsp
+	rm -f cliques cliques.mk
+	rm -f lang.as axextend.as axlit.as
+	rm -f minimach.as stub.as subsetc.as fricas.as
+	rm -f *.ao
+
+distclean-local: clean-local
+	-rm -f domains.mk Makefile2 Makefile3
+
+###################################################################
+# Here we produce the list of all domains, categories and packages
+# that are available in the algebra directory. This is where the
+# .spad files are extracted to.
+spaddir=$(abs_top_builddir)/src/algebra
+domains.mk:
+	echo "domains := \\" > $@
+	echo ')lisp (dolist (c (|allConstructors|)) (format t "~A \\~%" (|constructor?| c))) (quit)'|($(INTERPSYS))|grep '\\'|grep -v '.*- \\'|grep -v NIL|sed -e 's/.*-> //'|sort >> $@
+	echo >> $@
+
+include domains.mk
+
+###################################################################
+###################################################################
+# Now we are going to generate dependency files.
+# The dependencies are generated with the help gendepap.lsp.
+# There are 3 categories of dependency files.
+# 1. Initial dependencies connected to a given initlist.as.
+# 2. Dependencies generated from the $(domains).
+# 3. Dependencies of a few aldor files given by $(aldor_srcs).
+# These dependencies will be listed in the directory "gendeps".
+###################################################################
+###################################################################
+GENAX=$(srcdir)/gendepap.lsp
+###################################################################
+# 1. Initial dependencies connected to a given initlist.as.
+###################################################################
+# With the following stanzas initial dependencies will be generated
+# from the file initlist.as.
+#
+# The file initlist.lst will look like:
+## init_D1
+## ...
+## init_Dn
+#
+# At the same time for each domain Di a file gendeps/init_Di.dep is
+# generated which contains the dependencies for Di. That file will
+# look as follows.
+## DEPi1
+## ...
+## DEPin_i
+#
+# Furthermore, for each Di a file init_ap/init_Di.ap that contains the
+# ap form (parsed aldor source) of Di.
+# These files are only a part of what will later be ap/init_Di.ap.
+# (see Makefile2.in).
+###################################################################
+# Generate initlist.ap from initlist.as.
+# initlist.as lists the initial types that are used to break
+# a lot of big circular dependencies in the FriCAS algebra library.
+initlist.ap: initlist.as tmp/.dir
+	$(ALDOR) -Fap=tmp/$@ $<
+	sed -e 's/\([->A-Za-z0-9\\]\+\)/|\1|/g' tmp/$@ > $@
+
+
+###################################################################
+# Generate easylist.lsp. It is used internally in the
+# 'print-dependencies' function in $(GENAX) and used in all
+# the later calls of $(GENAX).
+easylist.lsp: mkeasy.lsp initlist.ap tmp/.dir
+	$(INTERPSYS) < $< > tmp/mkeasy.log
+	test -f $@
+
+mkeasy.lsp:
+	echo ')lisp (load "$(GENAX)")' > $@
+	echo ')lisp (|setForeignStyle| (quote $(ALDOR_FOREIGNSTYLE)))'
+	echo ')lisp (generate-easy "easylist.lsp")' >> $@
+	echo ')lisp (quit)' >> $@
+
+
+
+###################################################################
+# Generate (from initlist.ap) initlist.lst and initial files and
+# dependencies in the init_ap and gendeps directories.
+geninit_dirs = init_ap ap gendeps tmp
+initlist.lst: mkinit.lsp easylist.lsp $(patsubst %,%/.dir,$(geninit_dirs))
+	$(INTERPSYS) < $< > tmp/mkinit.log
+	test -f $@
+
+# here and in the following we use )lisp instead of )fin, because )fin
+# does not work in ecl based FriCAS.
+mkinit.lsp:
+	echo ')lisp (load "$(GENAX)")' > $@
+	echo ')lisp (|setForeignStyle| (quote $(ALDOR_FOREIGNSTYLE)))'
+	echo ')lisp (generate-init "initlist.lst")' >> $@
+	echo ')lisp (quit)' >> $@
+
+
+###################################################################
+# 2. Dependencies generated from the $(domains).
+###################################################################
+domain_dep_files = $(patsubst %,gendeps/%.dep,$(domains))
+$(domain_dep_files): gendeps/%.dep: tmp/dep_%.lsp tmp/.dir initlist.lst
+	$(INTERPSYS) < $< > tmp/dep_$*.log
+	test -f $@
+
+domain_lsp_files = $(patsubst %,tmp/dep_%.lsp,$(domains))
+$(domain_lsp_files): tmp/dep_%.lsp: tmp/.dir gendeps/.dir
+	echo ')lisp (load "$(GENAX)")' > $@
+	echo ')lisp (|setForeignStyle| (quote $(ALDOR_FOREIGNSTYLE)))'
+	echo ')lisp (generate-deps (quote ($*)))' >> $@
+	echo ')lisp (quit)' >> $@
+
+domaindepfiles: $(domain_dep_files)
+	touch $@
+
+
+###################################################################
+# 3. Dependencies of a few aldor files given by $(aldor_srcs).
+###################################################################
+# The .as files in aldor subdirectory are taken from the Aldor source.
+ALDOR_top_srcdir=${fricas_top_srcdir}/src/aldor
+ALDORBASICS=$(ALDOR_top_srcdir)/aldor
+ALDORLANG=$(ALDOR_top_srcdir)/aldor
+XCAT=cat
+
+fricas.as axlit.as stub.as: %.as: $(ALDORBASICS)/%.as
+	$(XCAT) $< > $@
+
+axextend.as: $(ALDORBASICS)/axextend.as
+	$(XCAT) $< | \
+	sed -e '/^extend Matrix/ s/Ring/AbelianMonoid/' > $@
+
+minimach.as: $(ALDORBASICS)/minimach.as
+	$(XCAT) $< | \
+	sed -e 's/^#.*//;s/Language;/FriCASLib;inline from FriCASLib;/' > $@
+
+lang.as: $(ALDORLANG)/lang.as
+	$(XCAT) $< > $@
+
+subsetc.as: stub.as
+	grep FriCASLib $< > $@
+	tail -4 $< >> $@
+
+
+include $(srcdir)/aldor.mk
+
+aldor_dep_files = $(patsubst %,gendeps/%.dep,$(aldor_srcs))
+$(aldor_dep_files): gendeps/%.dep: tmp/dep_%.lsp initlist.lst gendeps/.dir
+	echo 'Generating dependency of $*.'
+	$(INTERPSYS) < $< > tmp/dep_$*.log
+	test -f $@
+
+aldor_lsp_files = $(patsubst %,tmp/dep_%.lsp,$(aldor_srcs))
+$(aldor_lsp_files): tmp/dep_%.lsp: ap/%.ap tmp/.dir
+	echo ')lisp (load "$(GENAX)")' > $@
+	echo ')lisp (|setForeignStyle| (quote $(ALDOR_FOREIGNSTYLE)))'
+	echo ')lisp (generate-deps-from-ap-files (quote (|$*|)))' >> $@
+	echo ')lisp (quit)' >> $@
+
+aldor_ap_files = $(patsubst %,ap/%.ap,$(aldor_srcs))
+$(aldor_ap_files): ap/%.ap: %.as ap/.dir tmp/.dir
+	$(ALDOR) -Fap=tmp/$*.ap $<
+	sed -e 's/\([->A-Za-z0-9\\]\+\)/|\1|/g' tmp/$*.ap > $@
+
+aldordepfiles: $(aldor_dep_files)
+	touch $@
+
+
+###################################################################
+# Starting from the list initlist.lst, we create a file libfricas.lst.
+# That file contains pairs of the form
+## keyword filename
+# where keyword is one of "base", "initfricas", "fricas", and "aldorext".
+# libfricas.lst is used for the computation of cliques in the
+# FriCAS library, see program 'cliques'.
+#
+# Note that the function dep-type-or-nil in gendepap.lsp tests whether an
+# identifier is indeed a FriCAS type. Therefore, it is necessary to make
+# attrib.as a dependency of every FriCAS clique.
+libfricas.lst: initlist.lst
+	sed -e 's/^/initfricas /' initlist.lst > $@
+	for i in $(aldor_lang);       do echo "lang $$i"     >> $@; done
+	for i in $(aldor_basics);     do echo "base $$i"     >> $@; done
+	for i in $(aldor_misc);       do echo "base $$i"     >> $@; done
+	for i in $(domains);          do echo "fricas $$i"   >> $@; done
+	for i in $(aldor_extensions); do echo "aldorext $$i" >> $@; done
+
+
+###################################################################
+# The program 'cliques' computes cliques according to the dependencies from
+# the gendeps directory. It writes a collection of Makefile variable
+# assignments and Makefile targets to stdout.
+CLIQUEOPTS=-mno-abbrev -mno-mactext -laldor -fx -c args=-lm
+cliques: cliques.as
+#	$(ALDOR) $(CLIQUEOPTS) $<
+	$(ALDOR) $(CLIQUEOPTS) -dTRACE $<
+
+cliques.mk: libfricas.lst cliques domaindepfiles aldordepfiles
+	./cliques libfricas.lst > $@
+
+
+###################################################################
+# After we have generated cliques.mk, we can do the real work and start
+# compilation of al/libfricas.al.
+al/libfricas.al: cliques.mk al/.dir Makefile2
+	$(MAKE) -f Makefile2 aldor_srcs="$(aldor_srcs)" GENAX="$(GENAX)"
+
+# The following targets are actually handled in Makefile2 and are
+# only useful to start a computation via
+#   make CLIQUES=LODOF2 ao/LODOF2.ao
+$(patsubst %,ao/%.ao,$(CLIQUES)): ao/%.ao: cliques.mk al/.dir Makefile2
+	$(MAKE) -f Makefile2 aldor_srcs="$(aldor_srcs)" GENAX="$(GENAX)" $@
+
+$(patsubst %,ap/%.ap,$(CLIQUES)): ap/%.ap: cliques.mk al/.dir Makefile2
+	$(MAKE) -f Makefile2 aldor_srcs="$(aldor_srcs)" GENAX="$(GENAX)" $@
+
+
+###################################################################
+# Runtime - things required to run aldor files
+runtimefiles: al/libfricas.al
+	$(MAKE) runtimelib
+
+# The target 'runtimelib' is here as a direct entry point for cases
+# where al/libfricas.al is already assumed to be up-to-date.
+runtimelib:
+	$(MAKE) -f Makefile3 aldor_srcs="$(aldor_srcs)"
+
+
+#
+# :: Directories
+#
+
+###################################################################
+# Creation of build subdirectories.
+# TODO: Maybe that can be removed some day. There is no real need to create
+# subdirectories.
+%/.dir:
+	${MKDIR_P} $(patsubst %/.dir,%,$@)
+	touch -t 199901010000 $@
+
+#
+# :: Installation
+#
+
+.PHONY: install
+###################################################################
+# We need libfricas.al and the .o (runtime support) files in the lib
+# subdirectory.
+install: install-libalgebra install-runtimefiles
+
+# Destination directory for the algebra files and aldor libraries.
+install_target_dir = $(DESTDIR)$(libdir)/fricas/target/$(target)
+install_algebra_dir = $(install_target_dir)/algebra
+install-libalgebra:
+	$(INSTALL_DATA) al/libfricas.al $(install_algebra_dir)
+	$(INSTALL_DATA) fricas.as $(install_algebra_dir)
+
+# runtime_files should be the same as in Makefile3.in
+runtime_files = $(patsubst %,lib/%.$(FASLEXT), runtime $(aldor_srcs))
+install_aldor_dir = $(install_target_dir)/aldor
+install-runtimefiles: installdir-runtimefiles
+	for f in $(runtime_files); do \
+	  $(INSTALL_DATA) $$f '$(install_aldor_dir)/lib'; \
+	done
+
+installdir-runtimefiles:
+	$(mkinstalldirs) '$(install_aldor_dir)/lib'
+
+Makefile2: $(srcdir)/Makefile2.in $(top_srcdir)/config/var-def.mk \
+	  $(top_srcdir)/config/setup-dep.mk \
+	  $(abs_top_builddir)/config.status
+	cd $(abs_top_builddir) && $(SHELL) ./config.status $(subdir)$@
+
+Makefile3: $(srcdir)/Makefile3.in $(top_srcdir)/config/var-def.mk \
+	  $(top_srcdir)/config/setup-dep.mk \
+	  $(abs_top_builddir)/config.status
+	cd $(abs_top_builddir) && $(SHELL) ./config.status $(subdir)$@

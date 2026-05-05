@@ -1,0 +1,2 @@
+extern void compute_form_page(HyperDocPage * page);
+extern int window_width(int cols);

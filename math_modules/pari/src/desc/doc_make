@@ -1,0 +1,224 @@
+#!/usr/bin/perl
+BEGIN { @INC=(".",@INC); }
+use warnings FATAL => 'all';
+use strict;
+use PARI::822;
+use vars qw(%cproto %cprotogp %p2c);
+
+sub readproto { my($file) = @_;
+  my %c = ();
+  open HEADER,"<","$file";
+  while(<HEADER>)
+  {
+    /([a-zA-Z_0-9]+)\(/ and $c{$1}=1;
+  }
+  close HEADER;
+  return %c;
+}
+
+%cproto = readproto "../headers/paridecl.h";
+%cprotogp = readproto "../gp/gp.h";
+%p2c = ('G' => 'GEN', 'I' => 'GEN', 'J' => 'GEN',  'E' => 'GEN', '&' => 'GEN *',
+        'L' => 'long', 'M' => 'long', U => 'ulong',
+        'r' => 'const char *', 's' => 'const char *');
+
+my (%funcs, %Fun_by_sec, %sec_header, @SECTIONS);
+PARI::822::read(\%funcs, "pari.desc");
+@SECTIONS = qw(
+  programming/control
+  programming/specific
+  programming/parallel
+  default
+  operators
+  conversions
+  combinatorics
+  number_theoretical
+  polynomials
+  linear_algebra
+  transcendental
+  sums
+  number_fields
+  algebras
+  elliptic_curves
+  hypergeometric_motives
+  l_functions
+  modular_forms
+  modular_symbols
+  graphic
+);
+
+# Write the prototypes to proto.c for comparing with pari.h
+# See test-proto
+open (PROTO, ">", "proto.c");
+print PROTO "#include \"pari.h\"\n";
+
+for (keys %funcs)
+{
+  my ($s) = $funcs{$_}->{Section};
+  next if (!$s);
+  my ($c) = $funcs{$_}->{Class};
+  if ($c eq 'header')
+  { $sec_header{$s} = $funcs{$_}->{Doc} }
+  else
+  { push(@{$Fun_by_sec{$s}}, $_); }
+}
+for (@SECTIONS)
+{
+  my ($sec) = $_;
+  my ($head) = $sec_header{$sec};
+  print "$head\n" if defined($head);
+  next if (!$Fun_by_sec{$sec});
+  for ( sort @{$Fun_by_sec{$sec}} ) {
+    my ($fun) = $funcs{$_};
+    my ($doc) = $fun->{Doc};
+    next if (!defined($doc));
+
+    my ($args)  = $fun->{Help};
+    my ($v);
+    $doc =~ s/^[\n\t ]*(.)/uc($1)/e;
+    $args =~ s/ *:.*//s;
+    # sanity checks
+    if ($args =~ /([_a-zA-Z0-9]*)\(/ && $fun->{Function} ne $1)
+    { die "fix $fun->{Function} Help" }
+    if ($fun->{Help} =~ /\$/) { die "\$ in $fun->{Function}"; }
+    die "double parenthesis in $fun->{Function} proto" if ($args =~ /\)\)/);
+    # ok
+    if (!$args || $args =~ /^\w+=\w+\(\)/) { $args = $v = ''; }
+    else
+    {
+      $args =~ s/^[^(]*\((.*)\)/$1/; # args proper
+      $v = $args;
+      $v =~ s/([{}&])/\\$1/g;
+      $v =~ s/\^(\d+)/^{$1}/g;
+      $v =~ s/\[\]/[\\,]/g;
+      $v =~ s/([a-zA-Z]\w+)/\\var{$1}/g;
+      $v =~ s/\^([a-z])/\\hbox{\\kbd{\\pow}}$1/g;
+      $v =~ s/\\var\{flag\}/\\fl/g;
+      $v =~ s/\\var\{(\d+)\}/{$1}/g;
+      $v =~ s/_/\\_/g; # don't merge with first subst: \var{} rule kills it
+      $v =~ s/~/\\til{}/g;
+      $v =~ s/'/\\kbd{'}/g;
+
+      $v = "\$($v)\$";
+    }
+    my $lib = library_syntax($fun, $args);
+    if ($doc !~ /\\syn\w*\{/ && $sec !~ /programming\/control/) {
+      $doc .= $lib;
+    }
+    s/_def_//;
+    my ($secname) = $_;
+    my ($l) = ($fun->{Section} =~ 'default')? "def,$_": $_;
+    my ($idx) = ($secname =~ s/_/\\_/g)? $l: $secname;
+    print "\n\\subsec{$secname$v}\\kbdsidx{$idx}\\label{se:$l}\n$doc\n";
+  }
+}
+print '\vfill\eject';
+close PROTO;
+
+
+sub library_syntax { my ($fun, $args) = @_;
+  my ($class) = $fun->{Class};
+  return '' if ($class =~ /^(default|gp_default)$/);
+  my ($gpname) = $fun->{'Function'};
+  my ($Cname) = $fun->{'C-Name'};
+  return '' if (!$Cname);
+  my ($Variant) = $fun->{Variant};
+  my ($Proto) = $fun->{Prototype};
+  $Proto =~ s/\\n.*//; # delete Mnemonics
+  my (@proto) = split(//, $Proto);
+  $args = ~ s/^/,/g if ($gpname eq "O(_^_)");
+  my (@ARGS) = split(/, */, $args);
+  my ($type) = "GEN";
+  my (@vars)=();
+  $args = '';
+  my $vargs = '';
+  if ( $class eq 'basic')
+  {
+    if (!defined($cproto{$fun->{'C-Name'}}))
+    {
+      die "$fun->{Function} : prototype $fun->{'C-Name'} not found in paridecl.h";
+    }
+  } elsif ($class eq 'gp' && !defined($cprotogp{$fun->{'C-Name'}}))
+  { die "$fun->{Function} : prototype $fun->{'C-Name'} not found in gp.h"; }
+  for (my $i = 0; $i <= $#proto; )
+  {
+    my ($c) = $proto[$i++];
+    if ($c eq 'i') { $type = "int"; next; }
+    if ($c eq 'l') { $type = "long"; next; }
+    if ($c eq 'u') { $type = "ulong"; next; }
+    if ($c eq 'v') { $type = "void"; next; }
+    if ($c =~ /^[GIJEULM&]$/) {$args .= ", $p2c{$c} " . shift(@ARGS); next;}
+    if ($c eq 'W') {my ($v) = shift(@ARGS);
+                    $v =~ s/^~//g or die ("missing ~ in ?$gpname");
+                    $args .= ", GEN " . $v; next;}
+    if ($c eq 'n') {my ($v) = shift(@ARGS); push @vars,"\\kbd{$v}";
+                    $args .= ", long " . $v; next;}
+    if ($c =~ /^[rs]$/) {
+       my ($v) = shift(@ARGS);
+       $v =~ s/[{}]//g;
+       if (defined($proto[$i]) && $proto[$i] eq '*')
+       { $i++; $v =~ s/[*]$//;
+         $args .= ", GEN " . $v;}
+       else {
+         $args .= ", const char *" . $v;
+       }
+       next;}
+    if ($c eq 'p') {$args .= ", long prec"; next;}
+    if ($c eq 'b') {$args .= ", long bitprec"; next;}
+    if ($c eq 'P') {$args .= ", long precdl"; next;}
+    if ($c eq 'C') {$args .= ", GEN ctx"; next;}
+    if ($c eq '') { next; }
+    if ($c eq 'V') { $vargs  = shift(@ARGS); next; }
+    if ($c eq '=') { my (@v) =  split('=',$vargs); $i++;
+                    $args .= ", GEN " . $v[1]; next; }
+    if ($c eq 'D') {
+      $c = $proto[$i++];
+      if ($c =~ /^[GEIJrs]$/) { my $v = shift(@ARGS);
+        if (!defined($v)) { die "*** ?$gpname: missing default\n"; next; }
+        # delete default value
+        ($v =~ s/\{([^\}]*)=[^\}]*\}/$1/g) or ($v =~ s/[{}]//g);
+        $args .= ", $p2c{$c} " . $v ." = NULL"; next; }
+      if ($c eq '&') { my $v = shift(@ARGS);
+        $v =~ s/[{}]//g;
+        $v =~ s/^&// or die("missing & in ?$gpname");
+        $args .= ", GEN *". $v ." = NULL"; next; }
+      if ($c eq 'P') { $args .= ", long precdl"; next; }
+      if ($c eq 'V') { next; }
+      if ($c eq 'n') {
+        my ($v) = shift(@ARGS);
+        # delete default value
+        ($v =~ s/\{([^\}]*)=[^\}]*\}/$1/g) or ($v =~ s/[{}]//g);
+        $args .= ", long $v = -1";
+        push @vars,"\\kbd{$v}"; next; }
+      while (defined($c = $proto[$i++]) && $c ne ',') {}
+      $c = $proto[$i++];
+      if ($c =~ /^[LMUrs]$/ ) {  my $v = shift(@ARGS); my $w = $v;
+        if (!defined($v)) { die "*** ?$gpname: missing default\n"; next; }
+        # delete default value
+        ($v =~ s/\{([^\}]*)=[^\}]*\}/$1/g) or ($v =~ s/[{}]//g);
+        $args .= ", $p2c{$c} " . $v; next;}
+      $c = $proto[$i++];
+    }
+  }
+  $args =~ s/^, //;
+
+  my ($post);
+  my ($l)=scalar @vars;
+  if    ($l==0) { $post=''; }
+  elsif ($l==1)
+  {
+    $post = " where $vars[0] is a variable number";
+  }
+  else
+  {
+    my ($vl)=join(", ",@vars);
+    $post = " where $vl are variable numbers";
+  }
+  my ($proto) = "$type $Cname($args);\n";
+  $proto =~ s/ = (?:NULL|-1)//g;
+  print PROTO $proto;
+  return "" if ($class eq 'gp');
+  my ($txt) = "\n\nThe library syntax is \\fun{$type}{$Cname}{$args}$post.";
+  $txt .= "\n$Variant" if ($Variant);
+  return $txt;
+}
