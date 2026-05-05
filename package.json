@@ -4,7 +4,7 @@
   "description": "Discord moderation and utility bot with spam protection and AI detection",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node DISCOMOD.js"
   },
   "dependencies": {
     "discord.js": "^14.0.0",
