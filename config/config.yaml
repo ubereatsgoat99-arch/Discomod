@@ -1,0 +1,19 @@
+bot:
+  allow_dm: true
+  allow_gc: true
+  anti_age_ban: true
+  batch_messages: true
+  batch_wait_time: 10.0
+  disable_mentions: true
+  groq_model: openai/gpt-oss-120b
+  help_command_enabled: true
+  hold_conversation: true
+  openai_model: gpt-4o
+  owner_id: "1427299411049840640"
+  prefix: '!'
+  realistic_typing: false
+  reply_ping: true
+  trigger: cyber
+notifications:
+  error_webhook: https://discord.com/api/webhooks/1494034203371769997/T_nprdxd93SKV-bRudRqUos7gZmY2cqWdjtErO9k4pCZBiy2hJc9b0WXIJ5qqd_0gbkO
+  ratelimit_notifications: true
