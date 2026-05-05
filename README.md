@@ -71,6 +71,8 @@ Then fill in your values:
 ```bash
 DISCORD_TOKEN=your_token_here
 ANTHROPIC_API_KEY=your_key_here
+WOLFRAM_APPID=
+GROQ_API_KEY
 ```
 and then run:
 
