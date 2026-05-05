@@ -35,6 +35,17 @@ Originally made for MonkeyVerseYT's server, but extended the use for everyone an
 - Fallback defaults included
 - Role and channel customization support
 
+### 🤖 AI Roasts and Conversations
+- Powered by Groq/Chatgpt
+- Can split into messages
+- Toggleable via configuration
+
+### Math Calculators
+- Powered by very powerful math modules
+- Can split into messages
+- Supports arbitary-preceision
+- Can show every digit
+
 ---
 
 ## 📦 Requirements
