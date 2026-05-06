@@ -1786,6 +1786,27 @@ function detectRaidOrDungeonRecruitment(cleanText) {
     if (ns.includes('hostingraid') || ns.includes('hostraid') || ns.includes('carryraid') || ns.includes('carryingraid')) return true;
     if (ns.includes('hostingdungeon') || ns.includes('hostdungeon') || ns.includes('carrydungeon') || ns.includes('carryingdungeon')) return true;
 
+    // "hosting levi" / "host levi" — explicit leviathan hosting
+    if (/\b(?:host|hosting)\s+levi(?:athan|than|atan|thn)?\b/i.test(t)) return true;
+
+    // "hosting <any boss>" / "host <any boss>" — dynamic check against all boss names & aliases
+    if (/\b(?:host|hosting)\b/i.test(t)) {
+        const allBossNames = [
+            ...BOSSES,
+            ...Object.keys(BOSS_ALIASES),
+            ...Object.values(BOSS_ALIASES),
+        ];
+        const nsNoSpace = ns;
+        for (const bossRaw of allBossNames) {
+            const b = String(bossRaw).toLowerCase().replace(/[\s_\-']/g, '');
+            if (b.length < 3) continue;
+            // Check no-space concat: "hosting" + boss or "host" + boss
+            if (nsNoSpace.includes('hosting' + b) || nsNoSpace.includes('host' + b)) return true;
+            // Check spaced/loose pattern
+            if (new RegExp(`\\b(?:host|hosting)[\\s\\W_]{0,10}${b.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}`, 'i').test(ns.replace(/[\s_]/g, '') === nsNoSpace ? t : t)) return true;
+        }
+    }
+
     // added difficulty + join combos (no-space)
     if (ns.includes('whowannajoinraid') || ns.includes('whowannajoindungeon')) return true;
     if (ns.includes('normalraid') || ns.includes('hardraid') || ns.includes('challengeraid')) return true;
@@ -3421,6 +3442,38 @@ const FRUITS = [
     "tiger","yeti","kitsune","control","dragon","leopard",
     "2x money","2x mastery","2x boss drops","dark blade","yoru",
     "fast boats","fruit notifier","werewolf",
+    // cosmetics / skins / auras / chromatics
+    "empyrean","fiendyetimutation","fiend yeti mutation",
+    "werewolftigermutation","werewolf tiger mutation",
+    "blueportalskin","blue portal skin",
+    "divineportalskin","divine portal skin",
+    "purplelightningskin","purple lightning skin",
+    "eclipsedracoskin","eclipse draco skin",
+    "emberdragonskin","ember dragon skin",
+    "empyreanskin","empyrean skin",
+    "snowwhiteaura","snow white aura",
+    "pureredaura","pure red aura",
+    "winterskyaura","winter sky aura",
+    "chromaticbomb","chromatic bomb",
+    "chromaticdiamond","chromatic diamond",
+    "chromaticpain","chromatic pain",
+    "chromaticportal","chromatic portal",
+    "chromaticempyrean","chromatic empyrean",
+    "chromaticeagle","chromatic eagle",
+    "chromaticlightning","chromatic lightning",
+    "chromaticdragon","chromatic dragon",
+    "nuclearbombskin","nuclear bomb skin",
+    "thermitebombskin","thermite bomb skin",
+    "azurabombskin","azura bomb skin",
+    "celebrationbombskin","celebration bomb skin",
+    "tormentpainskin","torment pain skin",
+    "superspiritpainskin","super spirit pain skin",
+    "frustrationpainskin","frustration pain skin",
+    "sadnesspainskin","sadness pain skin",
+    "celestialpainskin","celestial pain skin",
+    "greenlightningskin","green lightning skin",
+    "redlightningskin","red lightning skin",
+    "yellowlightningskin","yellow lightning skin",
 ];
 const FRUIT_ALIASES = {
     "rmble":"rumble","rmbl":"rumble","ruble":"rumble","rumbl":"rumble",
