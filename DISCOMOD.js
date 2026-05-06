@@ -7205,6 +7205,12 @@ client.on('interactionCreate', async interaction => {
         const cid = String(interaction.customId || '');
         if (cid.startsWith('rb_stop:')) {
             const key = cid.slice('rb_stop:'.length);
+            // key format: guildId:channelId:userId — only the starter can stop it
+            const starterId = key.split(':')[2];
+            if (interaction.user.id !== starterId) {
+                await interaction.reply({ content: '❌ Only the person who started this roast battle can stop it.', ephemeral: true }).catch(()=>{});
+                return;
+            }
             await interaction.deferUpdate().catch(()=>{});
             const st = roastBattles.get(key);
             roastBattles.delete(key);
@@ -9673,7 +9679,32 @@ client.on('messageCreate', async message => {
             await message.reply("Look in the mirror. That's my roast.").catch(()=>{});
             return;
         }
-        await message.reply("Roast incoming. (Tip: use `!roast battle` for AI roasts)").catch(()=>{});
+        // Generate an actual AI roast of the target user
+        const targetName = target.displayName || target.username;
+        await message.channel.sendTyping().catch(()=>{});
+        let roastText = null;
+        try {
+            const roastRes = await fetch(AI_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': ANTHROPIC_KEY,
+                    'anthropic-version': '2023-06-01',
+                },
+                body: JSON.stringify({
+                    model: AI_MODEL,
+                    max_tokens: 300,
+                    messages: [{
+                        role: 'user',
+                        content: `You are a savage roast comedian. Roast the Discord user named "${targetName}" in 2-3 short sentences. Be creative, witty, and funny. Keep it playful and based on their username/vibe — no slurs or genuinely harmful content. Go.`
+                    }],
+                }),
+            });
+            const roastData = await roastRes.json();
+            roastText = roastData?.content?.[0]?.text?.trim() || null;
+        } catch { roastText = null; }
+        if (!roastText) roastText = `${targetName}? I'd roast you, but my mom said I'm not allowed to burn trash. 🔥`;
+        await message.reply(roastText.slice(0, 1990)).catch(()=>{});
         return;
     }
 
