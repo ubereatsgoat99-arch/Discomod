@@ -2188,6 +2188,7 @@ function getGuildSettings(guildId, data) {
     if (gs.checksEnabled === undefined) gs.checksEnabled = true;
     if (gs.noAffiliationEnabled === undefined) gs.noAffiliationEnabled = false;
     if (gs.exileStripRoles === undefined) gs.exileStripRoles = false;
+    if (gs.exileRemoveRole === undefined) gs.exileRemoveRole = true;
     if (gs.botOwnerId === undefined) gs.botOwnerId = null;
     if (gs.botFooterText === undefined) gs.botFooterText = null;
     if (gs.botInfoPublic === undefined) gs.botInfoPublic = false;
@@ -6515,6 +6516,11 @@ const slashCommands = [
             .setName('striproles')
             .setDescription('Toggle whether ALL roles are stripped (not restored) when a member is exiled')
             .addStringOption(o => o.setName('toggle').setDescription('on or off').setRequired(true)
+                .addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })))
+        .addSubcommand(sub => sub
+            .setName('removerole')
+            .setDescription('ON: remove roles on exile & restore after. OFF: only add/remove exile role.')
+            .addStringOption(o => o.setName('toggle').setDescription('on or off').setRequired(true)
                 .addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' }))),
 
     // Immunity
@@ -8393,6 +8399,30 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('⛓️ Exile Config — Strip Roles Toggled')
                     .setColor(gs.exileStripRoles ? 0xFF4444 : 0x00CC66)
                     .setDescription(`Strip roles on exile set to **${gs.exileStripRoles ? 'ON' : 'OFF'}** by <@${interaction.user.id}>`)
+                    .setTimestamp());
+            } else if (ecSub === 'removerole') {
+                const toggle = interaction.options.getString('toggle');
+                gs.exileRemoveRole = (toggle === 'on');
+                saveData(data);
+                await interaction.reply({
+                    embeds: [new EmbedBuilder()
+                        .setTitle('⛓️ Exile Config — Remove Role')
+                        .setColor(gs.exileRemoveRole ? 0xFF8800 : 0x00CC66)
+                        .setDescription(gs.exileRemoveRole
+                            ? '✅ **Remove Role is now ON.**\nWhen a member is exiled, all their roles are **removed** and the exile role is added. Their roles are **restored** when unexiled.'
+                            : '❌ **Remove Role is now OFF.**\nWhen a member is exiled, the exile role is **only added** to their existing roles. When unexiled, the exile role is simply **removed** — all other roles stay untouched.')
+                        .addFields(
+                            { name: 'Exile Role',    value: gs.exiledRoleId ? `<@&${gs.exiledRoleId}>` : 'Not set — use `/exileconfig setrole`', inline: false },
+                            { name: 'Strip Roles',   value: gs.exileStripRoles ? '✅ ON (permanent strip)' : '❌ OFF', inline: true },
+                            { name: 'Remove Role',   value: gs.exileRemoveRole ? '✅ ON (remove & restore)' : '❌ OFF (add-only)', inline: true },
+                        )
+                        .setTimestamp()],
+                    ephemeral: true,
+                });
+                await sendLog(interaction.guild, data, new EmbedBuilder()
+                    .setTitle('⛓️ Exile Config — Remove Role Toggled')
+                    .setColor(gs.exileRemoveRole ? 0xFF8800 : 0x00CC66)
+                    .setDescription(`Remove role on exile set to **${gs.exileRemoveRole ? 'ON' : 'OFF'}** by <@${interaction.user.id}>`)
                     .setTimestamp());
             }
             break;
@@ -10694,19 +10724,30 @@ async function performExile(userOrMember, guild, minutes, reason, data) {
         .filter(r => !r.managed && r.id !== guild.id && r.id !== gs.exiledRoleId)
         .map(r => r.id);
 
-    // If exileStripRoles is ON, don't save old roles — they won't be restored on unexile
-    const rolesToSave = gs.exileStripRoles ? [] : oldRoleIds;
+    // exileRemoveRole OFF → don't remove existing roles, just add exile role
+    // exileRemoveRole ON  → remove existing roles; exileStripRoles controls whether they're restored
+    const removeRoles = gs.exileRemoveRole !== false; // default true
+    const rolesToSave = (!removeRoles || gs.exileStripRoles) ? [] : oldRoleIds;
 
     data.exiles[member.id] = {
-        old_roles: rolesToSave,
-        expiry:    Date.now()/1000 + minutes*60,
+        old_roles:   rolesToSave,
+        remove_role: removeRoles, // remember which mode was active at exile time
+        expiry:      Date.now()/1000 + minutes*60,
         reason,
     };
     saveData(data);
 
     const exRole = guild.roles.cache.get(gs.exiledRoleId);
     if (exRole) {
-        try { await member.edit({ roles: [exRole], reason }); } catch {}
+        try {
+            if (removeRoles) {
+                // Replace ALL roles with only the exile role
+                await member.edit({ roles: [exRole], reason });
+            } else {
+                // Just add the exile role without touching the rest
+                await member.roles.add(exRole, reason);
+            }
+        } catch {}
     }
 
     try {
@@ -10751,13 +10792,27 @@ async function performUnexile(member, guild, data) {
     const gs  = getGuildSettings(guild.id, data);
     const uid = member.id;
     if (!data.exiles[uid]) return false;
-    const roleIds = data.exiles[uid].old_roles || [];
-    const roles   = roleIds.map(rid => guild.roles.cache.get(rid)).filter(Boolean);
+
+    const exileRecord  = data.exiles[uid];
+    const roleIds      = exileRecord.old_roles || [];
+    const wasRemoved   = exileRecord.remove_role !== false; // true unless explicitly stored as false
+
     try {
-        await member.edit({ roles, reason: 'Exile expired' });
+        if (wasRemoved) {
+            // Roles were stripped at exile time — restore them (or set to empty if striproles was on)
+            const roles = roleIds.map(rid => guild.roles.cache.get(rid)).filter(Boolean);
+            await member.edit({ roles, reason: 'Exile expired' });
+        } else {
+            // Roles were never removed — just remove the exile role
+            const exRole = guild.roles.cache.get(gs.exiledRoleId);
+            if (exRole && member.roles.cache.has(gs.exiledRoleId)) {
+                await member.roles.remove(exRole, 'Exile expired').catch(() => {});
+            }
+        }
     } catch {
+        // Fallback: at minimum try to remove the exile role
         const exRole = guild.roles.cache.get(gs.exiledRoleId);
-        if (exRole && member.roles.cache.has(gs.exiledRoleId)) await member.roles.remove(exRole).catch(()=>{});
+        if (exRole && member.roles.cache.has(gs.exiledRoleId)) await member.roles.remove(exRole).catch(() => {});
     }
     return true;
 }
