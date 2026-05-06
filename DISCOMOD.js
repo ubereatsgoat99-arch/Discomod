@@ -2044,6 +2044,7 @@ function getGuildSettings(guildId, data) {
             aiEnabled: false,
             checksEnabled: true,
             noAffiliationEnabled: false,
+            exileStripRoles: false,
             botOwnerId: null,
             botFooterText: null,
             botInfoPublic: false,
@@ -2186,6 +2187,7 @@ function getGuildSettings(guildId, data) {
     if (gs.aiEnabled === undefined) gs.aiEnabled = false;
     if (gs.checksEnabled === undefined) gs.checksEnabled = true;
     if (gs.noAffiliationEnabled === undefined) gs.noAffiliationEnabled = false;
+    if (gs.exileStripRoles === undefined) gs.exileStripRoles = false;
     if (gs.botOwnerId === undefined) gs.botOwnerId = null;
     if (gs.botFooterText === undefined) gs.botFooterText = null;
     if (gs.botInfoPublic === undefined) gs.botInfoPublic = false;
@@ -6500,6 +6502,21 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addSubcommand(sub => sub.setName('create').setDescription('Auto-create an exile role')),
 
+    // Exile config
+    new SlashCommandBuilder()
+        .setName('exileconfig')
+        .setDescription('Configure exile system settings')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(sub => sub
+            .setName('setrole')
+            .setDescription('Set the exile role')
+            .addRoleOption(o => o.setName('role').setDescription('The role to assign to exiled members').setRequired(true)))
+        .addSubcommand(sub => sub
+            .setName('striproles')
+            .setDescription('Toggle whether ALL roles are stripped (not restored) when a member is exiled')
+            .addStringOption(o => o.setName('toggle').setDescription('on or off').setRequired(true)
+                .addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' }))),
+
     // Immunity
     new SlashCommandBuilder()
         .setName('enableimmunity')
@@ -8331,6 +8348,56 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
+        // ── /exileconfig ──────────────────────────────────
+        case 'exileconfig': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const ecSub = interaction.options.getSubcommand();
+            if (ecSub === 'setrole') {
+                const role = interaction.options.getRole('role');
+                gs.exiledRoleId = role.id;
+                saveData(data);
+                await interaction.reply({
+                    embeds: [new EmbedBuilder()
+                        .setTitle('⛓️ Exile Config — Role Updated')
+                        .setColor(0xFF4444)
+                        .addFields(
+                            { name: 'Exile Role', value: `<@&${role.id}> (${role.id})`, inline: false },
+                            { name: 'Strip Roles on Exile', value: gs.exileStripRoles ? '✅ ON — roles are NOT restored on unexile' : '❌ OFF — roles are restored on unexile', inline: false },
+                        )
+                        .setTimestamp()],
+                    ephemeral: true,
+                });
+                await sendLog(interaction.guild, data, new EmbedBuilder()
+                    .setTitle('⛓️ Exile Config — Role Updated')
+                    .setColor(0xFF4444)
+                    .setDescription(`Exile role set to <@&${role.id}> (${role.id}) by <@${interaction.user.id}>`)
+                    .setTimestamp());
+            } else if (ecSub === 'striproles') {
+                const toggle = interaction.options.getString('toggle');
+                gs.exileStripRoles = (toggle === 'on');
+                saveData(data);
+                await interaction.reply({
+                    embeds: [new EmbedBuilder()
+                        .setTitle('⛓️ Exile Config — Strip Roles')
+                        .setColor(gs.exileStripRoles ? 0xFF4444 : 0x00CC66)
+                        .setDescription(gs.exileStripRoles
+                            ? '✅ **Strip Roles is now ON.**\nWhen a member is exiled, all their roles are removed and will **not** be restored when unexiled.'
+                            : '❌ **Strip Roles is now OFF.**\nWhen a member is exiled, their roles are saved and **restored** when unexiled.')
+                        .addFields(
+                            { name: 'Exile Role', value: gs.exiledRoleId ? `<@&${gs.exiledRoleId}>` : 'Not set — use `/exileconfig setrole`', inline: false },
+                        )
+                        .setTimestamp()],
+                    ephemeral: true,
+                });
+                await sendLog(interaction.guild, data, new EmbedBuilder()
+                    .setTitle('⛓️ Exile Config — Strip Roles Toggled')
+                    .setColor(gs.exileStripRoles ? 0xFF4444 : 0x00CC66)
+                    .setDescription(`Strip roles on exile set to **${gs.exileStripRoles ? 'ON' : 'OFF'}** by <@${interaction.user.id}>`)
+                    .setTimestamp());
+            }
+            break;
+        }
+
         // ── Immunity ──────────────────────────────────────
         case 'enableimmunity':  { if(!isAdmin){await interaction.reply({content:'❌ Admins only.',ephemeral:true});return;} imm.enabled=true; saveData(data); await interaction.reply({ content: '✅ **Staff immunity ENABLED.** Admins/mods are now immune from scanning.', ephemeral: true }); break; }
         case 'disableimmunity': { if(!isAdmin){await interaction.reply({content:'❌ Admins only.',ephemeral:true});return;} imm.enabled=false; saveData(data); await interaction.reply({ content: '⚠️ **Staff immunity DISABLED.** Everyone is scanned, including staff.', ephemeral: true }); break; }
@@ -9795,7 +9862,8 @@ client.on('messageCreate', async message => {
             } catch { roastText = null; }
         }
         if (!roastText) roastText = `${targetName}? I'd roast you, but my mom said I'm not allowed to burn trash. 🔥`;
-        await message.reply(roastText.slice(0, 1990)).catch(()=>{});
+        const roastMention = `<@${target.id}> `;
+        await message.reply((roastMention + roastText).slice(0, 1990)).catch(()=>{});
         return;
     }
 
@@ -10418,6 +10486,48 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
         }
     }
 
+    // ── Instant noAffiliation flag: need/needing/hosting + any boss or sea event ──
+    if (gs.noAffiliationEnabled) {
+        const hasNeedHosting = /\b(need|needing|hosting)\b/i.test(contentClean);
+        if (hasNeedHosting) {
+            const hasBossOrSeaEv =
+                bossesFound.length > 0 ||
+                seaEvFound.length > 0 ||
+                hasBossRegex ||
+                Object.keys(BOSS_ALIASES).some(alias => {
+                    const a = alias.toLowerCase();
+                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a));
+                }) ||
+                Object.keys(SEA_EVENT_ALIASES).some(alias => {
+                    const a = alias.toLowerCase();
+                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a));
+                });
+            if (hasBossOrSeaEv) {
+                const serverName = message.guild?.name || 'This server';
+                if (gs.enforcementMode === 'monitor') {
+                    await handlePolicyViolation(message, data, gs, 'service', {
+                        title: '📢 Notice — No Affiliation',
+                        color: 0x5865F2,
+                        reason: `${serverName} is not Blox Fruits related anymore. (No-affiliation mode)`,
+                        footerLabel: 'No Affiliation',
+                        ttlMs: 12000,
+                    });
+                    return true;
+                }
+                try { await message.delete(); } catch { return false; }
+                await issueViolation(message, data, gs, {
+                    title: '📢 Notice — No Affiliation',
+                    color: 0x5865F2,
+                    reason: `${serverName} is not Blox Fruits related anymore. Please use the Official Blox Fruits Discord for services/trades related to Blox Fruits.`,
+                    details: message.content,
+                    footerLabel: 'No Affiliation',
+                    ttlMs: 12000,
+                });
+                return true;
+            }
+        }
+    }
+
     const trialsHit = detectTrialsOrTrialsRecruitment(contentClean);
     const dungeonHit = detectRaidOrDungeonRecruitment(contentClean);
     const hasTarget = hasSvcForRaid || hasBossRegex || bossesFound.length || hasFruitRaid || hasFruitAndRaid || hasAnyItem;
@@ -10584,8 +10694,11 @@ async function performExile(userOrMember, guild, minutes, reason, data) {
         .filter(r => !r.managed && r.id !== guild.id && r.id !== gs.exiledRoleId)
         .map(r => r.id);
 
+    // If exileStripRoles is ON, don't save old roles — they won't be restored on unexile
+    const rolesToSave = gs.exileStripRoles ? [] : oldRoleIds;
+
     data.exiles[member.id] = {
-        old_roles: oldRoleIds,
+        old_roles: rolesToSave,
         expiry:    Date.now()/1000 + minutes*60,
         reason,
     };
