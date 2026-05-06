@@ -7264,13 +7264,27 @@ client.on('interactionCreate', async interaction => {
                 await interaction.reply({ content: '❌ Only the person who started this roast battle can stop it.', ephemeral: true }).catch(()=>{});
                 return;
             }
+            // Guard: if the battle is already gone, tell them instead of silently no-oping
+            if (!roastBattles.has(key)) {
+                await interaction.reply({ content: '⚠️ You already stopped the roast battle!', ephemeral: true }).catch(()=>{});
+                return;
+            }
             await interaction.deferUpdate().catch(()=>{});
             const st = roastBattles.get(key);
             roastBattles.delete(key);
             if (st?.convoId) {
                 try { await pyWorker.request('roast_kill', { convoId: st.convoId }); } catch {}
             }
-            try { await interaction.channel?.send('Roast battle ended.'); } catch {}
+            // Disable the Stop button so spamming it shows the guard above
+            const disabledRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`rb_stop:${key}`)
+                    .setLabel('⏹ Stopped')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(true)
+            );
+            try { await interaction.editReply({ components: [disabledRow] }); } catch {}
+            try { await interaction.channel?.send('🔥 Roast battle ended.'); } catch {}
             return;
         }
 
@@ -9401,12 +9415,14 @@ function isMessageCommand(msg) {
     if (/^[.!?/;:~`#$%^&*+=|\\]\s+[a-zA-Z]/.test(t)) return false;
     // Must have a non-alphanum prefix char IMMEDIATELY followed by a letter (zero spaces)
     // Also restrict to actual bot command prefix characters — exclude quotes, parens, brackets
-    if (CMD_PREFIX_RE.test(t) && /^[!\/\.\?;:~`#\$%\^&\*\+=\|\\][a-zA-Z]/.test(t)) return true;
+    // '*' and '_' excluded — Discord markdown (italic/bold/underline)
+    if (CMD_PREFIX_RE.test(t) && /^[!\/\.\?;:~`#\$%\^\+=\|\\][a-zA-Z]/.test(t)) return true;
     return false;
 }
 
 const COMMAND_LIKE_PREFIXES = [
-    '/', '!', '.', '?', ';', ':', '-', '_', '~', '`', '#', '$', '%', '^', '&', '*', '+', '=', '|', '\\',
+    // '*' and '_' intentionally excluded — they are Discord markdown (bold/italic/underline)
+    '/', '!', '.', '?', ';', ':', '~', '`', '#', '$', '%', '^', '+', '=', '|', '\\',
     'g.', 'g!', 'g/', 'm.', 'm!', 'm/', 'k.', 'k!', 'k/', 'p.', 'p!', 'p/', 'r.', 'r!', 'r/',
     't.', 't!', 't/', 's.', 's!', 's/', 'a.', 'a!', 'a/',
     'bb.', 'bb!', 'bb/', 'skynet.', 'skynet!', 'skynet/',
@@ -9577,6 +9593,15 @@ function looksLikeCommandButNotCaught(raw, cleaned) {
     const t = cleaned || fullClean(r);
     const ns = t.replace(/[\s_]/g,'');
     if (/^["'()\[\]{}]/.test(r)) return false;
+
+    // ── Discord markdown formatting — never treat as commands ──────────────
+    // Bold: **text**, Italic: *text* or _text_, Underline: __text__
+    // Strikethrough: ~~text~~, Spoiler: ||text||, Bold-italic: ***text***
+    if (/^\*{1,3}[^*]/.test(r)) return false;   // *italic*, **bold**, ***bold-italic***
+    if (/^_{1,2}[^_]/.test(r)) return false;     // _italic_, __underline__
+    if (/^~~[^~]/.test(r)) return false;          // ~~strikethrough~~
+    if (/^\|\|[^|]/.test(r)) return false;        // ||spoiler||
+    // ───────────────────────────────────────────────────────────────────────
 
     // KEY RULE: "char SPACE word" is NOT a command. Only "charword" (zero spaces) counts.
     // e.g. ".invite" → command; ". invite" → NOT a command; "i am going to .say" → NOT a command
@@ -9756,6 +9781,19 @@ client.on('messageCreate', async message => {
             const roastData = await roastRes.json();
             roastText = roastData?.content?.[0]?.text?.trim() || null;
         } catch { roastText = null; }
+        if (!roastText) {
+            // Claude API failed — fall back to roastedbyai via the Python worker
+            try {
+                const fbConvoId = `roast_fb_${uid}_${Date.now()}`;
+                const startRes = await pyWorker.request('roast_start', { convoId: fbConvoId, style: 'default' });
+                if (startRes?.convoId) {
+                    const prompt = `Roast the Discord user "${targetName}" in 2-3 short, savage but playful sentences. Be witty and creative, no slurs.`;
+                    const fbResp = await pyWorker.request('roast_send', { convoId: startRes.convoId, message: prompt });
+                    if (fbResp && typeof fbResp === 'string' && fbResp.trim()) roastText = fbResp.trim();
+                    await pyWorker.request('roast_kill', { convoId: startRes.convoId }).catch(()=>{});
+                }
+            } catch { roastText = null; }
+        }
         if (!roastText) roastText = `${targetName}? I'd roast you, but my mom said I'm not allowed to burn trash. 🔥`;
         await message.reply(roastText.slice(0, 1990)).catch(()=>{});
         return;
