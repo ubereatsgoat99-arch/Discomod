@@ -440,6 +440,10 @@ async function ai2HandleChatMessage(message) {
     const isActive = ai2State.activeChannels.has(Number(channelId)) || message.channel?.type === ChannelType.DM;
     if (!isActive) return false;
 
+    // Silently drop messages that exceed the 250-char limit so the AI never
+    // generates the "User input is too long" error reply.
+    if (String(message.content || '').trim().length > 250) return true;
+
     if (ai2State.batchMessages) {
         const batchKey = `${userId}-${channelId}`;
         const batch = ai2State.userMessageBatches.get(batchKey) || { messages: [], start: now };
@@ -10055,7 +10059,7 @@ client.on('messageCreate', async message => {
             if (!roastText) roastText = await tryRoastedByAi();
         }
 
-        if (!roastText) roastText = `${targetName}? I'd roast you, but my mom said I'm not allowed to burn trash. 🔥`;
+        if (!roastText) roastText = `I'd roast you, but my mom said I'm not allowed to burn trash. 🔥`;
         const roastMention = `<@${target.id}> `;
         await message.reply((roastMention + roastText).slice(0, 1990)).catch(()=>{});
         return;
