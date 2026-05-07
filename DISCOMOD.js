@@ -9987,10 +9987,16 @@ client.on('messageCreate', async message => {
             await message.reply("Look in the mirror. That's my roast.").catch(()=>{});
             return;
         }
-        const target = message.mentions.users.first();
+        let target = message.mentions.users.first();
         if (target && target.id === uid) {
             await message.reply("Look in the mirror. That's my roast.").catch(()=>{});
             return;
+        }
+
+        // ── If they tried to roast the bot, roast them back instead ──
+        if (target && target.id === client.user.id) {
+            target = message.author;
+            await message.reply(`Nice try. You really thought you could roast *me*? Let me show you how it's done. 🔥`).catch(()=>{});
         }
 
         // ── Fetch last 5 messages from the target user for context ──
