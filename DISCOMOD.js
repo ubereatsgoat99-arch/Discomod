@@ -10498,7 +10498,7 @@ client.on('messageCreate', async message => {
                 }
 
                 if (cat === 'service' && gs.serviceRedirectEnabled !== false && message.channel.id !== gs.servicesChannelId) {
-                    const flagged = await checkServicesViolation(message, contentClean, contentNospace, data, gs);
+                    const flagged = await checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs);
                     if (flagged) return;
                 }
 
@@ -10561,7 +10561,7 @@ client.on('messageCreate', async message => {
 
     // ── SERVICES / ITEMS ──────────────────────────────────
     if ((gs.serviceRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'service') && message.channel.id !== gs.servicesChannelId) {
-        const flagged = await checkServicesViolation(message, contentClean, contentNospace, data, gs);
+        const flagged = await checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs);
         if (flagged) return;
     }
 
@@ -10652,7 +10652,7 @@ async function checkBegging(message, contentClean, data, gs) {
 // ══════════════════════════════════════════════════════════
 //  SERVICES / ITEMS CHECKER
 // ══════════════════════════════════════════════════════════
-async function checkServicesViolation(message, contentClean, contentNospace, data, gs) {
+async function checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs) {
     const hasBossRegex   = bossRegex.test(contentClean);
     const hasFruitRaid   = fruitRaidRegex.test(contentClean);
     const hasSvcForRaid  = svcForRaidRegex.test(contentClean);
