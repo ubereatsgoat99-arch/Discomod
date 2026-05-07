@@ -2174,6 +2174,10 @@ function getGuildSettings(guildId, data) {
             linkDenylistedDomains: [],
             scanEditsEnabled: true,
             policyPreset: null,
+
+            // ── Roast system ──────────────────────────────────────────
+            roastProvider: 'auto',   // 'claude' | 'roastedbyai' | 'auto' (claude first, fallback to roastedbyai)
+            roastContext:  true,     // include target's last 5 msgs as context
         };
     }
     const gs = data.guildSettings[guildId];
@@ -2210,6 +2214,8 @@ function getGuildSettings(guildId, data) {
     if (gs.enforcementMode === undefined) gs.enforcementMode = 'enforce';
     if (!gs.categoryPolicies || typeof gs.categoryPolicies !== 'object') gs.categoryPolicies = {};
     if (gs.policyPreset === undefined) gs.policyPreset = null;
+    if (gs.roastProvider === undefined) gs.roastProvider = 'auto';
+    if (gs.roastContext  === undefined) gs.roastContext  = true;
     return gs;
 }
 
@@ -6802,6 +6808,30 @@ const slashCommands = [
             .addIntegerOption(o => o.setName('trade').setDescription('Trade minutes').setRequired(false))
             .addIntegerOption(o => o.setName('service').setDescription('Service minutes').setRequired(false))),
 
+    // Roast config
+    new SlashCommandBuilder()
+        .setName('roastconfig')
+        .setDescription('Configure the !roast command')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('provider')
+            .setDescription('Set which AI provider generates roasts')
+            .addStringOption(o => o.setName('provider')
+                .setDescription('claude | roastedbyai | auto (claude first, fallback to roastedbyai)')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'claude',       value: 'claude' },
+                    { name: 'roastedbyai',  value: 'roastedbyai' },
+                    { name: 'auto (claude → roastedbyai fallback)', value: 'auto' },
+                )))
+        .addSubcommand(s => s.setName('context')
+            .setDescription("Toggle whether the target's last 5 messages are used as roast context")
+            .addStringOption(o => o.setName('toggle')
+                .setDescription('on or off')
+                .setRequired(true)
+                .addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })))
+        .addSubcommand(s => s.setName('status')
+            .setDescription('Show current roast configuration')),
+
     new SlashCommandBuilder()
         .setName('commandimmunity')
         .setDescription('Manage immunity for command scanning')
@@ -8754,6 +8784,60 @@ client.on('interactionCreate', async interaction => {
         case 'scamimmunity':     { await handleCategoryImmunity('scam'); break; }
         case 'acctradeimmunity': { await handleCategoryImmunity('acctrade'); break; }
 
+        // ── /roastconfig ──────────────────────────────────
+        case 'roastconfig': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const rsub = interaction.options.getSubcommand();
+
+            if (rsub === 'status') {
+                const embed = new EmbedBuilder()
+                    .setTitle('🔥 Roast Config')
+                    .setColor(0xFF6600)
+                    .addFields(
+                        { name: 'Provider', value: gs.roastProvider || 'auto', inline: true },
+                        { name: 'Context (last 5 msgs)', value: gs.roastContext ? '✅ ON' : '❌ OFF', inline: true },
+                    )
+                    .setDescription(
+                        '**Provider choices:**\n' +
+                        '`claude` — Claude API only\n' +
+                        '`roastedbyai` — roastedbyai only\n' +
+                        '`auto` — Claude first, falls back to roastedbyai\n\n' +
+                        '**Context:** when ON, the bot fetches the target\'s last 5 messages in the channel and feeds them to the AI for a more personalised roast.'
+                    )
+                    .setTimestamp();
+                const ft = footerText(gs);
+                if (ft) embed.setFooter({ text: ft });
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+                return;
+            }
+
+            if (rsub === 'provider') {
+                const prev = gs.roastProvider;
+                gs.roastProvider = interaction.options.getString('provider') || 'auto';
+                saveData(data);
+                await interaction.reply({ content: `✅ Roast provider set to **${gs.roastProvider}**.`, ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🔥 Roast Config', [
+                    `provider: **${prev}** → **${gs.roastProvider}**`,
+                ]);
+                return;
+            }
+
+            if (rsub === 'context') {
+                const toggle = interaction.options.getString('toggle');
+                const prev = gs.roastContext;
+                gs.roastContext = (toggle === 'on');
+                saveData(data);
+                await interaction.reply({ content: `✅ Roast context is now **${gs.roastContext ? 'ON' : 'OFF'}**.`, ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🔥 Roast Config', [
+                    `context: **${prev ? 'ON' : 'OFF'}** → **${gs.roastContext ? 'ON' : 'OFF'}**`,
+                ]);
+                return;
+            }
+
+            await interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
+            break;
+        }
+
         // ── /exile ────────────────────────────────────────
         case 'exile': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
@@ -9902,43 +9986,75 @@ client.on('messageCreate', async message => {
             await message.reply("Look in the mirror. That's my roast.").catch(()=>{});
             return;
         }
-        // Generate an actual AI roast of the target user
-        const targetName = target.displayName || target.username;
+
+        // ── Fetch last 5 messages from the target user for context ──
+        const targetName = target?.displayName || target?.username || 'that user';
+        let contextBlock = '';
+        if (gs.roastContext) {
+            try {
+                const fetched = await message.channel.messages.fetch({ limit: 100 });
+                const targetMsgs = fetched
+                    .filter(m => m.author.id === target.id && m.content && m.content.trim())
+                    .sort((a, b) => b.createdTimestamp - a.createdTimestamp)
+                    .first(5)
+                    .map(m => `- "${m.content.slice(0, 200).replace(/\n/g, ' ')}"`)
+                    .reverse();
+                if (targetMsgs.length) {
+                    contextBlock = `\n\nHere are their last ${targetMsgs.length} messages for context:\n${targetMsgs.join('\n')}`;
+                }
+            } catch { contextBlock = ''; }
+        }
+
         await message.channel.sendTyping().catch(()=>{});
+        const provider = gs.roastProvider || 'auto';
         let roastText = null;
-        try {
-            const roastRes = await fetch(AI_API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': ANTHROPIC_KEY,
-                    'anthropic-version': '2023-06-01',
-                },
-                body: JSON.stringify({
-                    model: AI_MODEL,
-                    max_tokens: 300,
-                    messages: [{
-                        role: 'user',
-                        content: `You are a savage roast comedian. Roast the Discord user named "${targetName}" in 2-3 short sentences. Be creative, witty, and funny. Keep it playful and based on their username/vibe — no slurs or genuinely harmful content. Go.`
-                    }],
-                }),
-            });
-            const roastData = await roastRes.json();
-            roastText = roastData?.content?.[0]?.text?.trim() || null;
-        } catch { roastText = null; }
-        if (!roastText) {
-            // Claude API failed — fall back to roastedbyai via the Python worker
+
+        // ── Try Claude API ────────────────────────────────────────────
+        const tryClaudeRoast = async () => {
+            if (!ANTHROPIC_KEY) return null;
+            try {
+                const prompt = `You are a savage roast comedian performing at a comedy roast. Roast the Discord user named "${targetName}" in 3-5 short, punchy sentences. Be creative, witty, and funny — skewer their vibe, their messages, whatever ammo you have. Keep it playful, no slurs or genuinely harmful content. Roast them hard.${contextBlock}`;
+                const roastRes = await fetch(AI_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': ANTHROPIC_KEY,
+                        'anthropic-version': '2023-06-01',
+                    },
+                    body: JSON.stringify({
+                        model: AI_MODEL,
+                        max_tokens: 400,
+                        messages: [{ role: 'user', content: prompt }],
+                    }),
+                });
+                const d = await roastRes.json();
+                return d?.content?.[0]?.text?.trim() || null;
+            } catch { return null; }
+        };
+
+        // ── Try roastedbyai via Python worker ─────────────────────────
+        const tryRoastedByAi = async () => {
             try {
                 const fbConvoId = `roast_fb_${uid}_${Date.now()}`;
                 const startRes = await pyWorker.request('roast_start', { convoId: fbConvoId, style: 'default' });
-                if (startRes?.convoId) {
-                    const prompt = `Roast the Discord user "${targetName}" in 2-3 short, savage but playful sentences. Be witty and creative, no slurs.`;
-                    const fbResp = await pyWorker.request('roast_send', { convoId: startRes.convoId, message: prompt });
-                    if (fbResp && typeof fbResp === 'string' && fbResp.trim()) roastText = fbResp.trim();
-                    await pyWorker.request('roast_kill', { convoId: startRes.convoId }).catch(()=>{});
-                }
-            } catch { roastText = null; }
+                if (!startRes?.convoId) return null;
+                const prompt = `Roast the Discord user "${targetName}" in 3-5 short savage sentences. Be witty and creative, no slurs.${contextBlock}`;
+                const fbResp = await pyWorker.request('roast_send', { convoId: startRes.convoId, message: prompt });
+                await pyWorker.request('roast_kill', { convoId: startRes.convoId }).catch(()=>{});
+                return (fbResp && typeof fbResp === 'string' && fbResp.trim()) ? fbResp.trim() : null;
+            } catch { return null; }
+        };
+
+        if (provider === 'claude') {
+            roastText = await tryClaudeRoast();
+        } else if (provider === 'roastedbyai') {
+            roastText = await tryRoastedByAi();
+        } else {
+            // auto: claude first, roastedbyai fallback
+            roastText = await tryClaudeRoast();
+            if (!roastText) roastText = await tryRoastedByAi();
         }
+
         if (!roastText) roastText = `${targetName}? I'd roast you, but my mom said I'm not allowed to burn trash. 🔥`;
         const roastMention = `<@${target.id}> `;
         await message.reply((roastMention + roastText).slice(0, 1990)).catch(()=>{});
