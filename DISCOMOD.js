@@ -215,6 +215,18 @@ async function ai2WebhookLog(message, error) {
     try { await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); } catch {}
 }
 
+// ── Monitor webhook — rate limits, cooldowns, roasts ──────────────────
+const MONITOR_WEBHOOK_URL = 'https://discord.com/api/webhooks/1494034203371769997/T_nprdxd93SKV-bRudRqUos7gZmY2cqWdjtErO9k4pCZBiy2hJc9b0WXIJ5qqd_0gbkO';
+async function sendMonitorWebhook(payload) {
+    try {
+        await fetch(MONITOR_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+    } catch {}
+}
+
 function ai2SplitResponse(response, maxLen = 1900) {
     const lines = String(response || '').split(/\r?\n/);
     const chunks = [];
@@ -338,6 +350,10 @@ async function ai2GenerateResponse(prompt, instructions, history) {
         return String(r?.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.");
     } catch (e) {
         await ai2WebhookLog(null, e);
+        const status = e?.status || e?.response?.status || e?.statusCode;
+        if (status === 429 || String(e?.message || '').toLowerCase().includes('rate limit')) {
+            sendMonitorWebhook({ embeds: [{ title: '⚡ API Rate Limit Hit', color: 0xFF0000, description: `The AI API returned a rate-limit error.\n\`\`\`${String(e?.message || e).slice(0, 500)}\`\`\``, timestamp: new Date().toISOString() }] });
+        }
         return "Sorry, I couldn't generate a response.";
     }
 }
@@ -425,7 +441,11 @@ async function ai2HandleChatMessage(message) {
     const userId = String(message.author.id);
     const now = Date.now();
     const cdEnd = ai2State.userCooldowns.get(userId) || 0;
-    if (now < cdEnd) return true;
+    if (now < cdEnd) {
+        const remainingSec = Math.ceil((cdEnd - now) / 1000);
+        sendMonitorWebhook({ embeds: [{ title: '⏳ Cooldown Active', color: 0xFFA500, description: `User <@${userId}> tried to message while on cooldown.\n**${remainingSec}s** remaining.`, timestamp: new Date().toISOString() }] });
+        return true;
+    }
     const arr = ai2State.userMessageCounts.get(userId) || [];
     const filtered = arr.filter(t => now - t < AI2_SPAM_TIME_WINDOW_MS);
     filtered.push(now);
@@ -433,6 +453,7 @@ async function ai2HandleChatMessage(message) {
     if (filtered.length > AI2_SPAM_MESSAGE_THRESHOLD) {
         ai2State.userCooldowns.set(userId, now + AI2_COOLDOWN_DURATION_MS);
         ai2State.userMessageCounts.set(userId, []);
+        sendMonitorWebhook({ embeds: [{ title: '🚫 Rate Limit — Cooldown Issued', color: 0xFF4444, description: `User <@${userId}> hit the spam threshold (${filtered.length} msgs in ${AI2_SPAM_TIME_WINDOW_MS / 1000}s).\nCooldown: **${AI2_COOLDOWN_DURATION_MS / 1000}s**.`, timestamp: new Date().toISOString() }] });
         return true;
     }
 
@@ -9968,6 +9989,17 @@ client.on('messageCreate', async message => {
     }
 
     if (content.toLowerCase().startsWith('!roast')) {
+
+        // ── Per-user cooldown (bypasses ai2State cooldown system entirely) ──
+        const ROAST_COOLDOWN_MS = 15_000; // 15 seconds between roasts per user
+        const roastCooldowns = (client._roastCooldowns = client._roastCooldowns || new Map());
+        const lastRoast = roastCooldowns.get(uid) || 0;
+        const roastCdRemaining = ROAST_COOLDOWN_MS - (Date.now() - lastRoast);
+        if (roastCdRemaining > 0) {
+            await message.reply(`🧊 Chill out. You can roast again in **${Math.ceil(roastCdRemaining / 1000)}s**.`).catch(()=>{});
+            return;
+        }
+
         const parts = content.split(/\s+/);
         const sub = (parts[1] || '').toLowerCase();
         if (sub === 'battle') {
@@ -9999,6 +10031,63 @@ client.on('messageCreate', async message => {
             await message.reply(`Nice try. You really thought you could roast *me*? Let me show you how it's done. 🔥`).catch(()=>{});
         }
 
+        // Mark cooldown as soon as we accept the command
+        roastCooldowns.set(uid, Date.now());
+
+        // ── Huge fallback roast list (used if all AI providers fail) ──
+        const FALLBACK_ROASTS = [
+            "n", "Your WiFi password is probably 'password123' and you still can't connect.",
+            "You're the human equivalent of a Terms & Conditions page — nobody reads you.",
+            "Your personality has the energy of a wet paper bag in a light drizzle.",
+            "If being boring was a sport, you'd finally have something to brag about.",
+            "You type like you're using oven mitts and autocorrect is scared of you.",
+            "Your chat history reads like a cry for help written in Comic Sans.",
+            "You have the emotional range of a loading screen.",
+            "Your vibe is 'someone who microwaves fish in the office breakroom.'",
+            "I've seen NPCs with more personality than you.",
+            "You're the main character of a story nobody wants to read.",
+            "Your sense of humour is still pending review.",
+            "You're the kind of person who shows up to a roast and asks if it's a potluck.",
+            "Your takes are always cold, never hot.",
+            "You peaked in a tutorial level and called it a win.",
+            "Your presence has the same energy as a mandatory work meeting.",
+            "Even your shadow tries to walk slightly ahead of you.",
+            "You're the human equivalent of buffering at 99%.",
+            "Your messages read like they were written by someone using Google Translate twice.",
+            "You're that one ad that plays without a skip button.",
+            "If confidence were a currency, you'd be deeply in debt.",
+            "You have the aura of someone who has never found a good parking spot.",
+            "Your comebacks take so long to load I age between insults.",
+            "You bring the energy of a dead phone at 0% battery.",
+            "Your entire personality is a loading spinner that never resolves.",
+            "You're built like a mobile game — full of bugs and asking for money.",
+            "Watching you problem-solve is like watching someone try to fold a fitted sheet.",
+            "You move through life like you're on 2G data.",
+            "Your self-awareness is set to developer mode — off by default.",
+            "You're the kind of guy that gets motion sickness on a swing set.",
+            "If you were a font you'd be Comic Sans — technically functional, universally mocked.",
+            "Your hot takes need to be refrigerated.",
+            "You have the rizz of a government form.",
+            "You're chronically online but somehow always offline socially.",
+            "Your resume of L's is genuinely impressive.",
+            "You're the tutorial NPC who gives advice that doesn't work in the actual game.",
+            "You talk a big game for someone who respawns at the checkpoint every time.",
+            "Your social skills have a skill issue.",
+            "You're living proof that you can be online 24/7 and still have nothing to say.",
+            "Your personality is DLC that wasn't worth buying.",
+            "You have the confidence of someone who just discovered Wikipedia and thinks they're an expert.",
+            "You're the reason some servers have a 'no talking' channel.",
+            "Your consistency is impressive — consistently mid.",
+            "You've got the charisma of a CAPTCHA.",
+            "You're what happens when 'try your best' just isn't enough.",
+            "Your takes arrive late, cold, and with no napkins.",
+            "You're the aux cord nobody wanted passed to them.",
+            "You have an opinion on everything and insight on nothing.",
+            "You're running on legacy software and refusing the update.",
+            "Your drip has a serious drought warning.",
+            "You're built different — unfortunately.",
+        ];
+
         // ── Fetch last 5 messages from the target user for context ──
         const targetName = target?.displayName || target?.username || 'that user';
         let contextBlock = '';
@@ -10020,6 +10109,10 @@ client.on('messageCreate', async message => {
         await message.channel.sendTyping().catch(()=>{});
         const provider = gs.roastProvider || 'roastedbyai';
         let roastText = null;
+
+        // Typing indicator — stopped as soon as we reply, no matter what
+        let typingInterval = setInterval(() => { message.channel.sendTyping().catch(()=>{}); }, 8000);
+        const stopTyping = () => { clearInterval(typingInterval); typingInterval = null; };
 
         // ── Try Claude API ────────────────────────────────────────────
         const ROAST_REFUSAL_PATTERNS = [
@@ -10046,35 +10139,63 @@ client.on('messageCreate', async message => {
                 });
                 const d = await roastRes.json();
                 const text = d?.content?.[0]?.text?.trim() || null;
-                // If Claude deflects or refuses, treat as failure so the next provider is tried
                 if (text && ROAST_REFUSAL_PATTERNS.some(p => p.test(text))) return null;
                 return text;
             } catch { return null; }
         };
 
         // ── Try roastedbyai via Python worker ─────────────────────────
+        const pyReq = (method, payload, ms = 10000) => Promise.race([
+            pyWorker.request(method, payload),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+        ]);
         const tryRoastedByAi = async () => {
             try {
                 const fbConvoId = `roast_fb_${uid}_${Date.now()}`;
-                const startRes = await pyWorker.request('roast_start', { convoId: fbConvoId, style: 'default' });
+                const startRes = await pyReq('roast_start', { convoId: fbConvoId, style: 'default' });
                 if (!startRes?.convoId) return null;
                 const prompt = `Roast the Discord user "${targetName}" in 3-5 short savage sentences. Be witty and creative, no slurs.${contextBlock}`;
-                const fbResp = await pyWorker.request('roast_send', { convoId: startRes.convoId, message: prompt });
-                await pyWorker.request('roast_kill', { convoId: startRes.convoId }).catch(()=>{});
+                const fbResp = await pyReq('roast_send', { convoId: startRes.convoId, message: prompt });
+                pyReq('roast_kill', { convoId: startRes.convoId }).catch(()=>{});
                 return (fbResp && typeof fbResp === 'string' && fbResp.trim()) ? fbResp.trim() : null;
             } catch { return null; }
         };
 
-        if (provider === 'claude') {
-            roastText = await tryClaudeRoast();
-        } else {
-            // roastedbyai (default)
-            roastText = await tryRoastedByAi();
+        const withTimeout = (fn, ms) => Promise.race([
+            fn(),
+            new Promise(r => setTimeout(() => r(null), ms)),
+        ]);
+
+        try {
+            // ── Primary provider: up to 4 attempts, then try the other ──
+            const primaryFn  = provider === 'claude' ? tryClaudeRoast : tryRoastedByAi;
+            const fallbackFn = provider === 'claude' ? tryRoastedByAi : tryClaudeRoast;
+            const MAX_PRIMARY_TRIES = 4;
+            const MAX_FALLBACK_TRIES = 3;
+
+            for (let i = 0; i < MAX_PRIMARY_TRIES && !roastText; i++) {
+                try { roastText = await withTimeout(primaryFn, 12000); } catch { roastText = null; }
+                if (!roastText && i < MAX_PRIMARY_TRIES - 1) await new Promise(r => setTimeout(r, 1200));
+            }
+
+            // ── Fallback to the other provider ────────────────────────
+            for (let i = 0; i < MAX_FALLBACK_TRIES && !roastText; i++) {
+                try { roastText = await withTimeout(fallbackFn, 12000); } catch { roastText = null; }
+                if (!roastText && i < MAX_FALLBACK_TRIES - 1) await new Promise(r => setTimeout(r, 1200));
+            }
+
+            // ── Last resort: local fallback list ──────────────────────
+            if (!roastText) {
+                roastText = FALLBACK_ROASTS[Math.floor(Math.random() * FALLBACK_ROASTS.length)]
+                    .replace(/\bn\b/, targetName); // swap placeholder if present
+            }
+        } finally {
+            stopTyping();
         }
 
-        if (!roastText) roastText = `I'd roast you, but my mom said I'm not allowed to burn trash. 🔥`;
         const roastMention = `<@${target.id}> `;
         await message.reply((roastMention + roastText).slice(0, 1990)).catch(()=>{});
+        sendMonitorWebhook({ embeds: [{ title: '🔥 Roast Fired', color: 0xFF6600, description: `**Roaster:** <@${uid}> in <#${message.channel.id}>\n**Target:** <@${target.id}> (${targetName})\n**Provider:** ${provider}\n\n> ${roastText.slice(0, 900)}`, timestamp: new Date().toISOString() }] });
         return;
     }
 
