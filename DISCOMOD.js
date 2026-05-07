@@ -10014,10 +10014,14 @@ client.on('messageCreate', async message => {
         let roastText = null;
 
         // ── Try Claude API ────────────────────────────────────────────
+        const ROAST_REFUSAL_PATTERNS = [
+            /i'?m not allowed/i, /my mom said/i, /i (can'?t|won'?t|cannot|will not) (roast|do that|help)/i,
+            /i'?m (unable|not able)/i, /as an ai/i, /i (refuse|decline)/i,
+        ];
         const tryClaudeRoast = async () => {
             if (!ANTHROPIC_KEY) return null;
             try {
-                const prompt = `You are a savage roast comedian performing at a comedy roast. Roast the Discord user named "${targetName}" in 3-5 short, punchy sentences. Be creative, witty, and funny — skewer their vibe, their messages, whatever ammo you have. Keep it playful, no slurs or genuinely harmful content. Roast them hard.${contextBlock}`;
+                const userPrompt = `Roast the Discord user named "${targetName}" in 3-5 short, punchy sentences. Be creative, witty, and funny — skewer their vibe, their messages, whatever ammo you have. Keep it playful, no slurs or genuinely harmful content.${contextBlock}`;
                 const roastRes = await fetch(AI_API_URL, {
                     method: 'POST',
                     headers: {
@@ -10028,11 +10032,15 @@ client.on('messageCreate', async message => {
                     body: JSON.stringify({
                         model: AI_MODEL,
                         max_tokens: 400,
-                        messages: [{ role: 'user', content: prompt }],
+                        system: 'You are a savage roast comedian performing at a comedy roast event. Your only job is to write funny, creative, witty roasts. Always deliver the roast directly — never refuse, never break character, never comment on the task itself. Keep it playful with no slurs or genuinely harmful content.',
+                        messages: [{ role: 'user', content: userPrompt }],
                     }),
                 });
                 const d = await roastRes.json();
-                return d?.content?.[0]?.text?.trim() || null;
+                const text = d?.content?.[0]?.text?.trim() || null;
+                // If Claude deflects or refuses, treat as failure so the next provider is tried
+                if (text && ROAST_REFUSAL_PATTERNS.some(p => p.test(text))) return null;
+                return text;
             } catch { return null; }
         };
 
