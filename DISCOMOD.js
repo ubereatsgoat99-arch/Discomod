@@ -65,6 +65,9 @@ const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 if (AI_ENABLED && !ANTHROPIC_KEY) {
     throw new Error("AI is enabled but ANTHROPIC_API_KEY is missing");
 }
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
 const BOT_START_TS = Date.now();
 
@@ -215,18 +218,6 @@ async function ai2WebhookLog(message, error) {
     try { await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); } catch {}
 }
 
-// ── Monitor webhook — rate limits, cooldowns, roasts ──────────────────
-const MONITOR_WEBHOOK_URL = 'https://discord.com/api/webhooks/1494034203371769997/T_nprdxd93SKV-bRudRqUos7gZmY2cqWdjtErO9k4pCZBiy2hJc9b0WXIJ5qqd_0gbkO';
-async function sendMonitorWebhook(payload) {
-    try {
-        await fetch(MONITOR_WEBHOOK_URL, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-    } catch {}
-}
-
 function ai2SplitResponse(response, maxLen = 1900) {
     const lines = String(response || '').split(/\r?\n/);
     const chunks = [];
@@ -350,10 +341,6 @@ async function ai2GenerateResponse(prompt, instructions, history) {
         return String(r?.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.");
     } catch (e) {
         await ai2WebhookLog(null, e);
-        const status = e?.status || e?.response?.status || e?.statusCode;
-        if (status === 429 || String(e?.message || '').toLowerCase().includes('rate limit')) {
-            sendMonitorWebhook({ embeds: [{ title: '⚡ API Rate Limit Hit', color: 0xFF0000, description: `The AI API returned a rate-limit error.\n\`\`\`${String(e?.message || e).slice(0, 500)}\`\`\``, timestamp: new Date().toISOString() }] });
-        }
         return "Sorry, I couldn't generate a response.";
     }
 }
@@ -441,11 +428,7 @@ async function ai2HandleChatMessage(message) {
     const userId = String(message.author.id);
     const now = Date.now();
     const cdEnd = ai2State.userCooldowns.get(userId) || 0;
-    if (now < cdEnd) {
-        const remainingSec = Math.ceil((cdEnd - now) / 1000);
-        sendMonitorWebhook({ embeds: [{ title: '⏳ Cooldown Active', color: 0xFFA500, description: `User <@${userId}> tried to message while on cooldown.\n**${remainingSec}s** remaining.`, timestamp: new Date().toISOString() }] });
-        return true;
-    }
+    if (now < cdEnd) return true;
     const arr = ai2State.userMessageCounts.get(userId) || [];
     const filtered = arr.filter(t => now - t < AI2_SPAM_TIME_WINDOW_MS);
     filtered.push(now);
@@ -453,7 +436,6 @@ async function ai2HandleChatMessage(message) {
     if (filtered.length > AI2_SPAM_MESSAGE_THRESHOLD) {
         ai2State.userCooldowns.set(userId, now + AI2_COOLDOWN_DURATION_MS);
         ai2State.userMessageCounts.set(userId, []);
-        sendMonitorWebhook({ embeds: [{ title: '🚫 Rate Limit — Cooldown Issued', color: 0xFF4444, description: `User <@${userId}> hit the spam threshold (${filtered.length} msgs in ${AI2_SPAM_TIME_WINDOW_MS / 1000}s).\nCooldown: **${AI2_COOLDOWN_DURATION_MS / 1000}s**.`, timestamp: new Date().toISOString() }] });
         return true;
     }
 
@@ -6845,11 +6827,12 @@ const slashCommands = [
         .addSubcommand(s => s.setName('provider')
             .setDescription('Set which AI provider generates roasts')
             .addStringOption(o => o.setName('provider')
-                .setDescription('claude | roastedbyai')
+                .setDescription('claude | roastedbyai | gpt-oss-120b')
                 .setRequired(true)
                 .addChoices(
                     { name: 'claude',       value: 'claude' },
                     { name: 'roastedbyai',  value: 'roastedbyai' },
+                    { name: 'gpt-oss-120b',  value: 'groq' },
                 )))
         .addSubcommand(s => s.setName('context')
             .setDescription("Toggle whether the target's last 5 messages are used as roast context")
@@ -8828,7 +8811,9 @@ client.on('interactionCreate', async interaction => {
                     .setDescription(
                         '**Provider choices:**\n' +
                         '`claude` — Claude API only\n' +
-                        '`roastedbyai` — roastedbyai only\n\n' +
+                        '`roastedbyai` — roastedbyai only\n' +
+                        '`gpt-oss-120b` — OpenRouter (openai/gpt-oss-120b) only\n\n' +
+                        '**Fallback order:** primary → gpt-oss-120b → hardcoded list\n\n' +
                         '**Context:** when ON, the bot fetches the target\'s last 5 messages in the channel and feeds them to the AI for a more personalised roast.'
                     )
                     .setTimestamp();
@@ -10114,28 +10099,22 @@ client.on('messageCreate', async message => {
         let typingInterval = setInterval(() => { message.channel.sendTyping().catch(()=>{}); }, 8000);
         const stopTyping = () => { clearInterval(typingInterval); typingInterval = null; };
 
-        // ── Try Claude API ────────────────────────────────────────────
+        // ── Shared refusal filter ─────────────────────────────────────
         const ROAST_REFUSAL_PATTERNS = [
             /i'?m not allowed/i, /my mom said/i, /i (can'?t|won'?t|cannot|will not) (roast|do that|help)/i,
             /i'?m (unable|not able)/i, /as an ai/i, /i (refuse|decline)/i,
         ];
+        const ROAST_SYSTEM = 'You are a savage roast comedian performing at a comedy roast event. Your only job is to write funny, creative, witty roasts. Always deliver the roast directly — never refuse, never break character, never comment on the task itself. Keep it playful with no slurs or genuinely harmful content.';
+        const ROAST_USER_PROMPT = `Roast the Discord user named "${targetName}" in 3-5 short, punchy sentences. Be creative, witty, and funny — skewer their vibe, their messages, whatever ammo you have. Keep it playful, no slurs or genuinely harmful content.${contextBlock}`;
+
+        // ── Try Claude API ────────────────────────────────────────────
         const tryClaudeRoast = async () => {
             if (!ANTHROPIC_KEY) return null;
             try {
-                const userPrompt = `Roast the Discord user named "${targetName}" in 3-5 short, punchy sentences. Be creative, witty, and funny — skewer their vibe, their messages, whatever ammo you have. Keep it playful, no slurs or genuinely harmful content.${contextBlock}`;
                 const roastRes = await fetch(AI_API_URL, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': ANTHROPIC_KEY,
-                        'anthropic-version': '2023-06-01',
-                    },
-                    body: JSON.stringify({
-                        model: AI_MODEL,
-                        max_tokens: 400,
-                        system: 'You are a savage roast comedian performing at a comedy roast event. Your only job is to write funny, creative, witty roasts. Always deliver the roast directly — never refuse, never break character, never comment on the task itself. Keep it playful with no slurs or genuinely harmful content.',
-                        messages: [{ role: 'user', content: userPrompt }],
-                    }),
+                    headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+                    body: JSON.stringify({ model: AI_MODEL, max_tokens: 400, system: ROAST_SYSTEM, messages: [{ role: 'user', content: ROAST_USER_PROMPT }] }),
                 });
                 const d = await roastRes.json();
                 const text = d?.content?.[0]?.text?.trim() || null;
@@ -10154,10 +10133,32 @@ client.on('messageCreate', async message => {
                 const fbConvoId = `roast_fb_${uid}_${Date.now()}`;
                 const startRes = await pyReq('roast_start', { convoId: fbConvoId, style: 'default' });
                 if (!startRes?.convoId) return null;
-                const prompt = `Roast the Discord user "${targetName}" in 3-5 short savage sentences. Be witty and creative, no slurs.${contextBlock}`;
-                const fbResp = await pyReq('roast_send', { convoId: startRes.convoId, message: prompt });
+                const fbResp = await pyReq('roast_send', { convoId: startRes.convoId, message: ROAST_USER_PROMPT });
                 pyReq('roast_kill', { convoId: startRes.convoId }).catch(()=>{});
                 return (fbResp && typeof fbResp === 'string' && fbResp.trim()) ? fbResp.trim() : null;
+            } catch { return null; }
+        };
+
+        // ── Try OpenRouter (openai/gpt-oss-120b) API ─────────────────────
+        const tryGroqRoast = async () => {
+            if (!GROQ_API_KEY) return null;
+            try {
+                const roastRes = await fetch(GROQ_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
+                    body: JSON.stringify({
+                        model: GROQ_MODEL,
+                        max_tokens: 400,
+                        messages: [
+                            { role: 'system', content: ROAST_SYSTEM },
+                            { role: 'user',   content: ROAST_USER_PROMPT },
+                        ],
+                    }),
+                });
+                const d = await roastRes.json();
+                const text = d?.choices?.[0]?.message?.content?.trim() || null;
+                if (text && ROAST_REFUSAL_PATTERNS.some(p => p.test(text))) return null;
+                return text;
             } catch { return null; }
         };
 
@@ -10167,27 +10168,39 @@ client.on('messageCreate', async message => {
         ]);
 
         try {
-            // ── Primary provider: up to 4 attempts, then try the other ──
-            const primaryFn  = provider === 'claude' ? tryClaudeRoast : tryRoastedByAi;
-            const fallbackFn = provider === 'claude' ? tryRoastedByAi : tryClaudeRoast;
-            const MAX_PRIMARY_TRIES = 4;
-            const MAX_FALLBACK_TRIES = 3;
+            // ── Pick primary fn based on configured provider ───────────
+            const primaryFn = provider === 'claude' ? tryClaudeRoast
+                            : provider === 'groq'   ? tryGroqRoast
+                            :                         tryRoastedByAi;
 
-            for (let i = 0; i < MAX_PRIMARY_TRIES && !roastText; i++) {
+            // ── Try primary: up to 4 attempts ─────────────────────────
+            for (let i = 0; i < 4 && !roastText; i++) {
                 try { roastText = await withTimeout(primaryFn, 12000); } catch { roastText = null; }
-                if (!roastText && i < MAX_PRIMARY_TRIES - 1) await new Promise(r => setTimeout(r, 1200));
+                if (!roastText && i < 3) await new Promise(r => setTimeout(r, 1200));
             }
 
-            // ── Fallback to the other provider ────────────────────────
-            for (let i = 0; i < MAX_FALLBACK_TRIES && !roastText; i++) {
-                try { roastText = await withTimeout(fallbackFn, 12000); } catch { roastText = null; }
-                if (!roastText && i < MAX_FALLBACK_TRIES - 1) await new Promise(r => setTimeout(r, 1200));
+            // ── Fallback 1: OpenRouter/gpt-oss-120b (unless it was primary) ──
+            if (!roastText && primaryFn !== tryGroqRoast) {
+                for (let i = 0; i < 3 && !roastText; i++) {
+                    try { roastText = await withTimeout(tryGroqRoast, 12000); } catch { roastText = null; }
+                    if (!roastText && i < 2) await new Promise(r => setTimeout(r, 1200));
+                }
             }
 
-            // ── Last resort: local fallback list ──────────────────────
+            // ── Fallback 2: the remaining AI provider ─────────────────
+            if (!roastText) {
+                const lastResortFn = provider === 'claude'       ? tryRoastedByAi
+                                   : /* roastedbyai or gpt-oss-120b */  tryClaudeRoast;
+                for (let i = 0; i < 3 && !roastText; i++) {
+                    try { roastText = await withTimeout(lastResortFn, 12000); } catch { roastText = null; }
+                    if (!roastText && i < 2) await new Promise(r => setTimeout(r, 1200));
+                }
+            }
+
+            // ── Last resort: hardcoded list ───────────────────────────
             if (!roastText) {
                 roastText = FALLBACK_ROASTS[Math.floor(Math.random() * FALLBACK_ROASTS.length)]
-                    .replace(/\bn\b/, targetName); // swap placeholder if present
+                    .replace(/\bn\b/, targetName);
             }
         } finally {
             stopTyping();
@@ -10195,7 +10208,6 @@ client.on('messageCreate', async message => {
 
         const roastMention = `<@${target.id}> `;
         await message.reply((roastMention + roastText).slice(0, 1990)).catch(()=>{});
-        sendMonitorWebhook({ embeds: [{ title: '🔥 Roast Fired', color: 0xFF6600, description: `**Roaster:** <@${uid}> in <#${message.channel.id}>\n**Target:** <@${target.id}> (${targetName})\n**Provider:** ${provider}\n\n> ${roastText.slice(0, 900)}`, timestamp: new Date().toISOString() }] });
         return;
     }
 
