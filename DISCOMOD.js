@@ -2614,7 +2614,7 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
             }
         }
 
-        const { contentClean } = prepareText(message.content);
+        const { contentClean } = prepareText(message.content, message);
         const scam = gs.scamEnabled ? detectScamOrExploit(contentClean, message.content) : { hit: false };
         if (scam?.hit) {
             try { await message.delete(); } catch {}
@@ -6436,12 +6436,60 @@ setInterval(() => { const now=Date.now()/1000; for(const[uid,v] of _partial) if(
 // ══════════════════════════════════════════════════════════
 //  TEXT PREPARATION
 // ══════════════════════════════════════════════════════════
-function prepareText(raw) {
-    let textOnly = raw.replace(/<a?:[a-zA-Z0-9_]+:\d+>/g,' __EMOJI__ ').replace(/<@!?\d+>/g,' ');
-    const emojiNames = [...raw.toLowerCase().matchAll(/<a?:([a-zA-Z0-9_]+):\d+>/g)].map(m=>m[1]);
+
+// Extract all text from Discord forwarded-message snapshots.
+// Forwarding is a major bypass vector — the forwarder's own message.content
+// may be empty (no caption) while the forwarded content sits in snapshots.
+function extractSnapshotText(message) {
+    const snaps = message?.messageSnapshots;
+    if (!snaps || !snaps.size) return '';
+    const parts = [];
+    for (const [, snap] of snaps) {
+        if (snap.content) parts.push(String(snap.content));
+        // Also pull text out of any embeds attached to the snapshot
+        for (const emb of (snap.embeds || [])) {
+            if (emb.title)       parts.push(String(emb.title));
+            if (emb.description) parts.push(String(emb.description));
+            for (const f of (emb.fields || [])) {
+                if (f.name)  parts.push(String(f.name));
+                if (f.value) parts.push(String(f.value));
+            }
+        }
+    }
+    return parts.join(' ');
+}
+
+// Returns whether a message is a forwarded message (has snapshots with content).
+function isForwardedMessage(message) {
+    const snaps = message?.messageSnapshots;
+    return !!(snaps && snaps.size > 0);
+}
+
+// prepareText(raw, message?)
+//  - raw      : message.content (the sender's own caption, may be empty for forwards)
+//  - message  : full Message object (optional) — used to extract forwarded snapshot text
+//               and all custom/Nitro emoji names including from forwarded content
+//
+// Returns { contentClean, contentNospace, emojiNames, hasForward }
+// emojiNames  : raw array of custom-emoji slug names (before fullClean) for additional checks
+// hasForward  : true when the message is a Discord forward
+function prepareText(raw, message) {
+    // Pull in forwarded message content so forwards can't bypass any check
+    const forwarded  = message ? extractSnapshotText(message) : '';
+    const combined   = forwarded ? (raw + ' ' + forwarded) : raw;
+
+    // Strip emoji tags from readable text (replaced with placeholder)
+    let textOnly = combined.replace(/<a?:[a-zA-Z0-9_]+:\d+>/g, ' __EMOJI__ ')
+                            .replace(/<@!?\d+>/g, ' ');
+
+    // Collect ALL custom/Nitro emoji names (from both caption and forwarded content).
+    // These are appended to the scanned string so e.g. :need_magma_trade: → "need magma trade"
+    // and Nitro external-server emojis get their names checked just like local ones.
+    const emojiNames = [...combined.toLowerCase().matchAll(/<a?:([a-zA-Z0-9_]+):\d+>/g)].map(m => m[1]);
+
     const contentClean   = fullClean(textOnly + ' ' + emojiNames.join(' '));
-    const contentNospace = contentClean.replace(/[\s_]/g,'');
-    return { contentClean, contentNospace };
+    const contentNospace = contentClean.replace(/[\s_]/g, '');
+    return { contentClean, contentNospace, emojiNames, hasForward: isForwardedMessage(message) };
 }
 
 // ══════════════════════════════════════════════════════════
@@ -10229,7 +10277,9 @@ client.on('messageCreate', async message => {
     // ── IMMUNE SKIP ───────────────────────────────────────
     if (immune) return;
 
-    const { contentClean, contentNospace } = prepareText(message.content);
+    // Pass the full message object so prepareText can include forwarded-message
+    // snapshot text (prevents the forward-bypass) and all custom/Nitro emoji names.
+    const { contentClean, contentNospace, emojiNames, hasForward } = prepareText(message.content, message);
 
     // ── SPAM DETECTION ────────────────────────────────────
     // NOTE: this MUST run before the trivial message guard below.
@@ -10256,8 +10306,17 @@ client.on('messageCreate', async message => {
     // characters, or have fewer than 4 meaningful alphanumeric chars.
     // e.g. ".", "..", "....", ".?", "!", "?!", "okay.", "lol.", "^^", "xd."
     // A real trade/service post always has at least one actual word.
+    //
+    // IMPORTANT: forwarded messages may have an empty caption (message.content = "")
+    // while the actual content lives in message.messageSnapshots.  We must NOT skip
+    // them here — contentNospace already includes the snapshot text (via prepareText),
+    // so we check that instead of message.content alone when a forward is detected.
     {
-        const alphanumCount = (message.content.match(/[a-zA-Z0-9]/g) || []).length;
+        // For forwards: trust contentNospace (which already has snapshot text).
+        // For regular messages: also gate on the raw content so tiny spam msgs are still blocked.
+        const alphanumCount = hasForward
+            ? (contentNospace.replace(/[^a-z0-9]/gi, '').length)
+            : ((message.content.match(/[a-zA-Z0-9]/g) || []).length);
         if (alphanumCount < 4) return;
         // Also skip if the cleaned content is exclusively punctuation / whitespace
         const meaningfulChars = contentNospace.replace(/[^a-z0-9]/g, '');
@@ -10518,7 +10577,14 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
 
     // ── Instant noAffiliation flag: need/needing/hosting + any boss or sea event ──
     if (gs.noAffiliationEnabled) {
-        const hasNeedHosting = /\b(need|needing|hosting)\b/i.test(contentClean);
+        // Check both word-boundary form (for normal text + underscore-split emoji names)
+        // AND nospace form (for emoji names like :needmagma: that have no separator at all).
+        // Also scan raw emoji slugs individually so a Nitro/external emoji named
+        // e.g. "need_hosting_magma" gets caught even if fullClean folds it unexpectedly.
+        const hasNeedHostingClean  = /\b(need|needing|hosting)\b/i.test(contentClean);
+        const hasNeedHostingNospace= /need|needing|hosting/i.test(contentNospace);
+        const hasNeedHostingEmoji  = emojiNames.some(n => /need|needing|hosting/i.test(n));
+        const hasNeedHosting = hasNeedHostingClean || hasNeedHostingNospace || hasNeedHostingEmoji;
         if (hasNeedHosting) {
             const hasBossOrSeaEv =
                 bossesFound.length > 0 ||
@@ -10526,11 +10592,24 @@ async function checkServicesViolation(message, contentClean, contentNospace, dat
                 hasBossRegex ||
                 Object.keys(BOSS_ALIASES).some(alias => {
                     const a = alias.toLowerCase();
-                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a));
+                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a)
+                        // Also check raw emoji names in case the boss name appears only in a slug
+                        || emojiNames.some(n => n.includes(a)));
                 }) ||
                 Object.keys(SEA_EVENT_ALIASES).some(alias => {
                     const a = alias.toLowerCase();
-                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a));
+                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a)
+                        || emojiNames.some(n => n.includes(a)));
+                }) ||
+                // Also catch boss/sea-event names appearing directly inside emoji slugs
+                // (e.g. a Nitro emoji :magma_boss: or :harbinger_hosting:)
+                BOSSES.some(b => {
+                    const bn = b.replace(/[\s\-]/g, '').toLowerCase();
+                    return bn.length >= 4 && emojiNames.some(n => n.includes(bn));
+                }) ||
+                SEA_EVENTS.some(se => {
+                    const sen = se.replace(/[\s\-]/g, '').toLowerCase();
+                    return sen.length >= 4 && emojiNames.some(n => n.includes(sen));
                 });
             if (hasBossOrSeaEv) {
                 const serverName = message.guild?.name || 'This server';
@@ -10639,10 +10718,18 @@ async function checkTradeViolation(message, contentClean, contentNospace, data, 
     let isExchange = tradeRegex.test(contentClean);
     if (!isExchange) for (const p of NOSPACE_PATTERNS) if(p.test(contentNospace)){isExchange=true;break;}
 
-    const rawEmojis   = [...message.content.toLowerCase().matchAll(/<a?:[a-zA-Z0-9_]+:\d+>/g)].map(m=>m[0]);
+    // Scan for fruit emojis — check BOTH message.content AND any forwarded snapshot content
+    // so a forwarded trade post using only fruit emojis is still caught.
+    // We also check emoji names (not just the full tag string) so external/Nitro emojis
+    // whose NAME contains a fruit name (e.g. :magma_fruit: from another server) are caught.
+    const allEmojiSources = message.messageSnapshots?.size
+        ? message.content + ' ' + extractSnapshotText(message)
+        : message.content;
+    const rawEmojis   = [...allEmojiSources.toLowerCase().matchAll(/<a?:[a-zA-Z0-9_]+:\d+>/g)].map(m=>m[0]);
     const fruitEmojis = rawEmojis.filter(e => FRUITS.some(f => e.includes(f.replace(/\s/g,''))));
     const totalItems  = fruitsFound.length + fruitEmojis.length;
-    const hasEmojiId  = message.content.toLowerCase().includes(gs.redirectEmojiId || DEFAULT_REDIRECT_EMOJI_ID);
+    // Check redirect emoji in both caption and snapshot content
+    const hasEmojiId  = allEmojiSources.toLowerCase().includes(gs.redirectEmojiId || DEFAULT_REDIRECT_EMOJI_ID);
 
     if (!hasIntent && totalItems === 0 && strictnessHasBypassMode(gs, 8)) {
         for (const f of FRUITS) {
