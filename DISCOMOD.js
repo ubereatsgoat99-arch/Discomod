@@ -2180,7 +2180,7 @@ function getGuildSettings(guildId, data) {
             policyPreset: null,
 
             // ── Roast system ──────────────────────────────────────────
-            roastProvider: 'auto',   // 'claude' | 'roastedbyai' | 'auto' (claude first, fallback to roastedbyai)
+            roastProvider: 'roastedbyai',   // 'claude' | 'roastedbyai'
             roastContext:  true,     // include target's last 5 msgs as context
         };
     }
@@ -2218,7 +2218,7 @@ function getGuildSettings(guildId, data) {
     if (gs.enforcementMode === undefined) gs.enforcementMode = 'enforce';
     if (!gs.categoryPolicies || typeof gs.categoryPolicies !== 'object') gs.categoryPolicies = {};
     if (gs.policyPreset === undefined) gs.policyPreset = null;
-    if (gs.roastProvider === undefined) gs.roastProvider = 'auto';
+    if (gs.roastProvider === undefined) gs.roastProvider = 'roastedbyai';
     if (gs.roastContext  === undefined) gs.roastContext  = true;
     return gs;
 }
@@ -2451,14 +2451,18 @@ function getImmunitySettings(guildId, data) {
 
 function isMemberImmune(member, guildId, data) {
     const s = getImmunitySettings(guildId, data);
+    // Whitelisted roles via /addimmunity always grant global immunity,
+    // regardless of whether the enabled toggle is on or off.
+    for (const rid of s.whitelistedRoles) {
+        if (member.roles.cache.has(rid)) return true;
+    }
+    // The enabled toggle controls whether Discord staff perms (Admin/ManageMessages)
+    // automatically get immunity — it does NOT affect explicit whitelisted roles.
     if (!s.enabled) return false;
     if (
         member.permissions.has(PermissionFlagsBits.Administrator) ||
         member.permissions.has(PermissionFlagsBits.ManageMessages)
     ) return true;
-    for (const rid of s.whitelistedRoles) {
-        if (member.roles.cache.has(rid)) return true;
-    }
     return false;
 }
 
@@ -6820,12 +6824,11 @@ const slashCommands = [
         .addSubcommand(s => s.setName('provider')
             .setDescription('Set which AI provider generates roasts')
             .addStringOption(o => o.setName('provider')
-                .setDescription('claude | roastedbyai | auto (claude first, fallback to roastedbyai)')
+                .setDescription('claude | roastedbyai')
                 .setRequired(true)
                 .addChoices(
                     { name: 'claude',       value: 'claude' },
                     { name: 'roastedbyai',  value: 'roastedbyai' },
-                    { name: 'auto (claude → roastedbyai fallback)', value: 'auto' },
                 )))
         .addSubcommand(s => s.setName('context')
             .setDescription("Toggle whether the target's last 5 messages are used as roast context")
@@ -8798,14 +8801,13 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🔥 Roast Config')
                     .setColor(0xFF6600)
                     .addFields(
-                        { name: 'Provider', value: gs.roastProvider || 'auto', inline: true },
+                        { name: 'Provider', value: gs.roastProvider || 'roastedbyai', inline: true },
                         { name: 'Context (last 5 msgs)', value: gs.roastContext ? '✅ ON' : '❌ OFF', inline: true },
                     )
                     .setDescription(
                         '**Provider choices:**\n' +
                         '`claude` — Claude API only\n' +
-                        '`roastedbyai` — roastedbyai only\n' +
-                        '`auto` — Claude first, falls back to roastedbyai\n\n' +
+                        '`roastedbyai` — roastedbyai only\n\n' +
                         '**Context:** when ON, the bot fetches the target\'s last 5 messages in the channel and feeds them to the AI for a more personalised roast.'
                     )
                     .setTimestamp();
@@ -8817,7 +8819,7 @@ client.on('interactionCreate', async interaction => {
 
             if (rsub === 'provider') {
                 const prev = gs.roastProvider;
-                gs.roastProvider = interaction.options.getString('provider') || 'auto';
+                gs.roastProvider = interaction.options.getString('provider') || 'roastedbyai';
                 saveData(data);
                 await interaction.reply({ content: `✅ Roast provider set to **${gs.roastProvider}**.`, ephemeral: true });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔥 Roast Config', [
@@ -10010,7 +10012,7 @@ client.on('messageCreate', async message => {
         }
 
         await message.channel.sendTyping().catch(()=>{});
-        const provider = gs.roastProvider || 'auto';
+        const provider = gs.roastProvider || 'roastedbyai';
         let roastText = null;
 
         // ── Try Claude API ────────────────────────────────────────────
@@ -10059,12 +10061,9 @@ client.on('messageCreate', async message => {
 
         if (provider === 'claude') {
             roastText = await tryClaudeRoast();
-        } else if (provider === 'roastedbyai') {
-            roastText = await tryRoastedByAi();
         } else {
-            // auto: claude first, roastedbyai fallback
-            roastText = await tryClaudeRoast();
-            if (!roastText) roastText = await tryRoastedByAi();
+            // roastedbyai (default)
+            roastText = await tryRoastedByAi();
         }
 
         if (!roastText) roastText = `I'd roast you, but my mom said I'm not allowed to burn trash. 🔥`;
@@ -10121,10 +10120,18 @@ client.on('messageCreate', async message => {
         }
     }
 
+    // ── GLOBAL IMMUNITY SKIP ──────────────────────────────
+    // Must run before ALL moderation checks so addimmunity roles are
+    // fully exempt from every enforcement path (commands, trades, spam, etc.)
+    if (immune) {
+        await handlePrefixCommands(message, isAdmin, isMod, data, gs);
+        await ai2HandleChatMessage(message);
+        return;
+    }
+
     // ── COMMAND LOCKDOWN ──────────────────────────────────
     if ((gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message)) {
-        const staffCommandImmune = isStaff && immCfg.enabled;
-        if (!staffCommandImmune && !isGamesHubChannelId(message.channel.id, gs)) {
+        if (!isGamesHubChannelId(message.channel.id, gs)) {
             try { await message.delete(); } catch {}
             recordCommandAbuse(message.author.id);
             incStat(guildId, data, 'commandUsage', 1);
@@ -10141,26 +10148,23 @@ client.on('messageCreate', async message => {
         }
     }
 
-    if ((gs.commandRedirectEnabled !== false) && !immune && !isCategoryImmune(message.member, guildId, data, 'command') && !isGamesHubChannelId(message.channel.id, gs)) {
+    if ((gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && !isGamesHubChannelId(message.channel.id, gs)) {
         const { contentClean: cmdClean } = prepareText(message.content);
         if (looksLikeCommandButNotCaught(message.content, cmdClean)) {
-            const staffCommandImmune = isStaff && immCfg.enabled;
-            if (!staffCommandImmune) {
-                try { await message.delete(); } catch {}
-                const abuse = recordCommandAbuse(message.author.id);
-                const extra = abuse?.hits?.length >= 6 ? 'Repeated command attempts detected.' : 'Command-like message outside Games Hub.';
-                incStat(guildId, data, 'commandAbuse', 1);
-                await issueViolation(message, data, gs, {
-                    title: '⚠️ Command-Like Abuse Detected',
-                    color: 0xFF2255,
-                    reason: extra,
-                    details: message.content,
-                    redirectChannelId: gs.gamesHubId || DEFAULT_GAMES_HUB_ID,
-                    footerLabel: 'Command Abuse',
-                    ttlMs: 10000,
-                });
-                return;
-            }
+            try { await message.delete(); } catch {}
+            const abuse = recordCommandAbuse(message.author.id);
+            const extra = abuse?.hits?.length >= 6 ? 'Repeated command attempts detected.' : 'Command-like message outside Games Hub.';
+            incStat(guildId, data, 'commandAbuse', 1);
+            await issueViolation(message, data, gs, {
+                title: '⚠️ Command-Like Abuse Detected',
+                color: 0xFF2255,
+                reason: extra,
+                details: message.content,
+                redirectChannelId: gs.gamesHubId || DEFAULT_GAMES_HUB_ID,
+                footerLabel: 'Command Abuse',
+                ttlMs: 10000,
+            });
+            return;
         }
     }
 
@@ -10401,9 +10405,6 @@ client.on('messageCreate', async message => {
     await handlePrefixCommands(message, isAdmin, isMod, data, gs);
 
     await ai2HandleChatMessage(message);
-
-    // ── IMMUNE SKIP ───────────────────────────────────────
-    if (immune) return;
 
     // Pass the full message object so prepareText can include forwarded-message
     // snapshot text (prevents the forward-bypass) and all custom/Nitro emoji names.
