@@ -7535,9 +7535,16 @@ client.on('interactionCreate', async interaction => {
             const parts = interaction.customId.split('_');
             const exiledUserId = parts.length >= 4 ? parts.slice(3).join('_') : interaction.customId.replace('appeal_modal_', '');
             const reason       = interaction.fields.getTextInputValue('appeal_reason');
+            const fd_check = loadData();
+        if (hasAppealedCurrentExile(exiledUserId, fd_check)) {
+            await safeEdit(interaction, {
+                content: '❌ You have already submitted an appeal for your current exile. You cannot submit another one.',
+            });
+            return;
+        }
             const appealId     = `appeal_${Date.now()}_${exiledUserId}`;
             data.appeals = data.appeals || {};
-            data.appeals[appealId] = { userId: exiledUserId, reason, timestamp: Date.now(), status: 'pending', handledBy: null };
+            data.appeals[appealId] = { userId: exiledUserId, reason, timestamp: Date.now(), createdAt: Date.now(), status: 'pending', handledBy: null };
             saveData(data);
 
             const appealsChId = gs.appealsChannelId || gs.logChannelId;
@@ -7597,6 +7604,14 @@ client.on('interactionCreate', async interaction => {
         if (cid.startsWith('open_appeal_')) {
             const parts = cid.split('_');
             const exiledUserId = parts.length >= 4 ? parts.slice(3).join('_') : cid.replace('open_appeal_', '');
+            const fd_btn = loadData();
+        if (hasAppealedCurrentExile(exiledUserId, fd_btn)) {
+            await interaction.reply({
+                content: '❌ You have already submitted an appeal for your current exile.',
+                ephemeral: true,
+            }).catch(() => {});
+            return;
+        }
             const modal = new ModalBuilder()
                 .setCustomId(`appeal_modal_${guildId}_${exiledUserId}`)
                 .setTitle('📩 Submit an Appeal');
@@ -7950,6 +7965,13 @@ client.on('interactionCreate', async interaction => {
             const sub = interaction.options.getSubcommand();
             if (sub !== 'submit') { await interaction.reply({ content: '❌ Invalid appeal command.', ephemeral: true }); return; }
             await interaction.deferReply({ ephemeral: true });
+            const fd_slash = loadData();
+            if (hasAppealedCurrentExile(interaction.user.id, fd_slash)) {
+                await interaction.editReply({
+                    content: '❌ You have already submitted an appeal for your current exile. You cannot submit another one.',
+                });
+                return;
+            }
             const text = interaction.options.getString('text') || '';
             const caseId = (interaction.options.getString('case') || '').trim();
             if (!gs.appealsChannelId) { await interaction.editReply({ content: '❌ Appeals channel is not configured.' }); return; }
@@ -11074,6 +11096,22 @@ async function handleTradeViolation(message, data, gs) {
 // ══════════════════════════════════════════════════════════
 //  EXILE / UNEXILE
 // ══════════════════════════════════════════════════════════
+function hasAppealedCurrentExile(userId, data) {
+    const exile = data.exiles?.[String(userId)];
+    if (!exile) return false;                      // user isn't even exiled
+    const exiledAt = exile.exiledAt || 0;
+    const appeals = data.appeals || {};
+    for (const appeal of Object.values(appeals)) {
+        // Support both `createdAt` (slash/prefix) and `timestamp` (modal) field names
+        const appealTime = appeal.createdAt || appeal.timestamp || 0;
+        if (
+            String(appeal.userId) === String(userId) &&
+            appealTime >= exiledAt
+        ) return true;
+    }
+    return false;
+}
+
 async function performExile(userOrMember, guild, minutes, reason, data) {
     let member = userOrMember.roles
         ? userOrMember
@@ -11091,11 +11129,12 @@ async function performExile(userOrMember, guild, minutes, reason, data) {
     const rolesToSave = (!removeRoles || gs.exileStripRoles) ? [] : oldRoleIds;
 
     data.exiles[member.id] = {
-        old_roles:   rolesToSave,
-        remove_role: removeRoles, // remember which mode was active at exile time
-        expiry:      Date.now()/1000 + minutes*60,
-        reason,
-    };
+    old_roles:   rolesToSave,
+    remove_role: removeRoles,
+    expiry:      Date.now()/1000 + minutes*60,
+    exiledAt:    Date.now(),
+    reason,
+};
     saveData(data);
 
     const exRole = guild.roles.cache.get(gs.exiledRoleId);
@@ -11485,6 +11524,11 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (sub !== 'submit') return message.channel.send('❌ Use: !appeal submit <text> [caseId]');
         const text = args.slice(1).join(' ').trim();
         if (!text) return message.channel.send('❌ Provide appeal text.');
+        if (hasAppealedCurrentExile(message.author.id, data)) {
+            return message.channel.send(
+                '❌ You have already submitted an appeal for your current exile.'
+            );
+        }
         if (!gs.appealsChannelId) return message.channel.send('❌ Appeals channel is not configured.');
         const ch = await message.guild.channels.fetch(gs.appealsChannelId).catch(()=>null);
         if (!ch || !ch.isTextBased || !ch.isTextBased()) return message.channel.send('❌ Appeals channel is invalid.');
