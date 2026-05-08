@@ -4040,9 +4040,10 @@ const SEA_EVENTS = [
     "terrorshark","terror shark","piranhas","piranha",
     "fishman commando","fishman scout",
     "electric recluse","leviathan",
-    "rough sea","roughsea","mirage island","mirageisland",
+    "rough sea","roughsea","mirage island","mirageisland","mirage",
     "frozen outpost","frozenoutpost",
     "haunted shipwreck","hauntedshipwreck",
+    "prehistoric island","prehistoricisland","kitsune island","kitsuneisland",
 ];
 const SEA_EVENT_ALIASES = {
     "sb":"sea beast","seabst":"sea beast","sebeast":"sea beast",
@@ -4059,9 +4060,14 @@ const SEA_EVENT_ALIASES = {
     "levi":"leviathan","levthan":"leviathan","levitan":"leviathan",
     "rs":"rough sea","roughseas":"rough sea","roughsea":"rough sea",
     "mi":"mirage island","mirageisl":"mirage island","mrisland":"mirage island",
+    "mirg":"mirage","mirag":"mirage",
     "fo":"frozen outpost","frozoutpost":"frozen outpost","frznoutpost":"frozen outpost",
     "hw":"haunted shipwreck","hauntshipwreck":"haunted shipwreck","hauntedship":"haunted shipwreck",
     "hauntshp":"haunted shipwreck",
+    "ph":"prehistoric island","prehistoricisl":"prehistoric island","prhistoricisland":"prehistoric island",
+    "preh":"prehistoric island","prehi":"prehistoric island","prehisland":"prehistoric island",
+    "ki":"kitsune island","kitsuneisle":"kitsune island","kitsunisl":"kitsune island",
+    "kitsuneisl":"kitsune island","kitisland":"kitsune island",
 };
 
 // ══════════════════════════════════════════════════════════
@@ -10849,9 +10855,9 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
         // AND nospace form (for emoji names like :needmagma: that have no separator at all).
         // Also scan raw emoji slugs individually so a Nitro/external emoji named
         // e.g. "need_hosting_magma" gets caught even if fullClean folds it unexpectedly.
-        const hasNeedHostingClean  = /\b(need|needing|hosting)\b/i.test(contentClean);
-        const hasNeedHostingNospace= /need|needing|hosting/i.test(contentNospace);
-        const hasNeedHostingEmoji  = emojiNames.some(n => /need|needing|hosting/i.test(n));
+        const hasNeedHostingClean  = /\b(need|needing|hosting|wanna|want\s+to|hunt|hunting|wanna\s+do|wanna\s+join|anyone\s+wanna)\b/i.test(contentClean);
+        const hasNeedHostingNospace= /need|needing|hosting|wanna|wantto|hunt|hunting/i.test(contentNospace);
+        const hasNeedHostingEmoji  = emojiNames.some(n => /need|needing|hosting|wanna|hunt|hunting/i.test(n));
         const hasNeedHosting = hasNeedHostingClean || hasNeedHostingNospace || hasNeedHostingEmoji;
         if (hasNeedHosting) {
             const hasBossOrSeaEv =
