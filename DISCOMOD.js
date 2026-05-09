@@ -10888,14 +10888,27 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
                 hasBossRegex ||
                 Object.keys(BOSS_ALIASES).some(alias => {
                     const a = alias.toLowerCase();
-                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a)
-                        // Also check raw emoji names in case the boss name appears only in a slug
-                        || emojiNames.some(n => n.includes(a)));
+                    if (a.length < 2) return false;
+                    // Short aliases (≤3 chars, e.g. "ma", "wa", "se") must match as a
+                    // whole word in contentClean to avoid hitting substrings inside
+                    // ordinary words like "message" (ma), "wanna" (wa), "Tekken" (tk).
+                    if (a.length <= 3) {
+                        return new RegExp(`(?<![a-z0-9])${escapeRegex(a)}(?![a-z0-9])`, 'i').test(contentClean)
+                            // Also check raw emoji names in case the boss name appears only in a slug
+                            || emojiNames.some(n => n.includes(a));
+                    }
+                    return contentClean.includes(a) || contentNospace.includes(a)
+                        || emojiNames.some(n => n.includes(a));
                 }) ||
                 Object.keys(SEA_EVENT_ALIASES).some(alias => {
                     const a = alias.toLowerCase();
-                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a)
-                        || emojiNames.some(n => n.includes(a)));
+                    if (a.length < 2) return false;
+                    if (a.length <= 3) {
+                        return new RegExp(`(?<![a-z0-9])${escapeRegex(a)}(?![a-z0-9])`, 'i').test(contentClean)
+                            || emojiNames.some(n => n.includes(a));
+                    }
+                    return contentClean.includes(a) || contentNospace.includes(a)
+                        || emojiNames.some(n => n.includes(a));
                 }) ||
                 // Also catch boss/sea-event names appearing directly inside emoji slugs
                 // (e.g. a Nitro emoji :magma_boss: or :harbinger_hosting:)
