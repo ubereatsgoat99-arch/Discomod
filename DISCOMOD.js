@@ -2962,7 +2962,7 @@ const COMMON_WORD_WHITELIST = new Set([
     "support","surface","system","term","theory","thought","treatment",
     "truth","understanding","university","version","weight",
     // ── Short words (3-letter) that aren't game items ────────────
-    "ice","age","ace","act","aid","air","all","any","apt","arc","arm","art",
+    "age","ace","act","aid","air","all","any","apt","arc","arm","art",
     "ash","awe","bad","bag","ban","bar","bat","bay","bed","big","bit","bot",
     "bow","box","boy","bud","bug","bus","cab","cap","car","cat","cop","cup",
     "cut","day","den","dig","dim","dip","dog","dot","dug","duo","ear","egg",
@@ -5769,7 +5769,24 @@ function scanForServiceIntent(cleanText, strictness = 5) {
     }
     return false;
 }
+// ── Safe phrases that should never trigger trade intent ──────
+const SAFE_PHRASE_EXCEPTIONS = [
+    /\bwant(?:s|ed)? to play\b/i,
+    /\bwanna play\b/i,
+    /\bwant(?:s|ed)? to join\b/i,
+    /\bwanna join\b/i,
+    /\banyone want(?:s)? to play\b/i,
+    /\bwho wants? to play\b/i,
+    /\bplay (?:with|together)\b/i,
+    /\bplay(?:ing)? (?:any|some|a) roblox\b/i,
+    /\bplay(?:ing)? roblox\b/i,
+];
+
 function scanForIntent(cleanText, strictness = 5) {
+    // Bail out early on clearly innocent phrases before any intent matching
+    for (const safe of SAFE_PHRASE_EXCEPTIONS) {
+        if (safe.test(cleanText)) return false;
+    }
     const ns = cleanText.replace(/\s/g,'');
 
     // ── Curated strict phrases — active at ALL levels ──────
@@ -11003,9 +11020,56 @@ async function checkRaceViolation(message, contentClean, contentNospace, data, g
 // ══════════════════════════════════════════════════════════
 //  TRADE VIOLATION CHECKER
 // ══════════════════════════════════════════════════════════
+// Direct regex for unambiguous "perm <fruit> dm" trade solicitations.
+// Short fruit names (ice, sand, dark, etc.) can get lost in generic detection
+// because they appear as substrings in no-space matches or live in the whitelist.
+// This fires BEFORE the generic pipeline and is intentionally broad.
+const PERM_FRUIT_NAMES = [
+    'ice','sand','dark','light','rubber','ghost','diamond','eagle',
+    'flame','magma','smoke','spike','bomb','spring','swamp','snow',
+    'door','kilo','love','quake','string','revive','rumble','gravity',
+    'barrier','phoenix','buddha','blizzard','venom','control','shadow',
+    'portal','leopard','spirit','dough','dragon','kitsune','mammoth',
+    'trex','t-rex','sound','spider','pain','lightning','creation',
+    'yeti','werewolf','rocket','gas','tiger',
+];
+const PERM_FRUIT_ALT = PERM_FRUIT_NAMES.map(f => f.replace(/[-]/g,'\\-')).join('|');
+const PERM_TRADE_DIRECT_RE = new RegExp(
+    `\\bperm(?:s|anent)?\\b[\\s\\S]{0,40}\\b(${PERM_FRUIT_ALT})\\b` +
+    `|\\b(${PERM_FRUIT_ALT})\\b[\\s\\S]{0,40}\\bperm(?:s|anent)?\\b`,
+    'i'
+);
+const DM_SIGNAL_RE = /\b(dm|dms|pm|msg|message me|who has|who got|anyone have|lf|wtt|wtb|wts|trade|trading|selling|buying|offer)\b/i;
+
 async function checkTradeViolation(message, contentClean, contentNospace, data, gs) {
+    // ── Direct perm+fruit+dm fast-path ───────────────────────────────────────
+    // Catches "who has perm ice dm me", "perm sand dm offers", etc. before
+    // the generic pipeline, which can miss short fruit names in whitelist.
+    if (PERM_TRADE_DIRECT_RE.test(contentClean) && DM_SIGNAL_RE.test(contentClean)) {
+        await handleTradeViolation(message, data, gs);
+        return true;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const fruitsFound = scanForFruits(contentClean);
     for (const f of FRUITS) { const fc=f.replace(/[\s\-]/g,''); if(contentNospace.includes(fc)&&!fruitsFound.includes(f)) fruitsFound.push(f); }
+
+    // ── Perm-context rescan ────────────────────────────────────────────────────
+    // Short fruit names like "ice", "gas", "sand", "dark" are in COMMON_WORD_WHITELIST
+    // and get skipped by genericScan. When "perm" (permanent gamepass) is explicitly
+    // present in the message the context is unambiguous, so we rescan FRUITS directly
+    // (bypassing the whitelist) to catch patterns like "who has perm ice dm me".
+    if (/\bperm(s|anent)?\b/i.test(contentClean) && fruitsFound.length === 0) {
+        for (const f of FRUITS) {
+            const fc = f.replace(/[\s\-]/g, '');
+            const fRe = new RegExp(`(?<![a-z])${f.replace(/[-]/g,'\\-')}(?![a-z])`, 'i');
+            if (fRe.test(contentClean) || (fc.length >= 3 && contentNospace.includes(fc))) {
+                if (!fruitsFound.includes(f)) fruitsFound.push(f);
+            }
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const _strictness = getStrictness(gs);
     let hasIntent = scanForIntent(contentClean, _strictness);
     if (!hasIntent) {
