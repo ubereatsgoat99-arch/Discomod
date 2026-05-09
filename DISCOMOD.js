@@ -10740,19 +10740,22 @@ client.on('messageCreate', async message => {
     }
 
     // ── SERVICES / ITEMS ──────────────────────────────────
-    if ((gs.serviceRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'service') && message.channel.id !== gs.servicesChannelId) {
+    // noAffiliationEnabled bypasses the serviceRedirectEnabled gate so the no-affiliation
+    // notice still fires even when service redirects are turned off.
+    if ((gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || message.channel.id !== gs.servicesChannelId)) {
         const flagged = await checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs);
         if (flagged) return;
     }
 
     // ── TRADE ─────────────────────────────────────────────
-    if ((gs.tradeRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'trade') && message.channel.id !== gs.tradeChannelId) {
+    // Same — noAffiliationEnabled must bypass the tradeRedirectEnabled gate.
+    if ((gs.tradeRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'trade') && (gs.noAffiliationEnabled || message.channel.id !== gs.tradeChannelId)) {
         const flagged = await checkTradeViolation(message, contentClean, contentNospace, data, gs);
         if (flagged) return;
     }
 
     // ── RACE + TIER + INTENT ──────────────────────────────
-    if ((gs.serviceRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'service') && message.channel.id !== gs.tradeChannelId) {
+    if ((gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || message.channel.id !== gs.tradeChannelId)) {
         await checkRaceViolation(message, contentClean, contentNospace, data, gs);
     }
 
@@ -10888,27 +10891,14 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
                 hasBossRegex ||
                 Object.keys(BOSS_ALIASES).some(alias => {
                     const a = alias.toLowerCase();
-                    if (a.length < 2) return false;
-                    // Short aliases (≤3 chars, e.g. "ma", "wa", "se") must match as a
-                    // whole word in contentClean to avoid hitting substrings inside
-                    // ordinary words like "message" (ma), "wanna" (wa), "Tekken" (tk).
-                    if (a.length <= 3) {
-                        return new RegExp(`(?<![a-z0-9])${escapeRegex(a)}(?![a-z0-9])`, 'i').test(contentClean)
-                            // Also check raw emoji names in case the boss name appears only in a slug
-                            || emojiNames.some(n => n.includes(a));
-                    }
-                    return contentClean.includes(a) || contentNospace.includes(a)
-                        || emojiNames.some(n => n.includes(a));
+                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a)
+                        // Also check raw emoji names in case the boss name appears only in a slug
+                        || emojiNames.some(n => n.includes(a)));
                 }) ||
                 Object.keys(SEA_EVENT_ALIASES).some(alias => {
                     const a = alias.toLowerCase();
-                    if (a.length < 2) return false;
-                    if (a.length <= 3) {
-                        return new RegExp(`(?<![a-z0-9])${escapeRegex(a)}(?![a-z0-9])`, 'i').test(contentClean)
-                            || emojiNames.some(n => n.includes(a));
-                    }
-                    return contentClean.includes(a) || contentNospace.includes(a)
-                        || emojiNames.some(n => n.includes(a));
+                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a)
+                        || emojiNames.some(n => n.includes(a)));
                 }) ||
                 // Also catch boss/sea-event names appearing directly inside emoji slugs
                 // (e.g. a Nitro emoji :magma_boss: or :harbinger_hosting:)
