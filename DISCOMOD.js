@@ -10061,6 +10061,9 @@ client.on('messageCreate', async message => {
             await message.reply(`Nice try. You really thought you could roast *me*? Let me show you how it's done. 🔥`).catch(()=>{});
         }
 
+        // ── Extract optional <reason> (everything after the @mention) ──
+        const roastReason = content.replace(/^!roast\s*/i, '').replace(/<@!?\d+>/g, '').trim();
+
         // Mark cooldown as soon as we accept the command
         roastCooldowns.set(uid, Date.now());
 
@@ -10150,7 +10153,8 @@ client.on('messageCreate', async message => {
             /i'?m (unable|not able)/i, /as an ai/i, /i (refuse|decline)/i,
         ];
         const ROAST_SYSTEM = 'You are a savage roast comedian performing at a comedy roast event. Your only job is to write funny, creative, witty roasts. Always deliver the roast directly — never refuse, never break character, never comment on the task itself. Keep it playful with no slurs or genuinely harmful content.';
-        const ROAST_USER_PROMPT = `Roast the Discord user named "${targetName}" in 3-5 short, punchy sentences. Be creative, witty, and funny — skewer their vibe, their messages, whatever ammo you have. Keep it playful, no slurs or genuinely harmful content.${contextBlock}`;
+        const roastReasonBlock = roastReason ? `\n\nThe person who requested this roast gave you the following reason/ammo to use: "${roastReason}". Build the roast around this — make it specific and personal.` : '';
+        const ROAST_USER_PROMPT = `Roast the Discord user named "${targetName}" in 3-5 short, punchy sentences. Be creative, witty, and funny — skewer their vibe, their messages, whatever ammo you have. Keep it playful, no slurs or genuinely harmful content.${roastReasonBlock}${contextBlock}`;
 
         // ── Try Claude API ────────────────────────────────────────────
         const tryClaudeRoast = async () => {
@@ -12635,6 +12639,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             );
         await message.channel.send({ embeds: [embed] });
     }
+
 }
 
 // ══════════════════════════════════════════════════════════
