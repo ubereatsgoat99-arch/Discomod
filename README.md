@@ -69,7 +69,7 @@ This project has a bunch of hardcoded paths, so do the follwoing:
 git clone https://github.com/xenostopic-cyber/Discomod
 cd Discomod
 mkdir -p ~/venvs
-mv venv ~/venvs/advikmathlib_env
+mv .venv ~/venvs/advikmathlib_env
 mv * ~/Downloads/
 cd ..
 rm -rf Discomod
