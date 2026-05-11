@@ -40,7 +40,7 @@ Originally made for MonkeyVerseYT's server, but extended the use for everyone an
 - Can split into messages
 - Toggleable via configuration
 
-### Math Calculators
+###🧮 Math Calculators
 - Powered by very powerful math modules
 - Can split into messages
 - Supports arbitary-preceision
@@ -68,12 +68,10 @@ This project has a bunch of hardcoded paths, so do the follwoing:
 ```bash
 git clone https://github.com/xenostopic-cyber/Discomod
 cd Discomod
-mkdir -p ~/venvs
-mv .venv ~/venvs/advikmathlib_env
-mv * ~/Downloads/
-cd ..
-rm -rf Discomod
+chmod +x setup.sh
+./setup.sh
 ```
+
 After this, copy the example env file inside the Repo
 
 ```bash
