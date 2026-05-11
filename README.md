@@ -63,16 +63,18 @@ Originally made for MonkeyVerseYT's server, but extended the use for everyone an
 
 ## 🛠️ Installation
 
-Install dependencies:
-(Optional, already installed inside the repo)
+This project has a bunch of hardcoded paths, so do the follwoing:
 
 ```bash
-npm install 
+git clone https://github.com/xenostopic-cyber/Discomod
+cd Discomod
+mkdir -p ~/venvs
+mv venv ~/venvs/advikmathlib_env
+mv * ~/Downloads/
+cd ..
+rm -rf Discomod
 ```
-
-## Setup
-
-After that, copy the example environment file:
+After this, copy the example env file inside the Repo
 
 ```bash
 cp .env.example .env
@@ -96,5 +98,5 @@ Send me friend request to my discord: https://www.discord.com/users/142729941104
 
 ## Credit
 
-If you use this project, please give credit to the original author, aka me, CyberNovaX
+If you use this project, please give credit to the original author, aka me, CyberNovaX (Xenostopic)
 
