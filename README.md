@@ -69,7 +69,7 @@ This project has a bunch of hardcoded paths, so do the follwoing:
 git clone https://github.com/xenostopic-cyber/Discomod
 cd Discomod
 chmod +x setup.sh
-./setup.sh
+./setup.sh --to-downloads
 ```
 
 After this, copy the example env file inside the Repo
