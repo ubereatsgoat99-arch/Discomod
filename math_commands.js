@@ -17,6 +17,13 @@
 //     add at the end:
 //       ...mathMod.mathSlashCommandBuilders,
 //
+//     This adds ONE /math command (with subcommands run/all/status/ramset)
+//     instead of 15 separate commands, staying under Discord's 100-command limit.
+//     Users invoke it as:  /math run <backend> [expression]
+//                          /math all [expression]
+//                          /math status
+//                          /math ramset <mb>
+//
 //  3. At the VERY TOP of the interactionCreate handler (before any other checks):
 //       if (await mathMod.handleMathInteraction(interaction)) return;
 //
@@ -581,6 +588,9 @@ mathWorker.start();
 // ══════════════════════════════════════════════════════════
 const _mathModalSessions = new Map();  // sessionId → { backend, userId, timestamp }
 
+// Per-user multiline accumulation for /math run  (same pattern as /wolf, /gaypy etc.)
+const _mathRunSessions = new Map();  // userId → { backend, lines: string[] }
+
 function _saveModalSession(sessionId, backend, userId) {
     _mathModalSessions.set(sessionId, { backend, userId, timestamp: Date.now() });
     // GC old sessions
@@ -620,13 +630,14 @@ function _chunkOutput(text) {
  * Send all output chunks to a Discord channel or interaction.
  * Supports very long outputs by splitting across multiple messages.
  */
-async function _sendResults({ interaction, channel, backend, parts, errors, isPartial, ramMb }) {
+async function _sendResults({ interaction, channel, backend, resolvedBackend, parts, errors, isPartial, ramMb }) {
     const EMOJI = {
         mpmath: '🔢', numpy: '📐', scipy: '🔬', pari: '🔣',
         gmp: '🔏', mpfr: '🎯', arb: '⚽', fricas: '🌀',
         ginac: '✨', linbox: '🗂️', cln: '🔠', sage: '🌿',
     };
-    const emoji = EMOJI[backend] || '🧮';
+    const emojiKey = resolvedBackend || backend;
+    const emoji = EMOJI[emojiKey] || '🧮';
 
     const totalParts = parts.length;
     const allText    = parts.join('\n\n--- Part Break ---\n\n');
@@ -726,6 +737,21 @@ function _buildMathModal(backend, sessionId) {
 // ══════════════════════════════════════════════════════════
 //  CORE EVAL PIPELINE  (used by slash + message commands)
 // ══════════════════════════════════════════════════════════
+
+/** Lightweight reply helper that works whether or not the interaction is deferred. */
+async function safeReplyMath(interaction, content) {
+    if (!interaction) return;
+    try {
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content });
+        } else {
+            await interaction.reply({ content, ephemeral: false });
+        }
+    } catch {
+        try { await interaction.followUp({ content }); } catch {}
+    }
+}
+
 async function runMathEval({ interaction, channel, backend, code, userId }) {
     // Show "computing…" indicator
     if (interaction) {
@@ -741,14 +767,20 @@ async function runMathEval({ interaction, channel, backend, code, userId }) {
         channel.sendTyping().catch(() => {});
     }
 
+    // Resolve friendly display name → real Python backend name
+    const resolvedBackend = BACKEND_ALIAS[backend] || backend;
+
     const { parts, totalParts, errors } = await mathWorker.evalChunked(
-        backend, code, MATH_RAM_LIMIT_MB, MATH_TIMEOUT_S
+        resolvedBackend, code, MATH_RAM_LIMIT_MB, MATH_TIMEOUT_S
     );
 
     const isPartial = errors.some(e => /RAM limit|timeout|exceeded/i.test(e));
 
     await _sendResults({
-        interaction, channel, backend, parts, errors, isPartial,
+        interaction, channel,
+        backend,         // display name for the embed title
+        resolvedBackend, // actual backend for the emoji lookup
+        parts, errors, isPartial,
         ramMb: MATH_RAM_LIMIT_MB,
     });
 }
@@ -762,62 +794,102 @@ async function runMathEval({ interaction, channel, backend, code, userId }) {
 // ══════════════════════════════════════════════════════════
 
 const BACKENDS_META = [
-    { name: 'mpmath',  emoji: '🔢', desc: 'mpmath — arbitrary-precision Python math (pi, Bessel, etc.)'                  },
-    { name: 'numpy',   emoji: '📐', desc: 'NumPy — fast array & linear algebra (Python)'                                 },
-    { name: 'scipy',   emoji: '🔬', desc: 'SciPy — scientific computing: integrate, optimize, signal, stats…'            },
-    { name: 'pari',    emoji: '🔣', desc: 'PARI/GP — number theory, modular forms, elliptic curves'                     },
-    { name: 'gmp',     emoji: '🔏', desc: 'GMP (gmpy2) — big integer & rational arithmetic'                             },
-    { name: 'mpfr',    emoji: '🎯', desc: 'MPFR (gmpy2) — multi-precision floating-point with correct rounding'          },
-    { name: 'arb',     emoji: '⚽', desc: 'Arb (python-flint) — ball arithmetic / interval arithmetic'                  },
-    { name: 'fricas',  emoji: '🌀', desc: 'FriCAS — symbolic algebra, integration, differential equations'               },
-    { name: 'ginac',   emoji: '✨', desc: 'GiNaC (symengine) — fast symbolic computation, CAS'                           },
-    { name: 'linbox',  emoji: '🗂️', desc: 'LinBox — exact linear algebra over finite fields / integers'                  },
-    { name: 'cln',     emoji: '🔠', desc: 'CLN — fast arbitrary precision numbers (C++ via Python bindings)'             },
-    { name: 'sage',    emoji: '🌿', desc: 'SageMath — comprehensive CAS: algebra, geometry, combinatorics, crypto'       },
+    { name: 'precision', desc: 'Perform high-precision interval arithmetic' }, // was arb
+    { name: 'algebra',   desc: 'Symbolic algebraic manipulations' },          // was cln
+    { name: 'symbolic',  desc: 'Advanced symbolic math and calculus' },       // was fricas
+    { name: 'geometry',  desc: 'Interactive geometry computations' },         // was ginac
+    { name: 'integers',  desc: 'High-speed integer arithmetic' },              // was gmp
+    { name: 'matrices',  desc: 'Linear algebra and matrix math' },            // was linbox
+    { name: 'floats',    desc: 'Multi-precision floating-point math' },       // was mpfr
+    { name: 'analysis',  desc: 'Numerical analysis and functions' },          // was mpmath
+    { name: 'arrays',    desc: 'Fast array and vector processing' },          // was numpy
+    { name: 'theory',    desc: 'Number theory and modular math' },            // was pari
+    { name: 'advanced',  desc: 'General-purpose advanced math suite' },       // was sage
+    { name: 'scientific',desc: 'Scientific and engineering tools' },          // was scipy
 ];
 
-/** Builds all math slash commands. Spread these into your slashCommands array. */
+// ── Maps the user-facing display names → the actual Python backend keys ──────
+// Without this, sending 'symbolic' to the Python worker causes
+// "Unknown backend: symbolic. Valid: ['mpmath', ...]"
+const BACKEND_ALIAS = {
+    precision: 'arb',
+    algebra:   'cln',
+    symbolic:  'fricas',
+    geometry:  'ginac',
+    integers:  'gmp',
+    matrices:  'linbox',
+    floats:    'mpfr',
+    analysis:  'mpmath',
+    arrays:    'numpy',
+    theory:    'pari',
+    advanced:  'sage',
+    scientific: 'scipy',
+};
+
+/**
+ * Single /math command with subcommands:
+ *   /math run <backend> [expression]  — run code on a specific backend
+ *   /math all [expression]            — run on every available backend
+ *   /math status                      — show which backends are installed
+ *   /math ramset <mb>                 — change RAM limit (Manage Messages required)
+ *
+ * This counts as ONE slash command instead of 15, staying well under Discord's 100-command limit.
+ */
 const mathSlashCommandBuilders = [
-
-    // ── Per-backend commands ─────────────────────────────
-    ...BACKENDS_META.map(({ name, emoji, desc }) =>
-        new SlashCommandBuilder()
-            .setName(`math${name}`)
-            .setDescription(`${emoji} ${desc}`)
-            .addStringOption(o =>
-                o.setName('expression')
-                 .setDescription('Inline code/expression (leave blank for multiline modal)')
-                 .setRequired(false)
-            )
-    ),
-
-    // ── /mathall  — run on every available backend ───────
     new SlashCommandBuilder()
-        .setName('mathall')
-        .setDescription('🧮 Run the same code on ALL available math backends and compare results')
-        .addStringOption(o =>
-            o.setName('expression')
-             .setDescription('Inline code (leave blank for multiline modal)')
-             .setRequired(false)
+        .setName('math')
+        .setDescription('🧮 Math computation — run code across multiple backends')
+
+        // ── /math run ──────────────────────────────────
+        .addSubcommand(sub =>
+            sub.setName('run')
+               .setDescription('Run code on a specific math backend')
+               .addStringOption(o =>
+                   o.setName('backend')
+                    .setDescription('Which math backend to use')
+                    .setRequired(true)
+                    .addChoices(
+                        ...BACKENDS_META.map(({ name, desc }) => ({
+                            name: `${name} — ${desc}`.slice(0, 100),
+                            value: name,
+                        }))
+                    )
+               )
+               .addStringOption(o =>
+                   o.setName('expression')
+                    .setDescription('Inline code/expression (leave blank to open multiline modal)')
+                    .setRequired(false)
+               )
+        )
+
+        // ── /math all ──────────────────────────────────
+        .addSubcommand(sub =>
+            sub.setName('all')
+               .setDescription('🧮 Run the same code on ALL available backends and compare results')
+               .addStringOption(o =>
+                   o.setName('expression')
+                    .setDescription('Inline code (leave blank to open multiline modal)')
+                    .setRequired(false)
+               )
+        )
+
+        // ── /math status ───────────────────────────────
+        .addSubcommand(sub =>
+            sub.setName('status')
+               .setDescription('📊 Show which math backends are installed and available')
+        )
+
+        // ── /math ramset ───────────────────────────────
+        .addSubcommand(sub =>
+            sub.setName('ramset')
+               .setDescription('⚙️ Set the RAM limit (MB) for math computations (requires Manage Messages)')
+               .addIntegerOption(o =>
+                   o.setName('mb')
+                    .setDescription('RAM limit in MB (64 – 32768)')
+                    .setRequired(true)
+               )
         ),
-
-    // ── /mathstatus  — show which backends are available ─
-    new SlashCommandBuilder()
-        .setName('mathstatus')
-        .setDescription('📊 Show which math backends are installed and available'),
-
-    // ── /mathramset  — change RAM limit on the fly ───────
-    new SlashCommandBuilder()
-        .setName('mathramset')
-        .setDescription('⚙️ Set the RAM limit (MB) for math computations')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
-        .addIntegerOption(o =>
-            o.setName('mb')
-             .setDescription('RAM limit in MB (64 – 32768)')
-             .setRequired(true)
-        ),
-
-].map(c => c.toJSON());
+];
 
 // ══════════════════════════════════════════════════════════
 //  INTERACTION HANDLER
@@ -828,14 +900,17 @@ async function handleMathInteraction(interaction) {
     // ── Slash commands ─────────────────────────────────
     if (interaction.isChatInputCommand()) {
         const cmd = String(interaction.commandName || '');
+        if (cmd !== 'math') return false;  // not ours
 
-        // /mathstatus
-        if (cmd === 'mathstatus') {
+        const sub = interaction.options.getSubcommand(false);
+
+        // /math status
+        if (sub === 'status') {
             await interaction.deferReply().catch(() => {});
             const avail = await mathWorker.ping();
             const lines = BACKENDS_META.map(({ name, emoji }) => {
                 const ok = avail[name];
-                return `${ok ? '✅' : '❌'} **${name}** ${emoji}`;
+                return `${ok ? '✅' : '❌'} **${name}** ${emoji || ''}`;
             });
             await interaction.editReply({
                 embeds: [new EmbedBuilder()
@@ -852,22 +927,25 @@ async function handleMathInteraction(interaction) {
             return true;
         }
 
-        // /mathramset
-        if (cmd === 'mathramset') {
+        // /math ramset  (permission checked here since subcommands can't have their own perms)
+        if (sub === 'ramset') {
+            if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageMessages)) {
+                await interaction.reply({ content: '❌ You need the **Manage Messages** permission to use this.', ephemeral: true });
+                return true;
+            }
             const mb = interaction.options.getInteger('mb');
             if (mb < 64 || mb > 32768) {
                 await interaction.reply({ content: '❌ RAM limit must be between 64 and 32768 MB.', ephemeral: true });
                 return true;
             }
-            // eslint-disable-next-line no-global-assign
             process.env.MATH_RAM_LIMIT_MB = String(mb);
             mathWorker.restart();
             await interaction.reply({ content: `✅ Math RAM limit set to **${mb} MB**. Worker restarted.`, ephemeral: true });
             return true;
         }
 
-        // /mathall
-        if (cmd === 'mathall') {
+        // /math all
+        if (sub === 'all') {
             const expr = interaction.options.getString('expression') || '';
             if (!expr) {
                 const sid = `mathall_${interaction.id}`;
@@ -895,16 +973,33 @@ async function handleMathInteraction(interaction) {
             return true;
         }
 
-        // /math<backend>
-        const backendMatch = BACKENDS_META.find(b => cmd === `math${b.name}`);
-        if (backendMatch) {
-            const expr   = interaction.options.getString('expression') || '';
-            const backend = backendMatch.name;
+        // /math run
+        if (sub === 'run') {
+            const backend = interaction.options.getString('backend');
+            const expr    = interaction.options.getString('expression') || '';
+            const uid     = interaction.user.id;
 
-            if (!expr) {
-                // Open multiline modal
+            // Check for an active accumulation session for this user
+            const st = _mathRunSessions.get(uid) || { backend, lines: [] };
+
+            // "Evaluate" → flush accumulated lines and run
+            if (expr.toLowerCase() === 'evaluate' && st.lines.length) {
+                _mathRunSessions.delete(uid);
+                const combined = st.lines.join('');
+                await runMathEval({
+                    interaction,
+                    channel: interaction.channel,
+                    backend: st.backend,
+                    code: combined,
+                    userId: uid,
+                });
+                return true;
+            }
+
+            // No expression at all and no session → open modal as fallback
+            if (!expr && !st.lines.length) {
                 const sid = `math_${backend}_${interaction.id}`;
-                _saveModalSession(sid, backend, interaction.user.id);
+                _saveModalSession(sid, backend, uid);
                 try {
                     await interaction.showModal(_buildMathModal(backend, sid));
                 } catch {
@@ -913,18 +1008,21 @@ async function handleMathInteraction(interaction) {
                 return true;
             }
 
-            // Inline expression
-            await runMathEval({
-                interaction,
-                channel: interaction.channel,
-                backend,
-                code: expr,
-                userId: interaction.user.id,
-            });
+            // Accumulate this line into the session
+            if (expr) {
+                st.backend = backend;  // always update backend in case they switch
+                st.lines.push(expr);
+                _mathRunSessions.set(uid, st);
+            }
+
+            await safeReplyMath(interaction,
+                `🧮 **${(st.backend || backend).toUpperCase()}** — line ${st.lines.length} saved. `
+                + `Send more or type \`Evaluate\` to run.`
+            );
             return true;
         }
 
-        return false;  // not a math command
+        return false;  // unknown subcommand
     }
 
     // ── Modal submissions ──────────────────────────────
