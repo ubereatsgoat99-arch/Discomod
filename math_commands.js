@@ -53,6 +53,7 @@ const MATH_SESSION_TTL   = 5 * 60 * 1000;  // modal session lifetime (5 min)
 // ══════════════════════════════════════════════════════════
 const MATH_WORKER_PY = String.raw`
 import sys, json, gc, os, traceback, threading, time, ctypes, io, shutil, resource, subprocess, tempfile
+sys.set_int_max_str_digits(0)
 
 MAX_RAM_MB  = float(os.environ.get('MATH_RAM_LIMIT_MB', '512'))
 TIMEOUT_S   = float(os.environ.get('MATH_TIMEOUT_S',    '110'))
