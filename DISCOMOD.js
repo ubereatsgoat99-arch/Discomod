@@ -546,6 +546,28 @@ for line in sys.stdin:
                 _reply({'id': rid, 'ok': True, 'result': f"SymPy Error: {ex}"})
             continue
 
+        if method=='python_exec':
+            import io, traceback as _tb
+            code=str(params.get('code',''))
+            buf=io.StringIO()
+            globs={'__builtins__': __builtins__}
+            locs={}
+            def _print(*args, **kwargs):
+                sep=kwargs.get('sep',' ')
+                end=kwargs.get('end','\\n')
+                buf.write(sep.join(str(a) for a in args)+end)
+            globs['print']=_print
+            locs['print']=_print
+            try:
+                exec(compile(code,'<gaypy>','exec'),globs,locs)
+                out=buf.getvalue()
+                if not out.strip() and 'result' in locs:
+                    out=str(locs['result'])
+                _reply({'id': rid, 'ok': True, 'result': out or '(No output)'})
+            except Exception as ex:
+                _reply({'id': rid, 'ok': True, 'result': f"Error:\\n{_tb.format_exc()}"})
+            continue
+
         if method=='roast_start':
             if not ROAST_OK:
                 _reply({'id': rid, 'ok': False, 'error': 'roastedbyai not available in python env'})
@@ -6745,11 +6767,11 @@ const slashCommands = [
 
     new SlashCommandBuilder()
         .setName('calc')
-        .setDescription('Qalculate CLI calculation (multi-line: send more, then Evaluate)')
+        .setDescription('Calc CLI calculation (multi-line: send more, then Evaluate)')
         .addStringOption(o => o.setName('expression').setDescription("Expression, or type 'Evaluate' to run accumulated input").setRequired(true)),
     new SlashCommandBuilder()
         .setName('wolf')
-        .setDescription('Ask Wolfram Alpha (multi-line: send more, then Evaluate)')
+        .setDescription('Ask Online (multi-line: send more, then Evaluate)')
         .addStringOption(o => o.setName('question').setDescription("Question, or type 'Evaluate' to run accumulated input").setRequired(true)),
     new SlashCommandBuilder()
         .setName('supercalc')
@@ -6760,8 +6782,8 @@ const slashCommands = [
         .setDescription('Run superqalc_tower (multi-line: send more, then Evaluate)')
         .addStringOption(o => o.setName('expression').setDescription("Expression, or type 'Evaluate' to run accumulated input").setRequired(true)),
     new SlashCommandBuilder()
-        .setName('sympy')
-        .setDescription('Evaluate using SymPy (multi-line: send more, then Evaluate)')
+        .setName('gaypy')
+        .setDescription('Evaluate using damn code (multi-line: send more, then Evaluate)')
         .addStringOption(o => o.setName('expression').setDescription("Expression, or type 'Evaluate' to run accumulated input").setRequired(true)),
 
     new SlashCommandBuilder()
@@ -8274,15 +8296,35 @@ client.on('interactionCreate', async interaction => {
             st.mode = 'sympy';
             st.lines.push(expr);
             slashSessions.set(uid, st);
-            await safeReply(interaction, { content: '🧮 Multi-line SymPy mode started. Send more lines or type `Evaluate`.', ephemeral: false });
+            await safeReply(interaction, { content: '🧮 Multi-line GayPy mode started. Send more lines or type `Evaluate`.', ephemeral: false });
             break;
         }
 
+        case 'gaypy': {
+            await safeDefer(interaction, { ephemeral: false });
+            const uid = interaction.user.id;
+            const expr = interaction.options.getString('expression') || '';
+            const st = slashSessions.get(uid) || { mode: 'gaypy', lines: [] };
+            if (expr.toLowerCase() === 'evaluate' && st.mode === 'gaypy' && st.lines.length) {
+                const combined = st.lines.join('');
+                slashSessions.delete(uid);
+                let res;
+                try {
+                    res = await pyWorker.request('sympy_eval', { expression: combined });
+                } catch (e) {
+                    res = `SymPy Error: ${String(e?.message || e)}`;
+                }
+                await sendLongToInteraction(interaction, res);
+                break;
+            }
+            st.mode = 'gaypy';
+            st.lines.push(expr);
+            slashSessions.set(uid, st);
+            await safeReply(interaction, { content: '🧮 Multi-line SymPy mode started. Send more lines or type `Evaluate`.', ephemeral: false });
+            break;
+        }
         case 'policymode': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            const mode = (interaction.options.getString('mode') || '').toLowerCase();
-            if (!['enforce','monitor'].includes(mode)) { await interaction.reply({ content: '❌ Use: enforce|monitor', ephemeral: true }); return; }
-            const before = gs.enforcementMode;
             gs.enforcementMode = mode;
             saveData(data);
             await interaction.reply({ content: `✅ Enforcement mode: **${before}** -> **${gs.enforcementMode}**`, ephemeral: true });
