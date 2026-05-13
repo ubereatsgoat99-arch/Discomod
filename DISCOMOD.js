@@ -498,6 +498,7 @@ class PyWorker {
         if (this.proc) return;
         const workerCode = `
 import sys, json
+sys.set_int_max_str_digits(0)
 
 try:
     import sympy
