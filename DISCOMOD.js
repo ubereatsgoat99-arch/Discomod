@@ -22,6 +22,7 @@ const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const mathMod = require('./math_commands');
 const yaml = require('js-yaml');
 const sqlite3 = require('sqlite3');
 const { OpenAI } = require('openai');
@@ -7273,7 +7274,8 @@ const slashCommands = [
         .addIntegerOption(o => o.setName('window').setDescription('Window seconds (5-120)').setRequired(false))
         .addIntegerOption(o => o.setName('threshold').setDescription('Repeats to trigger (2-20)').setRequired(false))
         .addIntegerOption(o => o.setName('minlen').setDescription('Min message length (5-200)').setRequired(false)),
-
+    
+...mathMod.mathSlashCommandBuilders,
 ].map(c => c.toJSON());
 
 // ══════════════════════════════════════════════════════════
@@ -7342,6 +7344,9 @@ client.once('ready', onClientReady);
 //  INTERACTION HANDLER (slash commands + buttons + modals)
 // ══════════════════════════════════════════════════════════
 client.on('interactionCreate', async interaction => {
+    
+    if (await mathMod.handleMathInteraction(interaction)) return;
+    
     const customId = interaction?.customId || '';
     let derivedGuildId = null;
     if (!interaction.guildId && typeof customId === 'string') {
@@ -9946,6 +9951,9 @@ function looksLikeCommandButNotCaught(raw, cleaned) {
 }
 
 client.on('messageCreate', async message => {
+    
+    if (await mathMod.handleMathMessage(message)) return;
+    
     if (message.author.bot || !message.guild) return;
     if (message.stickers && message.stickers.size && (!message.content || !String(message.content).trim())) return;
     const data  = loadData();
