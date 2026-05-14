@@ -134,6 +134,7 @@ const ai2State = {
     errorWebhook: String(ai2Config?.notifications?.error_webhook || ''),
     ratelimitNotifications: !!ai2Config?.notifications?.ratelimit_notifications,
     paused: false,
+    activeProvider: 'groq', // 'groq' | 'openai' — configurable via /aimodel
     instructions: ai2LoadInstructions(),
     activeChannels: new Set(),
     ignoredUsers: new Set(),
@@ -189,23 +190,42 @@ async function ai2LoadDbState() {
 
 let ai2Client = null;
 let ai2Model = null;
-function ai2InitClient() {
+function ai2InitClient(forceProvider) {
     if (!ai2State.enabled) return;
-    if (ai2Client && ai2Model) return;
+    const provider = forceProvider || ai2State.activeProvider || 'groq';
     const openaiKey = process.env.OPENAI_API_KEY || '';
-    const groqKey = process.env.GROQ_API_KEY || '';
-    if (openaiKey) {
-        ai2Client = new OpenAI({ apiKey: openaiKey });
-        ai2Model = ai2State.openaiModel;
-        return;
-    }
-    if (groqKey) {
-        ai2Client = new OpenAI({ apiKey: groqKey, baseURL: 'https://api.groq.com/openai/v1' });
-        ai2Model = ai2State.groqModel;
-        return;
+    const groqKey   = process.env.GROQ_API_KEY   || '';
+    if (provider === 'openai') {
+        if (openaiKey) {
+            ai2Client = new OpenAI({ apiKey: openaiKey });
+            ai2Model  = ai2State.openaiModel;
+            ai2State.activeProvider = 'openai';
+            return;
+        }
+        // fallback to groq if no openai key
+        if (groqKey) {
+            ai2Client = new OpenAI({ apiKey: groqKey, baseURL: 'https://api.groq.com/openai/v1' });
+            ai2Model  = ai2State.groqModel;
+            ai2State.activeProvider = 'groq';
+            return;
+        }
+    } else {
+        // default: groq
+        if (groqKey) {
+            ai2Client = new OpenAI({ apiKey: groqKey, baseURL: 'https://api.groq.com/openai/v1' });
+            ai2Model  = ai2State.groqModel;
+            ai2State.activeProvider = 'groq';
+            return;
+        }
+        if (openaiKey) {
+            ai2Client = new OpenAI({ apiKey: openaiKey });
+            ai2Model  = ai2State.openaiModel;
+            ai2State.activeProvider = 'openai';
+            return;
+        }
     }
     ai2Client = null;
-    ai2Model = null;
+    ai2Model  = null;
 }
 
 async function ai2WebhookLog(message, error) {
@@ -1914,6 +1934,37 @@ function makeDefaultData() {
     };
 }
 
+// ── Violation data helpers (supports old numeric entries for backward compat) ──
+function getViolationCount(data, uid) {
+    const v = data.violations[uid];
+    if (v == null) return 0;
+    if (typeof v === 'number') return v;
+    return v.count || 0;
+}
+function getViolationHistory(data, uid) {
+    const v = data.violations[uid];
+    if (!v || typeof v === 'number') return [];
+    return Array.isArray(v.history) ? v.history : [];
+}
+function addViolationEntry(data, uid, { reason = 'Rule violation', category = 'unknown', by = null } = {}) {
+    const count = getViolationCount(data, uid);
+    const history = getViolationHistory(data, uid);
+    const newCount = count + 1;
+    history.push({ reason: String(reason).slice(0, 300), category: String(category).slice(0, 80), timestamp: Date.now(), by: by ? String(by) : null });
+    data.violations[uid] = { count: newCount, history };
+    return newCount;
+}
+function clearViolationEntry(data, uid) {
+    data.violations[uid] = { count: 0, history: [] };
+}
+function decrementViolationEntry(data, uid) {
+    const count = getViolationCount(data, uid);
+    const history = getViolationHistory(data, uid);
+    const newCount = Math.max(0, count - 1);
+    data.violations[uid] = { count: newCount, history };
+    return newCount;
+}
+
 function getGuildCases(guildId, data) {
     data.cases = data.cases || {};
     if (!data.cases[guildId]) data.cases[guildId] = {};
@@ -2467,10 +2518,14 @@ function getImmunitySettings(guildId, data) {
         data.immunity[guildId] = {
             enabled: false,
             whitelistedRoles: [],
+            whitelistedMembers: [],
         };
     }
     data.immunity[guildId].whitelistedRoles = Array.isArray(data.immunity[guildId].whitelistedRoles)
         ? data.immunity[guildId].whitelistedRoles
+        : [];
+    data.immunity[guildId].whitelistedMembers = Array.isArray(data.immunity[guildId].whitelistedMembers)
+        ? data.immunity[guildId].whitelistedMembers
         : [];
     if (typeof data.immunity[guildId].enabled !== 'boolean') data.immunity[guildId].enabled = false;
     return data.immunity[guildId];
@@ -2478,13 +2533,15 @@ function getImmunitySettings(guildId, data) {
 
 function isMemberImmune(member, guildId, data) {
     const s = getImmunitySettings(guildId, data);
+    // Explicitly whitelisted individual members always get immunity
+    if (s.whitelistedMembers.includes(member.id)) return true;
     // Whitelisted roles via /addimmunity always grant global immunity,
     // regardless of whether the enabled toggle is on or off.
     for (const rid of s.whitelistedRoles) {
         if (member.roles.cache.has(rid)) return true;
     }
     // The enabled toggle controls whether Discord staff perms (Admin/ManageMessages)
-    // automatically get immunity — it does NOT affect explicit whitelisted roles.
+    // automatically get immunity — it does NOT affect explicit whitelisted roles/members.
     if (!s.enabled) return false;
     if (
         member.permissions.has(PermissionFlagsBits.Administrator) ||
@@ -6003,8 +6060,11 @@ async function issueViolation(message, data, gs, opts) {
     const uid = message.author.id;
     const threshold = Math.max(1, Math.min(10, gs?.violationThreshold || VIOLATION_THRESHOLD));
     const exileMins = Math.max(1, Math.min(1440, gs?.exileDurationMins || EXILE_DURATION_MINS));
-    data.violations[uid] = (data.violations[uid] || 0) + 1;
-    const count = data.violations[uid];
+    const count = addViolationEntry(data, uid, {
+        reason: opts?.reason || 'Rule violation',
+        category: String(opts?.footerLabel || 'violation').toLowerCase(),
+        by: null,
+    });
     saveData(data);
 
     const title = opts?.title || '⚠️ Violation';
@@ -6036,7 +6096,7 @@ async function issueViolation(message, data, gs, opts) {
         ).setTimestamp());
 
     if (count >= threshold) {
-        data.violations[uid] = 0;
+        clearViolationEntry(data, uid);
         saveData(data);
         await performExile(message.member || message.author, message.guild, exileMins, `Automated: ${footerLabel} (${reason})`, data);
         saveData(data);
@@ -6635,29 +6695,24 @@ const slashCommands = [
             .addStringOption(o => o.setName('toggle').setDescription('on or off').setRequired(true)
                 .addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' }))),
 
-    // Immunity
+    // Immunity (all sub-commands merged into one)
     new SlashCommandBuilder()
-        .setName('enableimmunity')
-        .setDescription('Enable staff/mod immunity from all moderation actions')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
-    new SlashCommandBuilder()
-        .setName('disableimmunity')
-        .setDescription('Disable staff/mod immunity (they will be scanned like regular members)')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
-    new SlashCommandBuilder()
-        .setName('addimmunity')
-        .setDescription('Add a role to the immunity whitelist')
+        .setName('immunity')
+        .setDescription('Manage staff/role/member immunity from moderation')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addRoleOption(o => o.setName('role').setDescription('Role to whitelist').setRequired(true)),
-    new SlashCommandBuilder()
-        .setName('removeimmunity')
-        .setDescription('Remove a role from the immunity whitelist')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addRoleOption(o => o.setName('role').setDescription('Role to remove').setRequired(true)),
-    new SlashCommandBuilder()
-        .setName('immunestatus')
-        .setDescription('Show current immunity settings')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+        .addSubcommand(s => s.setName('enable').setDescription('Enable staff/mod immunity from all moderation actions'))
+        .addSubcommand(s => s.setName('disable').setDescription('Disable staff/mod immunity (everyone scanned)'))
+        .addSubcommand(s => s.setName('status').setDescription('Show current immunity settings'))
+        .addSubcommandGroup(g => g.setName('add').setDescription('Add to immunity whitelist')
+            .addSubcommand(s => s.setName('role').setDescription('Add a role to the immunity whitelist')
+                .addRoleOption(o => o.setName('role').setDescription('Role to whitelist').setRequired(true)))
+            .addSubcommand(s => s.setName('member').setDescription('Add a specific member to the immunity whitelist')
+                .addUserOption(o => o.setName('user').setDescription('Member to whitelist').setRequired(true))))
+        .addSubcommandGroup(g => g.setName('remove').setDescription('Remove from immunity whitelist')
+            .addSubcommand(s => s.setName('role').setDescription('Remove a role from the immunity whitelist')
+                .addRoleOption(o => o.setName('role').setDescription('Role to remove').setRequired(true)))
+            .addSubcommand(s => s.setName('member').setDescription('Remove a member from the immunity whitelist')
+                .addUserOption(o => o.setName('user').setDescription('Member to remove').setRequired(true)))),
 
     new SlashCommandBuilder()
         .setName('aienable')
@@ -7017,6 +7072,19 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addStringOption(o => o.setName('user').setDescription('User mention or Discord ID').setRequired(true)),
 
+    new SlashCommandBuilder()
+        .setName('aimodel')
+        .setDescription('Configure which AI provider is used when the bot is active (toggleactive)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o
+            .setName('provider')
+            .setDescription('AI provider to use (default: Groq)')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Groq (llama-3.3-70b-versatile) — default', value: 'groq' },
+                { name: 'OpenAI (gpt-4o-mini)', value: 'openai' },
+            )),
+
     // Violations
     new SlashCommandBuilder()
         .setName('violations')
@@ -7041,12 +7109,6 @@ const slashCommands = [
         .setDescription('Test the scanner on a message')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
         .addStringOption(o => o.setName('text').setDescription('Text to scan').setRequired(true)),
-
-    // Status
-    new SlashCommandBuilder()
-        .setName('botstatus')
-        .setDescription('Show current bot configuration and status')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
 
     new SlashCommandBuilder()
         .setName('warn')
@@ -7146,39 +7208,59 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
 
+    // Raid (merged into /raid)
     new SlashCommandBuilder()
-        .setName('raidmode')
-        .setDescription('Enable/disable raid mode (stricter, auto-lockdown on join spikes)')
+        .setName('raid')
+        .setDescription('Manage raid mode and protection settings')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(true)),
+        .addSubcommand(s => s.setName('mode')
+            .setDescription('Enable/disable raid mode')
+            .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(true)))
+        .addSubcommand(s => s.setName('status')
+            .setDescription('Show raid-mode status and current join spike window'))
+        .addSubcommand(s => s.setName('config')
+            .setDescription('Configure raid protection thresholds')
+            .addIntegerOption(o => o.setName('window').setDescription('Join window seconds (5-120)').setRequired(false))
+            .addIntegerOption(o => o.setName('threshold').setDescription('Joins in window to trigger (2-50)').setRequired(false))
+            .addIntegerOption(o => o.setName('lockdown').setDescription('Lockdown minutes (1-60)').setRequired(false))
+            .addBooleanOption(o => o.setName('lockchannels').setDescription('Lock channels on trigger').setRequired(false))
+            .addBooleanOption(o => o.setName('blocklinks').setDescription('Block all links during lockdown').setRequired(false))
+            .addIntegerOption(o => o.setName('newacctdays').setDescription('Treat accounts younger than X days as risky (0-90)').setRequired(false))
+            .addChannelOption(o => o.setName('notify').setDescription('Notify channel for raid alerts').setRequired(false)))
+        .addSubcommand(s => s.setName('unlockdown')
+            .setDescription('Disable raid lockdown and optionally unlock channels')
+            .addBooleanOption(o => o.setName('unlockchannels').setDescription('Unlock channels (@everyone SendMessages)').setRequired(false))),
 
+    // Link policy (merged into /link)
     new SlashCommandBuilder()
-        .setName('raidstatus')
-        .setDescription('Show raid-mode status and current join spike window')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
-
-    new SlashCommandBuilder()
-        .setName('linkpolicy')
-        .setDescription('Enable/disable link policy (allowlist/denylist)')
+        .setName('link')
+        .setDescription('Manage link policy settings')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('allowdomain')
-        .setDescription('Allowlist a domain for link policy')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addStringOption(o => o.setName('domain').setDescription('Domain (example.com)').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('denydomain')
-        .setDescription('Denylist a domain for link policy')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addStringOption(o => o.setName('domain').setDescription('Domain (example.com)').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('listdomains')
-        .setDescription('List link allowlist/denylist domains')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
+        .addSubcommand(s => s.setName('policy')
+            .setDescription('Enable/disable link policy (allowlist/denylist)')
+            .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(true)))
+        .addSubcommand(s => s.setName('mode')
+            .setDescription('Set link scanning mode')
+            .addStringOption(o => o.setName('mode').setDescription('strict|medium|off').setRequired(true)
+                .addChoices({ name: 'strict', value: 'strict' }, { name: 'medium', value: 'medium' }, { name: 'off', value: 'off' })))
+        .addSubcommand(s => s.setName('action')
+            .setDescription('Set action taken on link violation')
+            .addStringOption(o => o.setName('action').setDescription('delete|warn|exile|timeout').setRequired(true)
+                .addChoices({ name: 'delete', value: 'delete' }, { name: 'warn', value: 'warn' }, { name: 'exile', value: 'exile' }, { name: 'timeout', value: 'timeout' }))
+            .addIntegerOption(o => o.setName('minutes').setDescription('Timeout duration in minutes').setRequired(false)))
+        .addSubcommand(s => s.setName('status').setDescription('Show link policy status and domain counts'))
+        .addSubcommand(s => s.setName('list').setDescription('List all allowlisted and denylisted domains'))
+        .addSubcommand(s => s.setName('allow')
+            .setDescription('Allowlist a domain')
+            .addStringOption(o => o.setName('domain').setDescription('Domain (example.com)').setRequired(true)))
+        .addSubcommand(s => s.setName('deny')
+            .setDescription('Denylist a domain')
+            .addStringOption(o => o.setName('domain').setDescription('Domain (example.com)').setRequired(true)))
+        .addSubcommand(s => s.setName('remove')
+            .setDescription('Remove a domain from allowlist or denylist')
+            .addStringOption(o => o.setName('list').setDescription('allow or deny').setRequired(true)
+                .addChoices({ name: 'allow', value: 'allow' }, { name: 'deny', value: 'deny' }))
+            .addStringOption(o => o.setName('domain').setDescription('Domain (example.com)').setRequired(true))),
 
     new SlashCommandBuilder()
         .setName('mentionlimit')
@@ -7198,36 +7280,6 @@ const slashCommands = [
         .setName('automodstats')
         .setDescription('Show automod counters for this server')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
-
-    new SlashCommandBuilder()
-        .setName('raidconfig')
-        .setDescription('Configure raid protection thresholds')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addIntegerOption(o => o.setName('window').setDescription('Join window seconds (5-120)').setRequired(false))
-        .addIntegerOption(o => o.setName('threshold').setDescription('Joins in window to trigger (2-50)').setRequired(false))
-        .addIntegerOption(o => o.setName('lockdown').setDescription('Lockdown minutes (1-60)').setRequired(false))
-        .addBooleanOption(o => o.setName('lockchannels').setDescription('Lock channels on trigger').setRequired(false))
-        .addBooleanOption(o => o.setName('blocklinks').setDescription('Block all links during lockdown').setRequired(false))
-        .addIntegerOption(o => o.setName('newacctdays').setDescription('Treat accounts younger than X days as risky (0-90)').setRequired(false))
-        .addChannelOption(o => o.setName('notify').setDescription('Notify channel for raid alerts').setRequired(false)),
-
-    new SlashCommandBuilder()
-        .setName('unlockdown')
-        .setDescription('Disable raid lockdown and optionally unlock channels')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('unlockchannels').setDescription('Unlock channels (@everyone SendMessages)').setRequired(false)),
-
-    new SlashCommandBuilder()
-        .setName('linkstatus')
-        .setDescription('Show link policy status and summarize recent domains')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
-
-    new SlashCommandBuilder()
-        .setName('domainremove')
-        .setDescription('Remove a domain from allowlist or denylist')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addStringOption(o => o.setName('list').setDescription('allow|deny').setRequired(true))
-        .addStringOption(o => o.setName('domain').setDescription('Domain (example.com)').setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('capsconfig')
@@ -8610,34 +8662,57 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
-        // ── Immunity ──────────────────────────────────────
-        case 'enableimmunity':  { if(!isAdmin){await interaction.reply({content:'❌ Admins only.',ephemeral:true});return;} imm.enabled=true; saveData(data); await interaction.reply({ content: '✅ **Staff immunity ENABLED.** Admins/mods are now immune from scanning.', ephemeral: true }); break; }
-        case 'disableimmunity': { if(!isAdmin){await interaction.reply({content:'❌ Admins only.',ephemeral:true});return;} imm.enabled=false; saveData(data); await interaction.reply({ content: '⚠️ **Staff immunity DISABLED.** Everyone is scanned, including staff.', ephemeral: true }); break; }
-        case 'addimmunity': {
+        // ── /immunity ─────────────────────────────────────
+        case 'immunity': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            const role = interaction.options.getRole('role');
-            if (!imm.whitelistedRoles.includes(role.id)) { imm.whitelistedRoles.push(role.id); saveData(data); }
-            await interaction.reply({ content: `✅ Role **${role.name}** added to immunity whitelist.`, ephemeral: true });
-            break;
-        }
-        case 'removeimmunity': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            const role = interaction.options.getRole('role');
-            imm.whitelistedRoles = imm.whitelistedRoles.filter(id => id !== role.id);
-            saveData(data);
-            await interaction.reply({ content: `✅ Role **${role.name}** removed from immunity whitelist.`, ephemeral: true });
-            break;
-        }
-        case 'immunestatus': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
-            const roleNames = imm.whitelistedRoles.map(rid => { const r = interaction.guild.roles.cache.get(rid); return r ? `<@&${rid}>` : `Unknown (${rid})`; });
-            await interaction.reply({ embeds: [new EmbedBuilder()
-                .setTitle('🛡️ Immunity Settings')
-                .setColor(imm.enabled ? 0x00FF88 : 0xFF4444)
-                .addFields(
-                    { name: 'Immunity Status', value: imm.enabled ? '✅ ENABLED' : '❌ DISABLED', inline: true },
-                    { name: 'Whitelisted Roles', value: roleNames.length ? roleNames.join('\n') : 'None', inline: false },
-                )], ephemeral: true });
+            const sub   = interaction.options.getSubcommand(false);
+            const group = interaction.options.getSubcommandGroup(false);
+            // enable / disable / status
+            if (!group) {
+                if (sub === 'enable')  { imm.enabled = true;  saveData(data); await interaction.reply({ content: '✅ **Staff immunity ENABLED.** Admins/mods are now immune from scanning.', ephemeral: true }); return; }
+                if (sub === 'disable') { imm.enabled = false; saveData(data); await interaction.reply({ content: '⚠️ **Staff immunity DISABLED.** Everyone is scanned, including staff.', ephemeral: true }); return; }
+                if (sub === 'status') {
+                    const roleNames   = imm.whitelistedRoles.map(rid => { const r = interaction.guild.roles.cache.get(rid); return r ? `<@&${rid}>` : `Unknown (${rid})`; });
+                    const memberNames = imm.whitelistedMembers.map(uid => `<@${uid}>`);
+                    await interaction.reply({ embeds: [new EmbedBuilder()
+                        .setTitle('🛡️ Immunity Settings')
+                        .setColor(imm.enabled ? 0x00FF88 : 0xFF4444)
+                        .addFields(
+                            { name: 'Immunity Status',     value: imm.enabled ? '✅ ENABLED' : '❌ DISABLED', inline: true },
+                            { name: 'Whitelisted Roles',   value: roleNames.length   ? roleNames.join('\n')   : 'None', inline: false },
+                            { name: 'Whitelisted Members', value: memberNames.length ? memberNames.join('\n') : 'None', inline: false },
+                        )], ephemeral: true });
+                    return;
+                }
+            }
+            // add role / add member
+            if (group === 'add') {
+                if (sub === 'role') {
+                    const role = interaction.options.getRole('role');
+                    if (!imm.whitelistedRoles.includes(role.id)) { imm.whitelistedRoles.push(role.id); saveData(data); }
+                    await interaction.reply({ content: `✅ Role **${role.name}** added to immunity whitelist.`, ephemeral: true });
+                } else if (sub === 'member') {
+                    const user = interaction.options.getUser('user');
+                    if (!imm.whitelistedMembers.includes(user.id)) { imm.whitelistedMembers.push(user.id); saveData(data); }
+                    await interaction.reply({ content: `✅ Member <@${user.id}> added to immunity whitelist.`, ephemeral: true });
+                }
+                return;
+            }
+            // remove role / remove member
+            if (group === 'remove') {
+                if (sub === 'role') {
+                    const role = interaction.options.getRole('role');
+                    imm.whitelistedRoles = imm.whitelistedRoles.filter(id => id !== role.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Role **${role.name}** removed from immunity whitelist.`, ephemeral: true });
+                } else if (sub === 'member') {
+                    const user = interaction.options.getUser('user');
+                    imm.whitelistedMembers = imm.whitelistedMembers.filter(id => id !== user.id);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Member <@${user.id}> removed from immunity whitelist.`, ephemeral: true });
+                }
+                return;
+            }
             break;
         }
 
@@ -8779,36 +8854,91 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
-        case 'linkmode': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            const mode = (interaction.options.getString('mode') || '').toLowerCase();
-            if (!['strict','medium','off'].includes(mode)) { await interaction.reply({ content: '❌ Use: strict|medium|off', ephemeral: true }); return; }
-            const before = gs.linkMode;
-            gs.linkMode = mode;
-            saveData(data);
-            await interaction.reply({ content: `✅ Link mode set to **${mode}**.`, ephemeral: true });
-            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Link Mode Updated', [
-                `linkMode: **${before}** -> **${gs.linkMode}**`,
-            ]);
+        // ── /link ─────────────────────────────────────────
+        case 'link': {
+            const sub = interaction.options.getSubcommand();
+            if (sub === 'mode') {
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                const mode = (interaction.options.getString('mode') || '').toLowerCase();
+                if (!['strict','medium','off'].includes(mode)) { await interaction.reply({ content: '❌ Use: strict|medium|off', ephemeral: true }); return; }
+                const before = gs.linkMode;
+                gs.linkMode = mode;
+                saveData(data);
+                await interaction.reply({ content: `✅ Link mode set to **${mode}**.`, ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Link Mode Updated', [`linkMode: **${before}** -> **${gs.linkMode}**`]);
+            } else if (sub === 'action') {
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                const action = (interaction.options.getString('action') || '').toLowerCase();
+                if (!['delete','warn','exile','timeout'].includes(action)) { await interaction.reply({ content: '❌ Use: delete|warn|exile|timeout', ephemeral: true }); return; }
+                const before = gs.linkAction;
+                gs.linkAction = action;
+                const mins = interaction.options.getInteger('minutes');
+                if (action === 'timeout' && mins) gs.timeoutMinutesScam = Math.max(1, Math.min(10080, mins));
+                saveData(data);
+                await interaction.reply({ content: `✅ Link action set to **${action}**.`, ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Link Action Updated', [
+                    `linkAction: **${before}** -> **${gs.linkAction}**`,
+                    action === 'timeout' ? `timeoutMinutesScam: ${gs.timeoutMinutesScam}` : null,
+                ]);
+            } else if (sub === 'policy') {
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                gs.linkPolicyEnabled = !!interaction.options.getBoolean('enabled');
+                saveData(data);
+                await interaction.reply({ content: `✅ Link policy is now **${gs.linkPolicyEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            } else if (sub === 'allow') {
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                const dom = normalizeDomain(interaction.options.getString('domain'));
+                if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', ephemeral: true }); return; }
+                gs.linkAllowlistedDomains = Array.isArray(gs.linkAllowlistedDomains) ? gs.linkAllowlistedDomains : [];
+                if (!gs.linkAllowlistedDomains.includes(dom)) gs.linkAllowlistedDomains.push(dom);
+                saveData(data);
+                await interaction.reply({ content: `✅ Allowlisted: **${dom}**`, ephemeral: true });
+            } else if (sub === 'deny') {
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                const dom = normalizeDomain(interaction.options.getString('domain'));
+                if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', ephemeral: true }); return; }
+                gs.linkDenylistedDomains = Array.isArray(gs.linkDenylistedDomains) ? gs.linkDenylistedDomains : [];
+                if (!gs.linkDenylistedDomains.includes(dom)) gs.linkDenylistedDomains.push(dom);
+                saveData(data);
+                await interaction.reply({ content: `✅ Denylisted: **${dom}**`, ephemeral: true });
+            } else if (sub === 'list') {
+                if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+                const allow = (gs.linkAllowlistedDomains || []).slice(0, 60);
+                const deny  = (gs.linkDenylistedDomains || []).slice(0, 60);
+                await interaction.reply({ embeds: [new EmbedBuilder()
+                    .setTitle('🔗 Link Policy Domains')
+                    .setColor(gs.linkPolicyEnabled ? 0x00FF88 : 0xFF4444)
+                    .addFields(
+                        { name: 'Policy', value: gs.linkPolicyEnabled ? '✅ ENABLED' : '❌ DISABLED', inline: true },
+                        { name: 'Allowlist (first 60)', value: allow.length ? allow.join('\n').slice(0, 1024) : 'None', inline: false },
+                        { name: 'Denylist (first 60)',  value: deny.length  ? deny.join('\n').slice(0, 1024)  : 'None', inline: false },
+                    ).setTimestamp()], ephemeral: true });
+            } else if (sub === 'status') {
+                if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+                const allow = (gs.linkAllowlistedDomains || []).length;
+                const deny  = (gs.linkDenylistedDomains || []).length;
+                await interaction.reply({ embeds: [new EmbedBuilder()
+                    .setTitle('🔗 Link Policy Status')
+                    .setColor(gs.linkPolicyEnabled ? 0x00FF88 : 0xFF4444)
+                    .addFields(
+                        { name: 'Policy', value: gs.linkPolicyEnabled ? '✅ ENABLED' : '❌ DISABLED', inline: true },
+                        { name: 'Allowlist Size', value: String(allow), inline: true },
+                        { name: 'Denylist Size', value: String(deny), inline: true },
+                        { name: 'Raid Block Links', value: gs.raidLinkBlockAll ? '✅ ON' : '❌ OFF', inline: true },
+                    ).setTimestamp()], ephemeral: true });
+            } else if (sub === 'remove') {
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                const list = (interaction.options.getString('list') || '').toLowerCase();
+                const dom = normalizeDomain(interaction.options.getString('domain'));
+                if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', ephemeral: true }); return; }
+                if (list === 'allow') gs.linkAllowlistedDomains = (gs.linkAllowlistedDomains || []).filter(x => normalizeDomain(x) !== dom);
+                if (list === 'deny')  gs.linkDenylistedDomains  = (gs.linkDenylistedDomains  || []).filter(x => normalizeDomain(x) !== dom);
+                saveData(data);
+                await interaction.reply({ content: `✅ Removed **${dom}** from **${list}** list.`, ephemeral: true });
+            }
             break;
         }
-
-        case 'linkaction': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            const action = (interaction.options.getString('action') || '').toLowerCase();
-            if (!['delete','warn','exile','timeout'].includes(action)) { await interaction.reply({ content: '❌ Use: delete|warn|exile|timeout', ephemeral: true }); return; }
-            const before = gs.linkAction;
-            gs.linkAction = action;
-            const mins = interaction.options.getInteger('minutes');
-            if (action === 'timeout' && mins) gs.timeoutMinutesScam = Math.max(1, Math.min(10080, mins));
-            saveData(data);
-            await interaction.reply({ content: `✅ Link action set to **${action}**.`, ephemeral: true });
-            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Link Action Updated', [
-                `linkAction: **${before}** -> **${gs.linkAction}**`,
-                action === 'timeout' ? `timeoutMinutesScam: ${gs.timeoutMinutesScam}` : null,
-            ]);
-            break;
-        }
+        // legacy aliases kept for text-command compat — slash routes through 'link'
 
         case 'verifygate': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
@@ -8994,13 +9124,23 @@ client.on('interactionCreate', async interaction => {
         case 'violations': {
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const user  = interaction.options.getUser('user');
-            const count = data.violations[user.id] || 0;
+            const count = getViolationCount(data, user.id);
             const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
-            await interaction.reply({ embeds: [new EmbedBuilder()
-                .setTitle('📊 Violation Count')
-                .setColor(count >= threshold ? 0xFF4444 : 0xFFAA00)
-                .setDescription(`<@${user.id}> has **${count}/${threshold}** violations.`)
-                .setThumbnail(user.displayAvatarURL())], ephemeral: true });
+            const history = getViolationHistory(data, user.id);
+            const histLines = history.slice(-10).map((h, i) => {
+                const ts = h.timestamp ? `<t:${Math.floor(h.timestamp/1000)}:d>` : 'unknown date';
+                const cat = h.category ? `[${h.category}]` : '';
+                const by  = h.by ? ` — by <@${h.by}>` : '';
+                return `**${i+1}.** ${cat} ${h.reason}${by} — ${ts}`;
+            });
+            const embed = new EmbedBuilder()
+                .setTitle('📊 Violation History')
+                .setColor(count >= threshold ? 0xFF4444 : (count > 0 ? 0xFFAA00 : 0x00FF88))
+                .setThumbnail(user.displayAvatarURL())
+                .setDescription(`<@${user.id}> — **${count}/${threshold}** violations`)
+                .addFields({ name: `Recent warnings (${history.length} total)`, value: histLines.length ? histLines.join('\n') : 'No warning history.', inline: false })
+                .setTimestamp();
+            await interaction.reply({ embeds: [embed], ephemeral: true });
             break;
         }
 
@@ -9008,7 +9148,7 @@ client.on('interactionCreate', async interaction => {
         case 'clearviolations': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const user = interaction.options.getUser('user');
-            data.violations[user.id] = 0;
+            clearViolationEntry(data, user.id);
             saveData(data);
             await interaction.reply({ content: `✅ Cleared violations for <@${user.id}>.`, ephemeral: true });
             break;
@@ -9028,11 +9168,36 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
+        // ── /aimodel ──────────────────────────────────────
+        case 'aimodel': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!ai2State.enabled) { await interaction.reply({ content: '❌ AI chat system is not enabled (config/config.yaml missing).', ephemeral: true }); return; }
+            const provider = interaction.options.getString('provider');
+            const prev = ai2State.activeProvider || 'groq';
+            ai2State.activeProvider = provider;
+            ai2InitClient(provider);
+            const providerLabels = { groq: 'Groq (llama-3.3-70b-versatile)', openai: 'OpenAI (gpt-4o-mini)' };
+            const label = providerLabels[provider] || provider;
+            const prevLabel = providerLabels[prev] || prev;
+            const available = ai2Client ? '✅ Connected' : '❌ No API key found — falling back';
+            await interaction.reply({ embeds: [new EmbedBuilder()
+                .setTitle('🤖 AI Model Updated')
+                .setColor(0x5865F2)
+                .addFields(
+                    { name: 'Previous', value: prevLabel, inline: true },
+                    { name: 'Now Using', value: label, inline: true },
+                    { name: 'Status', value: `${available}\n\`Model: ${ai2Model || 'none'}\``, inline: false },
+                )
+                .setFooter({ text: 'Affects all !toggleactive channels immediately' })
+                .setTimestamp()], ephemeral: true });
+            break;
+        }
+
         // ── /botstatus ────────────────────────────────────
         case 'botstatus': {
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const totalExiled     = Object.keys(data.exiles).length;
-            const totalViolations = Object.values(data.violations).reduce((a,b)=>a+b,0);
+            const totalViolations = Object.values(data.violations).reduce((a, v) => a + (typeof v === 'number' ? v : (v?.count || 0)), 0);
             await interaction.reply({ embeds: [new EmbedBuilder()
                 .setTitle('🤖 SKYNET V7 — Status')
                 .setColor(0x5865F2)
@@ -9061,8 +9226,7 @@ client.on('interactionCreate', async interaction => {
             const reason = interaction.options.getString('reason') || 'Manual warn';
             const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
             const exileMins = Math.max(1, Math.min(1440, gs.exileDurationMins || EXILE_DURATION_MINS));
-            data.violations[user.id] = (data.violations[user.id] || 0) + 1;
-            const count = data.violations[user.id];
+            const count = addViolationEntry(data, user.id, { reason, category: 'manual', by: interaction.user.id });
             saveData(data);
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('⚠️ Manual Warn')
@@ -9075,7 +9239,7 @@ client.on('interactionCreate', async interaction => {
                 ).setTimestamp());
             await interaction.reply({ content: `✅ Warned <@${user.id}>. Violations: **${count}/${threshold}**`, ephemeral: false });
             if (count >= threshold) {
-                data.violations[user.id] = 0;
+                clearViolationEntry(data, user.id);
                 saveData(data);
                 const member = await interaction.guild.members.fetch(user.id).catch(()=>null);
                 if (member) await performExile(member, interaction.guild, exileMins, `Manual warn threshold reached: ${reason}`, data);
@@ -9089,9 +9253,8 @@ client.on('interactionCreate', async interaction => {
             const user = interaction.options.getUser('user');
             const reason = interaction.options.getString('reason') || 'Manual unwarn';
             const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
-            const cur = data.violations[user.id] || 0;
-            const next = Math.max(0, cur - 1);
-            data.violations[user.id] = next;
+            const cur = getViolationCount(data, user.id);
+            const next = decrementViolationEntry(data, user.id);
             saveData(data);
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('✅ Manual Unwarn')
@@ -11406,6 +11569,24 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         }
         return;
     }
+    if (ai2State.enabled && cmd === 'aimodel' && ai2OwnerOk) {
+        const providerArg = (args[0] || '').toLowerCase();
+        const validProviders = { groq: 'Groq (llama-3.3-70b-versatile)', openai: 'OpenAI (gpt-4o-mini)' };
+        if (!providerArg) {
+            const cur = ai2State.activeProvider || 'groq';
+            await message.channel.send(`🤖 Current AI provider: **${validProviders[cur] || cur}** | Model: \`${ai2Model || 'none'}\`\nUse \`!aimodel groq\` or \`!aimodel openai\` to switch.`);
+            return;
+        }
+        if (!validProviders[providerArg]) {
+            await message.channel.send(`❌ Unknown provider. Use: groq | openai`);
+            return;
+        }
+        const prev = ai2State.activeProvider || 'groq';
+        ai2State.activeProvider = providerArg;
+        ai2InitClient(providerArg);
+        await message.channel.send(`✅ AI provider switched from **${validProviders[prev] || prev}** → **${validProviders[providerArg]}**\nModel: \`${ai2Model || 'none (no API key?)'}\``);
+        return;
+    }
     if (ai2State.enabled && cmd === 'wipe' && ai2OwnerOk) {
         ai2State.messageHistory.clear();
         await message.channel.send("Wiped the bot's memory.");
@@ -11442,6 +11623,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             `${pfx}wipe - Clears history of the bot\n` +
             `${pfx}ping - Shows the bot's latency\n` +
             `${pfx}toggleactive [id / channel] - Toggle a mentioned channel or the current channel\n` +
+            `${pfx}aimodel [groq|openai] - Switch which AI provider is used (default: Groq)\n` +
             `${pfx}toggledm - Toggle if the bot should be active in DM's\n` +
             `${pfx}togglegc - Toggle if the bot should be active in group chats\n` +
             `${pfx}ignore [user] - Stop a user from using the bot\n` +
@@ -12002,15 +12184,28 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'violations' && (isAdmin || isMod)) {
         const target = await resolveMember(args[0]);
         if (!target) return;
-        const count = data.violations[target.id] || 0;
-        await message.channel.send(`📊 ${target} has **${count}/${threshold}** violations.`);
+        const count   = getViolationCount(data, target.id);
+        const history = getViolationHistory(data, target.id);
+        const histLines = history.slice(-10).map((h, i) => {
+            const ts  = h.timestamp ? `<t:${Math.floor(h.timestamp/1000)}:d>` : '?';
+            const cat = h.category ? `[${h.category}]` : '';
+            const by  = h.by ? ` — by <@${h.by}>` : '';
+            return `**${i+1}.** ${cat} ${h.reason}${by} — ${ts}`;
+        });
+        const embed = new EmbedBuilder()
+            .setTitle('📊 Violation History')
+            .setColor(count >= threshold ? 0xFF4444 : (count > 0 ? 0xFFAA00 : 0x00FF88))
+            .setDescription(`${target} — **${count}/${threshold}** violations`)
+            .addFields({ name: `Recent warnings (${history.length} total)`, value: histLines.length ? histLines.join('\n') : 'No warning history.', inline: false })
+            .setTimestamp();
+        await message.channel.send({ embeds: [embed] });
     }
 
     // !clearviolations [mention | id]
     else if (cmd === 'clearviolations' && isAdmin) {
         const target = await resolveMember(args[0]);
         if (!target) return;
-        data.violations[target.id] = 0;
+        clearViolationEntry(data, target.id);
         saveData(data);
         await message.channel.send(`✅ Cleared violations for ${target}.`);
     }
@@ -12033,12 +12228,11 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
         const reason = args.slice(1).join(' ') || 'Manual warn';
-        data.violations[target.id] = (data.violations[target.id] || 0) + 1;
-        const count = data.violations[target.id];
+        const count = addViolationEntry(data, target.id, { reason, category: 'manual', by: message.author.id });
         saveData(data);
         await message.channel.send(`✅ Warned ${target}. Violations: **${count}/${threshold}**`);
         if (count >= threshold && isAdmin) {
-            data.violations[target.id] = 0;
+            clearViolationEntry(data, target.id);
             saveData(data);
             const fd = loadData();
             await performExile(target, message.guild, exileMins, `Manual warn threshold reached: ${reason}`, fd);
@@ -12050,10 +12244,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'unwarn' && (isAdmin || isMod)) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
-        const cur = data.violations[target.id] || 0;
-        data.violations[target.id] = Math.max(0, cur - 1);
+        const cur = getViolationCount(data, target.id);
+        const next = decrementViolationEntry(data, target.id);
         saveData(data);
-        await message.channel.send(`✅ Unwarned ${target}. Violations: **${data.violations[target.id]}/${threshold}**`);
+        await message.channel.send(`✅ Unwarned ${target}. Violations: **${next}/${threshold}**`);
     }
 
     // !purge [1-100]
@@ -12641,13 +12835,15 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     // !immunestatus
     else if (cmd === 'immunestatus' && (isAdmin || isMod)) {
         const imm = getImmunitySettings(message.guildId, data);
-        const roleNames = imm.whitelistedRoles.map(rid => { const r = message.guild.roles.cache.get(rid); return r ? `<@&${rid}>` : `Unknown (${rid})`; });
+        const roleNames   = imm.whitelistedRoles.map(rid => { const r = message.guild.roles.cache.get(rid); return r ? `<@&${rid}>` : `Unknown (${rid})`; });
+        const memberNames = imm.whitelistedMembers.map(uid => `<@${uid}>`);
         await message.channel.send({ embeds: [new EmbedBuilder()
             .setTitle('🛡️ Immunity Settings')
             .setColor(imm.enabled ? 0x00FF88 : 0xFF4444)
             .addFields(
-                { name: 'Immunity Status',   value: imm.enabled ? '✅ ENABLED' : '❌ DISABLED', inline: true },
-                { name: 'Whitelisted Roles', value: roleNames.length ? roleNames.join('\n') : 'None', inline: false },
+                { name: 'Immunity Status',     value: imm.enabled ? '✅ ENABLED' : '❌ DISABLED', inline: true },
+                { name: 'Whitelisted Roles',   value: roleNames.length   ? roleNames.join('\n')   : 'None', inline: false },
+                { name: 'Whitelisted Members', value: memberNames.length ? memberNames.join('\n') : 'None', inline: false },
             )] });
     }
 
