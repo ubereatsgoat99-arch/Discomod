@@ -8267,7 +8267,7 @@ client.on('interactionCreate', async interaction => {
             st.mode = 'calc';
             st.lines.push(expr);
             slashSessions.set(uid, st);
-            await safeReply(interaction, { content: '🧮 Multi-line Qalculate mode started. Send more lines or type `Evaluate`.', ephemeral: false });
+            await safeReply(interaction, { content: '🧮 Multi-line calc mode started. Send more lines or type `Evaluate`.', ephemeral: false });
             break;
         }
 
