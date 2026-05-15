@@ -131,10 +131,11 @@ const ai2State = {
     replyPing: !!ai2Config?.bot?.reply_ping,
     openaiModel: String(ai2Config?.bot?.openai_model || 'gpt-4o-mini'),
     groqModel: String(ai2Config?.bot?.groq_model || 'llama-3.1-70b-versatile'),
+    claudeModel: String(ai2Config?.bot?.claude_model || 'claude-haiku-4-5-20251001'),
     errorWebhook: String(ai2Config?.notifications?.error_webhook || ''),
     ratelimitNotifications: !!ai2Config?.notifications?.ratelimit_notifications,
     paused: false,
-    activeProvider: 'groq', // 'groq' | 'openai' — configurable via /aimodel
+    activeProvider: 'groq', // 'groq' | 'openai' | 'claude' — configurable via /aimodel
     instructions: ai2LoadInstructions(),
     activeChannels: new Set(),
     ignoredUsers: new Set(),
@@ -195,7 +196,28 @@ function ai2InitClient(forceProvider) {
     const provider = forceProvider || ai2State.activeProvider || 'groq';
     const openaiKey = process.env.OPENAI_API_KEY || '';
     const groqKey   = process.env.GROQ_API_KEY   || '';
-    if (provider === 'openai') {
+    if (provider === 'claude') {
+        // Claude uses Anthropic API via fetch — no OpenAI client needed
+        if (ANTHROPIC_KEY) {
+            ai2Client = null; // flag: use Claude fetch path
+            ai2Model  = ai2State.claudeModel;
+            ai2State.activeProvider = 'claude';
+            return;
+        }
+        // fallback chain: groq → openai
+        if (groqKey) {
+            ai2Client = new OpenAI({ apiKey: groqKey, baseURL: 'https://api.groq.com/openai/v1' });
+            ai2Model  = ai2State.groqModel;
+            ai2State.activeProvider = 'groq';
+            return;
+        }
+        if (openaiKey) {
+            ai2Client = new OpenAI({ apiKey: openaiKey });
+            ai2Model  = ai2State.openaiModel;
+            ai2State.activeProvider = 'openai';
+            return;
+        }
+    } else if (provider === 'openai') {
         if (openaiKey) {
             ai2Client = new OpenAI({ apiKey: openaiKey });
             ai2Model  = ai2State.openaiModel;
@@ -346,8 +368,48 @@ function ai2IsTriggerMessage(message) {
     return contentHasTrigger || mentioned || repliedTo || isDm || isGc || inConversation;
 }
 
+// ── Claude (Anthropic) chat generation — uses fetch since Claude has its own API format ──
+async function ai2GenerateResponseClaude(prompt, instructions, history) {
+    if (!ANTHROPIC_KEY) return "Sorry, ANTHROPIC_API_KEY is not set.";
+    try {
+        const messages = [];
+        if (history && Array.isArray(history)) {
+            for (const h of history) {
+                if ((h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string')
+                    messages.push(h);
+            }
+        }
+        messages.push({ role: 'user', content: String(prompt || '') });
+        const body = {
+            model: ai2State.claudeModel,
+            max_tokens: 1024,
+            system: String(instructions || ''),
+            messages,
+        };
+        const res = await fetch(AI_API_URL, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                'x-api-key': ANTHROPIC_KEY,
+                'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+        return String(data?.content?.[0]?.text || "Sorry, I couldn't generate a response.");
+    } catch (e) {
+        await ai2WebhookLog(null, e);
+        return "Sorry, I couldn't generate a response.";
+    }
+}
+
 async function ai2GenerateResponse(prompt, instructions, history) {
     ai2InitClient();
+    // Claude uses its own API format — delegate to dedicated function
+    if (ai2State.activeProvider === 'claude') {
+        return await ai2GenerateResponseClaude(prompt, instructions, history);
+    }
     if (!ai2Client || !ai2Model) return "Sorry, I couldn't generate a response.";
     try {
         const msgs = [{ role: 'system', content: String(instructions || '') }];
@@ -3535,15 +3597,22 @@ const COMMON_WORD_WHITELIST = new Set([
 //  FRUITS
 // ══════════════════════════════════════════════════════════
 const FRUITS = [
-    "rocket","spin","blade","spring","bomb","smoke","spike","flame",
-    "ice","sand","dark","eagle","diamond","light","rubber","ghost",
-    "magma","quake","buddha","buda","love","creation","spider","sound",
+    // ── Common ────────────────────────────────────────────────────────────
+    "rocket","spin","chop","spring","bomb","smoke","spike","flame","kilo",
+    // ── Uncommon ──────────────────────────────────────────────────────────
+    "ice","sand","dark","eagle","diamond",
+    // ── Rare ──────────────────────────────────────────────────────────────
+    "light","rubber","ghost","magma","quake","buddha","buda","love","creation",
+    "spider","sound",
+    // ── Legendary ─────────────────────────────────────────────────────────
     "phoenix","portal","rumble","lightning","pain","blizzard","gravity",
-    "mammoth","trex","t-rex","dough","shadow","venom","gas","spirit",
-    "tiger","yeti","kitsune","control","dragon","leopard",
+    "mammoth","trex","t-rex","dough","shadow","venom",
+    // ── Mythical ──────────────────────────────────────────────────────────
+    "gas","spirit","tiger","yeti","kitsune","control","dragon","leopard",
+    // ── Gamepasses / perks ────────────────────────────────────────────────
     "2x money","2x mastery","2x boss drops","dark blade","yoru",
     "fast boats","fruit notifier","werewolf",
-    // cosmetics / skins / auras / chromatics
+    // ── Cosmetics / skins / auras / chromatics ────────────────────────────
     "empyrean","fiendyetimutation","fiend yeti mutation",
     "werewolftigermutation","werewolf tiger mutation",
     "blueportalskin","blue portal skin",
@@ -3637,6 +3706,9 @@ const FRUIT_ALIASES = {
     "smk":"smoke","smke":"smoke","smoe":"smoke",
     "spke":"spike","spik":"spike","snd":"sand","drk":"dark",
     "eagl":"eagle","egle":"eagle","eagel":"eagle",
+    "klo":"kilo","killo":"kilo","kiilo":"kilo","kiol":"kilo",
+    "chp":"chop","chopp":"chop","ch0p":"chop",
+    "blade":"chop", // Chop is sometimes called blade at common tier in the game
     "gass":"gas","gaas":"gas","luv":"love","lov":"love",
     "payn":"pain","pian":"pain",
     "rkt":"rocket","ic":"ice","snand":"sand","darck":"dark",
@@ -3764,43 +3836,40 @@ const SWORD_ALIASES = {
 //  BOSSES
 // ══════════════════════════════════════════════════════════
 const BOSSES = [
+    // ── Gods Chalice / story items ───────────────────────────────────────
     "gods chalice","god's chalice","godschalice",
     "fist of darkness","fistofdarkness",
+    // ── First Sea bosses ─────────────────────────────────────────────────
     "greybeard","grey beard",
-    "darkbeard","dark beard",
     "order",
-    "cake prince","cakeprince",
-    "dough king","doughking",
-    "tyrant of the skies","tyrant skies","tyrantskies",
-    "leviathan","leviathn","leviatan","levithan",
-    "sea beast","seabeast","seabst",
-    "unbound werewolf","unboundwerewolf","werewlf","wwolf",
-    "gorilla king","gorillaking",
-    "bobby",
-    "the saw","thesaw",
-    "yeti",
-    "mob leader","mobleader",
     "vice admiral","viceadmiral",
     "saber expert","saberexpert",
     "warden",
     "chief warden","chiefwarden",
     "swan",
-    "magma admiral","magmaadmiral",
-    "fishman lord","fishmanlord",
+    "gorilla king","gorillaking",
+    "bobby",
+    "the saw","thesaw",
+    "mob leader","mobleader",
+    // ── Second Sea bosses ────────────────────────────────────────────────
+    "darkbeard","dark beard",
+    "jeremy",
+    "fajita",
     "wysper",
     "thunder god","thundergod",
+    "magma admiral","magmaadmiral",
+    "fishman lord","fishmanlord",
     "cyborg",
     "ice admiral","iceadmiral",
     "diamond",
-    "jeremy",
-    "fajita",
     "don swan","donswan",
     "smoke admiral","smokeadmiral",
     "awakened ice admiral","awakenediceadmiral",
+    "kilo admiral","kiloadmiral",
+    // ── Third Sea bosses ─────────────────────────────────────────────────
     "tide keeper","tidekeeper",
     "stone",
     "island empress","islandempres",
-    "kilo admiral","kiloadmiral",
     "captain elephant","captainelephant",
     "beautiful pirate","beautifulpirate",
     "longma",
@@ -3808,6 +3877,21 @@ const BOSSES = [
     "soul reaper","soulreaper",
     "indra",
     "katakuri",
+    "yeti",
+    // ── Raid bosses (end-game) ────────────────────────────────────────────
+    "cake prince","cakeprince",
+    "dough king","doughking",
+    "tyrant of the skies","tyrant skies","tyrantskies",
+    "leviathan","leviathn","leviatan","levithan",
+    "sea beast","seabeast","seabst",
+    "unbound werewolf","unboundwerewolf","werewlf","wwolf",
+    // ── Raid-type references ──────────────────────────────────────────────
+    "raid boss","raidboss","raid bosses","raidbosses",
+    "buddha raid boss","rumble raid boss","dough raid boss",
+    "dragon raid boss","leopard raid boss","kitsune raid boss",
+    "phoenix raid boss","portal raid boss","blizzard raid boss",
+    "mammoth raid boss","spirit raid boss","venom raid boss",
+    "shadow raid boss","gravity raid boss","pain raid boss",
 ];
 const BOSS_ALIASES = {
     "gc":"gods chalice","fod":"fist of darkness",
@@ -4115,6 +4199,7 @@ const QUEST_ALIASES = {
 //  SEA EVENTS
 // ══════════════════════════════════════════════════════════
 const SEA_EVENTS = [
+    // ── Core sea events ───────────────────────────────────────────────────
     "sea beast","seabeast","ship raid","shipraid",
     "rumbling waters","pirate raid","pirateraid",
     "factory raid","factoryraid","ghost ship","ghostship",
@@ -4125,6 +4210,13 @@ const SEA_EVENTS = [
     "frozen outpost","frozenoutpost",
     "haunted shipwreck","hauntedshipwreck",
     "prehistoric island","prehistoricisland","kitsune island","kitsuneisland",
+    // ── Additional event references ───────────────────────────────────────
+    "monster shark","monstershark",
+    "leviathan raid","leviathanraid","levi raid","leviraid",
+    "sea event","sea events","sea spawn","sea boss","seaboss",
+    "sea beast spawn","seabeast spawn",
+    "rip indra","ripindra",
+    "cursed ship","cursedship",
 ];
 const SEA_EVENT_ALIASES = {
     "sb":"sea beast","seabst":"sea beast","sebeast":"sea beast",
@@ -6716,8 +6808,27 @@ const slashCommands = [
 
     new SlashCommandBuilder()
         .setName('aienable')
-        .setDescription('Enable AI (Claude) detection for this server')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+        .setDescription('Enable AI (Claude) detection for this server, optionally selecting a chat model')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('on').setDescription('Enable AI detection (keep current model)'))
+        .addSubcommand(s => s
+            .setName('model')
+            .setDescription('Enable AI detection and choose a chat AI model')
+            .addStringOption(o => o
+                .setName('provider')
+                .setDescription('AI chat model to use')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Groq — llama-3.3-70b-versatile (default)', value: 'groq' },
+                    { name: 'Groq — llama-3.1-70b-versatile', value: 'groq-llama31' },
+                    { name: 'Groq — mixtral-8x7b-32768', value: 'groq-mixtral' },
+                    { name: 'Groq — openai/gpt-oss-120b', value: 'groq-gpt-oss' },
+                    { name: 'OpenAI — gpt-4o', value: 'openai-gpt4o' },
+                    { name: 'OpenAI — gpt-4o-mini', value: 'openai-gpt4omini' },
+                    { name: 'Claude — claude-haiku-4-5 (fast, default)', value: 'claude' },
+                    { name: 'Claude — claude-sonnet-4-6 (balanced)', value: 'claude-sonnet' },
+                    { name: 'Claude — claude-opus-4-6 (powerful)', value: 'claude-opus' },
+                ))),
     new SlashCommandBuilder()
         .setName('aidisable')
         .setDescription('Disable AI (Claude) detection for this server')
@@ -7074,15 +7185,22 @@ const slashCommands = [
 
     new SlashCommandBuilder()
         .setName('aimodel')
-        .setDescription('Configure which AI provider is used when the bot is active (toggleactive)')
+        .setDescription('Configure which AI provider/model is used when the bot is active (toggleactive)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addStringOption(o => o
             .setName('provider')
             .setDescription('AI provider to use (default: Groq)')
             .setRequired(true)
             .addChoices(
-                { name: 'Groq (llama-3.3-70b-versatile) — default', value: 'groq' },
-                { name: 'OpenAI (gpt-4o-mini)', value: 'openai' },
+                { name: 'Groq — llama-3.3-70b-versatile (default)', value: 'groq' },
+                { name: 'Groq — llama-3.1-70b-versatile', value: 'groq-llama31' },
+                { name: 'Groq — mixtral-8x7b-32768', value: 'groq-mixtral' },
+                { name: 'Groq — openai/gpt-oss-120b', value: 'groq-gpt-oss' },
+                { name: 'OpenAI — gpt-4o', value: 'openai-gpt4o' },
+                { name: 'OpenAI — gpt-4o-mini', value: 'openai-gpt4omini' },
+                { name: 'Claude — claude-haiku-4-5 (fast, default)', value: 'claude' },
+                { name: 'Claude — claude-sonnet-4-6 (balanced)', value: 'claude-sonnet' },
+                { name: 'Claude — claude-opus-4-6 (powerful)', value: 'claude-opus' },
             )),
 
     // Violations
@@ -8720,9 +8838,39 @@ client.on('interactionCreate', async interaction => {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             gs.aiEnabled = true;
             saveData(data);
-            await interaction.reply({ content: '✅ AI detection is now **ENABLED** for this server.', ephemeral: true });
+
+            const sub = interaction.options.getSubcommand(false);
+            let modelLine = '';
+
+            if (sub === 'model') {
+                const providerChoice = interaction.options.getString('provider');
+                const providerMap = {
+                    'groq':           { provider: 'groq',   model: 'llama-3.3-70b-versatile',   label: 'Groq — llama-3.3-70b-versatile' },
+                    'groq-llama31':   { provider: 'groq',   model: 'llama-3.1-70b-versatile',   label: 'Groq — llama-3.1-70b-versatile' },
+                    'groq-mixtral':   { provider: 'groq',   model: 'mixtral-8x7b-32768',        label: 'Groq — mixtral-8x7b-32768' },
+                    'groq-gpt-oss':   { provider: 'groq',   model: 'openai/gpt-oss-120b',       label: 'Groq — openai/gpt-oss-120b' },
+                    'openai-gpt4o':   { provider: 'openai', model: 'gpt-4o',                    label: 'OpenAI — gpt-4o' },
+                    'openai-gpt4omini':{ provider: 'openai',model: 'gpt-4o-mini',               label: 'OpenAI — gpt-4o-mini' },
+                    'claude':         { provider: 'claude', model: 'claude-haiku-4-5-20251001', label: 'Claude — claude-haiku-4-5 (fast)' },
+                    'claude-sonnet':  { provider: 'claude', model: 'claude-sonnet-4-6',         label: 'Claude — claude-sonnet-4-6 (balanced)' },
+                    'claude-opus':    { provider: 'claude', model: 'claude-opus-4-6',           label: 'Claude — claude-opus-4-6 (powerful)' },
+                };
+                const chosen = providerMap[providerChoice];
+                if (chosen) {
+                    ai2State.activeProvider = chosen.provider;
+                    if (chosen.provider === 'claude') ai2State.claudeModel = chosen.model;
+                    if (chosen.provider === 'openai') ai2State.openaiModel = chosen.model;
+                    if (chosen.provider === 'groq')   ai2State.groqModel   = chosen.model;
+                    ai2InitClient(chosen.provider);
+                    if (chosen.provider !== 'claude') ai2Model = chosen.model;
+                    else ai2Model = chosen.model;
+                    modelLine = `\n🤖 Chat model set to: **${chosen.label}**`;
+                }
+            }
+
+            await interaction.reply({ content: `✅ AI detection is now **ENABLED** for this server.${modelLine}`, ephemeral: true });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Enabled', [
-                `AI detection: **ON**`,
+                `AI detection: **ON**${modelLine}`,
             ]);
             break;
         }
@@ -9172,23 +9320,52 @@ client.on('interactionCreate', async interaction => {
         case 'aimodel': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             if (!ai2State.enabled) { await interaction.reply({ content: '❌ AI chat system is not enabled (config/config.yaml missing).', ephemeral: true }); return; }
-            const provider = interaction.options.getString('provider');
+            const providerChoice = interaction.options.getString('provider');
+
+            // Map slash choice values → internal provider + model
+            const providerMap = {
+                'groq':           { provider: 'groq',   model: 'llama-3.3-70b-versatile',            label: 'Groq — llama-3.3-70b-versatile' },
+                'groq-llama31':   { provider: 'groq',   model: 'llama-3.1-70b-versatile',            label: 'Groq — llama-3.1-70b-versatile' },
+                'groq-mixtral':   { provider: 'groq',   model: 'mixtral-8x7b-32768',                 label: 'Groq — mixtral-8x7b-32768' },
+                'groq-gpt-oss':   { provider: 'groq',   model: 'openai/gpt-oss-120b',                label: 'Groq — openai/gpt-oss-120b' },
+                'openai-gpt4o':   { provider: 'openai', model: 'gpt-4o',                             label: 'OpenAI — gpt-4o' },
+                'openai-gpt4omini':{ provider: 'openai',model: 'gpt-4o-mini',                        label: 'OpenAI — gpt-4o-mini' },
+                'claude':         { provider: 'claude', model: 'claude-haiku-4-5-20251001',          label: 'Claude — claude-haiku-4-5 (fast)' },
+                'claude-sonnet':  { provider: 'claude', model: 'claude-sonnet-4-6',                  label: 'Claude — claude-sonnet-4-6 (balanced)' },
+                'claude-opus':    { provider: 'claude', model: 'claude-opus-4-6',                    label: 'Claude — claude-opus-4-6 (powerful)' },
+            };
+
             const prev = ai2State.activeProvider || 'groq';
-            ai2State.activeProvider = provider;
-            ai2InitClient(provider);
-            const providerLabels = { groq: 'Groq (llama-3.3-70b-versatile)', openai: 'OpenAI (gpt-4o-mini)' };
-            const label = providerLabels[provider] || provider;
-            const prevLabel = providerLabels[prev] || prev;
-            const available = ai2Client ? '✅ Connected' : '❌ No API key found — falling back';
+            const prevLabel = providerMap[prev]?.label || prev;
+            const chosen = providerMap[providerChoice];
+            if (!chosen) { await interaction.reply({ content: '❌ Unknown provider choice.', ephemeral: true }); return; }
+
+            ai2State.activeProvider = chosen.provider;
+            ai2State.claudeModel    = chosen.provider === 'claude' ? chosen.model : ai2State.claudeModel;
+            ai2State.openaiModel    = chosen.provider === 'openai' ? chosen.model : ai2State.openaiModel;
+            ai2State.groqModel      = chosen.provider === 'groq'   ? chosen.model : ai2State.groqModel;
+            ai2InitClient(chosen.provider);
+
+            // Override ai2Model with the exact chosen model
+            if (chosen.provider === 'groq' || chosen.provider === 'openai') ai2Model = chosen.model;
+            if (chosen.provider === 'claude') ai2Model = chosen.model;
+
+            const keyCheck = chosen.provider === 'claude'
+                ? (ANTHROPIC_KEY ? '✅ ANTHROPIC_API_KEY found' : '❌ ANTHROPIC_API_KEY missing')
+                : chosen.provider === 'openai'
+                    ? ((process.env.OPENAI_API_KEY) ? '✅ OPENAI_API_KEY found' : '❌ OPENAI_API_KEY missing')
+                    : ((process.env.GROQ_API_KEY) ? '✅ GROQ_API_KEY found' : '❌ GROQ_API_KEY missing');
+
             await interaction.reply({ embeds: [new EmbedBuilder()
-                .setTitle('🤖 AI Model Updated')
+                .setTitle('🤖 AI Chat Model Updated')
                 .setColor(0x5865F2)
                 .addFields(
                     { name: 'Previous', value: prevLabel, inline: true },
-                    { name: 'Now Using', value: label, inline: true },
-                    { name: 'Status', value: `${available}\n\`Model: ${ai2Model || 'none'}\``, inline: false },
+                    { name: 'Now Using', value: chosen.label, inline: true },
+                    { name: 'Model String', value: `\`${chosen.model}\``, inline: false },
+                    { name: 'API Key', value: keyCheck, inline: false },
                 )
-                .setFooter({ text: 'Affects all !toggleactive channels immediately' })
+                .setFooter({ text: 'Affects all !toggleactive AI channels immediately' })
                 .setTimestamp()], ephemeral: true });
             break;
         }
@@ -11571,19 +11748,39 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     }
     if (ai2State.enabled && cmd === 'aimodel' && ai2OwnerOk) {
         const providerArg = (args[0] || '').toLowerCase();
-        const validProviders = { groq: 'Groq (llama-3.3-70b-versatile)', openai: 'OpenAI (gpt-4o-mini)' };
+        const modelArg    = (args[1] || '').toLowerCase();
+        const validProviders = {
+            groq:   'Groq (llama-3.3-70b-versatile)',
+            openai: 'OpenAI (gpt-4o-mini)',
+            claude: `Claude (${ai2State.claudeModel})`,
+        };
         if (!providerArg) {
             const cur = ai2State.activeProvider || 'groq';
-            await message.channel.send(`🤖 Current AI provider: **${validProviders[cur] || cur}** | Model: \`${ai2Model || 'none'}\`\nUse \`!aimodel groq\` or \`!aimodel openai\` to switch.`);
+            await message.channel.send(
+                `🤖 Current AI provider: **${validProviders[cur] || cur}** | Model: \`${ai2Model || 'none'}\`` +
+                `\nUse \`!aimodel groq\`, \`!aimodel openai\`, or \`!aimodel claude\` to switch.` +
+                `\nFor Claude, optionally specify model: \`!aimodel claude claude-sonnet-4-6\``
+            );
             return;
         }
         if (!validProviders[providerArg]) {
-            await message.channel.send(`❌ Unknown provider. Use: groq | openai`);
+            await message.channel.send(`❌ Unknown provider. Use: \`groq\` | \`openai\` | \`claude\``);
             return;
+        }
+        if (providerArg === 'claude' && modelArg) {
+            const allowed = ['claude-haiku-4-5-20251001','claude-sonnet-4-6','claude-opus-4-6'];
+            if (allowed.includes(modelArg)) {
+                ai2State.claudeModel = modelArg;
+            } else {
+                await message.channel.send(`❌ Unknown Claude model. Valid: ${allowed.join(' | ')}`);
+                return;
+            }
         }
         const prev = ai2State.activeProvider || 'groq';
         ai2State.activeProvider = providerArg;
         ai2InitClient(providerArg);
+        if (providerArg !== 'claude') {} else { ai2Model = ai2State.claudeModel; }
+        validProviders.claude = `Claude (${ai2State.claudeModel})`;
         await message.channel.send(`✅ AI provider switched from **${validProviders[prev] || prev}** → **${validProviders[providerArg]}**\nModel: \`${ai2Model || 'none (no API key?)'}\``);
         return;
     }
@@ -11623,7 +11820,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             `${pfx}wipe - Clears history of the bot\n` +
             `${pfx}ping - Shows the bot's latency\n` +
             `${pfx}toggleactive [id / channel] - Toggle a mentioned channel or the current channel\n` +
-            `${pfx}aimodel [groq|openai] - Switch which AI provider is used (default: Groq)\n` +
+            `${pfx}aimodel [groq|openai|claude] [model] - Switch AI provider (Groq/OpenAI/Claude). For Claude, optionally add model name.\n` +
             `${pfx}toggledm - Toggle if the bot should be active in DM's\n` +
             `${pfx}togglegc - Toggle if the bot should be active in group chats\n` +
             `${pfx}ignore [user] - Stop a user from using the bot\n` +
