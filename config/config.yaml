@@ -5,10 +5,15 @@ bot:
   batch_messages: true
   batch_wait_time: 10.0
   disable_mentions: true
+  # Groq model (used when activeProvider = groq)
   groq_model: openai/gpt-oss-120b
+  # OpenAI model (used when activeProvider = openai)
+  openai_model: gpt-4o
+  # Claude model (used when activeProvider = claude)
+  # Options: claude-haiku-4-5-20251001 | claude-sonnet-4-6 | claude-opus-4-6
+  claude_model: claude-haiku-4-5-20251001
   help_command_enabled: true
   hold_conversation: true
-  openai_model: gpt-4o
   owner_id: "1427299411049840640"
   prefix: '!'
   realistic_typing: false
