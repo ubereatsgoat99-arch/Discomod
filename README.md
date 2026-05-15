@@ -26,7 +26,7 @@ Originally made for MonkeyVerseYT's server, but extended the use for everyone an
 - Suspicious content flagging system
 
 ### 🤖 AI Detection (Optional)
-- Powered by Anthropic Claude API
+- Powered by some AIs
 - Detects potentially harmful or suspicious messages
 - Toggleable via configuration
 
@@ -40,7 +40,7 @@ Originally made for MonkeyVerseYT's server, but extended the use for everyone an
 - Can split into messages
 - Toggleable via configuration
 
-###🧮 Math Calculators
+### 🧮 Math Calculators
 - Powered by very powerful math modules
 - Can split into messages
 - Supports arbitary-preceision
