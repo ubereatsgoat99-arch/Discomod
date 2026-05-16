@@ -16,7 +16,8 @@ const {
     REST, Routes, SlashCommandBuilder, PermissionsBitField,
     ActionRowBuilder, ButtonBuilder, ButtonStyle,
     ModalBuilder, TextInputBuilder, TextInputStyle,
-    ChannelType, Collection,
+    ChannelType, Collection, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
+    MessageFlags,
 } = require('discord.js');
 const fs   = require('fs');
 const os   = require('os');
@@ -2012,9 +2013,15 @@ function addViolationEntry(data, uid, { reason = 'Rule violation', category = 'u
     const count = getViolationCount(data, uid);
     const history = getViolationHistory(data, uid);
     const newCount = count + 1;
-    history.push({ reason: String(reason).slice(0, 300), category: String(category).slice(0, 80), timestamp: Date.now(), by: by ? String(by) : null });
+    const warnId = `w_${Date.now()}_${uid}`;
+    history.push({ warnId, reason: String(reason).slice(0, 300), category: String(category).slice(0, 80), timestamp: Date.now(), by: by ? String(by) : null });
     data.violations[uid] = { count: newCount, history };
     return newCount;
+}
+function getLastWarnId(data, uid) {
+    const history = getViolationHistory(data, uid);
+    if (!history.length) return null;
+    return history[history.length - 1].warnId || null;
 }
 function clearViolationEntry(data, uid) {
     data.violations[uid] = { count: 0, history: [] };
@@ -7550,6 +7557,19 @@ client.on('interactionCreate', async interaction => {
             const parts = customId.split('_');
             if (parts.length >= 4 && /^\d{15,20}$/.test(parts[2])) derivedGuildId = parts[2];
         }
+        // Warn appeal — button fires in DM, guildId is at parts[3]
+        // customId: open_warn_appeal_<guildId>_<warnId>
+        if (customId.startsWith('open_warn_appeal_')) {
+            const rest = customId.slice('open_warn_appeal_'.length);
+            const candidate = rest.split('_')[0];
+            if (/^\d{15,20}$/.test(candidate)) derivedGuildId = candidate;
+        }
+        // Modal submit also fires in DM: warn_appeal_modal_<guildId>_<warnId>
+        if (customId.startsWith('warn_appeal_modal_')) {
+            const rest = customId.slice('warn_appeal_modal_'.length);
+            const candidate = rest.split('_')[0];
+            if (/^\d{15,20}$/.test(candidate)) derivedGuildId = candidate;
+        }
     }
     const guildId = interaction.guildId || derivedGuildId;
     if (!guildId) return;
@@ -7917,6 +7937,229 @@ client.on('interactionCreate', async interaction => {
             await interaction.update({ embeds: [updated], components: [] });
             return;
         }
+    }
+
+    // ── SELECT MENUS ──────────────────────────────────────
+    if (interaction.isStringSelectMenu()) {
+        const cid = interaction.customId;
+
+        // Remove a specific warn from violations (admin only, not your own)
+        if (cid.startsWith('rmwarn_')) {
+            const isAdminCheck = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            if (!isAdminCheck) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const parts   = cid.split('_');
+            const targetId = parts[2];
+            if (targetId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot remove your own warns.', ephemeral: true }); return; }
+            const selectedWarnId = interaction.values[0];
+            const fd2 = loadData();
+            const vObj = fd2.violations[targetId];
+            if (!vObj || typeof vObj === 'number') { await interaction.reply({ content: '❌ No violation history found.', ephemeral: true }); return; }
+            const oldHistory = Array.isArray(vObj.history) ? vObj.history : [];
+            const newHistory = oldHistory.filter(h => {
+                const hid = h.warnId || null;
+                if (selectedWarnId.startsWith('idx_')) {
+                    const idx = parseInt(selectedWarnId.replace('idx_', ''));
+                    return oldHistory.indexOf(h) !== idx;
+                }
+                return hid !== selectedWarnId;
+            });
+            const removed = oldHistory.find(h => {
+                if (selectedWarnId.startsWith('idx_')) {
+                    const idx = parseInt(selectedWarnId.replace('idx_', ''));
+                    return oldHistory.indexOf(h) === idx;
+                }
+                return (h.warnId || null) === selectedWarnId;
+            });
+            fd2.violations[targetId] = { count: Math.max(0, newHistory.length), history: newHistory };
+            saveData(fd2);
+            await sendLog(interaction.guild, fd2, new EmbedBuilder()
+                .setTitle('🗑️ Warn Removed (Admin)')
+                .setColor(0x00BFFF)
+                .addFields(
+                    { name: 'User',       value: `<@${targetId}> (${targetId})`, inline: true },
+                    { name: 'Removed by', value: `<@${interaction.user.id}>`,    inline: true },
+                    { name: 'Warn',       value: removed ? String(removed.reason).slice(0, 512) : selectedWarnId, inline: false },
+                ).setTimestamp());
+            await interaction.update({ content: `✅ Warn removed for <@${targetId}>. Remaining violations: **${newHistory.length}**.`, components: [], embeds: [] });
+            return;
+        }
+    }
+
+    // ── WARN APPEAL — open modal (button in DM) ────────────
+    if (interaction.isButton()) {
+        const cid = interaction.customId;
+
+        if (cid.startsWith('open_warn_appeal_')) {
+            // customId: open_warn_appeal_<guildId>_<warnId>
+            const rest    = cid.slice('open_warn_appeal_'.length);
+            const sepIdx  = rest.indexOf('_');
+            const wGuildId = rest.slice(0, sepIdx);
+            const warnId   = rest.slice(sepIdx + 1);
+            const fd3 = loadData();
+            if (hasAppealedWarn(warnId, fd3)) {
+                await interaction.reply({ content: '❌ You have already submitted an appeal for this warning.', ephemeral: true }).catch(()=>{});
+                return;
+            }
+            const modal = new ModalBuilder()
+                .setCustomId(`warn_appeal_modal_${wGuildId}_${warnId}`)
+                .setTitle('📩 Appeal a Warning');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('appeal_reason')
+                        .setLabel('Why should this warning be removed?')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setMinLength(20)
+                        .setMaxLength(1000)
+                        .setRequired(true)
+                        .setPlaceholder('Explain why this warning was unfair. Be honest and respectful.')
+                )
+            );
+            try {
+                await interaction.showModal(modal);
+            } catch {
+                await interaction.reply({ content: '❌ Failed to open the appeal form. Try again.', ephemeral: true }).catch(()=>{});
+            }
+            return;
+        }
+
+        // Warn appeal — accept
+        if (cid.startsWith('warn_appeal_accept_')) {
+            const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            const isModBtn   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
+            if (!isAdminBtn && !isModBtn) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            const appealId = cid.replace('warn_appeal_accept_', '');
+            const fd4 = loadData();
+            const appeal = fd4.appeals[appealId];
+            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
+            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
+            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+            // Remove the specific warn from history
+            const targetId = appeal.userId;
+            const warnId   = appeal.warnId;
+            const vObj     = fd4.violations[targetId];
+            if (vObj && typeof vObj !== 'number' && Array.isArray(vObj.history)) {
+                vObj.history = vObj.history.filter(h => h.warnId !== warnId);
+                vObj.count   = Math.max(0, vObj.history.length);
+                fd4.violations[targetId] = vObj;
+            }
+            appeal.status    = 'accepted';
+            appeal.handledBy = interaction.user.id;
+            saveData(fd4);
+            // DM the user
+            const warnedUser = await client.users.fetch(targetId).catch(()=>null);
+            if (warnedUser) {
+                warnedUser.send({ embeds: [new EmbedBuilder()
+                    .setTitle('✅ Warn Appeal Accepted')
+                    .setDescription('Your warning appeal has been **accepted**. The warning has been removed from your record.\nPlease make sure to follow the server rules going forward.')
+                    .setColor(0x00FF88)
+                    .setTimestamp()] }).catch(()=>{});
+            }
+            const updated = EmbedBuilder.from(interaction.message.embeds[0])
+                .setColor(0x00FF88)
+                .setTitle('📩 Warn Appeal — ACCEPTED ✅')
+                .addFields({ name: 'Handled by', value: `<@${interaction.user.id}>`, inline: true });
+            await interaction.update({ embeds: [updated], components: [] });
+            return;
+        }
+
+        // Warn appeal — reject
+        if (cid.startsWith('warn_appeal_reject_')) {
+            const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            const isModBtn   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
+            if (!isAdminBtn && !isModBtn) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            const appealId = cid.replace('warn_appeal_reject_', '');
+            const fd5 = loadData();
+            const appeal = fd5.appeals[appealId];
+            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
+            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', ephemeral: true }); return; }
+            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+            appeal.status    = 'rejected';
+            appeal.handledBy = interaction.user.id;
+            saveData(fd5);
+            const warnedUser = await client.users.fetch(appeal.userId).catch(()=>null);
+            if (warnedUser) {
+                warnedUser.send({ embeds: [new EmbedBuilder()
+                    .setTitle('❌ Warn Appeal Rejected')
+                    .setDescription('Your warning appeal has been **rejected**.\nThe warning remains on your record. If you have further questions, contact a server admin.')
+                    .setColor(0xFF4444)
+                    .setTimestamp()] }).catch(()=>{});
+            }
+            const updated = EmbedBuilder.from(interaction.message.embeds[0])
+                .setColor(0xFF4444)
+                .setTitle('📩 Warn Appeal — REJECTED ❌')
+                .addFields({ name: 'Handled by', value: `<@${interaction.user.id}>`, inline: true });
+            await interaction.update({ embeds: [updated], components: [] });
+            return;
+        }
+    }
+
+    // ── WARN APPEAL — modal submit ────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('warn_appeal_modal_')) {
+        try { await interaction.deferReply({ ephemeral: true }); } catch {}
+        const rest     = interaction.customId.slice('warn_appeal_modal_'.length);
+        const sepIdx   = rest.indexOf('_');
+        const wGuildId = rest.slice(0, sepIdx);
+        const warnId   = rest.slice(sepIdx + 1);
+        const reason   = interaction.fields.getTextInputValue('appeal_reason');
+        const fd6 = loadData();
+        if (hasAppealedWarn(warnId, fd6)) {
+            try { await interaction.editReply({ content: '❌ You have already submitted an appeal for this warning.' }); } catch {}
+            return;
+        }
+        // Find warn details to enrich the appeal embed
+        const warnEntry = Object.values(fd6.violations || {}).flatMap(v => {
+            if (!v || typeof v === 'number' || !Array.isArray(v.history)) return [];
+            return v.history.filter(h => h.warnId === warnId);
+        })[0] || null;
+        const warnReason = warnEntry?.reason || 'Unknown reason';
+        const warnBy     = warnEntry?.by     || null;
+
+        const appealId = `warnappeal_${Date.now()}_${interaction.user.id}`;
+        fd6.appeals = fd6.appeals || {};
+        fd6.appeals[appealId] = {
+            type: 'warn', warnId,
+            userId: interaction.user.id,
+            reason, warnReason, warnBy,
+            timestamp: Date.now(), createdAt: Date.now(),
+            status: 'pending', handledBy: null,
+        };
+        saveData(fd6);
+
+        const wGS = getGuildSettings(wGuildId, fd6);
+        const appealsChId = wGS.appealsChannelId || wGS.logChannelId;
+        if (!appealsChId) {
+            try { await interaction.editReply({ content: '❌ No appeals channel configured. Contact an admin.' }); } catch {}
+            return;
+        }
+        try {
+            const wGuild = await client.guilds.fetch(wGuildId).catch(()=>null);
+            const appealsChannel = wGuild ? await wGuild.channels.fetch(appealsChId).catch(()=>null) : null;
+            if (!appealsChannel) { try { await interaction.editReply({ content: '❌ Appeals channel not found.' }); } catch {} return; }
+
+            const appealEmbed = new EmbedBuilder()
+                .setTitle('📩 New Warn Appeal')
+                .setColor(0xFFD700)
+                .setThumbnail(interaction.user.displayAvatarURL())
+                .addFields(
+                    { name: 'User',         value: `<@${interaction.user.id}> (${interaction.user.id})`, inline: true },
+                    { name: 'Submitted',    value: `<t:${Math.floor(Date.now()/1000)}:R>`,               inline: true },
+                    { name: 'Warn Reason',  value: warnReason.slice(0, 512),                             inline: false },
+                    ...(warnBy ? [{ name: 'Warned by', value: `<@${warnBy}>`, inline: true }] : []),
+                    { name: 'Appeal Reason', value: reason.slice(0, 1024),                               inline: false },
+                )
+                .setFooter({ text: `Appeal ID: ${appealId} • Warn ID: ${warnId}` })
+                .setTimestamp();
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`warn_appeal_accept_${appealId}`).setLabel('✅ Accept Appeal').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`warn_appeal_reject_${appealId}`).setLabel('❌ Reject Appeal').setStyle(ButtonStyle.Danger),
+            );
+            await appealsChannel.send({ embeds: [appealEmbed], components: [row] });
+            try { await interaction.editReply({ content: '✅ Your warn appeal has been submitted! Admins will review it shortly.' }); } catch {}
+        } catch {
+            try { await interaction.editReply({ content: '❌ Failed to submit appeal.' }); } catch {}
+        }
+        return;
     }
 
     // ── SLASH COMMANDS ─────────────────────────────────────
@@ -9223,17 +9466,17 @@ client.on('interactionCreate', async interaction => {
 
         // ── /exile ────────────────────────────────────────
         case 'exile': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins only.' }); return; }
             const targetUser = interaction.options.getUser('user');
             const duration   = interaction.options.getInteger('duration') || EXILE_DURATION_MINS;
             const reason     = interaction.options.getString('reason') || 'Admin action';
             const target     = await interaction.guild.members.fetch(targetUser.id).catch(()=>null);
-            if (!target) { await interaction.reply({ content: '❌ Member not found.', ephemeral: true }); return; }
-            if (target.id === interaction.user.id) { await interaction.reply({ content: '❌ You cannot exile yourself.', ephemeral: true }); return; }
-            if (target.roles.highest.position >= interaction.member.roles.highest.position) { await interaction.reply({ content: '❌ You cannot exile someone with equal or higher roles.', ephemeral: true }); return; }
+            if (!target) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Member not found.' }); return; }
+            if (target.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot exile yourself.' }); return; }
+            if (target.roles.highest.position >= interaction.member.roles.highest.position) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot exile someone with equal or higher roles.' }); return; }
+            await interaction.deferReply();
             await performExile(target, interaction.guild, duration, reason, data);
             saveData(data);
-            await interaction.reply({ content: `🔨 Exiled **${target.user.tag}** for **${duration}m**. Reason: ${reason}`, ephemeral: false });
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('⛓️ Manual Exile')
                 .setColor(0xFF6600)
@@ -9243,21 +9486,22 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Reason', value: reason,                            inline: false },
                     { name: 'Duration', value: `${duration} minutes`,           inline: true },
                 ).setTimestamp());
+            await interaction.editReply({ content: `🔨 Exiled **${target.user.tag}** for **${duration}m**. Reason: ${reason}` });
             break;
         }
 
         // ── /unexile ──────────────────────────────────────
         case 'unexile': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins only.' }); return; }
             const input  = interaction.options.getString('user');
             const userId = (input.match(/<@!?(\d+)>/) || input.match(/^(\d{15,20})$/) || [])[1] || input;
             const fd     = loadData();
             let member   = interaction.guild.members.cache.get(userId) || await interaction.guild.members.fetch(userId).catch(()=>null);
-            if (!member) { await interaction.reply({ content: '❌ Member not found.', ephemeral: true }); return; }
+            if (!member) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Member not found.' }); return; }
+            await interaction.deferReply();
             await performUnexile(member, interaction.guild, fd);
             delete fd.exiles[userId];
             saveData(fd);
-            await interaction.reply({ content: `✅ Unexiled **${member.user.tag}**.`, ephemeral: false });
             await sendLog(interaction.guild, fd, new EmbedBuilder()
                 .setTitle('🔓 Manual Unexile')
                 .setColor(0x00FF88)
@@ -9265,6 +9509,7 @@ client.on('interactionCreate', async interaction => {
                     { name: 'User', value: `<@${userId}>`, inline: true },
                     { name: 'By',   value: `<@${interaction.user.id}>`, inline: true },
                 ).setTimestamp());
+            await interaction.editReply({ content: `✅ Unexiled **${member.user.tag}**.` });
             break;
         }
 
@@ -9288,7 +9533,25 @@ client.on('interactionCreate', async interaction => {
                 .setDescription(`<@${user.id}> — **${count}/${threshold}** violations`)
                 .addFields({ name: `Recent warnings (${history.length} total)`, value: histLines.length ? histLines.join('\n') : 'No warning history.', inline: false })
                 .setTimestamp();
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+
+            // Admin-only: show dropdown to remove a specific warn (can't remove your own warns)
+            const canRemove = isAdmin && user.id !== interaction.user.id && history.length > 0;
+            let components = [];
+            if (canRemove) {
+                const options = history.slice(-25).map((h, i) => {
+                    const ts = h.timestamp ? new Date(h.timestamp).toLocaleDateString('en-GB') : '?';
+                    const label = `#${history.length - (history.slice(-25).length - 1 - i)} — ${String(h.reason).slice(0, 80)}`.slice(0, 100);
+                    const desc  = `[${h.category || 'unknown'}] ${ts}`.slice(0, 100);
+                    const val   = h.warnId || `idx_${i}`;
+                    return new StringSelectMenuOptionBuilder().setLabel(label).setDescription(desc).setValue(val);
+                });
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId(`rmwarn_${guildId}_${user.id}`)
+                    .setPlaceholder('🗑️ Select a warn to remove (admin only)')
+                    .addOptions(options);
+                components = [new ActionRowBuilder().addComponents(menu)];
+            }
+            await interaction.reply({ embeds: [embed], components, ephemeral: true });
             break;
         }
 
@@ -9398,36 +9661,96 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'warn': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Mods only.' }); return; }
             const user = interaction.options.getUser('user');
+            if (user.id === interaction.user.id) {
+                await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot warn yourself.' });
+                return;
+            }
+            if (user.bot) {
+                await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot warn a bot.' });
+                return;
+            }
+
+            // Defer BEFORE any async work — keeps the interaction token alive
+            await interaction.deferReply();
+
             const reason = interaction.options.getString('reason') || 'Manual warn';
             const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
             const exileMins = Math.max(1, Math.min(1440, gs.exileDurationMins || EXILE_DURATION_MINS));
             const count = addViolationEntry(data, user.id, { reason, category: 'manual', by: interaction.user.id });
+            const warnId = getLastWarnId(data, user.id);
             saveData(data);
+
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('⚠️ Manual Warn')
                 .setColor(0xFFAA00)
                 .addFields(
-                    { name: 'User', value: `<@${user.id}> (${user.id})`, inline: true },
-                    { name: 'By', value: `<@${interaction.user.id}>`, inline: true },
-                    { name: 'Violations', value: `${count}/${threshold}`, inline: true },
-                    { name: 'Reason', value: reason.slice(0, 1024), inline: false },
+                    { name: 'User',       value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',         value: `<@${interaction.user.id}>`,   inline: true },
+                    { name: 'Violations', value: `${count}/${threshold}`,        inline: true },
+                    { name: 'Reason',     value: reason.slice(0, 1024),          inline: false },
                 ).setTimestamp());
-            await interaction.reply({ content: `✅ Warned <@${user.id}>. Violations: **${count}/${threshold}**`, ephemeral: false });
+
+            // Build the public reply embed
+            const replyEmbed = new EmbedBuilder()
+                .setTitle('⚠️ Warning Issued')
+                .setColor(0xFFAA00)
+                .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+                .addFields(
+                    { name: '👤 User',        value: `<@${user.id}>`,             inline: true },
+                    { name: '🛡️ Issued by',   value: `<@${interaction.user.id}>`, inline: true },
+                    { name: '📊 Violations',  value: `${count}/${threshold}`,      inline: true },
+                    { name: '📝 Reason',      value: reason.slice(0, 1024),        inline: false },
+                )
+                .setFooter({ text: `Warn ID: ${warnId || 'N/A'}` })
+                .setTimestamp();
+            await interaction.editReply({ embeds: [replyEmbed] });
+
             if (count >= threshold) {
                 clearViolationEntry(data, user.id);
                 saveData(data);
                 const member = await interaction.guild.members.fetch(user.id).catch(()=>null);
                 if (member) await performExile(member, interaction.guild, exileMins, `Manual warn threshold reached: ${reason}`, data);
                 saveData(data);
+            } else if (warnId) {
+                // Beautiful DM with appeal button
+                const warnedMember = await interaction.guild.members.fetch(user.id).catch(()=>null);
+                if (warnedMember) {
+                    const guildIcon = interaction.guild.iconURL({ dynamic: true });
+                    const dmEmbed = new EmbedBuilder()
+                        .setTitle('⚠️  You have received a Warning')
+                        .setColor(0xFF8C00)
+                        .setThumbnail(guildIcon || null)
+                        .setAuthor({ name: interaction.guild.name, iconURL: guildIcon || undefined })
+                        .setDescription(
+                            `Hey <@${user.id}>, a moderator has issued you a **warning** in **${interaction.guild.name}**.\n` +
+                            `If you believe this was a mistake, you can appeal it below — but you only get **one shot**.\n\u200b`
+                        )
+                        .addFields(
+                            { name: '📝 Reason',       value: reason.slice(0, 1024),        inline: false },
+                            { name: '🛡️ Issued by',    value: `<@${interaction.user.id}>`,  inline: true  },
+                            { name: '📊 Strike count', value: `${count} / ${threshold}`,     inline: true  },
+                            { name: '🆔 Warn ID',      value: `\`${warnId}\``,              inline: true  },
+                        )
+                        .setFooter({ text: 'You may submit exactly 1 appeal per warning.' })
+                        .setTimestamp();
+                    const appealRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`open_warn_appeal_${guildId}_${warnId}`)
+                            .setLabel('📩 Appeal this Warning')
+                            .setStyle(ButtonStyle.Primary)
+                    );
+                    warnedMember.send({ embeds: [dmEmbed], components: [appealRow] }).catch(()=>{});
+                }
             }
             break;
         }
 
         case 'unwarn': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Mods only.' }); return; }
             const user = interaction.options.getUser('user');
+            await interaction.deferReply();
             const reason = interaction.options.getString('reason') || 'Manual unwarn';
             const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
             const cur = getViolationCount(data, user.id);
@@ -9442,7 +9765,7 @@ client.on('interactionCreate', async interaction => {
                     { name: 'From → To', value: `${cur} → ${next}`, inline: true },
                     { name: 'Reason', value: reason.slice(0, 1024), inline: false },
                 ).setTimestamp());
-            await interaction.reply({ content: `✅ Unwarned <@${user.id}>. Violations: **${next}/${threshold}**`, ephemeral: false });
+            await interaction.editReply({ content: `✅ Unwarned <@${user.id}>. Violations: **${next}/${threshold}**` });
             break;
         }
 
@@ -11574,6 +11897,15 @@ function hasAppealedCurrentExile(userId, data) {
     return false;
 }
 
+function hasAppealedWarn(warnId, data) {
+    if (!warnId) return false;
+    const appeals = data.appeals || {};
+    for (const appeal of Object.values(appeals)) {
+        if (appeal.type === 'warn' && appeal.warnId === warnId) return true;
+    }
+    return false;
+}
+
 async function performExile(userOrMember, guild, minutes, reason, data) {
     let member = userOrMember.roles
         ? userOrMember
@@ -12426,6 +12758,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
         const reason = args.slice(1).join(' ') || 'Manual warn';
         const count = addViolationEntry(data, target.id, { reason, category: 'manual', by: message.author.id });
+        const warnId = getLastWarnId(data, target.id);
         saveData(data);
         await message.channel.send(`✅ Warned ${target}. Violations: **${count}/${threshold}**`);
         if (count >= threshold && isAdmin) {
@@ -12434,6 +12767,25 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             const fd = loadData();
             await performExile(target, message.guild, exileMins, `Manual warn threshold reached: ${reason}`, fd);
             saveData(fd);
+        } else if (warnId) {
+            const appealEmbed = new EmbedBuilder()
+                .setTitle('⚠️ You received a warning')
+                .setColor(0xFFAA00)
+                .addFields(
+                    { name: 'Server', value: message.guild.name, inline: true },
+                    { name: 'Issued by', value: `<@${message.author.id}>`, inline: true },
+                    { name: 'Violations', value: `${count}/${threshold}`, inline: true },
+                    { name: 'Reason', value: reason.slice(0, 1024), inline: false },
+                )
+                .setDescription('If you believe this warning was issued unfairly, you may submit an appeal using the button below. You can only appeal this specific warning **once**.')
+                .setTimestamp();
+            const appealRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`open_warn_appeal_${message.guildId}_${warnId}`)
+                    .setLabel('📩 Appeal this Warning')
+                    .setStyle(ButtonStyle.Primary)
+            );
+            target.send({ embeds: [appealEmbed], components: [appealRow] }).catch(()=>{});
         }
     }
 
