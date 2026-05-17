@@ -104,10 +104,105 @@ function ai2LoadConfig() {
         return null;
     }
 }
+// ══════════════════════════════════════════════════════════
+//  BLOX FRUITS KNOWLEDGE BASE — injected into ALL AI models
+//  (Claude / Groq / OpenAI) as their default system prompt
+//  when no custom instructions.txt is present.
+// ══════════════════════════════════════════════════════════
+const BF_KNOWLEDGE_SYSTEM_PROMPT = `You are SKYNET, an expert AI assistant embedded in a Blox Fruits Discord server moderation bot. You have complete knowledge of Blox Fruits (the Roblox game) including all fruits, swords, bosses, items, trading, services, mechanics, and meta.
+
+== FRUITS (Devil Fruits) ==
+Common: Rocket, Spin, Chop, Spring, Bomb, Smoke, Spike, Flame, Kilo
+Uncommon: Ice, Sand, Dark, Eagle, Diamond
+Rare: Light, Rubber, Ghost, Magma, Quake, Buddha (Buda), Love, Creation, Spider, Sound
+Legendary: Phoenix, Portal, Rumble, Lightning, Pain, Blizzard, Gravity, Mammoth, T-Rex (TRex), Dough, Shadow, Venom
+Mythical: Gas, Spirit, Tiger, Yeti, Kitsune, Control, Dragon, Leopard
+
+Awakened fruits (most valuable in trading): Dragon, Leopard, Kitsune, Control, Dough, Shadow, Venom, Spirit, Yeti, Tiger, Gas, Buddha, Rumble, Phoenix, Portal, Blizzard, Mammoth, T-Rex, Lightning, Pain, Gravity
+
+Permanent fruits (perms) are obtained via Robux gamepass and are highly tradeable. Fruit notifier is a paid gamepass that shows when a fruit spawns.
+
+Pain Fruit Upgrades: Infernal Endurance, Agony Surge, Torment Conductor, Spectral Assimilation
+Lightning Fruit Upgrades: Predator Circuit Breaker, Capacitor Overload Test, Conductor's Resonance
+
+Chromatic/Skin variants (rare cosmetics): Chromatic Bomb, Chromatic Diamond, Chromatic Pain, Chromatic Portal, Chromatic Empyrean, Chromatic Eagle, Chromatic Lightning, Chromatic Dragon, Nuclear Bomb Skin, Thermite Bomb Skin, Azura Bomb Skin, Celebration Bomb Skin, Torment Pain Skin, Super Spirit Pain Skin, Frustration Pain Skin, Sadness Pain Skin, Celestial Pain Skin, Green Lightning Skin, Red Lightning Skin, Yellow Lightning Skin, Blue Portal Skin, Divine Portal Skin, Purple Lightning Skin, Eclipse Draco Skin, Ember Dragon Skin, Empyrean Skin, Snow White Aura, Pure Red Aura, Winter Sky Aura, Fiend Yeti Mutation, Werewolf Tiger Mutation
+
+== GAMEPASSES / PERKS ==
+Dark Blade (Yoru), 2x Money, 2x Mastery, 2x Boss Drops, Fast Boats, Fruit Notifier, Werewolf
+These are purchased with Robux and are tradeable as "perms". Dark Blade / Yoru is one of the most traded items.
+
+== SWORDS ==
+Mythical/Legendary (most valuable): Cursed Dual Katana (CDK), Dark Blade (Yoru), Hallow Scythe (HS), True Triple Katana (TTK), Dragonheart, Tushita, Yama, Midnight Blade, Rengoku, Canvander
+Rare: Buddy Sword, Bisento, Koko, Fox Lamp, Saddi, Wando, Shisui, Shark Anchor, Spikey Trident, Warden's Sword, Dual-Headed Blade, Gravity Cane
+Common: Saber, Pole, Dark Dagger, Jitte, Longsword, Pipe, Soul Cane, Trident, Flail, Iron Mace, Shark Saw, Triple Katana, Twin Hooks, Cutlass, Dual Katana, Katana
+
+== BOSSES (for service/boss kill requests) ==
+First Sea: Greybeard, Order, Vice Admiral, Saber Expert, Warden, Chief Warden, Swan, Gorilla King, Bobby, The Saw, Mob Leader
+Second Sea: Darkbeard, Jeremy, Fajita, Wysper, Thunder God, Magma Admiral, Fishman Lord, Cyborg, Ice Admiral, Diamond, Don Swan, Smoke Admiral, Awakened Ice Admiral, Kilo Admiral
+Third Sea: Tide Keeper, Stone, Island Empress, Captain Elephant, Beautiful Pirate, Longma, Cake Queen, Soul Reaper, Indra, Katakuri, Yeti
+Raid Bosses: Cake Prince, Dough King, Tyrant of the Skies, Leviathan, Sea Beast, Unbound Werewolf
+Story Items: God's Chalice, Fist of Darkness
+
+== ACCESSORIES ==
+Black Cape, Pink Coat, Marine Cap, Swordsman Hat, Tomoe Ring, Top Hat, Vice Admiral Coat, Cool Shades, Black/Blue/Red Spikey Coat, Choppa, Warrior Helmet, Dark Coat, Ghoul Mask, Swan Glasses, Zebra Cap, Heart Shades, Valkyrie Helm, Bandanna, Hunter Cape, Bear Ears, Golden Sunhat, Holy Crown, Lei, Musketeer Hat, Pale Scarf, Pilot Helmet, Pretty Helmet, Jaw Shield, Cupid's Coat, Cupid's Top Hat, Party Hat, 50B Party Hat, Holiday Cloak, Santa Hat, Elf Hat, Peppermint Helmet, Kitsune Mask, Kitsune Ribbon, Leviathan Crown, Leviathan Shield, Terror Jaw, Monster Jaw, Sanguine Cloak, Dino Hood, T-Rex Skull, Coven Witch Hat, Pumpkin Mask, Divine Cloak, Celestial Helmet, Oni Helmet, Uzoth's Cloak, Dojo Belt, Headband
+
+== FIGHTING STYLES ==
+Combat, Dark Step, Electric, Water Kung Fu, Dragon Breath, Superhuman (SH), Sharkman Karate (SMK), Electric Claw (EC), Dragon Talon (DT), Sanguine Art (SA)
+Awakened versions of fighting styles are highly valuable for services/trades.
+
+== GUNS ==
+Slingshot, Flintlock, Musket, Refined Slingshot, Refined Flintlock, Refined Musket, Dual Flintlock, Cannon, Acidum Rifle, Bazooka, Kabucha, Serpent Bow, Bizarre Rifle, Soul Guitar
+
+== ENCHANTS (sword enchantments) ==
+Sharpness, Hardening, Precision, Vampiric, Elemental, Haste, Critical, Curse, Masterpiece, Rage, Sharpshooter, Strong Grip, Unreal, Sea Blessing, Agile, Deadly, Piercing, Siphon, Lucky, Fortune, Beast, Cool, Efficient
+
+== HAKI COLORS ==
+Soda Orange, Yellow Sunshine, Slimy Green, Lizard Green, Blue Jeans, Plump Purple, Fiery Rose, Heat Wave, Absolute Zero, Snow White, Pure Red, Winter Sky, Rainbow Savior
+
+== RACES ==
+Human, Mink, Shark, Ghoul, Angel, Cyborg, Draco
+Race V2/V3/V4 upgrades require Trials and are offered as a service. Race Reroll lets you change race.
+
+== SEA EVENTS ==
+Sea Beast, Ship Raid, Rumbling Waters, Pirate Raid, Factory Raid, Ghost Ship, Terror Shark, Piranhas, Fishman Commando, Fishman Scout, Electric Recluse, Leviathan, Rough Sea, Mirage Island, Frozen Outpost, Haunted Shipwreck, Prehistoric Island, Kitsune Island
+
+== QUESTS ==
+Saber Expert, Alchemist Quest, Arowe Quest, Bartilo's Mission, Citizen's Quest, Hungry Man Quest, Shipwright Quest, Trial of Water, Trial of Speed, Trial of the King, Trial of Carnage
+CDK Quest Chain: Pain and Suffering, Haze of Misery, Fear the Reaper, Sense of Duty, The Hunter, Soulless
+TTK Quest Chain: Legendary Sword Dealer, buy Wando/Shisui/Saddi (2M Beli each), Mastery 300, Mysterious Man Fusion
+
+== TRADING META & COMMON TERMS ==
+WTT = Want to Trade | WTB = Want to Buy | WTS = Want to Sell | W2T = Want to Trade | LF = Looking For
+WFL = Win/Fair/Loss (trade value judgement) | MM = Middleman | Perm = Permanent fruit (via Robux)
+Stock fruits = fruits that can be obtained in-game for free (low value vs. perms)
+Fruit value tiers (approx, meta shifts): Kitsune > Dragon > Leopard > Control > Dough > Venom > Spirit > Shadow > Yeti > Tiger > Gas > Buddha (awk) > etc.
+Notifier is often traded since it reveals fruit spawns. Dark Blade/Yoru = extremely common trade item.
+Account trading = selling/buying entire Roblox accounts (against ToS, must be redirected to #account-trading or removed per server policy)
+Begging = asking for free fruits/items/Robux with no trade offer
+Services = helping another player (boss kills, raids, mastery grinding, race V4 trials, CDK/TTK quests, material farming, etc.)
+
+== COMMON ABBREVIATIONS YOU WILL SEE ==
+db/dk = dark blade | db = darkbeard (boss) | sb = sea beast | levi = leviathan | cdk = cursed dual katana | ttk = true triple katana | hs = hallow scythe | sh = superhuman | ec = electric claw | dt = dragon talon | sa = sanguine art | bf = blox fruits | rng = rengoku | tush = tushita | ya = yama | perm = permanent | notif/notifier = fruit notifier | gp = gamepass | v4 = race v4 | awk = awakened | 2x = 2x money or mastery gamepass
+
+== SERVER RULES YOU ENFORCE ==
+- Trading must happen in the designated trades channel(s)
+- Service requests (boss kills, raids, grinding) must go in the services channel
+- Bot commands must be used in the games hub / commands channel
+- Account trading/selling is strictly prohibited (or goes in a dedicated channel)
+- Begging for free items is not allowed
+- Scam links and suspicious URLs are auto-deleted
+- Spam and duplicate messages are monitored
+
+Always be helpful, concise, and knowledgeable about Blox Fruits when responding to server members. If someone asks about trade values, provide general guidance while noting values fluctuate with updates. If someone asks about how to get a fruit/sword/item, explain the in-game method clearly.`;
+
 function ai2LoadInstructions() {
     const p = ai2ResourcePath('config/instructions.txt');
-    if (!fs.existsSync(p)) return '';
-    try { return fs.readFileSync(p, 'utf8'); } catch { return ''; }
+    if (!fs.existsSync(p)) return BF_KNOWLEDGE_SYSTEM_PROMPT;
+    try {
+        const txt = fs.readFileSync(p, 'utf8');
+        // If the file is empty or whitespace, fall back to built-in BF knowledge
+        return txt.trim() ? txt : BF_KNOWLEDGE_SYSTEM_PROMPT;
+    } catch { return BF_KNOWLEDGE_SYSTEM_PROMPT; }
 }
 function ai2SaveInstructions(text) {
     const p = ai2ResourcePath('config/instructions.txt');
@@ -2150,6 +2245,103 @@ function saveData(data) {
     }
 }
 
+// ══════════════════════════════════════════════════════════
+//  MULTI-CHANNEL HELPERS
+// ══════════════════════════════════════════════════════════
+// Valid category keys for channelconfig
+const CHANNEL_CATEGORIES = {
+    trade:        { key: 'tradeChannelIds',               label: '🔄 Trade',               desc: 'fast-trading, slow-trading, fruit-value, etc.' },
+    raid:         { key: 'raidServiceChannelIds',          label: '⚔️ Raid/Service',         desc: 'raids, dungeons, bosses, lvling, sword quests, enchants, materials' },
+    race:         { key: 'raceV4ServiceChannelIds',        label: '🏁 Race V4/Trials',       desc: 'race-v4-service, trials, blue gear' },
+    seaevents:    { key: 'seaEventsChannelIds',            label: '🌊 Sea Events',           desc: 'general sea-events channel(s)' },
+    mirage:       { key: 'mirageIslandChannelIds',         label: '🏝️ Mirage Island',        desc: 'mirage-island' },
+    prehistoric:  { key: 'prehistoricIslandChannelIds',    label: '🦕 Prehistoric Island',   desc: 'prehistoric-island' },
+    kitsune:      { key: 'kitsuneIslandChannelIds',        label: '🦊 Kitsune Island',       desc: 'kitsune-island' },
+    leviathan:    { key: 'leviathanChannelIds',            label: '🐉 Leviathan/Frozen',     desc: 'leviathan-island, frozen dimension, levi heart' },
+};
+
+/** Get the multi-channel array for a category, falling back to the legacy single-ID field. */
+function getChannelIds(gs, categoryKey) {
+    const arr = gs[categoryKey];
+    if (Array.isArray(arr) && arr.length > 0) return arr;
+    // Legacy fallbacks
+    if (categoryKey === 'tradeChannelIds') return gs.tradeChannelId ? [gs.tradeChannelId] : [];
+    if (categoryKey === 'raidServiceChannelIds' || categoryKey === 'raceV4ServiceChannelIds' ||
+        categoryKey === 'seaEventsChannelIds' || categoryKey === 'mirageIslandChannelIds' ||
+        categoryKey === 'prehistoricIslandChannelIds' || categoryKey === 'kitsuneIslandChannelIds' ||
+        categoryKey === 'leviathanChannelIds') {
+        return gs.servicesChannelId ? [gs.servicesChannelId] : [];
+    }
+    return [];
+}
+
+/** First channel ID in the pool, or null. */
+function primaryChannelId(gs, categoryKey) {
+    const ids = getChannelIds(gs, categoryKey);
+    return ids.length > 0 ? ids[0] : null;
+}
+
+/** Is the given channel one of the "correct" trade channels? */
+function isInCorrectTradeChannel(channelId, gs) {
+    const ids = getChannelIds(gs, 'tradeChannelIds');
+    return ids.includes(channelId);
+}
+
+/** Is the given channel one of any correct service channel? */
+function isInCorrectServiceChannel(channelId, gs) {
+    const allServiceIds = [
+        gs.servicesChannelId,
+        ...getChannelIds(gs, 'raidServiceChannelIds'),
+        ...getChannelIds(gs, 'raceV4ServiceChannelIds'),
+        ...getChannelIds(gs, 'seaEventsChannelIds'),
+        ...getChannelIds(gs, 'mirageIslandChannelIds'),
+        ...getChannelIds(gs, 'prehistoricIslandChannelIds'),
+        ...getChannelIds(gs, 'kitsuneIslandChannelIds'),
+        ...getChannelIds(gs, 'leviathanChannelIds'),
+    ].filter(Boolean);
+    return allServiceIds.includes(channelId);
+}
+
+/** Leviathan / frozen-dimension detection regex */
+const LEVI_REDIRECT_RE = /\b(leviathan|levi\s*heart|levi\b|frozen\s*dimension|frozen\s*dim)\b/i;
+/** Kitsune island detection */
+const KITSUNE_ISLAND_RE = /\bkitsune\s*island\b/i;
+/** Prehistoric island detection */
+const PREHISTORIC_ISLAND_RE = /\bprehistoric\s*island\b|\bprehistoric\s*isle\b|\bprehisto?ric\b/i;
+/** Mirage island detection */
+const MIRAGE_ISLAND_RE = /\bmirage\s*island\b|\bmirage\s*isle\b|\bmirage\b/i;
+/** Race V4 / trials / blue gear detection */
+const RACE_V4_SERVICE_RE = /\b(race\s*v4|race\s*reroll|trials?|blue\s*gear)\b/i;
+/** Raid / dungeon / boss service detection */
+const RAID_SERVICE_RE = /\b(raid|dungeon|raid\s*boss|boss\s*carry|lev?el\s*up|lvl\s*up|lvling\s*up|leveling|sword\s*quest|cdk|ttk|enchant|material|bounty\s*reset|bounty\s*farm|materials?\s*hunt|pain\s*and\s*suffering|haze\s*of\s*misery|fear\s*the\s*reaper|sense\s*of\s*duty|the\s*hunter|soulless|legendary\s*sword\s*dealer|sword\s*dealer|mysterious\s*man|mastery\s*grind|mastery\s*farm|mastery\s*300|2m\s*beli|beli\s*purchase|wando\s*purchase|shisui\s*purchase|saddi\s*purchase|ttk\s*fusion|ttk\s*quest|cdk\s*quest|cdk\s*chain|ttk\s*chain|tushita\s*quest|yama\s*quest)\b/i;
+
+/**
+ * Given what was detected in a service violation, pick the best redirect channel pool.
+ * Returns { channelId, label } — channelId is the primary ID to redirect to (may be null),
+ * label is human-readable for the bot message.
+ */
+function pickServiceRedirectTarget(gs, detected) {
+    const fallback = { channelId: gs.servicesChannelId, label: 'the services channel' };
+    const pick = (catKey, label) => {
+        const id = primaryChannelId(gs, catKey);
+        return id ? { channelId: id, label } : fallback;
+    };
+    if (detected.leviathan) return pick('leviathanChannelIds', 'the leviathan/frozen-dimension channel');
+    if (detected.kitsune)   return pick('kitsuneIslandChannelIds', 'the kitsune island channel');
+    if (detected.prehistoric) return pick('prehistoricIslandChannelIds', 'the prehistoric island channel');
+    if (detected.mirage)    return pick('mirageIslandChannelIds', 'the mirage island channel');
+    if (detected.seaEvent)  return pick('seaEventsChannelIds', 'the sea-events channel');
+    if (detected.raceV4)    return pick('raceV4ServiceChannelIds', 'the race/trials channel');
+    if (detected.raid)      return pick('raidServiceChannelIds', 'the raid/service channel');
+    return fallback;
+}
+
+/** Format a channel ID array for display, e.g. "<#111>, <#222>" */
+function formatChannelIds(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return 'None';
+    return ids.map(id => `<#${id}>`).join(', ');
+}
+
 function exportGuildConfig(guildId, data) {
     const gs = getGuildSettings(guildId, data);
     const out = {
@@ -2178,7 +2370,16 @@ function getGuildSettings(guildId, data) {
     if (!data.guildSettings[guildId]) {
         data.guildSettings[guildId] = {
             tradeChannelId:    DEFAULT_TARGET_CHANNEL_ID,
+            tradeChannelIds:   [],   // multi: fast-trading, slow-trading, fruit-value, etc.
             servicesChannelId: DEFAULT_SERVICES_CHANNEL_ID,
+            // ── Specific service channel pools (each supports multiple channels) ──
+            raidServiceChannelIds:       [],  // raids, dungeons, raid bosses, services, bosses, lvling, sword quests (CDK/TTK), enchants, materials
+            raceV4ServiceChannelIds:     [],  // race-v4-service, trials, blue gear
+            seaEventsChannelIds:         [],  // general sea-events channel(s)
+            mirageIslandChannelIds:      [],  // mirage-island
+            prehistoricIslandChannelIds: [],  // prehistoric-island
+            kitsuneIslandChannelIds:     [],  // kitsune-island
+            leviathanChannelIds:         [],  // leviathan-island, frozen dimension, levi heart
             gamesHubId:        DEFAULT_GAMES_HUB_ID,
             exiledRoleId:      DEFAULT_EXILED_ROLE_ID,
             logChannelId:      null,
@@ -2620,6 +2821,96 @@ function isMemberImmune(member, guildId, data) {
 }
 
 // ══════════════════════════════════════════════════════════
+//  EXILE CHANNEL GUARD
+// ══════════════════════════════════════════════════════════
+/**
+ * Returns true if the given channelId is the configured exile channel.
+ * Uses gs.exileChannelId first (set by /exilechannel create), then falls
+ * back to searching for a channel named "exile-zone" so it works even on
+ * servers that created the channel before this fix was deployed.
+ */
+function isExileChannel(channelId, guild, gs) {
+    if (!channelId || !guild) return false;
+    if (gs?.exileChannelId && channelId === gs.exileChannelId) return true;
+    // Fallback: match by name if no ID is stored yet
+    const ch = guild.channels?.cache?.get(channelId);
+    if (ch && ch.name === 'exile-zone') return true;
+    return false;
+}
+
+// ══════════════════════════════════════════════════════════
+//  SETUP WIZARD HELPERS
+// ══════════════════════════════════════════════════════════
+function fmtCh(id) { return id ? `<#${id}>` : '`not set`'; }
+function fmtFirstPool(gs, key) {
+    const ids = gs[key];
+    if (!Array.isArray(ids) || !ids.length) return '`not set`';
+    return ids.map(id => `<#${id}>`).join(', ');
+}
+
+function buildSetupPickerEmbed(gs) {
+    const raidIds  = fmtFirstPool(gs, 'raidServiceChannelIds');
+    const raceIds  = fmtFirstPool(gs, 'raceV4ServiceChannelIds');
+    const seaIds   = fmtFirstPool(gs, 'seaEventsChannelIds');
+    const mirIds   = fmtFirstPool(gs, 'mirageIslandChannelIds');
+    const preIds   = fmtFirstPool(gs, 'prehistoricIslandChannelIds');
+    const kitIds   = fmtFirstPool(gs, 'kitsuneIslandChannelIds');
+    const leviIds  = fmtFirstPool(gs, 'leviathanChannelIds');
+    return new EmbedBuilder()
+        .setTitle('🔧 SKYNET V7 — Setup Wizard')
+        .setColor(0x5865F2)
+        .setDescription('Choose a section to configure. Each button opens a form for that group of settings.\n\u200b')
+        .addFields(
+            {
+                name: '📋 Page 1 — Core',
+                value: [
+                    `Trade Channel: ${fmtCh(gs.tradeChannelId)}`,
+                    `Services Channel: ${fmtCh(gs.servicesChannelId)}`,
+                    `Exile Role: ${gs.exiledRoleId ? `<@&${gs.exiledRoleId}>` : '`not set`'}`,
+                    `Log Channel: ${fmtCh(gs.logChannelId)}`,
+                    `Appeals Channel: ${fmtCh(gs.appealsChannelId)}`,
+                ].join('\n'),
+                inline: false,
+            },
+            {
+                name: '📋 Page 2 — Service Channel Pools',
+                value: [
+                    `⚔️ Raid/Service: ${raidIds}`,
+                    `🏁 Race V4/Trials: ${raceIds}`,
+                    `🌊 Sea Events: ${seaIds}`,
+                    `🏝️ Mirage Island: ${mirIds}`,
+                    `🦕 Prehistoric Island: ${preIds}`,
+                    `🦊 Kitsune Island: ${kitIds}`,
+                    `🐉 Leviathan/Frozen: ${leviIds}`,
+                ].join('\n'),
+                inline: false,
+            },
+            {
+                name: '📋 Page 3 — Misc',
+                value: [
+                    `Commands Hub: ${fmtCh(gs.gamesHubId)}`,
+                    `Exile Channel: ${fmtCh(gs.exileChannelId)}`,
+                    `Violation Threshold: **${gs.violationThreshold || 3}**`,
+                    `Exile Duration: **${gs.exileDurationMins || 45}m**`,
+                ].join('\n'),
+                inline: false,
+            },
+        )
+        .setFooter({ text: 'Tip: paste raw IDs — Discord channel/role/user IDs work directly' })
+        .setTimestamp();
+}
+
+function buildSetupPickerComponents() {
+    return [
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('setup_open_page1').setLabel('📋 Page 1 — Core').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('setup_open_page2').setLabel('📋 Page 2 — Channel Pools').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('setup_open_page3').setLabel('📋 Page 3 — Misc').setStyle(ButtonStyle.Secondary),
+        ),
+    ];
+}
+
+// ══════════════════════════════════════════════════════════
 //  LOG HELPER
 // ══════════════════════════════════════════════════════════
 async function sendLog(guild, data, embed) {
@@ -2652,6 +2943,8 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
         if ((oldMsg?.content || '') === (message.content || '')) return;
         const immune = message.member ? isMemberImmune(message.member, message.guild.id, data) : false;
         if (immune) return;
+        // No moderation enforcement inside the exile channel
+        if (isExileChannel(message.channel.id, message.guild, gs)) return;
 
         if (gs.attachmentPolicyEnabled && message.attachments && message.attachments.size) {
             const exts = getAttachmentExts(message);
@@ -4180,6 +4473,22 @@ const QUESTS = [
     "citizen's quest","hungry man quest","shipwright quest",
     "trial of water","trial of speed","trial of the king","trial of carnage",
     "alchemist","arowe","bartilo","shipwright",
+
+    // ── CDK (Cursed Dual Katana) quest chain ──────────────────────────────
+    "pain and suffering","pain & suffering","haze of misery","fear the reaper",
+    "sense of duty","the hunter","soulless",
+    "cdk quest","cursed dual katana quest","cdk chain","tushita quest","yama quest",
+    "tushita and yama","get tushita","get yama","unlock cdk",
+
+    // ── TTK (True Triple Katana) quest chain ─────────────────────────────
+    "legendary sword dealer","sword dealer spawn","sword dealer location",
+    "wando purchase","wando 2m","wando beli",
+    "shisui purchase","shisui 2m","shisui beli",
+    "saddi purchase","saddi 2m","saddi beli",
+    "mastery 300","mastery grinding","mastery grind","mastery farm",
+    "mysterious man","mysterious man fusion","ttk fusion","ttk quest",
+    "true triple katana quest","ttk chain","buy wando","buy shisui","buy saddi",
+    "beli purchase","2m beli",
 ];
 const QUEST_ALIASES = {
     "sexp":"saber expert","sabexp":"saber expert","sbrexp":"saber expert","saberxprt":"saber expert",
@@ -4200,6 +4509,30 @@ const QUEST_ALIASES = {
     "tkngqst":"trial of the king","tkng":"trial of the king",
     "tcarn":"trial of carnage","trialcarn":"trial of carnage","trialcarnage":"trial of carnage",
     "tcarnqst":"trial of carnage","tcarnage":"trial of carnage",
+
+    // CDK quest aliases
+    "p&s":"pain and suffering","pas":"pain and suffering","painandsuffering":"pain and suffering",
+    "pains":"pain and suffering","pain&suffering":"pain and suffering",
+    "hom":"haze of misery","hazeofmisery":"haze of misery","hazem":"haze of misery",
+    "ftr":"fear the reaper","fearreaper":"fear the reaper","fearthereaper":"fear the reaper",
+    "sod":"sense of duty","senseofduty":"sense of duty","snseofduty":"sense of duty",
+    "thehunter":"the hunter","huntquest":"the hunter",
+    "cdkquest":"cdk quest","cdkchain":"cdk chain","cdkqst":"cdk quest",
+    "tushquest":"tushita quest","yamaquest":"yama quest",
+    "unlkcdk":"unlock cdk","unlockcdk":"unlock cdk",
+
+    // TTK quest aliases
+    "ttksworddealer":"legendary sword dealer","sworddealer":"legendary sword dealer",
+    "legendarydealer":"legendary sword dealer","legdealer":"legendary sword dealer",
+    "wandopurchase":"wando purchase","wando2m":"wando 2m","wandobeli":"wando beli",
+    "shisuipurchase":"shisui purchase","shisui2m":"shisui 2m","shisuibeli":"shisui beli",
+    "saddipurchase":"saddi purchase","saddi2m":"saddi 2m","saddibeli":"saddi beli",
+    "mst300":"mastery 300","mas300":"mastery 300","mast300":"mastery 300",
+    "mastgrind":"mastery grinding","mastgrinding":"mastery grinding","mastfarm":"mastery farm",
+    "mysteryman":"mysterious man","mystman":"mysterious man","mystrman":"mysterious man",
+    "mystmanfusion":"mysterious man fusion","ttkfusion":"ttk fusion","ttkquest":"ttk quest",
+    "ttkchain":"ttk chain","buywando":"buy wando","buyshisui":"buy shisui","buysaddi":"buy saddi",
+    "belipurchase":"beli purchase","2mbeli":"2m beli",
 };
 
 // ══════════════════════════════════════════════════════════
@@ -6178,7 +6511,7 @@ async function issueViolation(message, data, gs, opts) {
         reason,
         details,
         footerLabel,
-        action: 'warn',
+        action: opts?.action || 'warn',  // ← use actual action instead of always 'warn'
     });
     const caseId = caseObj?.id || null;
 
@@ -6211,6 +6544,40 @@ async function issueViolation(message, data, gs, opts) {
         .setFooter({ text: `${footerLabel} ${count}/${threshold}${caseId ? ` • Case #${caseId}` : ''}` });
     const sent = await message.channel.send({ embeds: [embed] });
     setTimeout(() => sent.delete().catch(()=>{}), opts?.ttlMs || 10000);
+
+    // ── Warn appeal DM (auto-violations) ─────────────────
+    // Mirror the appeal button that /warn sends so users can always
+    // appeal their warning, whether it was issued manually or by the scanner.
+    const warnId = getLastWarnId(data, uid);
+    if (warnId) {
+        try {
+            const guildIcon = message.guild.iconURL({ dynamic: true });
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('⚠️ You have received a Warning')
+                .setColor(0xFF8C00)
+                .setThumbnail(guildIcon || null)
+                .setAuthor({ name: message.guild.name, iconURL: guildIcon || undefined })
+                .setDescription(
+                    `Hey <@${uid}>, you've been automatically warned in **${message.guild.name}**.\n` +
+                    `If you believe this was a mistake, you can appeal it below — but you only get **one shot**.\n\u200b`
+                )
+                .addFields(
+                    { name: '📝 Reason',       value: reason.slice(0, 1024),      inline: false },
+                    { name: '📊 Strike count', value: `${count} / ${threshold}`,   inline: true  },
+                    { name: '🆔 Warn ID',      value: `\`${warnId}\``,            inline: true  },
+                )
+                .setFooter({ text: 'You may submit exactly 1 appeal per warning.' })
+                .setTimestamp();
+            const appealRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`open_warn_appeal_${message.guild.id}_${warnId}`)
+                    .setLabel('📩 Appeal this Warning')
+                    .setStyle(ButtonStyle.Primary)
+            );
+            await message.author.send({ embeds: [dmEmbed], components: [appealRow] }).catch(()=>{});
+        } catch {}
+    }
+
     return { exiled: false, count };
 }
 
@@ -6604,19 +6971,33 @@ async function aiDetectViolation(message, categories, gs) {
     try {
         const guildId = message.guild?.id;
         if (!aiRateLimitOk(guildId)) return null;
-        const systemPrompt = `You are a moderation AI for a Blox Fruits Discord server.
-Analyze the user's message and determine if it violates any of these rules:
-1. Trading in wrong channel (should be in #trades)
-2. Begging for fruits or items
-3. Account trading/selling
-4. Service/boss/raid requests (should be in #services)
-5. Spam/inappropriate content
+        const systemPrompt = `You are a moderation AI for a Blox Fruits Discord server. You have deep knowledge of Blox Fruits (the Roblox game).
 
-6. Using bot commands in the wrong channels (command usage / command-like)
-7. Scam/exploit links or scammy content
+== BLOX FRUITS KNOWLEDGE ==
+FRUITS — Common: Rocket, Spin, Chop, Spring, Bomb, Smoke, Spike, Flame, Kilo | Uncommon: Ice, Sand, Dark, Eagle, Diamond | Rare: Light, Rubber, Ghost, Magma, Quake, Buddha/Buda, Love, Creation, Spider, Sound | Legendary: Phoenix, Portal, Rumble, Lightning, Pain, Blizzard, Gravity, Mammoth, T-Rex, Dough, Shadow, Venom | Mythical: Gas, Spirit, Tiger, Yeti, Kitsune, Control, Dragon, Leopard
+GAMEPASSES/PERMS: Dark Blade (Yoru), 2x Money, 2x Mastery, 2x Boss Drops, Fast Boats, Fruit Notifier, Werewolf
+SWORDS: CDK (Cursed Dual Katana), TTK (True Triple Katana), Dark Blade, Hallow Scythe, Dragonheart, Tushita, Yama, Midnight Blade, Rengoku, Canvander, Bisento, Koko, Fox Lamp, Wando, Shisui, Saddi, Shark Anchor, Spikey Trident, Warden's Sword, Dual-Headed Blade, Gravity Cane, Buddy Sword, Saber, Pole, Dark Dagger, Jitte, Longsword, Pipe, Soul Cane, Trident, Flail, Iron Mace, Shark Saw, Triple Katana, Twin Hooks, Cutlass, Dual Katana, Katana
+BOSSES: Greybeard, Order, Vice Admiral, Saber Expert, Warden, Chief Warden, Swan, Gorilla King, Bobby, The Saw, Mob Leader, Darkbeard, Jeremy, Fajita, Wysper, Thunder God, Magma Admiral, Fishman Lord, Cyborg, Ice Admiral, Diamond, Don Swan, Smoke Admiral, Awakened Ice Admiral, Kilo Admiral, Tide Keeper, Stone, Island Empress, Captain Elephant, Beautiful Pirate, Longma, Cake Queen, Soul Reaper, Indra, Katakuri, Yeti, Cake Prince, Dough King, Tyrant of the Skies, Leviathan, Sea Beast, Unbound Werewolf
+FIGHTING STYLES: Combat, Dark Step, Electric, Water Kung Fu, Dragon Breath, Superhuman (SH), Sharkman Karate, Electric Claw (EC), Dragon Talon (DT), Sanguine Art (SA)
+RACES: Human, Mink, Shark, Ghoul, Angel, Cyborg, Draco (V2/V3/V4 upgrades via Trials)
+ENCHANTS: Sharpness, Hardening, Precision, Vampiric, Elemental, Haste, Critical, Curse, Masterpiece, Rage, Sharpshooter, Strong Grip, Unreal, Sea Blessing, Agile, Deadly, Piercing, Siphon, Lucky, Fortune, Beast, Cool, Efficient
+TRADE TERMS: WTT=Want to Trade | WTB=Want to Buy | WTS=Want to Sell | LF=Looking For | WFL=Win/Fair/Loss | MM=Middleman | Perm=Permanent fruit | Notifier=Fruit Notifier gamepass
+SERVICES: boss kills, raids, mastery grinding, race V4 trials, CDK/TTK quest help, material farming, fruit awakening, Dragon Talon/Electric Claw unlock
+PAIN UPGRADES: Infernal Endurance, Agony Surge, Torment Conductor, Spectral Assimilation
+LIGHTNING UPGRADES: Predator Circuit Breaker, Capacitor Overload Test, Conductor's Resonance
 
-Respond ONLY with valid JSON: {"violation": true/false, "category": "trade|beg|account|acctrade|service|spam|command|scam|none", "confidence": 0.0-1.0, "reason": "short reason"}
-Only flag if confidence > 0.85. Be conservative — do NOT flag normal conversation.`;
+== VIOLATION CATEGORIES ==
+1. "trade" — Trading fruits/perms/swords/gamepasses/accessories in the wrong channel (correct channel: #trades or designated trade channels). Keywords: WTT, WTB, WTS, LF, swap, offer, trade, perm, notifier, dark blade, etc.
+2. "beg" — Begging/asking for FREE fruits, items, Robux with no trade offer. E.g. "can someone give me magma", "pls give free perm", "anyone donate fruit"
+3. "acctrade" — Selling, buying, or trading entire Roblox accounts. E.g. "selling my account", "buying accounts", "account for sale"
+4. "service" — Requesting or advertising boss kills, raids, mastery grinding, race trials, quest help, farming services in the wrong channel (correct channel: #services). Keywords: "need help with boss", "raid service", "farming service", "race v4 help", "mastery service"
+5. "spam" — Repeated messages, excessive emojis, gibberish, or flooding
+6. "command" — Using bot commands (!, /, etc.) outside the designated games hub/commands channel
+7. "scam" — Sharing suspicious/scam links, fake giveaways, "free perm" websites, verification scams, exploit links
+8. "none" — Normal conversation, not a violation
+
+Respond ONLY with valid JSON: {"violation": true/false, "category": "trade|beg|acctrade|service|spam|command|scam|none", "confidence": 0.0-1.0, "reason": "short reason under 20 words"}
+Rules: Only flag if confidence > 0.85. Be conservative — do NOT flag: normal chat about the game, asking for tips/advice, sharing screenshots, asking about fruit locations, discussing values without offering to trade, discussing patch notes or updates. DO flag clear trade offers/requests, clear begging, clear service posts, and obvious scam links.`;
         const resJson = await withAiQueue(message.guild?.id, async () => {
             const res = await fetch(AI_API_URL, {
                 method: 'POST',
@@ -6725,12 +7106,6 @@ const slashCommands = [
         .setDescription('Open the setup wizard to configure SKYNET for this server')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
 
-    // Change setup (alias)
-    new SlashCommandBuilder()
-        .setName('changesetup')
-        .setDescription('Reopen the setup wizard to change your configuration')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
-
     // Set individual channels
     new SlashCommandBuilder()
         .setName('set')
@@ -6815,9 +7190,10 @@ const slashCommands = [
 
     new SlashCommandBuilder()
         .setName('aienable')
-        .setDescription('Enable AI (Claude) detection for this server, optionally selecting a chat model')
+        .setDescription('Configure AI detection for this server (enable/disable/model)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addSubcommand(s => s.setName('on').setDescription('Enable AI detection (keep current model)'))
+        .addSubcommand(s => s.setName('off').setDescription('Disable AI detection for this server'))
         .addSubcommand(s => s
             .setName('model')
             .setDescription('Enable AI detection and choose a chat AI model')
@@ -6836,28 +7212,17 @@ const slashCommands = [
                     { name: 'Claude — claude-sonnet-4-6 (balanced)', value: 'claude-sonnet' },
                     { name: 'Claude — claude-opus-4-6 (powerful)', value: 'claude-opus' },
                 ))),
-    new SlashCommandBuilder()
-        .setName('aidisable')
-        .setDescription('Disable AI (Claude) detection for this server')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
 
     new SlashCommandBuilder()
-        .setName('disablecheck')
-        .setDescription('Disable ALL moderation checks for this server')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
-    new SlashCommandBuilder()
-        .setName('enablecheck')
-        .setDescription('Enable ALL moderation checks for this server')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+        .setName('check')
+        .setDescription('Enable or disable ALL moderation checks for this server')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('enable').setDescription('Enable all moderation checks'))
+        .addSubcommand(s => s.setName('disable').setDescription('Disable all moderation checks'))
+        .addSubcommand(s => s.setName('status').setDescription('Show whether checks are on or off')),
 
     new SlashCommandBuilder()
         .setName('noaffiliation')
-        .setDescription('Replace trade/service redirects with a no-affiliation notice')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(s => s.setName('enable').setDescription('Enable no-affiliation mode'))
-        .addSubcommand(s => s.setName('disable').setDescription('Disable no-affiliation mode')),
-    new SlashCommandBuilder()
-        .setName('noaffliation')
         .setDescription('Replace trade/service redirects with a no-affiliation notice')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addSubcommand(s => s.setName('enable').setDescription('Enable no-affiliation mode'))
@@ -7001,18 +7366,6 @@ const slashCommands = [
         .setDescription('Control whether /botinfo is public or ephemeral')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addStringOption(o => o.setName('mode').setDescription('on|off').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('linkmode')
-        .setDescription('Set link intelligence mode')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addStringOption(o => o.setName('mode').setDescription('strict|medium|off').setRequired(true)),
-    new SlashCommandBuilder()
-        .setName('linkaction')
-        .setDescription('Set what happens when link/scam content is detected')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addStringOption(o => o.setName('action').setDescription('delete|warn|exile|timeout').setRequired(true))
-        .addIntegerOption(o => o.setName('minutes').setDescription('Timeout minutes (only for timeout)').setRequired(false)),
 
     new SlashCommandBuilder()
         .setName('verifygate')
@@ -7253,7 +7606,17 @@ const slashCommands = [
         .setName('purge')
         .setDescription('Bulk delete messages in the current channel')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
-        .addIntegerOption(o => o.setName('count').setDescription('How many messages (1-100)').setRequired(true)),
+        .addSubcommand(sub => sub
+            .setName('count')
+            .setDescription('Delete the last N messages from this channel')
+            .addIntegerOption(o => o.setName('amount').setDescription('How many messages to delete (1–100)').setRequired(true).setMinValue(1).setMaxValue(100))
+        )
+        .addSubcommand(sub => sub
+            .setName('user')
+            .setDescription('Delete the last N messages from a specific user in this channel')
+            .addUserOption(o => o.setName('user').setDescription('The user whose messages to purge').setRequired(true))
+            .addIntegerOption(o => o.setName('amount').setDescription('Max messages to scan (1–100, default 50)').setRequired(false).setMinValue(1).setMaxValue(100))
+        ),
 
     new SlashCommandBuilder()
         .setName('lock')
@@ -7291,47 +7654,53 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(true)),
 
+    // ── /bloxfruits — unified Blox Fruits redirect/config command ──
     new SlashCommandBuilder()
-        .setName('commandredirect')
-        .setDescription('Enable/disable command redirect enforcement (Games Hub)')
+        .setName('bloxfruits')
+        .setDescription('Manage all Blox Fruits redirect and enforcement settings')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
-
-    new SlashCommandBuilder()
-        .setName('serviceredirect')
-        .setDescription('Enable/disable services redirect enforcement (wrong channel)')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
-
-    new SlashCommandBuilder()
-        .setName('traderedirect')
-        .setDescription('Enable/disable trade redirect enforcement (wrong channel)')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
-
-    new SlashCommandBuilder()
-        .setName('spamwarn')
-        .setDescription('Enable/disable spam warnings/enforcement')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
-
-    new SlashCommandBuilder()
-        .setName('begwarn')
-        .setDescription('Enable/disable begging warnings/enforcement')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
-
-    new SlashCommandBuilder()
-        .setName('scamwarn')
-        .setDescription('Enable/disable scam warnings/enforcement')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
-
-    new SlashCommandBuilder()
-        .setName('acctradewarn')
-        .setDescription('Enable/disable account trading warnings/enforcement')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addBooleanOption(o => o.setName('enabled').setDescription('Enable/disable').setRequired(false)),
+        .addSubcommandGroup(g => g
+            .setName('redirect')
+            .setDescription('Enable or disable channel redirect enforcement')
+            .addSubcommand(s => s.setName('enable').setDescription('Enable ALL redirects (trade + service + command) at once'))
+            .addSubcommand(s => s.setName('disable').setDescription('Disable ALL redirects (trade + service + command) at once'))
+            .addSubcommand(s => s.setName('status').setDescription('Show current status of all redirect settings'))
+        )
+        .addSubcommandGroup(g => g
+            .setName('trade')
+            .setDescription('Trade redirect settings')
+            .addSubcommand(s => s.setName('enable').setDescription('Enable trade redirect enforcement'))
+            .addSubcommand(s => s.setName('disable').setDescription('Disable trade redirect enforcement'))
+            .addSubcommand(s => s.setName('status').setDescription('Show trade redirect status'))
+        )
+        .addSubcommandGroup(g => g
+            .setName('service')
+            .setDescription('Service redirect settings')
+            .addSubcommand(s => s.setName('enable').setDescription('Enable service redirect enforcement'))
+            .addSubcommand(s => s.setName('disable').setDescription('Disable service redirect enforcement'))
+            .addSubcommand(s => s.setName('status').setDescription('Show service redirect status'))
+        )
+        .addSubcommandGroup(g => g
+            .setName('command')
+            .setDescription('Command redirect settings')
+            .addSubcommand(s => s.setName('enable').setDescription('Enable command redirect enforcement'))
+            .addSubcommand(s => s.setName('disable').setDescription('Disable command redirect enforcement'))
+            .addSubcommand(s => s.setName('status').setDescription('Show command redirect status'))
+        )
+        .addSubcommandGroup(g => g
+            .setName('warn')
+            .setDescription('Enable or disable specific warning categories')
+            .addSubcommand(s => s.setName('trade').setDescription('Toggle trade warnings').addBooleanOption(o => o.setName('enabled').setDescription('on/off').setRequired(true)))
+            .addSubcommand(s => s.setName('service').setDescription('Toggle service warnings').addBooleanOption(o => o.setName('enabled').setDescription('on/off').setRequired(true)))
+            .addSubcommand(s => s.setName('beg').setDescription('Toggle begging warnings').addBooleanOption(o => o.setName('enabled').setDescription('on/off').setRequired(true)))
+            .addSubcommand(s => s.setName('scam').setDescription('Toggle scam warnings').addBooleanOption(o => o.setName('enabled').setDescription('on/off').setRequired(true)))
+            .addSubcommand(s => s.setName('spam').setDescription('Toggle spam warnings').addBooleanOption(o => o.setName('enabled').setDescription('on/off').setRequired(true)))
+            .addSubcommand(s => s.setName('acctrade').setDescription('Toggle account trading warnings').addBooleanOption(o => o.setName('enabled').setDescription('on/off').setRequired(true)))
+        )
+        .addSubcommand(s => s
+            .setName('status')
+            .setDescription('Show full Blox Fruits moderation dashboard for this server')
+        ),
 
     // Raid (merged into /raid)
     new SlashCommandBuilder()
@@ -7474,6 +7843,45 @@ const slashCommands = [
         .addIntegerOption(o => o.setName('threshold').setDescription('Repeats to trigger (2-20)').setRequired(false))
         .addIntegerOption(o => o.setName('minlen').setDescription('Min message length (5-200)').setRequired(false)),
     
+    new SlashCommandBuilder()
+        .setName('channelconfig')
+        .setDescription('Add/remove/list channels for each redirect category')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('add')
+            .setDescription('Add a channel to a category pool')
+            .addStringOption(o => o.setName('category')
+                .setDescription('Category: trade | raid | race | seaevents | mirage | prehistoric | kitsune | leviathan')
+                .setRequired(true)
+                .addChoices(
+                    { name: '🔄 trade  (fast/slow trading, fruit-value…)',          value: 'trade' },
+                    { name: '⚔️ raid   (raids, bosses, dungeons, lvling, quests…)', value: 'raid' },
+                    { name: '🏁 race   (race-v4, trials, blue gear)',               value: 'race' },
+                    { name: '🌊 seaevents  (general sea events)',                   value: 'seaevents' },
+                    { name: '🏝️ mirage  (mirage island)',                           value: 'mirage' },
+                    { name: '🦕 prehistoric  (prehistoric island)',                  value: 'prehistoric' },
+                    { name: '🦊 kitsune  (kitsune island)',                         value: 'kitsune' },
+                    { name: '🐉 leviathan  (leviathan, frozen dimension, levi heart)', value: 'leviathan' },
+                ))
+            .addChannelOption(o => o.setName('channel').setDescription('Channel to add').setRequired(true)))
+        .addSubcommand(s => s.setName('remove')
+            .setDescription('Remove a channel from a category pool')
+            .addStringOption(o => o.setName('category')
+                .setDescription('Category: trade | raid | race | seaevents | mirage | prehistoric | kitsune | leviathan')
+                .setRequired(true)
+                .addChoices(
+                    { name: '🔄 trade',       value: 'trade' },
+                    { name: '⚔️ raid',         value: 'raid' },
+                    { name: '🏁 race',         value: 'race' },
+                    { name: '🌊 seaevents',    value: 'seaevents' },
+                    { name: '🏝️ mirage',       value: 'mirage' },
+                    { name: '🦕 prehistoric',  value: 'prehistoric' },
+                    { name: '🦊 kitsune',      value: 'kitsune' },
+                    { name: '🐉 leviathan',    value: 'leviathan' },
+                ))
+            .addChannelOption(o => o.setName('channel').setDescription('Channel to remove').setRequired(true)))
+        .addSubcommand(s => s.setName('list')
+            .setDescription('List all configured channel pools')),
+
 ...mathMod.mathSlashCommandBuilders,
 ].map(c => c.toJSON());
 
@@ -7740,6 +8148,105 @@ client.on('interactionCreate', async interaction => {
     // ── MODALS ────────────────────────────────────────────
     if (interaction.isModalSubmit()) {
         // Setup modal
+        // ── Setup modal page 1 — Core ────────────────────────
+        if (interaction.customId === 'setup_modal_p1') {
+            const tradeId    = interaction.fields.getTextInputValue('trade_channel_id').trim();
+            const servicesId = interaction.fields.getTextInputValue('services_channel_id').trim();
+            const exileRole  = interaction.fields.getTextInputValue('exile_role_id').trim();
+            const logId      = interaction.fields.getTextInputValue('log_channel_id').trim();
+            const appId      = interaction.fields.getTextInputValue('appeals_channel_id').trim();
+            if (tradeId)    gs.tradeChannelId    = tradeId;
+            if (servicesId) gs.servicesChannelId = servicesId;
+            if (exileRole)  gs.exiledRoleId      = exileRole;
+            if (logId)      gs.logChannelId      = logId;
+            if (appId)      gs.appealsChannelId  = appId;
+            saveData(data);
+            await interaction.reply({
+                embeds: [buildSetupPickerEmbed(gs)
+                    .setTitle('✅ Setup — Page 1 Saved')
+                    .setColor(0x00FF88)],
+                components: buildSetupPickerComponents(),
+                ephemeral: true,
+            });
+            return;
+        }
+
+        // ── Setup modal page 2 — Channel Pools ──────────────
+        if (interaction.customId === 'setup_modal_p2') {
+            function parseIds(raw) {
+                return raw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s));
+            }
+            const raidRaw  = interaction.fields.getTextInputValue('raid_channel_ids').trim();
+            const raceRaw  = interaction.fields.getTextInputValue('race_channel_ids').trim();
+            const seaRaw   = interaction.fields.getTextInputValue('sea_channel_ids').trim();
+            const mirRaw   = interaction.fields.getTextInputValue('mirage_channel_ids').trim();
+            const pklRaw   = interaction.fields.getTextInputValue('prehistoric_kitsune_levi_ids').trim();
+
+            if (raidRaw !== '')  gs.raidServiceChannelIds     = parseIds(raidRaw);
+            if (raceRaw !== '')  gs.raceV4ServiceChannelIds   = parseIds(raceRaw);
+            if (seaRaw  !== '')  gs.seaEventsChannelIds       = parseIds(seaRaw);
+            if (mirRaw  !== '')  gs.mirageIslandChannelIds    = parseIds(mirRaw);
+
+            // Parse the combined prehistoric/kitsune/leviathan field
+            // Accepts lines like:  prehistoric: 111,222   kitsune: 333   leviathan: 444
+            // Also handles plain IDs with no prefix (treated as prehistoric for that line)
+            if (pklRaw !== '') {
+                const preIds  = [];
+                const kitIds  = [];
+                const leviIds = [];
+                for (const line of pklRaw.split(/\n/)) {
+                    const clean = line.trim();
+                    if (!clean) continue;
+                    const prefixMatch = clean.match(/^(prehistoric|kitsune|leviathan|levi|kit|pre)\s*[:\-]?\s*(.+)$/i);
+                    if (prefixMatch) {
+                        const prefix = prefixMatch[1].toLowerCase();
+                        const ids    = parseIds(prefixMatch[2]);
+                        if (/^pre/.test(prefix))  preIds.push(...ids);
+                        else if (/^kit/.test(prefix)) kitIds.push(...ids);
+                        else if (/^le?vi/.test(prefix)) leviIds.push(...ids);
+                    } else {
+                        // No prefix — treat as prehistoric
+                        preIds.push(...parseIds(clean));
+                    }
+                }
+                if (preIds.length)  gs.prehistoricIslandChannelIds = preIds;
+                if (kitIds.length)  gs.kitsuneIslandChannelIds     = kitIds;
+                if (leviIds.length) gs.leviathanChannelIds         = leviIds;
+            }
+
+            saveData(data);
+            await interaction.reply({
+                embeds: [buildSetupPickerEmbed(gs)
+                    .setTitle('✅ Setup — Page 2 Saved')
+                    .setColor(0x00FF88)],
+                components: buildSetupPickerComponents(),
+                ephemeral: true,
+            });
+            return;
+        }
+
+        // ── Setup modal page 3 — Misc ────────────────────────
+        if (interaction.customId === 'setup_modal_p3') {
+            const hubId    = interaction.fields.getTextInputValue('games_hub_id').trim();
+            const exileCh  = interaction.fields.getTextInputValue('exile_channel_id').trim();
+            const thresh   = parseInt(interaction.fields.getTextInputValue('violation_threshold').trim()) || 0;
+            const dur      = parseInt(interaction.fields.getTextInputValue('exile_duration_mins').trim())  || 0;
+            if (hubId)   gs.gamesHubId        = hubId;
+            if (exileCh) gs.exileChannelId    = exileCh;
+            if (thresh)  gs.violationThreshold = Math.max(1, Math.min(10, thresh));
+            if (dur)     gs.exileDurationMins  = Math.max(1, Math.min(1440, dur));
+            saveData(data);
+            await interaction.reply({
+                embeds: [buildSetupPickerEmbed(gs)
+                    .setTitle('✅ Setup — Page 3 Saved')
+                    .setColor(0x00FF88)],
+                components: buildSetupPickerComponents(),
+                ephemeral: true,
+            });
+            return;
+        }
+
+        // ── Legacy setup_modal (keep for backwards compat) ──
         if (interaction.customId === 'setup_modal') {
             gs.tradeChannelId    = interaction.fields.getTextInputValue('trade_channel_id').trim();
             gs.servicesChannelId = interaction.fields.getTextInputValue('services_channel_id').trim();
@@ -7749,18 +8256,11 @@ client.on('interactionCreate', async interaction => {
             if (logId) gs.logChannelId = logId;
             if (appId) gs.appealsChannelId = appId;
             saveData(data);
-            const embed = new EmbedBuilder()
-                .setTitle('✅ SKYNET V7 — Setup Complete')
-                .setColor(0x00FF88)
-                .addFields(
-                    { name: '🔄 Trade Channel',    value: `<#${gs.tradeChannelId}>`,    inline: true },
-                    { name: '⚔️ Services Channel', value: `<#${gs.servicesChannelId}>`, inline: true },
-                    { name: '⛓️ Exile Role',       value: `<@&${gs.exiledRoleId}>`,     inline: true },
-                    { name: '📋 Log Channel',      value: gs.logChannelId ? `<#${gs.logChannelId}>` : 'Not set', inline: true },
-                    { name: '📩 Appeals Channel',  value: gs.appealsChannelId ? `<#${gs.appealsChannelId}>` : 'Not set', inline: true },
-                )
-                .setTimestamp();
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.reply({
+                embeds: [buildSetupPickerEmbed(gs).setTitle('✅ SKYNET V7 — Setup Complete').setColor(0x00FF88)],
+                components: buildSetupPickerComponents(),
+                ephemeral: true,
+            });
             return;
         }
 
@@ -7820,6 +8320,117 @@ client.on('interactionCreate', async interaction => {
     // ── BUTTONS ───────────────────────────────────────────
     if (interaction.isButton()) {
         const cid = interaction.customId;
+
+        // ── Setup page button → open the right modal ────────
+        if (cid === 'setup_open_page1') {
+            if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const modal = new ModalBuilder().setCustomId('setup_modal_p1').setTitle('🔧 Setup — Page 1: Core');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('trade_channel_id').setLabel('Trade Channel ID')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(gs.tradeChannelId || '').setPlaceholder('ID of your #trades channel')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('services_channel_id').setLabel('General Services Channel ID')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(gs.servicesChannelId || '').setPlaceholder('ID of your #services channel')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('exile_role_id').setLabel('Exile Role ID')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(gs.exiledRoleId || '').setPlaceholder('ID of the exiled/muted role')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('log_channel_id').setLabel('Log Channel ID')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(gs.logChannelId || '').setPlaceholder('ID of your mod-log channel')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('appeals_channel_id').setLabel('Appeals Channel ID')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(gs.appealsChannelId || '').setPlaceholder('ID of your #appeals channel')
+                ),
+            );
+            await interaction.showModal(modal);
+            return;
+        }
+
+        if (cid === 'setup_open_page2') {
+            if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            // Each field = one pool; comma-separated IDs for multi-channel pools
+            const raidCur  = (gs.raidServiceChannelIds        || []).join(', ');
+            const raceCur  = (gs.raceV4ServiceChannelIds       || []).join(', ');
+            const seaCur   = (gs.seaEventsChannelIds           || []).join(', ');
+            const mirCur   = (gs.mirageIslandChannelIds        || []).join(', ');
+            const preKitLevi = [
+                ...(gs.prehistoricIslandChannelIds || []),
+                ...(gs.kitsuneIslandChannelIds     || []),
+                ...(gs.leviathanChannelIds         || []),
+            ].join(', ');
+            const modal = new ModalBuilder().setCustomId('setup_modal_p2').setTitle('🔧 Setup — Page 2: Channel Pools');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('raid_channel_ids').setLabel('⚔️ Raid/Service channel ID(s)')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(raidCur).setPlaceholder('Comma-separated IDs, e.g. 111,222')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('race_channel_ids').setLabel('🏁 Race V4/Trials channel ID(s)')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(raceCur).setPlaceholder('Comma-separated IDs')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('sea_channel_ids').setLabel('🌊 Sea Events channel ID(s)')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(seaCur).setPlaceholder('Comma-separated IDs')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('mirage_channel_ids').setLabel('🏝️ Mirage Island channel ID(s)')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(mirCur).setPlaceholder('Comma-separated IDs')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('prehistoric_kitsune_levi_ids').setLabel('🦕 Prehistoric / 🦊 Kitsune / 🐉 Levi IDs')
+                        .setStyle(TextInputStyle.Paragraph).setRequired(false)
+                        .setValue(preKitLevi)
+                        .setPlaceholder(
+                            'prehistoric:<id1>,<id2>\nkitsune:<id1>\nleviathan:<id1>\n\n(prefix each line with the category name)'
+                        )
+                ),
+            );
+            await interaction.showModal(modal);
+            return;
+        }
+
+        if (cid === 'setup_open_page3') {
+            if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const modal = new ModalBuilder().setCustomId('setup_modal_p3').setTitle('🔧 Setup — Page 3: Misc');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('games_hub_id').setLabel('Commands Hub Channel ID')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(gs.gamesHubId || '').setPlaceholder('ID of your #games-hub / #bot-commands channel')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('exile_channel_id').setLabel('Exile Channel ID')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(gs.exileChannelId || '').setPlaceholder('ID of your #exile-zone channel')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('violation_threshold').setLabel('Violation Threshold before exile (1–10)')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(String(gs.violationThreshold || 3)).setPlaceholder('Default: 3')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('exile_duration_mins').setLabel('Default Exile Duration (minutes, 1–1440)')
+                        .setStyle(TextInputStyle.Short).setRequired(false)
+                        .setValue(String(gs.exileDurationMins || 45)).setPlaceholder('Default: 45')
+                ),
+            );
+            await interaction.showModal(modal);
+            return;
+        }
 
         if (cid === 'dash_toggle_checks' || cid === 'dash_toggle_ai' || cid === 'dash_toggle_mode' || cid.startsWith('dash_preset_')) {
             const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
@@ -8296,37 +8907,7 @@ client.on('interactionCreate', async interaction => {
         case 'setup':
         case 'changesetup': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            const modal = new ModalBuilder()
-                .setCustomId('setup_modal')
-                .setTitle('🔧 SKYNET V7 Setup');
-            modal.addComponents(
-                new ActionRowBuilder().addComponents(
-                    new TextInputBuilder().setCustomId('trade_channel_id').setLabel('Trade Channel ID')
-                        .setStyle(TextInputStyle.Short).setRequired(true)
-                        .setValue(gs.tradeChannelId || '').setPlaceholder('Paste the channel ID for #trades')
-                ),
-                new ActionRowBuilder().addComponents(
-                    new TextInputBuilder().setCustomId('services_channel_id').setLabel('Services Channel ID')
-                        .setStyle(TextInputStyle.Short).setRequired(true)
-                        .setValue(gs.servicesChannelId || '').setPlaceholder('Paste the channel ID for #services')
-                ),
-                new ActionRowBuilder().addComponents(
-                    new TextInputBuilder().setCustomId('exile_role_id').setLabel('Exile Role ID')
-                        .setStyle(TextInputStyle.Short).setRequired(true)
-                        .setValue(gs.exiledRoleId || '').setPlaceholder('Paste the exile role ID')
-                ),
-                new ActionRowBuilder().addComponents(
-                    new TextInputBuilder().setCustomId('log_channel_id').setLabel('Log Channel ID (optional)')
-                        .setStyle(TextInputStyle.Short).setRequired(false)
-                        .setValue(gs.logChannelId || '').setPlaceholder('Paste the log channel ID')
-                ),
-                new ActionRowBuilder().addComponents(
-                    new TextInputBuilder().setCustomId('appeals_channel_id').setLabel('Appeals Channel ID (optional)')
-                        .setStyle(TextInputStyle.Short).setRequired(false)
-                        .setValue(gs.appealsChannelId || '').setPlaceholder('Paste the appeals channel ID')
-                ),
-            );
-            await interaction.showModal(modal);
+            await interaction.reply({ embeds: [buildSetupPickerEmbed(gs)], components: buildSetupPickerComponents(), ephemeral: true });
             break;
         }
 
@@ -8914,6 +9495,8 @@ client.on('interactionCreate', async interaction => {
                         topic: '⛓️ You have been exiled. Wait here until your exile expires.',
                         permissionOverwrites: permOverwrites,
                     });
+                    gs.exileChannelId = ch.id;
+                    saveData(data);
                     await safeEdit(interaction, { content: `✅ Exile channel created: <#${ch.id}>` });
                 } catch(e) {
                     await safeEdit(interaction, { content: `❌ Failed to create exile channel: ${e.message}` });
@@ -9079,10 +9662,20 @@ client.on('interactionCreate', async interaction => {
 
         case 'aienable': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const sub = interaction.options.getSubcommand(false);
+
+            // /aienable off → disable AI detection
+            if (sub === 'off') {
+                gs.aiEnabled = false;
+                saveData(data);
+                await interaction.reply({ content: '⚠️ AI detection is now **DISABLED** for this server.', ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Disabled', [`AI detection: **OFF**`]);
+                break;
+            }
+
+            // /aienable on or /aienable model → enable
             gs.aiEnabled = true;
             saveData(data);
-
-            const sub = interaction.options.getSubcommand(false);
             let modelLine = '';
 
             if (sub === 'model') {
@@ -9105,49 +9698,56 @@ client.on('interactionCreate', async interaction => {
                     if (chosen.provider === 'openai') ai2State.openaiModel = chosen.model;
                     if (chosen.provider === 'groq')   ai2State.groqModel   = chosen.model;
                     ai2InitClient(chosen.provider);
-                    if (chosen.provider !== 'claude') ai2Model = chosen.model;
-                    else ai2Model = chosen.model;
+                    ai2Model = chosen.model;
                     modelLine = `\n🤖 Chat model set to: **${chosen.label}**`;
                 }
             }
 
             await interaction.reply({ content: `✅ AI detection is now **ENABLED** for this server.${modelLine}`, ephemeral: true });
-            await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Enabled', [
-                `AI detection: **ON**${modelLine}`,
-            ]);
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Enabled', [`AI detection: **ON**${modelLine}`]);
             break;
         }
 
+        // Legacy fallback — aidisable slash was removed; handled above via /aienable off
         case 'aidisable': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             gs.aiEnabled = false;
             saveData(data);
-            await interaction.reply({ content: '⚠️ AI detection is now **DISABLED** for this server.', ephemeral: true });
-            await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Disabled', [
-                `AI detection: **OFF**`,
-            ]);
+            await interaction.reply({ content: '⚠️ AI detection is now **DISABLED**. (Tip: use `/aienable off` going forward)', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Disabled', [`AI detection: **OFF**`]);
             break;
         }
 
+        // /check enable|disable|status — replaces /enablecheck and /disablecheck
+        case 'check': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const csub = interaction.options.getSubcommand();
+            if (csub === 'status') {
+                await interaction.reply({ content: `🛡️ Moderation checks are currently **${gs.checksEnabled !== false ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            } else {
+                gs.checksEnabled = (csub === 'enable');
+                saveData(data);
+                await interaction.reply({ content: `${gs.checksEnabled ? '✅' : '🛑'} All moderation checks are now **${gs.checksEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, gs.checksEnabled ? '✅ Checks Enabled' : '🛑 Checks Disabled', [`Checks: **${gs.checksEnabled ? 'ON' : 'OFF'}**`]);
+            }
+            break;
+        }
+
+        // Legacy fallbacks — disablecheck/enablecheck slash commands removed; /check replaces them
         case 'disablecheck': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             gs.checksEnabled = false;
             saveData(data);
-            await interaction.reply({ content: '🛑 All moderation checks are now **DISABLED** for this server.', ephemeral: true });
-            await sendConfigLog(interaction.guild, data, interaction.user.id, '🛑 Checks Disabled', [
-                `Checks: **OFF**`,
-            ]);
+            await interaction.reply({ content: '🛑 All moderation checks are now **DISABLED**. (Tip: use `/check disable` going forward)', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '🛑 Checks Disabled', [`Checks: **OFF**`]);
             break;
         }
-
         case 'enablecheck': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             gs.checksEnabled = true;
             saveData(data);
-            await interaction.reply({ content: '✅ All moderation checks are now **ENABLED** for this server.', ephemeral: true });
-            await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Checks Enabled', [
-                `Checks: **ON**`,
-            ]);
+            await interaction.reply({ content: '✅ All moderation checks are now **ENABLED**. (Tip: use `/check enable` going forward)', ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Checks Enabled', [`Checks: **ON**`]);
             break;
         }
 
@@ -9467,6 +10067,10 @@ client.on('interactionCreate', async interaction => {
         // ── /exile ────────────────────────────────────────
         case 'exile': {
             if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins only.' }); return; }
+            if (isExileChannel(interaction.channelId, interaction.guild, gs)) {
+                await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Exile commands cannot be used inside the exile channel.' });
+                return;
+            }
             const targetUser = interaction.options.getUser('user');
             const duration   = interaction.options.getInteger('duration') || EXILE_DURATION_MINS;
             const reason     = interaction.options.getString('reason') || 'Admin action';
@@ -9638,13 +10242,28 @@ client.on('interactionCreate', async interaction => {
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const totalExiled     = Object.keys(data.exiles).length;
             const totalViolations = Object.values(data.violations).reduce((a, v) => a + (typeof v === 'number' ? v : (v?.count || 0)), 0);
+            const tradeIds  = getChannelIds(gs, 'tradeChannelIds');
+            const raidIds   = getChannelIds(gs, 'raidServiceChannelIds');
+            const raceIds   = getChannelIds(gs, 'raceV4ServiceChannelIds');
+            const seaIds    = getChannelIds(gs, 'seaEventsChannelIds');
+            const mirageIds = getChannelIds(gs, 'mirageIslandChannelIds');
+            const preIds    = getChannelIds(gs, 'prehistoricIslandChannelIds');
+            const kitIds    = getChannelIds(gs, 'kitsuneIslandChannelIds');
+            const leviIds   = getChannelIds(gs, 'leviathanChannelIds');
             await interaction.reply({ embeds: [new EmbedBuilder()
                 .setTitle('🤖 SKYNET V7 — Status')
                 .setColor(0x5865F2)
                 .addFields(
                     { name: '🧠 Checks',          value: gs.checksEnabled ? '✅ ON' : '🛑 OFF',       inline: true },
-                    { name: '📡 Trade Channel',    value: `<#${gs.tradeChannelId}>`,              inline: true },
+                    { name: '📡 Trade Channels',   value: tradeIds.length ? formatChannelIds(tradeIds) : (gs.tradeChannelId ? `<#${gs.tradeChannelId}>` : 'Not set'), inline: false },
                     { name: '⚔️ Services Channel', value: `<#${gs.servicesChannelId}>`,           inline: true },
+                    { name: '⚔️ Raid/Service',     value: formatChannelIds(raidIds),              inline: true },
+                    { name: '🏁 Race/Trials',      value: formatChannelIds(raceIds),              inline: true },
+                    { name: '🌊 Sea Events',        value: formatChannelIds(seaIds),              inline: true },
+                    { name: '🏝️ Mirage Island',    value: formatChannelIds(mirageIds),           inline: true },
+                    { name: '🦕 Prehistoric Isl.', value: formatChannelIds(preIds),              inline: true },
+                    { name: '🦊 Kitsune Island',   value: formatChannelIds(kitIds),              inline: true },
+                    { name: '🐉 Leviathan/Frozen', value: formatChannelIds(leviIds),            inline: true },
                     { name: '📋 Log Channel',      value: gs.logChannelId ? `<#${gs.logChannelId}>` : 'Not set', inline: true },
                     { name: '📩 Appeals Channel',  value: gs.appealsChannelId ? `<#${gs.appealsChannelId}>` : 'Not set', inline: true },
                     { name: '⛓️ Exile Role',       value: `<@&${gs.exiledRoleId}>`,               inline: true },
@@ -9657,6 +10276,67 @@ client.on('interactionCreate', async interaction => {
                     { name: '🤖 AI Detection',     value: AI_ENABLED ? '✅ ON' : '❌ OFF',         inline: true },
                 )
                 .setTimestamp()], ephemeral: true });
+            break;
+        }
+
+        // ── /channelconfig ────────────────────────────────
+        case 'channelconfig': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const sub = interaction.options.getSubcommand();
+
+            if (sub === 'list') {
+                const lines = Object.entries(CHANNEL_CATEGORIES).map(([cat, meta]) => {
+                    const ids = getChannelIds(gs, meta.key);
+                    return `**${meta.label}** (\`${cat}\`) — ${ids.length ? ids.map(id=>`<#${id}>`).join(', ') : 'None'}\n↳ ${meta.desc}`;
+                });
+                const embed = new EmbedBuilder()
+                    .setTitle('📋 Channel Config — All Pools')
+                    .setColor(0x5865F2)
+                    .setDescription(lines.join('\n\n'))
+                    .setTimestamp();
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+                return;
+            }
+
+            const cat = (interaction.options.getString('category') || '').toLowerCase();
+            const meta = CHANNEL_CATEGORIES[cat];
+            if (!meta) {
+                await interaction.reply({ content: `❌ Unknown category \`${cat}\`. Valid: ${Object.keys(CHANNEL_CATEGORIES).join(', ')}`, ephemeral: true });
+                return;
+            }
+
+            const ch = interaction.options.getChannel('channel');
+            if (!ch) { await interaction.reply({ content: '❌ Provide a channel.', ephemeral: true }); return; }
+
+            gs[meta.key] = Array.isArray(gs[meta.key]) ? gs[meta.key] : [];
+
+            if (sub === 'add') {
+                if (!gs[meta.key].includes(ch.id)) {
+                    gs[meta.key].push(ch.id);
+                    saveData(data);
+                    await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Channel Pool Updated', [
+                        `Added <#${ch.id}> to **${meta.label}** pool`,
+                    ]);
+                    await interaction.reply({ content: `✅ Added <#${ch.id}> to the **${meta.label}** pool.\nPool now: ${formatChannelIds(gs[meta.key])}`, ephemeral: true });
+                } else {
+                    await interaction.reply({ content: `⚠️ <#${ch.id}> is already in the **${meta.label}** pool.`, ephemeral: true });
+                }
+                return;
+            }
+
+            if (sub === 'remove') {
+                if (gs[meta.key].includes(ch.id)) {
+                    gs[meta.key] = gs[meta.key].filter(id => id !== ch.id);
+                    saveData(data);
+                    await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Channel Pool Updated', [
+                        `Removed <#${ch.id}> from **${meta.label}** pool`,
+                    ]);
+                    await interaction.reply({ content: `✅ Removed <#${ch.id}> from the **${meta.label}** pool.\nPool now: ${formatChannelIds(gs[meta.key])}`, ephemeral: true });
+                } else {
+                    await interaction.reply({ content: `⚠️ <#${ch.id}> was not in the **${meta.label}** pool.`, ephemeral: true });
+                }
+                return;
+            }
             break;
         }
 
@@ -9771,13 +10451,33 @@ client.on('interactionCreate', async interaction => {
 
         case 'purge': {
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
-            const count = Math.max(1, Math.min(100, interaction.options.getInteger('count')));
-            if (!interaction.channel || !interaction.channel.isTextBased()) { await interaction.reply({ content: '❌ Invalid channel.', ephemeral: true }); return; }
-            try {
-                const deleted = await interaction.channel.bulkDelete(count, true).catch(()=>null);
-                await interaction.reply({ content: `✅ Purged ${deleted ? deleted.size : 0} messages.`, ephemeral: true });
-            } catch(e) {
-                await interaction.reply({ content: `❌ Purge failed: ${e.message}`, ephemeral: true });
+            if (!interaction.channel || !interaction.channel.isTextBased()) { await interaction.reply({ content: '❌ This command can only be used in a text channel.', ephemeral: true }); return; }
+            await interaction.deferReply({ ephemeral: true });
+            const purgeSub = interaction.options.getSubcommand(false) || 'count';
+
+            if (purgeSub === 'count') {
+                const amount = Math.max(1, Math.min(100, interaction.options.getInteger('amount') ?? 1));
+                try {
+                    const deleted = await interaction.channel.bulkDelete(amount, true).catch(() => null);
+                    await interaction.editReply({ content: `✅ Purged **${deleted ? deleted.size : 0}** messages.` });
+                } catch (e) {
+                    await interaction.editReply({ content: `❌ Purge failed: ${e.message}` });
+                }
+            } else if (purgeSub === 'user') {
+                const targetUser = interaction.options.getUser('user');
+                const scanLimit  = Math.max(1, Math.min(100, interaction.options.getInteger('amount') ?? 50));
+                try {
+                    const fetched = await interaction.channel.messages.fetch({ limit: scanLimit });
+                    const toDelete = fetched.filter(m => m.author.id === targetUser.id);
+                    if (toDelete.size === 0) {
+                        await interaction.editReply({ content: `✅ No recent messages from <@${targetUser.id}> found in the last **${scanLimit}** messages.` });
+                        break;
+                    }
+                    const deleted = await interaction.channel.bulkDelete(toDelete, true).catch(() => null);
+                    await interaction.editReply({ content: `✅ Purged **${deleted ? deleted.size : 0}** messages from <@${targetUser.id}>.` });
+                } catch (e) {
+                    await interaction.editReply({ content: `❌ Purge failed: ${e.message}` });
+                }
             }
             break;
         }
@@ -9844,42 +10544,164 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
+        // ── Legacy slash case fallbacks (slash commands removed; /bloxfruits covers these) ──
         case 'commandredirect': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) {
-                await interaction.reply({ content: `🧭 Command redirect is currently **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
-                break;
-            }
-            gs.commandRedirectEnabled = !!enabled;
-            saveData(data);
-            await interaction.reply({ content: `✅ Command redirect is now **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            if (enabled === null) { await interaction.reply({ content: `🧭 Command redirect: **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits command\` to change.`, ephemeral: true }); break; }
+            gs.commandRedirectEnabled = !!enabled; saveData(data);
+            await interaction.reply({ content: `✅ Command redirect → **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits command\` going forward)`, ephemeral: true });
             break;
         }
-
         case 'serviceredirect': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) {
-                await interaction.reply({ content: `⚔️ Service redirect is currently **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
-                break;
-            }
-            gs.serviceRedirectEnabled = !!enabled;
-            saveData(data);
-            await interaction.reply({ content: `✅ Service redirect is now **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            if (enabled === null) { await interaction.reply({ content: `⚔️ Service redirect: **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits service\` to change.`, ephemeral: true }); break; }
+            gs.serviceRedirectEnabled = !!enabled; saveData(data);
+            await interaction.reply({ content: `✅ Service redirect → **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits service\` going forward)`, ephemeral: true });
             break;
         }
-
         case 'traderedirect': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) {
-                await interaction.reply({ content: `🔄 Trade redirect is currently **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            if (enabled === null) { await interaction.reply({ content: `🔄 Trade redirect: **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits trade\` to change.`, ephemeral: true }); break; }
+            gs.tradeRedirectEnabled = !!enabled; saveData(data);
+            await interaction.reply({ content: `✅ Trade redirect → **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits trade\` going forward)`, ephemeral: true });
+            break;
+        }
+        case 'spamwarn': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) { await interaction.reply({ content: `⚠️ Spam warnings: **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn spam\` to change.`, ephemeral: true }); break; }
+            gs.spamWarnEnabled = !!enabled; saveData(data);
+            await interaction.reply({ content: `✅ Spam warnings → **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn spam\` going forward)`, ephemeral: true });
+            break;
+        }
+        case 'begwarn': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) { await interaction.reply({ content: `🚫 Beg warnings: **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn beg\` to change.`, ephemeral: true }); break; }
+            gs.begWarnEnabled = !!enabled; saveData(data);
+            await interaction.reply({ content: `✅ Beg warnings → **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn beg\` going forward)`, ephemeral: true });
+            break;
+        }
+        case 'scamwarn': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) { await interaction.reply({ content: `🚨 Scam warnings: **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn scam\` to change.`, ephemeral: true }); break; }
+            gs.scamWarnEnabled = !!enabled; saveData(data);
+            await interaction.reply({ content: `✅ Scam warnings → **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn scam\` going forward)`, ephemeral: true });
+            break;
+        }
+        case 'acctradewarn': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const enabled = interaction.options.getBoolean('enabled');
+            if (enabled === null) { await interaction.reply({ content: `📦 Acctrade warnings: **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn acctrade\` to change.`, ephemeral: true }); break; }
+            gs.accTradeWarnEnabled = !!enabled; saveData(data);
+            await interaction.reply({ content: `✅ Acctrade warnings → **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn acctrade\` going forward)`, ephemeral: true });
+            break;
+        }
+
+
+        case 'bloxfruits': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const bfGroup = interaction.options.getSubcommandGroup(false);
+            const bfSub   = interaction.options.getSubcommand(false);
+
+            // /bloxfruits status (top-level)
+            if (!bfGroup && bfSub === 'status') {
+                const e = new EmbedBuilder()
+                    .setTitle('🍎 Blox Fruits Moderation Dashboard')
+                    .setColor(0xF97316)
+                    .addFields(
+                        { name: '🔄 Trade Redirect',   value: gs.tradeRedirectEnabled   ? '✅ Enabled' : '❌ Disabled', inline: true },
+                        { name: '⚔️ Service Redirect', value: gs.serviceRedirectEnabled ? '✅ Enabled' : '❌ Disabled', inline: true },
+                        { name: '🧭 Command Redirect', value: gs.commandRedirectEnabled ? '✅ Enabled' : '❌ Disabled', inline: true },
+                        { name: '⚠️ Spam Warn',        value: gs.spamWarnEnabled    ? '✅ Enabled' : '❌ Disabled', inline: true },
+                        { name: '🚫 Beg Warn',         value: gs.begWarnEnabled     ? '✅ Enabled' : '❌ Disabled', inline: true },
+                        { name: '🚨 Scam Warn',        value: gs.scamWarnEnabled    ? '✅ Enabled' : '❌ Disabled', inline: true },
+                        { name: '📦 Acctrade Warn',    value: gs.accTradeWarnEnabled ? '✅ Enabled' : '❌ Disabled', inline: true },
+                        { name: '🤖 AI Detection',     value: gs.aiEnabled          ? '✅ Enabled' : '❌ Disabled', inline: true },
+                        { name: '🔗 Scam Detection',   value: gs.scamEnabled        ? '✅ Enabled' : '❌ Disabled', inline: true },
+                    )
+                    .setFooter({ text: 'Use /bloxfruits redirect enable/disable to toggle all redirects at once' })
+                    .setTimestamp();
+                await interaction.reply({ embeds: [e], ephemeral: true });
                 break;
             }
-            gs.tradeRedirectEnabled = !!enabled;
-            saveData(data);
-            await interaction.reply({ content: `✅ Trade redirect is now **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+
+            // /bloxfruits redirect enable|disable|status
+            if (bfGroup === 'redirect') {
+                if (bfSub === 'enable') {
+                    gs.tradeRedirectEnabled = true;
+                    gs.serviceRedirectEnabled = true;
+                    gs.commandRedirectEnabled = true;
+                    saveData(data);
+                    await interaction.reply({ content: '✅ **All redirects enabled!**\n🔄 Trade redirect → ON\n⚔️ Service redirect → ON\n🧭 Command redirect → ON', ephemeral: true });
+                } else if (bfSub === 'disable') {
+                    gs.tradeRedirectEnabled = false;
+                    gs.serviceRedirectEnabled = false;
+                    gs.commandRedirectEnabled = false;
+                    saveData(data);
+                    await interaction.reply({ content: '⛔ **All redirects disabled!**\n🔄 Trade redirect → OFF\n⚔️ Service redirect → OFF\n🧭 Command redirect → OFF', ephemeral: true });
+                } else { // status
+                    await interaction.reply({ content: `🔄 **Trade redirect:** ${gs.tradeRedirectEnabled ? 'ENABLED ✅' : 'DISABLED ❌'}\n⚔️ **Service redirect:** ${gs.serviceRedirectEnabled ? 'ENABLED ✅' : 'DISABLED ❌'}\n🧭 **Command redirect:** ${gs.commandRedirectEnabled ? 'ENABLED ✅' : 'DISABLED ❌'}`, ephemeral: true });
+                }
+                break;
+            }
+
+            // /bloxfruits trade enable|disable|status
+            if (bfGroup === 'trade') {
+                if (bfSub === 'status') {
+                    await interaction.reply({ content: `🔄 Trade redirect is currently **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                } else {
+                    gs.tradeRedirectEnabled = (bfSub === 'enable');
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Trade redirect is now **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                }
+                break;
+            }
+
+            // /bloxfruits service enable|disable|status
+            if (bfGroup === 'service') {
+                if (bfSub === 'status') {
+                    await interaction.reply({ content: `⚔️ Service redirect is currently **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                } else {
+                    gs.serviceRedirectEnabled = (bfSub === 'enable');
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Service redirect is now **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                }
+                break;
+            }
+
+            // /bloxfruits command enable|disable|status
+            if (bfGroup === 'command') {
+                if (bfSub === 'status') {
+                    await interaction.reply({ content: `🧭 Command redirect is currently **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                } else {
+                    gs.commandRedirectEnabled = (bfSub === 'enable');
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Command redirect is now **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                }
+                break;
+            }
+
+            // /bloxfruits warn <category> <enabled>
+            if (bfGroup === 'warn') {
+                const warnEnabled = interaction.options.getBoolean('enabled');
+                let warnName = '';
+                if (bfSub === 'trade')    { gs.tradeWarnEnabled    = !!warnEnabled; warnName = '🔄 Trade warnings'; }
+                else if (bfSub === 'service') { gs.serviceWarnEnabled  = !!warnEnabled; warnName = '⚔️ Service warnings'; }
+                else if (bfSub === 'beg')     { gs.begWarnEnabled      = !!warnEnabled; warnName = '🚫 Begging warnings'; }
+                else if (bfSub === 'scam')    { gs.scamWarnEnabled     = !!warnEnabled; warnName = '🚨 Scam warnings'; }
+                else if (bfSub === 'spam')    { gs.spamWarnEnabled     = !!warnEnabled; warnName = '⚠️ Spam warnings'; }
+                else if (bfSub === 'acctrade'){ gs.accTradeWarnEnabled = !!warnEnabled; warnName = '📦 Account trading warnings'; }
+                saveData(data);
+                await interaction.reply({ content: `✅ **${warnName}** are now **${warnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                break;
+            }
+
+            await interaction.reply({ content: '❓ Unknown subcommand. Use `/bloxfruits status` for an overview.', ephemeral: true });
             break;
         }
 
@@ -10976,6 +11798,15 @@ client.on('messageCreate', async message => {
 
     if (gs.checksEnabled === false) return;
 
+    // ── EXILE CHANNEL — no moderation fires in here ever ──
+    // Members serving their sentence can talk freely; allow prefix
+    // commands and the AI chat system but skip every enforcement path.
+    if (isExileChannel(message.channel.id, message.guild, gs)) {
+        await handlePrefixCommands(message, isAdmin, isMod, data, gs);
+        await ai2HandleChatMessage(message);
+        return;
+    }
+
     if (gs.verifyGateEnabled && !immune && !isCategoryImmune(message.member, guildId, data, 'verify')) {
         const requiredRoleOk = gs.verifyRequiredRoleId ? message.member?.roles?.cache?.has(gs.verifyRequiredRoleId) : false;
         const acctAgeDays = message.author?.createdTimestamp ? (Date.now() - message.author.createdTimestamp) / (1000 * 60 * 60 * 24) : 9999;
@@ -11412,12 +12243,12 @@ client.on('messageCreate', async message => {
                     return;
                 }
 
-                if (cat === 'service' && gs.serviceRedirectEnabled !== false && message.channel.id !== gs.servicesChannelId) {
+                if (cat === 'service' && gs.serviceRedirectEnabled !== false && !isInCorrectServiceChannel(message.channel.id, gs)) {
                     const flagged = await checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs);
                     if (flagged) return;
                 }
 
-                if (cat === 'trade' && gs.tradeRedirectEnabled !== false && message.channel.id !== gs.tradeChannelId) {
+                if (cat === 'trade' && gs.tradeRedirectEnabled !== false && !isInCorrectTradeChannel(message.channel.id, gs)) {
                     const flagged = await checkTradeViolation(message, contentClean, contentNospace, data, gs);
                     if (flagged) return;
                 }
@@ -11477,20 +12308,20 @@ client.on('messageCreate', async message => {
     // ── SERVICES / ITEMS ──────────────────────────────────
     // noAffiliationEnabled bypasses the serviceRedirectEnabled gate so the no-affiliation
     // notice still fires even when service redirects are turned off.
-    if ((gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || message.channel.id !== gs.servicesChannelId)) {
+    if ((gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
         const flagged = await checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs);
         if (flagged) return;
     }
 
     // ── TRADE ─────────────────────────────────────────────
     // Same — noAffiliationEnabled must bypass the tradeRedirectEnabled gate.
-    if ((gs.tradeRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'trade') && (gs.noAffiliationEnabled || message.channel.id !== gs.tradeChannelId)) {
+    if ((gs.tradeRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'trade') && (gs.noAffiliationEnabled || !isInCorrectTradeChannel(message.channel.id, gs))) {
         const flagged = await checkTradeViolation(message, contentClean, contentNospace, data, gs);
         if (flagged) return;
     }
 
     // ── RACE + TIER + INTENT ──────────────────────────────
-    if ((gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || message.channel.id !== gs.tradeChannelId)) {
+    if ((gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
         await checkRaceViolation(message, contentClean, contentNospace, data, gs);
     }
 
@@ -11701,13 +12532,25 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
             return true;
         }
 
+        // ── Smart per-category redirect ────────────────────────────────────────
+        const detected = {
+            leviathan:   LEVI_REDIRECT_RE.test(contentClean) || seaEvFound.some(e => /leviathan|levi|frozen/i.test(e)),
+            kitsune:     KITSUNE_ISLAND_RE.test(contentClean) || seaEvFound.some(e => /kitsune/i.test(e)),
+            prehistoric: PREHISTORIC_ISLAND_RE.test(contentClean) || seaEvFound.some(e => /prehistoric/i.test(e)),
+            mirage:      MIRAGE_ISLAND_RE.test(contentClean) || seaEvFound.some(e => /mirage/i.test(e)),
+            seaEvent:    seaEvFound.length > 0,
+            raceV4:      RACE_V4_SERVICE_RE.test(contentClean),
+            raid:        RAID_SERVICE_RE.test(contentClean) || bossesFound.length > 0 || hasBossRegex || hasFruitRaid || hasSvcForRaid,
+        };
+        const { channelId: redirectId, label: redirectLabel } = pickServiceRedirectTarget(gs, detected);
+
         await handlePolicyViolation(message, data, gs, 'service', {
             title: '⚠️ Service Request — Wrong Channel',
             color: 0xFF6600,
-            reason: 'Service/boss/raid/item/quest/trials requests go in the services channel.',
+            reason: `Service/boss/raid/item/quest/trials requests go in ${redirectLabel}.`,
             footerLabel: 'Service',
             ttlMs: 10000,
-            redirectChannelId: gs.servicesChannelId,
+            redirectChannelId: redirectId,
         });
         return true;
     }
@@ -11728,10 +12571,10 @@ async function checkRaceViolation(message, contentClean, contentNospace, data, g
     await handlePolicyViolation(message, data, gs, 'service', {
         title: '⚠️ Race Service — Wrong Channel',
         color: 0x9B59B6,
-        reason: 'Race reroll/trials/services go in the services channel.',
+        reason: 'Race reroll/trials/services go in the race/trials channel.',
         footerLabel: 'Race Service',
         ttlMs: 10000,
-        redirectChannelId: gs.servicesChannelId,
+        redirectChannelId: primaryChannelId(gs, 'raceV4ServiceChannelIds') || gs.servicesChannelId,
     });
 }
 
@@ -11874,7 +12717,7 @@ async function handleTradeViolation(message, data, gs) {
         reason: 'Keep trades in the trades channel.',
         footerLabel: 'Trade',
         ttlMs: 10000,
-        redirectChannelId: gs.tradeChannelId,
+        redirectChannelId: primaryChannelId(gs, 'tradeChannelIds') || gs.tradeChannelId,
     });
 }
 
@@ -11945,7 +12788,9 @@ async function performExile(userOrMember, guild, minutes, reason, data) {
     }
 
     try {
-        const exileCh = guild.channels.cache.find(c => c && c.type === ChannelType.GuildText && c.name === 'exile-zone');
+        const exileCh = gs.exileChannelId
+            ? guild.channels.cache.get(gs.exileChannelId)
+            : guild.channels.cache.find(c => c && c.type === ChannelType.GuildText && c.name === 'exile-zone');
         if (exileCh) {
             await exileCh.send(`${member} has been exiled.`);
         }
@@ -12128,9 +12973,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             return;
         }
         if (prompt.toLowerCase() === 'clear') {
-            ai2State.instructions = '';
+            ai2State.instructions = BF_KNOWLEDGE_SYSTEM_PROMPT;
             ai2SaveInstructions('');
-            await message.channel.send('Cleared prompt.');
+            await message.channel.send('Cleared custom prompt. Restored built-in Blox Fruits knowledge system prompt.');
             return;
         }
         ai2State.instructions = prompt;
@@ -12228,6 +13073,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !exile [mention | id] [duration] [reason...]
     else if (cmd === 'exile' && isAdmin) {
+        if (isExileChannel(message.channel.id, message.guild, gs)) return message.channel.send('❌ Exile commands cannot be used inside the exile channel.');
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
         if (target.id === message.author.id) return message.channel.send('❌ You cannot exile yourself.');
@@ -12712,7 +13558,26 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     // !violations [mention | id]
     else if (cmd === 'violations' && (isAdmin || isMod)) {
         const target = await resolveMember(args[0]);
-        if (!target) return;
+        if (!target) {
+            // Allow checking by raw ID even if user left the server
+            const rawId = args[0]?.match(/^<@!?(\d+)>$/) ? args[0].match(/^<@!?(\d+)>$/)[1] : (args[0]?.match(/^\d{15,20}$/) ? args[0] : null);
+            if (!rawId) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
+            const count   = getViolationCount(data, rawId);
+            const history = getViolationHistory(data, rawId);
+            const histLines = history.slice(-10).map((h, i) => {
+                const ts  = h.timestamp ? `<t:${Math.floor(h.timestamp/1000)}:d>` : '?';
+                const cat = h.category ? `[${h.category}]` : '';
+                const by  = h.by ? ` — by <@${h.by}>` : '';
+                return `**${i+1}.** ${cat} ${h.reason}${by} — ${ts}`;
+            });
+            const embed = new EmbedBuilder()
+                .setTitle('📊 Violation History (User not in server)')
+                .setColor(count >= threshold ? 0xFF4444 : (count > 0 ? 0xFFAA00 : 0x00FF88))
+                .setDescription(`<@${rawId}> (${rawId}) — **${count}/${threshold}** violations`)
+                .addFields({ name: `Recent warnings (${history.length} total)`, value: histLines.length ? histLines.join('\n') : 'No warning history.', inline: false })
+                .setTimestamp();
+            return message.channel.send({ embeds: [embed] });
+        }
         const count   = getViolationCount(data, target.id);
         const history = getViolationHistory(data, target.id);
         const histLines = history.slice(-10).map((h, i) => {
@@ -12733,7 +13598,13 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     // !clearviolations [mention | id]
     else if (cmd === 'clearviolations' && isAdmin) {
         const target = await resolveMember(args[0]);
-        if (!target) return;
+        if (!target) {
+            const rawId = args[0]?.match(/^<@!?(\d+)>$/) ? args[0].match(/^<@!?(\d+)>$/)[1] : (args[0]?.match(/^\d{15,20}$/) ? args[0] : null);
+            if (!rawId) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
+            clearViolationEntry(data, rawId);
+            saveData(data);
+            return message.channel.send(`✅ Cleared violations for <@${rawId}> (${rawId}).`);
+        }
         clearViolationEntry(data, target.id);
         saveData(data);
         await message.channel.send(`✅ Cleared violations for ${target}.`);
@@ -12756,36 +13627,42 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'warn' && (isAdmin || isMod)) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
+        if (target.id === message.author.id) return message.channel.send('❌ You cannot warn yourself.');
         const reason = args.slice(1).join(' ') || 'Manual warn';
-        const count = addViolationEntry(data, target.id, { reason, category: 'manual', by: message.author.id });
+        const count  = addViolationEntry(data, target.id, { reason, category: 'manual', by: message.author.id });
         const warnId = getLastWarnId(data, target.id);
         saveData(data);
-        await message.channel.send(`✅ Warned ${target}. Violations: **${count}/${threshold}**`);
-        if (count >= threshold && isAdmin) {
+
+        if (count >= threshold) {
+            // Threshold hit — exile
+            if (!isAdmin) return message.channel.send(`✅ Warned ${target}. Violations: **${count}/${threshold}** — an admin must exile them.`);
             clearViolationEntry(data, target.id);
             saveData(data);
-            const fd = loadData();
-            await performExile(target, message.guild, exileMins, `Manual warn threshold reached: ${reason}`, fd);
-            saveData(fd);
-        } else if (warnId) {
-            const appealEmbed = new EmbedBuilder()
-                .setTitle('⚠️ You received a warning')
-                .setColor(0xFFAA00)
-                .addFields(
-                    { name: 'Server', value: message.guild.name, inline: true },
-                    { name: 'Issued by', value: `<@${message.author.id}>`, inline: true },
-                    { name: 'Violations', value: `${count}/${threshold}`, inline: true },
-                    { name: 'Reason', value: reason.slice(0, 1024), inline: false },
-                )
-                .setDescription('If you believe this warning was issued unfairly, you may submit an appeal using the button below. You can only appeal this specific warning **once**.')
-                .setTimestamp();
-            const appealRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`open_warn_appeal_${message.guildId}_${warnId}`)
-                    .setLabel('📩 Appeal this Warning')
-                    .setStyle(ButtonStyle.Primary)
-            );
-            target.send({ embeds: [appealEmbed], components: [appealRow] }).catch(()=>{});
+            await performExile(target, message.guild, exileMins, `Manual warn threshold reached: ${reason}`, data);
+            saveData(data);
+            await message.channel.send(`⛓️ Warned ${target} and threshold reached — exiled for **${exileMins}m**. Reason: ${reason}`);
+        } else {
+            await message.channel.send(`✅ Warned ${target}. Violations: **${count}/${threshold}**`);
+            if (warnId) {
+                const appealEmbed = new EmbedBuilder()
+                    .setTitle('⚠️ You received a warning')
+                    .setColor(0xFFAA00)
+                    .setDescription('If you believe this warning was issued unfairly, you may submit an appeal using the button below. You can only appeal this specific warning **once**.')
+                    .addFields(
+                        { name: 'Server',      value: message.guild.name,            inline: true },
+                        { name: 'Issued by',   value: `<@${message.author.id}>`,     inline: true },
+                        { name: 'Violations',  value: `${count}/${threshold}`,        inline: true },
+                        { name: 'Reason',      value: reason.slice(0, 1024),         inline: false },
+                    )
+                    .setTimestamp();
+                const appealRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`open_warn_appeal_${message.guildId}_${warnId}`)
+                        .setLabel('📩 Appeal this Warning')
+                        .setStyle(ButtonStyle.Primary)
+                );
+                target.send({ embeds: [appealEmbed], components: [appealRow] }).catch(() => {});
+            }
         }
     }
 
@@ -12793,39 +13670,84 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'unwarn' && (isAdmin || isMod)) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
-        const cur = getViolationCount(data, target.id);
         const next = decrementViolationEntry(data, target.id);
         saveData(data);
         await message.channel.send(`✅ Unwarned ${target}. Violations: **${next}/${threshold}**`);
     }
 
-    // !purge [1-100]
+    // !purge [count]  OR  !purge user [@mention|id] [count]
     else if (cmd === 'purge' && (isAdmin || isMod)) {
-        const count = Math.max(1, Math.min(100, parseInt(args[0]) || 0));
-        if (!count) return;
-        try {
-            const deleted = await message.channel.bulkDelete(count, true).catch(()=>null);
-            const sent = await message.channel.send(`✅ Purged ${deleted ? deleted.size : 0} messages.`);
-            setTimeout(() => sent.delete().catch(()=>{}), 6000);
-        } catch {}
+        if (!message.channel.isTextBased()) return;
+        const sub = (args[0] || '').toLowerCase();
+
+        if (sub === 'user') {
+            // !purge user <@mention|id> [count]
+            const targetArg = args[1];
+            const scanLimit = Math.max(1, Math.min(100, parseInt(args[2]) || 50));
+            const mentionMatch = targetArg?.match(/^<@!?(\d+)>$/);
+            const targetId = mentionMatch ? mentionMatch[1] : (targetArg?.match(/^\d{15,20}$/) ? targetArg : null);
+            if (!targetId) return message.channel.send('❌ Use: `!purge user <@mention|id> [count]`');
+            try {
+                const fetched = await message.channel.messages.fetch({ limit: scanLimit });
+                const toDelete = fetched.filter(m => m.author.id === targetId);
+                if (toDelete.size === 0) {
+                    const notice = await message.channel.send(`✅ No recent messages from <@${targetId}> found in the last **${scanLimit}** messages.`);
+                    setTimeout(() => notice.delete().catch(() => {}), 8000);
+                    return;
+                }
+                // Include the command message itself in the delete batch
+                toDelete.set(message.id, message);
+                const deleted = await message.channel.bulkDelete(toDelete, true).catch(() => null);
+                const notice = await message.channel.send(`✅ Purged **${deleted ? deleted.size : 0}** messages from <@${targetId}>.`);
+                setTimeout(() => notice.delete().catch(() => {}), 6000);
+            } catch (e) {
+                message.channel.send(`❌ Purge failed: ${e.message}`).catch(() => {});
+            }
+        } else {
+            // !purge [count]
+            const count = Math.max(1, Math.min(100, parseInt(args[0]) || 0));
+            if (!count) return message.channel.send('❌ Use: `!purge <count>` or `!purge user <@mention|id> [count]`');
+            try {
+                // +1 to also delete the invoking command message
+                const deleted = await message.channel.bulkDelete(count + 1, true).catch(() => null);
+                const sent = await message.channel.send(`✅ Purged **${deleted ? Math.max(0, deleted.size - 1) : 0}** messages.`);
+                setTimeout(() => sent.delete().catch(() => {}), 6000);
+            } catch (e) {
+                message.channel.send(`❌ Purge failed: ${e.message}`).catch(() => {});
+            }
+        }
     }
 
-    // !lock [reason...]
+    // !lock [#channel|id] [reason...]
     else if (cmd === 'lock' && (isAdmin || isMod)) {
-        const reason = args.join(' ') || 'Channel locked';
+        const chArg = args[0] ? await resolveChannel(args[0]) : null;
+        const targetCh = chArg || message.channel;
+        const reasonStart = chArg ? 1 : 0;
+        const reason = args.slice(reasonStart).join(' ') || 'Channel locked';
+        if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels) && !isAdmin)
+            return message.channel.send('❌ You need **Manage Channels** permission.');
         try {
-            await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: false }, { reason });
-            await message.channel.send('🔒 Channel locked.');
-        } catch {}
+            await targetCh.permissionOverwrites.edit(message.guild.id, { SendMessages: false }, { reason });
+            await message.channel.send(`🔒 <#${targetCh.id}> locked. Reason: ${reason}`);
+        } catch (e) {
+            await message.channel.send(`❌ Lock failed: ${e.message}`);
+        }
     }
 
-    // !unlock [reason...]
+    // !unlock [#channel|id] [reason...]
     else if (cmd === 'unlock' && (isAdmin || isMod)) {
-        const reason = args.join(' ') || 'Channel unlocked';
+        const chArg = args[0] ? await resolveChannel(args[0]) : null;
+        const targetCh = chArg || message.channel;
+        const reasonStart = chArg ? 1 : 0;
+        const reason = args.slice(reasonStart).join(' ') || 'Channel unlocked';
+        if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels) && !isAdmin)
+            return message.channel.send('❌ You need **Manage Channels** permission.');
         try {
-            await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: null }, { reason });
-            await message.channel.send('🔓 Channel unlocked.');
-        } catch {}
+            await targetCh.permissionOverwrites.edit(message.guild.id, { SendMessages: null }, { reason });
+            await message.channel.send(`🔓 <#${targetCh.id}> unlocked. Reason: ${reason}`);
+        } catch (e) {
+            await message.channel.send(`❌ Unlock failed: ${e.message}`);
+        }
     }
 
     // !setgameshub [channelId]
@@ -12858,11 +13780,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !raidmode [on|off]
     else if (cmd === 'raidmode' && isAdmin) {
-        const v = (args[0] || '').toLowerCase();
-        if (!v) return message.channel.send(`🛡️ Raid mode is currently **${gs.raidModeEnabled ? 'ON' : 'OFF'}**.`);
-        if (['on','true','yes','1','enable','enabled'].includes(v)) gs.raidModeEnabled = true;
-        else if (['off','false','no','0','disable','disabled'].includes(v)) gs.raidModeEnabled = false;
-        else return message.channel.send('❌ Use: !raidmode on/off');
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🛡️ Raid mode is currently **${gs.raidModeEnabled ? 'ON' : 'OFF'}**. Use: !raidmode on/off`);
+        gs.raidModeEnabled = v;
         saveData(data);
         await message.channel.send(`✅ Raid mode is now **${gs.raidModeEnabled ? 'ON' : 'OFF'}**.`);
     }
@@ -13010,11 +13930,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !linkpolicy [on|off]
     else if (cmd === 'linkpolicy' && isAdmin) {
-        const v = (args[0] || '').toLowerCase();
-        if (!v) return message.channel.send(`🔗 Link policy is currently **${gs.linkPolicyEnabled ? 'ON' : 'OFF'}**.`);
-        if (['on','true','yes','1','enable','enabled'].includes(v)) gs.linkPolicyEnabled = true;
-        else if (['off','false','no','0','disable','disabled'].includes(v)) gs.linkPolicyEnabled = false;
-        else return message.channel.send('❌ Use: !linkpolicy on/off');
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🔗 Link policy is currently **${gs.linkPolicyEnabled ? 'ON' : 'OFF'}**. Use: !linkpolicy on/off`);
+        gs.linkPolicyEnabled = v;
         saveData(data);
         await message.channel.send(`✅ Link policy is now **${gs.linkPolicyEnabled ? 'ON' : 'OFF'}**.`);
     }
@@ -13131,11 +14049,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !togglescanedits [on|off]
     else if (cmd === 'togglescanedits' && isAdmin) {
-        const v = (args[0] || '').toLowerCase();
-        if (!v) return message.channel.send(`✏️ Scan edits is currently **${gs.scanEditsEnabled ? 'ON' : 'OFF'}**.`);
-        if (['on','true','yes','1','enable','enabled'].includes(v)) gs.scanEditsEnabled = true;
-        else if (['off','false','no','0','disable','disabled'].includes(v)) gs.scanEditsEnabled = false;
-        else return message.channel.send('❌ Use: !togglescanedits on/off');
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`✏️ Scan edits is currently **${gs.scanEditsEnabled ? 'ON' : 'OFF'}**. Use: !togglescanedits on/off`);
+        gs.scanEditsEnabled = v;
         saveData(data);
         await message.channel.send(`✅ Scan edits is now **${gs.scanEditsEnabled ? 'ON' : 'OFF'}**.`);
     }
@@ -13168,39 +14084,33 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !dupeconfig [on/off] [windowSec] [threshold] [minLen]
     else if (cmd === 'dupeconfig' && isAdmin) {
-        const onoff = (args[0] || '').toLowerCase();
-        if (onoff) {
-            if (['on','true','yes','1','enable','enabled'].includes(onoff)) gs.dupeSpamEnabled = true;
-            else if (['off','false','no','0','disable','disabled'].includes(onoff)) gs.dupeSpamEnabled = false;
-        }
-        if (args[1]) gs.dupeWindowSec = Math.max(5, Math.min(120, parseInt(args[1]) || gs.dupeWindowSec || 20));
-        if (args[2]) gs.dupeThreshold = Math.max(2, Math.min(20, parseInt(args[2]) || gs.dupeThreshold || 4));
-        if (args[3]) gs.dupeMinLen = Math.max(5, Math.min(200, parseInt(args[3]) || gs.dupeMinLen || 10));
+        const onoff = parseOnOff(args[0]);
+        if (onoff !== null) gs.dupeSpamEnabled = onoff;
+        if (args[1]) gs.dupeWindowSec  = Math.max(5,  Math.min(120, parseInt(args[1]) || gs.dupeWindowSec  || 20));
+        if (args[2]) gs.dupeThreshold  = Math.max(2,  Math.min(20,  parseInt(args[2]) || gs.dupeThreshold  || 4));
+        if (args[3]) gs.dupeMinLen     = Math.max(5,  Math.min(200, parseInt(args[3]) || gs.dupeMinLen     || 10));
         saveData(data);
         await message.channel.send(`✅ Dupe config: enabled=${gs.dupeSpamEnabled} window=${gs.dupeWindowSec}s threshold=${gs.dupeThreshold} minLen=${gs.dupeMinLen}`);
     }
 
-    // !raidconfig [windowSec] [threshold] [lockdownMins] [lockchannels on/off] [blocklinks on/off] [newacctdays]
+    // !raidconfig [window <sec>] [threshold <n>] [lockdown <mins>] [lockchannels on/off] [blocklinks on/off] [newacctdays <n>]
     else if (cmd === 'raidconfig' && isAdmin) {
-        const windowSec = args[0] ? Math.max(5, Math.min(120, parseInt(args[0]) || gs.raidJoinWindowSec || 25)) : null;
-        const threshold = args[1] ? Math.max(2, Math.min(50, parseInt(args[1]) || gs.raidJoinThreshold || 7)) : null;
-        const lockdown  = args[2] ? Math.max(1, Math.min(60, parseInt(args[2]) || gs.raidLockdownMins || 8)) : null;
-        const lockChStr = (args[3] || '').toLowerCase();
-        const blockStr  = (args[4] || '').toLowerCase();
-        const newAcct   = args[5] ? Math.max(0, Math.min(90, parseInt(args[5]) || gs.raidNewAccountDays || 7)) : null;
-
-        if (windowSec !== null) gs.raidJoinWindowSec = windowSec;
-        if (threshold !== null) gs.raidJoinThreshold = threshold;
-        if (lockdown !== null) gs.raidLockdownMins = lockdown;
-        if (lockChStr) {
-            if (['on','true','yes','1','enable','enabled'].includes(lockChStr)) gs.raidLockChannels = true;
-            else if (['off','false','no','0','disable','disabled'].includes(lockChStr)) gs.raidLockChannels = false;
+        if (!args.length) {
+            return message.channel.send(
+                `📋 Raid config: window=${gs.raidJoinWindowSec||25}s threshold=${gs.raidJoinThreshold||7} lockdown=${gs.raidLockdownMins||8}m lockChannels=${gs.raidLockChannels} blockLinks=${gs.raidLinkBlockAll} newAcctDays=${gs.raidNewAccountDays||7}\n` +
+                `Use: !raidconfig window <s> threshold <n> lockdown <m> lockchannels on/off blocklinks on/off newacctdays <d>`
+            );
         }
-        if (blockStr) {
-            if (['on','true','yes','1','enable','enabled'].includes(blockStr)) gs.raidLinkBlockAll = true;
-            else if (['off','false','no','0','disable','disabled'].includes(blockStr)) gs.raidLinkBlockAll = false;
+        for (let i = 0; i < args.length; i++) {
+            const k = (args[i] || '').toLowerCase();
+            const v = args[i + 1];
+            if (k === 'window'      && v) { gs.raidJoinWindowSec   = Math.max(5,  Math.min(120, parseInt(v) || gs.raidJoinWindowSec  || 25)); i++; continue; }
+            if (k === 'threshold'   && v) { gs.raidJoinThreshold   = Math.max(2,  Math.min(50,  parseInt(v) || gs.raidJoinThreshold  || 7));  i++; continue; }
+            if (k === 'lockdown'    && v) { gs.raidLockdownMins    = Math.max(1,  Math.min(60,  parseInt(v) || gs.raidLockdownMins   || 8));  i++; continue; }
+            if (k === 'newacctdays' && v) { gs.raidNewAccountDays  = Math.max(0,  Math.min(90,  parseInt(v) || gs.raidNewAccountDays || 7));  i++; continue; }
+            if (k === 'lockchannels'&& v) { const p = parseOnOff(v); if (p !== null) gs.raidLockChannels  = p; i++; continue; }
+            if (k === 'blocklinks'  && v) { const p = parseOnOff(v); if (p !== null) gs.raidLinkBlockAll  = p; i++; continue; }
         }
-        if (newAcct !== null) gs.raidNewAccountDays = newAcct;
         saveData(data);
         await message.channel.send(`✅ Raid config updated. window=${gs.raidJoinWindowSec}s threshold=${gs.raidJoinThreshold} lockdown=${gs.raidLockdownMins}m lockChannels=${gs.raidLockChannels} blockLinks=${gs.raidLinkBlockAll} newAcctDays=${gs.raidNewAccountDays}`);
     }
@@ -13245,38 +14155,29 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !capsconfig [on/off] [percent] [minLetters] [maxRun]
     else if (cmd === 'capsconfig' && isAdmin) {
-        const onoff = (args[0] || '').toLowerCase();
-        if (onoff) {
-            if (['on','true','yes','1','enable','enabled'].includes(onoff)) gs.capsSpamEnabled = true;
-            else if (['off','false','no','0','disable','disabled'].includes(onoff)) gs.capsSpamEnabled = false;
-        }
-        if (args[1]) gs.capsMaxPercent = Math.max(30, Math.min(100, parseInt(args[1]) || gs.capsMaxPercent || 70));
-        if (args[2]) gs.capsMinLetters = Math.max(8, Math.min(80, parseInt(args[2]) || gs.capsMinLetters || 16));
-        if (args[3]) gs.capsMaxRun = Math.max(10, Math.min(120, parseInt(args[3]) || gs.capsMaxRun || 28));
+        const onoff = parseOnOff(args[0]);
+        if (onoff !== null) gs.capsSpamEnabled = onoff;
+        if (args[1]) gs.capsMaxPercent  = Math.max(30, Math.min(100, parseInt(args[1]) || gs.capsMaxPercent  || 70));
+        if (args[2]) gs.capsMinLetters  = Math.max(8,  Math.min(80,  parseInt(args[2]) || gs.capsMinLetters  || 16));
+        if (args[3]) gs.capsMaxRun      = Math.max(10, Math.min(120, parseInt(args[3]) || gs.capsMaxRun      || 28));
         saveData(data);
         await message.channel.send(`✅ Caps config: enabled=${gs.capsSpamEnabled} percent=${gs.capsMaxPercent} minLetters=${gs.capsMinLetters} maxRun=${gs.capsMaxRun}`);
     }
 
     // !emojiconfig [on/off] [max] [windowSec]
     else if (cmd === 'emojiconfig' && isAdmin) {
-        const onoff = (args[0] || '').toLowerCase();
-        if (onoff) {
-            if (['on','true','yes','1','enable','enabled'].includes(onoff)) gs.emojiSpamEnabled = true;
-            else if (['off','false','no','0','disable','disabled'].includes(onoff)) gs.emojiSpamEnabled = false;
-        }
-        if (args[1]) gs.emojiMaxCount = Math.max(5, Math.min(60, parseInt(args[1]) || gs.emojiMaxCount || 18));
-        if (args[2]) gs.emojiWindowSec = Math.max(3, Math.min(60, parseInt(args[2]) || gs.emojiWindowSec || 12));
+        const onoff = parseOnOff(args[0]);
+        if (onoff !== null) gs.emojiSpamEnabled = onoff;
+        if (args[1]) gs.emojiMaxCount  = Math.max(5,  Math.min(60, parseInt(args[1]) || gs.emojiMaxCount  || 18));
+        if (args[2]) gs.emojiWindowSec = Math.max(3,  Math.min(60, parseInt(args[2]) || gs.emojiWindowSec || 12));
         saveData(data);
         await message.channel.send(`✅ Emoji config: enabled=${gs.emojiSpamEnabled} max=${gs.emojiMaxCount} window=${gs.emojiWindowSec}s`);
     }
 
     // !zalgoconfig [on/off] [maxMarks]
     else if (cmd === 'zalgoconfig' && isAdmin) {
-        const onoff = (args[0] || '').toLowerCase();
-        if (onoff) {
-            if (['on','true','yes','1','enable','enabled'].includes(onoff)) gs.zalgoEnabled = true;
-            else if (['off','false','no','0','disable','disabled'].includes(onoff)) gs.zalgoEnabled = false;
-        }
+        const onoff = parseOnOff(args[0]);
+        if (onoff !== null) gs.zalgoEnabled = onoff;
         if (args[1]) gs.zalgoMaxCombining = Math.max(4, Math.min(80, parseInt(args[1]) || gs.zalgoMaxCombining || 12));
         saveData(data);
         await message.channel.send(`✅ Zalgo config: enabled=${gs.zalgoEnabled} maxMarks=${gs.zalgoMaxCombining}`);
@@ -13284,11 +14185,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !invitepolicy [on/off]
     else if (cmd === 'invitepolicy' && isAdmin) {
-        const v = (args[0] || '').toLowerCase();
-        if (!v) return message.channel.send(`🔗 Invite policy is currently **${gs.invitePolicyEnabled ? 'ON' : 'OFF'}**.`);
-        if (['on','true','yes','1','enable','enabled'].includes(v)) gs.invitePolicyEnabled = true;
-        else if (['off','false','no','0','disable','disabled'].includes(v)) gs.invitePolicyEnabled = false;
-        else return message.channel.send('❌ Use: !invitepolicy on/off');
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🔗 Invite policy is currently **${gs.invitePolicyEnabled ? 'ON' : 'OFF'}**. Use: !invitepolicy on/off`);
+        gs.invitePolicyEnabled = v;
         saveData(data);
         await message.channel.send(`✅ Invite policy is now **${gs.invitePolicyEnabled ? 'ON' : 'OFF'}**.`);
     }
@@ -13321,11 +14220,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !attachmentpolicy [on/off]
     else if (cmd === 'attachmentpolicy' && isAdmin) {
-        const v = (args[0] || '').toLowerCase();
-        if (!v) return message.channel.send(`📎 Attachment policy is currently **${gs.attachmentPolicyEnabled ? 'ON' : 'OFF'}**.`);
-        if (['on','true','yes','1','enable','enabled'].includes(v)) gs.attachmentPolicyEnabled = true;
-        else if (['off','false','no','0','disable','disabled'].includes(v)) gs.attachmentPolicyEnabled = false;
-        else return message.channel.send('❌ Use: !attachmentpolicy on/off');
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`📎 Attachment policy is currently **${gs.attachmentPolicyEnabled ? 'ON' : 'OFF'}**. Use: !attachmentpolicy on/off`);
+        gs.attachmentPolicyEnabled = v;
         saveData(data);
         await message.channel.send(`✅ Attachment policy is now **${gs.attachmentPolicyEnabled ? 'ON' : 'OFF'}**.`);
     }
@@ -13358,25 +14255,50 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !stretchconfig [on/off] [maxCharRun] [maxPunctRun] [maxWordRepeat]
     else if (cmd === 'stretchconfig' && isAdmin) {
-        const onoff = (args[0] || '').toLowerCase();
-        if (onoff) {
-            if (['on','true','yes','1','enable','enabled'].includes(onoff)) gs.stretchSpamEnabled = true;
-            else if (['off','false','no','0','disable','disabled'].includes(onoff)) gs.stretchSpamEnabled = false;
-        }
-        if (args[1]) gs.stretchMaxCharRun = Math.max(6, Math.min(40, parseInt(args[1]) || gs.stretchMaxCharRun || 12));
-        if (args[2]) gs.stretchMaxPunctRun = Math.max(6, Math.min(40, parseInt(args[2]) || gs.stretchMaxPunctRun || 10));
-        if (args[3]) gs.stretchMaxWordRepeat = Math.max(3, Math.min(20, parseInt(args[3]) || gs.stretchMaxWordRepeat || 5));
+        const onoff = parseOnOff(args[0]);
+        if (onoff !== null) gs.stretchSpamEnabled = onoff;
+        if (args[1]) gs.stretchMaxCharRun    = Math.max(6,  Math.min(40, parseInt(args[1]) || gs.stretchMaxCharRun    || 12));
+        if (args[2]) gs.stretchMaxPunctRun   = Math.max(6,  Math.min(40, parseInt(args[2]) || gs.stretchMaxPunctRun   || 10));
+        if (args[3]) gs.stretchMaxWordRepeat = Math.max(3,  Math.min(20, parseInt(args[3]) || gs.stretchMaxWordRepeat  || 5));
         saveData(data);
         await message.channel.send(`✅ Stretch config: enabled=${gs.stretchSpamEnabled} maxCharRun=${gs.stretchMaxCharRun} maxPunctRun=${gs.stretchMaxPunctRun} maxWordRepeat=${gs.stretchMaxWordRepeat}`);
     }
 
+    // !channelconfig [add|remove|list] [category] [#channel]
+    // categories: trade, raid, race, seaevents, mirage, prehistoric, kitsune, leviathan
+    else if ((cmd === 'channelconfig' || cmd === 'channelconf') && isAdmin) {
+        const mode = (args[0] || '').toLowerCase();
+        const cat  = (args[1] || '').toLowerCase();
+        if (mode === 'list' || (!mode && !cat)) {
+            const lines = Object.entries(CHANNEL_CATEGORIES).map(([c, meta]) => {
+                const ids = getChannelIds(gs, meta.key);
+                return `${meta.label} (\`${c}\`): ${ids.length ? ids.map(id=>`<#${id}>`).join(', ') : 'None'}`;
+            });
+            return message.channel.send(`📋 **Channel Config Pools:**\n${lines.join('\n')}`);
+        }
+        const meta = CHANNEL_CATEGORIES[cat];
+        if (!meta) return message.channel.send(`❌ Unknown category \`${cat}\`. Valid: ${Object.keys(CHANNEL_CATEGORIES).join(', ')}\nUsage: !channelconfig add|remove|list [category] [#channel]`);
+        const ch = await resolveChannel(args[2] || args[1]);
+        if (!ch) return message.channel.send('❌ Provide a channel mention or ID. Example: !channelconfig add trade #fast-trading');
+        gs[meta.key] = Array.isArray(gs[meta.key]) ? gs[meta.key] : [];
+        if (mode === 'add') {
+            if (!gs[meta.key].includes(ch.id)) { gs[meta.key].push(ch.id); saveData(data); }
+            await message.channel.send(`✅ Added <#${ch.id}> to **${meta.label}** pool. Pool: ${formatChannelIds(gs[meta.key])}`);
+            return;
+        }
+        if (mode === 'remove') {
+            gs[meta.key] = gs[meta.key].filter(id => id !== ch.id); saveData(data);
+            await message.channel.send(`✅ Removed <#${ch.id}> from **${meta.label}** pool. Pool: ${formatChannelIds(gs[meta.key])}`);
+            return;
+        }
+        await message.channel.send('❌ Use: !channelconfig add|remove|list [category] [#channel]');
+    }
+
     // !togglescam [on|off]
     else if (cmd === 'togglescam' && isAdmin) {
-        const v = (args[0] || '').toLowerCase();
-        if (!v) return message.channel.send(`🚨 Scam detection is currently **${gs.scamEnabled ? 'ON' : 'OFF'}**.`);
-        if (['on','true','yes','1','enable','enabled'].includes(v)) gs.scamEnabled = true;
-        else if (['off','false','no','0','disable','disabled'].includes(v)) gs.scamEnabled = false;
-        else return message.channel.send('❌ Use: !togglescam on/off');
+        const v = parseOnOff(args[0]);
+        if (v === null) return message.channel.send(`🚨 Scam detection is currently **${gs.scamEnabled ? 'ON' : 'OFF'}**. Use: !togglescam on/off`);
+        gs.scamEnabled = v;
         saveData(data);
         await message.channel.send(`✅ Scam detection is now **${gs.scamEnabled ? 'ON' : 'OFF'}**.`);
     }
