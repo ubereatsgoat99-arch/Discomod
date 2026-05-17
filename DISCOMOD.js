@@ -1196,10 +1196,18 @@ function rotateBackups(maxKeep = 25) {
 }
 
 function safeWriteJsonAtomic(filePath, obj) {
-    const tmp = `${filePath}.tmp`;
+    // Use a unique tmp filename per call to prevent race conditions when
+    // multiple async handlers call saveData concurrently. A shared .tmp
+    // path causes ENOENT on rename if another call already renamed it away.
+    const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
     const json = JSON.stringify(obj, null, 2);
-    fs.writeFileSync(tmp, json, 'utf8');
-    fs.renameSync(tmp, filePath);
+    try {
+        fs.writeFileSync(tmp, json, 'utf8');
+        fs.renameSync(tmp, filePath);
+    } catch (e) {
+        try { fs.unlinkSync(tmp); } catch {}
+        throw e;
+    }
 }
 
 function loadData() {
@@ -2314,6 +2322,10 @@ const MIRAGE_ISLAND_RE = /\bmirage\s*island\b|\bmirage\s*isle\b|\bmirage\b/i;
 const RACE_V4_SERVICE_RE = /\b(race\s*v4|race\s*reroll|trials?|blue\s*gear)\b/i;
 /** Raid / dungeon / boss service detection */
 const RAID_SERVICE_RE = /\b(raid|dungeon|raid\s*boss|boss\s*carry|lev?el\s*up|lvl\s*up|lvling\s*up|leveling|sword\s*quest|cdk|ttk|enchant|material|bounty\s*reset|bounty\s*farm|materials?\s*hunt|pain\s*and\s*suffering|haze\s*of\s*misery|fear\s*the\s*reaper|sense\s*of\s*duty|the\s*hunter|soulless|legendary\s*sword\s*dealer|sword\s*dealer|mysterious\s*man|mastery\s*grind|mastery\s*farm|mastery\s*300|2m\s*beli|beli\s*purchase|wando\s*purchase|shisui\s*purchase|saddi\s*purchase|ttk\s*fusion|ttk\s*quest|cdk\s*quest|cdk\s*chain|ttk\s*chain|tushita\s*quest|yama\s*quest)\b/i;
+
+// ── Detects farm/grind/hunt/help intent paired with materials or NPCs
+//    (independent of svcIntent — catches "grind gorilla", "help shark tooth", etc.)
+const MATERIAL_NPC_FARM_RE = /\b(?:grind(?:ing)?|farm(?:ing)?|hunt(?:ing)?|help(?:\s+(?:with|me|out))?|need(?:ing)?|lf(?:\s+for)?|looking\s+for|hosting|anyone\s+(?:farm|grind|hunt)|who(?:\s+(?:wanna?|wants?\s+to|is)\s+(?:farm|grind|hunt))?|wanna?\s+(?:farm|grind|hunt|do)|want(?:s?\s+to)?\s+(?:farm|grind|hunt))\b/i;
 
 /**
  * Given what was detected in a service violation, pick the best redirect channel pool.
@@ -4245,6 +4257,320 @@ const BOSS_ALIASES = {
     "levthan":"leviathan","lviathan":"leviathan","leviatan":"leviathan",
     "sebeast":"sea beast","seabeast":"sea beast",
     "unbndww":"unbound werewolf","ubww":"unbound werewolf",
+};
+
+// ══════════════════════════════════════════════════════════
+//  MATERIALS
+// ══════════════════════════════════════════════════════════
+const MATERIALS = [
+    "angel wings","angelwings",
+    "leather",
+    "magma ore","magmaore",
+    "scrap metal","scrapmetal",
+    "wooden plank","woodenplank",
+    "yeti fur","yetifur",
+    "fish tail","fishtail",
+    "mystic droplet","mysticdroplet",
+    "radioactive material","radioactivematerial",
+    "shark tooth","sharktooth",
+    "vampire fang","vampirefang",
+    "conjured cocoa","conjuredcocoa",
+    "demonic wisp","demonicwisp",
+    "dragon scale","dragonscale",
+    "electric wing","electricwing",
+    "mutant tooth","mutanttooth",
+    "alucard fragment","alucardfragment",
+    "azure ember","azureember",
+    "celestial token","celestialtoken",
+    "dinosaur bones","dinosaurbones",
+    "dark fragment","darkfragment",
+    "fool's gold","fools gold","foolsgold",
+    "hearts",
+    "leviathan scale","leviathanscale",
+    "meteorite",
+    "mini mythic","minimythic",
+    "monster magnet","monstermagnet",
+    "oni token","onitoken",
+    "summer token","summertoken",
+    "terror eyes","terroreyes",
+    "volcanic magnet","volcanicmagnet",
+    "volt capsule","voltcapsule",
+    "leviathan heart","leviatanheart",
+];
+const MATERIAL_ALIASES = {
+    "angwings":"angel wings","angwng":"angel wings","angelwng":"angel wings",
+    "leathr":"leather","lether":"leather","lethr":"leather",
+    "magore":"magma ore","mgore":"magma ore","magmaor":"magma ore",
+    "scrpmetal":"scrap metal","scrapmet":"scrap metal","scrapmtl":"scrap metal",
+    "woodplank":"wooden plank","wdnplank":"wooden plank","woodenplk":"wooden plank",
+    "yetifr":"yeti fur","ytifur":"yeti fur","yetfur":"yeti fur",
+    "fishtl":"fish tail","fshtail":"fish tail",
+    "mysticdrop":"mystic droplet","mystdrop":"mystic droplet","mysticdropl":"mystic droplet",
+    "radmat":"radioactive material","radiomat":"radioactive material","radactmat":"radioactive material",
+    "shrktooth":"shark tooth","sharktth":"shark tooth","shktooth":"shark tooth",
+    "vampfang":"vampire fang","vampirefng":"vampire fang","vmpfang":"vampire fang",
+    "conjcocoa":"conjured cocoa","conjuredcoc":"conjured cocoa","conjcoc":"conjured cocoa",
+    "demwisp":"demonic wisp","demonwisp":"demonic wisp","dmcwisp":"demonic wisp",
+    "drgscale":"dragon scale","dragonscl":"dragon scale","dragscale":"dragon scale",
+    "elecwing":"electric wing","electricwng":"electric wing","elwing":"electric wing",
+    "mutanttth":"mutant tooth","muttooth":"mutant tooth","mutntooth":"mutant tooth",
+    "alucardfrag":"alucard fragment","alucfrag":"alucard fragment","alufrag":"alucard fragment",
+    "azrember":"azure ember","azuremb":"azure ember","azrembr":"azure ember",
+    "celesttok":"celestial token","celesttoken":"celestial token","celesttk":"celestial token",
+    "dinobones":"dinosaur bones","dinosaurbns":"dinosaur bones",
+    "darkfrag":"dark fragment","drkfrag":"dark fragment",
+    "foolsgold":"fool's gold","foolsglod":"fool's gold","fgold":"fool's gold",
+    "hrt":"hearts","hart":"hearts",
+    "leviscale":"leviathan scale","levithanscale":"leviathan scale","levscale":"leviathan scale",
+    "meterite":"meteorite","meteor":"meteorite","meteroite":"meteorite",
+    "minimyth":"mini mythic","mnimythic":"mini mythic","mnimyth":"mini mythic",
+    "monstermag":"monster magnet","mnstrmagnet":"monster magnet","monstermagn":"monster magnet",
+    "onitok":"oni token","onitokn":"oni token","ontok":"oni token",
+    "summertok":"summer token","sumtok":"summer token","summtok":"summer token",
+    "terroreye":"terror eyes","trreyes":"terror eyes",
+    "volcmag":"volcanic magnet","volcanicmag":"volcanic magnet","volcmagnet":"volcanic magnet",
+    "voltcap":"volt capsule","vltcap":"volt capsule","voltcapsul":"volt capsule",
+    "leviheart":"leviathan heart","leviatanhrt":"leviathan heart","levihrt":"leviathan heart",
+};
+
+// ══════════════════════════════════════════════════════════
+//  NPCs
+// ══════════════════════════════════════════════════════════
+const NPCS = [
+    // ── Combat NPCs (enemies / grindable mobs) ────────────────────────────
+    "bandit","monkey","gorilla","pirate","brute",
+    "desert bandit","desertbandit","desert officer","desertofficer",
+    "snow bandit","snowbandit","snowman",
+    "chief petty officer","chiefpettyofficer",
+    "sky bandit","skybandit","dark master","darkmaster",
+    "prisoner","dangerous prisoner","dangerousprisoner",
+    "tars",
+    "fishman warrior","fishmanwarrior",
+    "fishman commando","fishmancommando",
+    "god's guard","gods guard","godsguard",
+    "shanda","royal squad","royalsquad",
+    "royal soldier","royalsoldier",
+    "swan pirate","swanpirate",
+    "factory staff","factorystaff",
+    "marine lieutenant","marineleuienant","marine lt",
+    "marine captain","marinecaptain",
+    "zombie","vampire",
+    "snow trooper","snowtrooper","winter warrior","winterwarrior",
+    "scout","ship officer","shipofficer",
+    "ship engineer","shipengineer",
+    "ship steward","shipsteward",
+    "ship captain","shipcaptain",
+    "arctic warrior","arcticwarrior",
+    "snow mountain warrior","snowmountainwarrior",
+    "sea soldier","seasoldier","water gladiator","watergladiator",
+    "reborn skeleton","rebornskeleton",
+    "living zombie","livingzombie",
+    "demonic soul","demonicsoul",
+    "posessed mummy","possessed mummy","possessedmummy",
+    "forest pirate","forestpirate",
+    "mythological pirate","mythologicalpirate",
+    "marine commodore","marinecommodore",
+    "fishman raider","fishmanraider",
+    "fishman captain","fishmancaptain",
+    "giant bandit","giantbandit",
+    "haunted shipwright","hauntedshipwright",
+    "candy pirate","candypirate",
+    "snow demon","snowdemon",
+    "ice cream chef","icecreamchef",
+    "peanut scout","peanutscout","peanut bandit","peanutbandit",
+    "cocoa warrior","cocoawarrior",
+    "chocolate bar battallion","chocolatebarbattallion","chocolate bar battalion","chocolatebarbattalion",
+    "sweet scout","sweetscout","cookie cracker","cookiecracker",
+    "cake guard","cakeguard","baking staff","bakingstaff",
+    "head baker","headbaker","cocoa pirate","cocoapirate",
+    "dragon wizard","dragonwizard","dragon hunter","dragonhunter",
+    "skeleton apprentice","skeletonapprentice",
+    "skeletal scouter","skeletalscouter",
+    "demonic soul reaper","demonicsoulreaper",
+    "crypt master","cryptmaster",
+    "living skeleton","livingskeleton",
+    // ── Friendly NPCs / Vendors / Trainers ───────────────────────────────
+    "citizen","sea captain","seacaptain","blacksmith",
+    "set home point","sethomepoint",
+    "mysterious man","mysteriousman",
+    "crew captain","crewcaptain","trevor","manager","nerd",
+    "bounty expert","bountyexpert",
+    "honor expert","honorexpert",
+    "awakenings expert","awakeningsexpert",
+    "customer","experienced captain","experiencedcaptain",
+    "rip indra","ripindra","rip_indra",
+    "titles specialist","titlesspecialist",
+    "aura editor","auraeditor",
+    "mr captain","mr. captain","mrcaptain",
+    "military detective","militarydetective",
+    "mysterious entity","mysteriousentity",
+    "erin","angler","lucien",
+    "trinket expert","trinketexpert",
+    "trinket refiner","trinketrefiner",
+    "valentines delivery","valentinesdelivery",
+    "blox fruit dealer","bloxfruitdealer",
+    "blox fruit gacha","bloxfruitgacha",
+    "sabi","santa claws","santaclaws",
+    "sealed king","sealedking","shafi",
+    "shark hunter","sharkhunter",
+    "sharkman master","sharkmanmaster",
+    "sharkman teacher","sharkmanteacher",
+    "shipwright teacher","shipwrightteacher",
+    "sick man","sickman","spy","statue",
+    "submarine worker","submarineworker",
+    "sweet crafter","sweetcrafter",
+    "beast hunter","beasthunter",
+    "ancient one","ancientone",
+    "dojo trainer","dojotrainer",
+    "dragon talon sage","dragontalonsage",
+    "previous hero","previoushero",
+    "hungry man","hungryman","barista",
+    "death king","deathking",
+    "weird machine","weirdmachine",
+    "sick scientist","sickscientist",
+    "cake scientist","cakescientist",
+    "drip mama","drip_mama","dripmama",
+    "lunoven","plokster","butler",
+    "mysterious scientist","mysteriousscientist",
+    "tacomura","phoeyu the reformed","phoeyuthereformed",
+    "water kung fu teacher","waterkungfuteacher",
+    "dark step teacher","darkstepteacher",
+    "mad scientist","madscientist",
+    "martial arts master","martialartsmaster",
+    "elite hunter","elitehunter",
+    "player hunter","playerhunter",
+    "remove blox fruit","removebloxfruit",
+    "hassan","boris","yoshi",
+];
+const NPC_ALIASES = {
+    "bndtt":"bandit","mnky":"monkey","monky":"monkey","monke":"monkey",
+    "grlla":"gorilla","gorila":"gorilla","grla":"gorilla",
+    "pirte":"pirate","prat":"pirate","prte":"pirate",
+    "brtt":"brute","brt":"brute",
+    "dserbandit":"desert bandit","desrtbandit":"desert bandit","drtbandit":"desert bandit",
+    "dsertofficer":"desert officer","desrtofficer":"desert officer",
+    "snwbandit":"snow bandit","snwbndt":"snow bandit","snowbndt":"snow bandit",
+    "snwman":"snowman","snoman":"snowman",
+    "cpo":"chief petty officer","chfpettyofficer":"chief petty officer","chiefpto":"chief petty officer",
+    "skybndt":"sky bandit","skybdt":"sky bandit",
+    "drkmaster":"dark master","darkmastr":"dark master","drkmstr":"dark master",
+    "prisnr":"prisoner","prisonr":"prisoner",
+    "dangerousprsnr":"dangerous prisoner","dangprisoner":"dangerous prisoner",
+    "fishwarr":"fishman warrior","fshmanwarr":"fishman warrior",
+    "fishcmdo":"fishman commando","fshmancmdo":"fishman commando",
+    "godsguard":"god's guard","godguard":"god's guard","gdguard":"god's guard",
+    "royalsqd":"royal squad","ryalsquad":"royal squad","roylsquad":"royal squad",
+    "royalsldr":"royal soldier","ryalsoldier":"royal soldier","roysldr":"royal soldier",
+    "swanprt":"swan pirate","swanpirte":"swan pirate","swanpirt":"swan pirate",
+    "factstf":"factory staff","factorystf":"factory staff","facstf":"factory staff",
+    "marinelt":"marine lieutenant","marinelieu":"marine lieutenant",
+    "marinecpt":"marine captain","marinecap":"marine captain","marinecapt":"marine captain",
+    "zmbie":"zombie","zmby":"zombie","zomie":"zombie",
+    "vampr":"vampire","vampyre":"vampire","vampir":"vampire",
+    "snowtrpr":"snow trooper","snwtrpr":"snow trooper","snowtroopr":"snow trooper",
+    "wintrwarr":"winter warrior","wntwarr":"winter warrior",
+    "scot":"scout","sct":"scout",
+    "shipoffcr":"ship officer","shipofficr":"ship officer",
+    "shipengnr":"ship engineer","shipenginr":"ship engineer",
+    "shipstwd":"ship steward","shipstewd":"ship steward",
+    "shipcpt":"ship captain","shipcapt":"ship captain",
+    "arcticwarr":"arctic warrior","arcwarr":"arctic warrior",
+    "snowmtwarr":"snow mountain warrior","snwmtnwarr":"snow mountain warrior",
+    "seasldr":"sea soldier","seaoldr":"sea soldier",
+    "watergla":"water gladiator","wtrglad":"water gladiator","wglad":"water gladiator",
+    "rebrnsk":"reborn skeleton","rebskel":"reborn skeleton",
+    "lvngzmb":"living zombie","livingzmb":"living zombie",
+    "demncsoul":"demonic soul","dmcsoul":"demonic soul","demonsoul":"demonic soul",
+    "possedmum":"possessed mummy","possdmum":"possessed mummy",
+    "frstpirate":"forest pirate","forestpirt":"forest pirate",
+    "mythpirt":"mythological pirate","mytholgpirt":"mythological pirate",
+    "marinecmdr":"marine commodore","marinecmod":"marine commodore",
+    "fishraidr":"fishman raider","fshmanraidr":"fishman raider",
+    "fishcapt":"fishman captain","fishmancapt":"fishman captain",
+    "giantbndt":"giant bandit","gntbandit":"giant bandit",
+    "hauntshpwrt":"haunted shipwright","hauntedshpwrt":"haunted shipwright",
+    "candyprt":"candy pirate","candypirt":"candy pirate",
+    "snwdmn":"snow demon","snowdmn":"snow demon","snwdem":"snow demon",
+    "icecrmchef":"ice cream chef","icecrmchf":"ice cream chef",
+    "pnutsct":"peanut scout","pnutscout":"peanut scout",
+    "pnutbndt":"peanut bandit","pnutbandit":"peanut bandit",
+    "cocoawarr":"cocoa warrior","cocoawarrir":"cocoa warrior",
+    "chocbar":"chocolate bar battallion","chocbarbatt":"chocolate bar battallion",
+    "swtsct":"sweet scout","sweetscot":"sweet scout",
+    "cookieckr":"cookie cracker","cookcracker":"cookie cracker",
+    "cakegrd":"cake guard","ckgrd":"cake guard",
+    "bakstf":"baking staff","bakingst":"baking staff",
+    "hdbakr":"head baker","headbakr":"head baker",
+    "cocoaiprt":"cocoa pirate","ccoaiprt":"cocoa pirate",
+    "drgwzrd":"dragon wizard","dragonwzrd":"dragon wizard","drgwiz":"dragon wizard",
+    "drghuntr":"dragon hunter","drgonhuntr":"dragon hunter",
+    "skelappr":"skeleton apprentice","skleappr":"skeleton apprentice",
+    "skelsct":"skeletal scouter","sktlsctr":"skeletal scouter",
+    "demncsoulrpr":"demonic soul reaper","demsoulrpr":"demonic soul reaper",
+    "cryptmstr":"crypt master","cryptmastr":"crypt master",
+    "lvngsk":"living skeleton","livingskel":"living skeleton",
+    "ctzn":"citizen","citiz":"citizen",
+    "seacpt":"sea captain","seacapt":"sea captain",
+    "blksmith":"blacksmith","blcksmith":"blacksmith",
+    "mystman":"mysterious man","mysteriousmn":"mysterious man",
+    "crewcpt":"crew captain","crwcpt":"crew captain",
+    "trevr":"trevor","trvor":"trevor",
+    "mngr":"manager","mgr":"manager",
+    "bntexp":"bounty expert","bountyexp":"bounty expert","btyexp":"bounty expert",
+    "honexp":"honor expert","honorexp":"honor expert","hnrexp":"honor expert",
+    "awakexp":"awakenings expert","awknexp":"awakenings expert",
+    "custmr":"customer","cstmr":"customer",
+    "exprcpt":"experienced captain","expcpt":"experienced captain",
+    "ripindra":"rip indra","ripindr":"rip indra",
+    "titlespec":"titles specialist","titlspec":"titles specialist",
+    "auraed":"aura editor","auraedit":"aura editor",
+    "mrcpt":"mr. captain","mrcapt":"mr. captain",
+    "mildet":"military detective","mildetr":"military detective",
+    "mystent":"mysterious entity","mysteriousent":"mysterious entity",
+    "anglr":"angler",
+    "lcn":"lucien","luci":"lucien","lucein":"lucien",
+    "trinktexp":"trinket expert","trnktexp":"trinket expert",
+    "trinktref":"trinket refiner","trnktref":"trinket refiner",
+    "valdel":"valentines delivery","valentdel":"valentines delivery",
+    "bfdealer":"blox fruit dealer","blxfruitdlr":"blox fruit dealer","bfdlr":"blox fruit dealer",
+    "bfgacha":"blox fruit gacha","blxfruitgch":"blox fruit gacha","bfgch":"blox fruit gacha",
+    "santaclaw":"santa claws","sntaclaws":"santa claws",
+    "sealdking":"sealed king","sealedkng":"sealed king",
+    "shrkhuntr":"shark hunter","sharkhuntr":"shark hunter",
+    "shmkmastr":"sharkman master","sharkmanmstr":"sharkman master",
+    "shmktchr":"sharkman teacher","sharkmanteach":"sharkman teacher",
+    "shipwrttchr":"shipwright teacher","shpwrtteach":"shipwright teacher",
+    "sckman":"sick man","sickmn":"sick man",
+    "subwrkr":"submarine worker","subworker":"submarine worker",
+    "sweetcrft":"sweet crafter","swetcrafter":"sweet crafter",
+    "bsthuntr":"beast hunter","beasthuntr":"beast hunter",
+    "ancntone":"ancient one","ancentone":"ancient one",
+    "dojotrnr":"dojo trainer","dojotrain":"dojo trainer",
+    "drgtalnsage":"dragon talon sage","drgtalonsge":"dragon talon sage",
+    "prevhero":"previous hero","prevhro":"previous hero",
+    "hungrymn":"hungry man","hungman":"hungry man","hngrmn":"hungry man",
+    "bartst":"barista","bartsta":"barista","barist":"barista",
+    "dthking":"death king","deathkng":"death king","dthkng":"death king",
+    "wrdmachine":"weird machine","wrdmchn":"weird machine",
+    "sckscntst":"sick scientist","sicksci":"sick scientist",
+    "cakescntst":"cake scientist","cakesci":"cake scientist",
+    "dripmama":"drip_mama","drpmama":"drip_mama",
+    "lnoven":"lunoven","lunovn":"lunoven",
+    "plkstr":"plokster","plokstre":"plokster",
+    "butlr":"butler","butlar":"butler",
+    "mystsci":"mysterious scientist","mystscient":"mysterious scientist",
+    "tacomur":"tacomura","tcomura":"tacomura",
+    "phoeyu":"phoeyu the reformed","phoeyurform":"phoeyu the reformed",
+    "wkfteach":"water kung fu teacher","waterkfteach":"water kung fu teacher",
+    "drkstpteach":"dark step teacher","darkstepteach":"dark step teacher",
+    "madsci":"mad scientist","madscient":"mad scientist",
+    "marartmastr":"martial arts master","martartsmastr":"martial arts master",
+    "elthuntr":"elite hunter","elitehuntr":"elite hunter",
+    "plyhuntr":"player hunter","playerhuntr":"player hunter",
+    "rmvbf":"remove blox fruit","removebf":"remove blox fruit","rmbf":"remove blox fruit",
+    "hssn":"hassan","hasssn":"hassan",
+    "brrs":"boris","borris":"boris",
+    "yshi":"yoshi","yoshii":"yoshi","yosh":"yoshi",
 };
 
 // ══════════════════════════════════════════════════════════
@@ -6230,8 +6556,10 @@ const scanForAccessories    = t => genericScan(t, ACCESSORIES,      ACCESSORY_AL
 const scanForQuests         = t => genericScan(t, QUESTS,           QUEST_ALIASES);
 const scanForSeaEvents      = t => genericScan(t, SEA_EVENTS,       SEA_EVENT_ALIASES);
 const scanForRaces          = t => genericScan(t, RACES,            RACE_ALIASES);
-const scanForPainUpgrades   = t => genericScan(t, PAIN_UPGRADES,    PAIN_UPGRADE_ALIASES);
+const scanForPainUpgrades      = t => genericScan(t, PAIN_UPGRADES,    PAIN_UPGRADE_ALIASES);
 const scanForLightningUpgrades = t => genericScan(t, LIGHTNING_UPGRADES, LIGHTNING_UPGRADE_ALIASES);
+const scanForMaterials         = t => genericScan(t, MATERIALS,        MATERIAL_ALIASES);
+const scanForNpcs              = t => genericScan(t, NPCS,             NPC_ALIASES);
 
 function scanForServiceIntent(cleanText, strictness = 5) {
     const ns = cleanText.replace(/\s/g, '');
@@ -7945,7 +8273,7 @@ async function onClientReady() {
 }
 
 client.once('clientReady', onClientReady);
-client.once('ready', onClientReady);
+// NOTE: 'ready' was removed — it's deprecated in discord.js v14+ (renamed to clientReady)
 
 // ══════════════════════════════════════════════════════════
 //  INTERACTION HANDLER (slash commands + buttons + modals)
@@ -12419,10 +12747,22 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
     const seaEvFound     = scanForSeaEvents(contentClean);
     const painUpgFound   = scanForPainUpgrades(contentClean);
     const lightUpgFound  = scanForLightningUpgrades(contentClean);
+    const materialsFound = scanForMaterials(contentClean);
+    for (const m of MATERIALS) { const mc=m.replace(/[\s\-']/g,''); if(mc.length>=4&&contentNospace.includes(mc)&&!materialsFound.includes(m)) materialsFound.push(m); }
+    const npcsFound      = scanForNpcs(contentClean);
+    for (const n of NPCS) { const nc=n.replace(/[\s\-']/g,''); if(nc.length>=5&&contentNospace.includes(nc)&&!npcsFound.includes(n)) npcsFound.push(n); }
+
+    // Explicit farm/grind/help + material or NPC — fires regardless of svcIntent
+    // catches "grind gorilla", "farming shark tooth", "help [NPC]", "lf monster magnet", etc.
+    const hasExplicitFarmForMatNpc =
+        (materialsFound.length > 0 || npcsFound.length > 0) &&
+        MATERIAL_NPC_FARM_RE.test(contentClean);
+
     const hasAnyItem     = swordsFound.length||enchantsFound.length||hakiFound.length||
                            stylesFound.length||gunsFound.length||accsFound.length||
                            questsFound.length||seaEvFound.length||
-                           painUpgFound.length||lightUpgFound.length;
+                           painUpgFound.length||lightUpgFound.length||
+                           materialsFound.length||npcsFound.length;
 
     let hasFruitAndRaid = fruitsFound.length && /r+[\s\W_]*a+[\s\W_]*i+[\s\W_]*d+s*/i.test(contentClean);
 
@@ -12454,6 +12794,8 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
             const hasBossOrSeaEv =
                 bossesFound.length > 0 ||
                 seaEvFound.length > 0 ||
+                materialsFound.length > 0 ||
+                npcsFound.length > 0 ||
                 hasBossRegex ||
                 Object.keys(BOSS_ALIASES).some(alias => {
                     const a = alias.toLowerCase();
@@ -12475,6 +12817,14 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
                 SEA_EVENTS.some(se => {
                     const sen = se.replace(/[\s\-]/g, '').toLowerCase();
                     return sen.length >= 4 && emojiNames.some(n => n.includes(sen));
+                }) ||
+                MATERIALS.some(m => {
+                    const mn = m.replace(/[\s\-']/g, '').toLowerCase();
+                    return mn.length >= 4 && emojiNames.some(n => n.includes(mn));
+                }) ||
+                NPCS.some(npc => {
+                    const nn = npc.replace(/[\s\-'_]/g, '').toLowerCase();
+                    return nn.length >= 5 && emojiNames.some(n => n.includes(nn));
                 });
             if (hasBossOrSeaEv) {
                 const serverName = message.guild?.name || 'This server';
@@ -12505,7 +12855,7 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
     const trialsHit = detectTrialsOrTrialsRecruitment(contentClean);
     const dungeonHit = detectRaidOrDungeonRecruitment(contentClean);
     const hasTarget = hasSvcForRaid || hasBossRegex || bossesFound.length || hasFruitRaid || hasFruitAndRaid || hasAnyItem;
-    const flagged = trialsHit || dungeonHit || bypassHit || (svcIntent && hasTarget);
+    const flagged = trialsHit || dungeonHit || bypassHit || hasExplicitFarmForMatNpc || (svcIntent && hasTarget);
 
     if (flagged) {
         if (gs.noAffiliationEnabled) {
@@ -14330,6 +14680,8 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const swords  = scanForSwords(cleaned);
         const painUpg = scanForPainUpgrades(cleaned);
         const lightUpg= scanForLightningUpgrades(cleaned);
+        const materials = scanForMaterials(cleaned);
+        const npcs      = scanForNpcs(cleaned);
         const intent  = scanForIntent(cleaned);
         const svcInt  = scanForServiceIntent(cleaned);
         const tier    = hasTierKeyword(cleaned);
@@ -14348,6 +14700,8 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                 { name: 'Swords',          value: swords.join(', ')    || 'None', inline: false },
                 { name: 'Pain Upgrades',   value: painUpg.join(', ')   || 'None', inline: false },
                 { name: 'Lightning Upgr.', value: lightUpg.join(', ')  || 'None', inline: false },
+                { name: 'Materials',       value: materials.join(', ')  || 'None', inline: false },
+                { name: 'NPCs',            value: npcs.join(', ')       || 'None', inline: false },
                 { name: 'Trade Intent',    value: intent   ? '✅' : '❌', inline: true },
                 { name: 'Service Intent',  value: svcInt   ? '✅' : '❌', inline: true },
                 { name: 'Tier Keyword',    value: tier     ? '✅' : '❌', inline: true },
