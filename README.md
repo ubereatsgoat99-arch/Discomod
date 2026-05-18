@@ -69,27 +69,10 @@ This project has a bunch of hardcoded paths, so do the follwoing:
 git clone https://github.com/xenostopic-cyber/Discomod
 cd Discomod
 chmod +x setup.sh
-./setup.sh --to-downloads
+./setup.sh
 ```
 
-After this, copy the example env file inside the Repo
-
-```bash
-cp .env.example .env
-```
-Then fill in your values:
-
-```bash
-DISCORD_TOKEN=your_token_here
-ANTHROPIC_API_KEY=your_key_here
-WOLFRAM_APPID=
-GROQ_API_KEY
-```
-and then run:
-
-```bash
-node start
-```
+Fill out your shit which it asks you to do, and go mad!
 
 Have a lovely moderation bot hosting, dm me at my discord user: 1427299411049840640 for bugs that you found, and with that have a lovely day!
 Send me friend request to my discord: https://www.discord.com/users/1427299411049840640 for discussing, constructive feedback is very much welcomed!
