@@ -4,54 +4,29 @@ set -e
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_DIR"
-if [ "$1" == "--to-downloads" ]; then
-    echo "Exporting project to Downloads..."
-
-    DEST="$HOME/Downloads/Discomod"
-    mkdir -p "$DEST"
-
-    rsync -av --exclude ".git" --exclude "node_modules" --exclude ".venv" . "$DEST"
-
-    echo "Done → $DEST"
-    exit 0
-fi
-
-echo "=== Setting up virtual environment ==="
-
-mkdir -p ~/venvs
-python3 -m venv ~/venvs/advikmathlib_env 2>/dev/null || true
-
-VENV=~/venvs/advikmathlib_env
-
-
-echo "=== Upgrading pip ==="
-$VENV/bin/pip install --upgrade pip
-
 
 echo "=== Installing packages ==="
-$VENV/bin/pip install \
-  sympy roastedbyai symengine mpmath gmpy2 cypari2 python-flint numpy scipy
+npm install
 
+echo ""
+echo "=== Setting up .env ==="
+cp -n .env.example .env 2>/dev/null || true
 
-echo "=== Installing system libraries (Linux) ==="
-sudo -n apt update >/dev/null 2>&1 || true
-sudo -n apt install -y \
-  liblinbox-dev libmpfr-dev libgmp-dev libntl-dev \
-  >/dev/null 2>&1 || true
+read -p "DISCORD_TOKEN: " DISCORD_TOKEN
+read -p "ANTHROPIC_API_KEY: " ANTHROPIC_API_KEY
+read -p "WOLFRAM_APPID: " WOLFRAM_APPID
+read -p "GROQ_API_KEY: " GROQ_API_KEY
 
+sed -i'' "s|DISCORD_TOKEN=.*|DISCORD_TOKEN=$DISCORD_TOKEN|" .env
+sed -i'' "s|ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY|" .env
+sed -i'' "s|WOLFRAM_APPID=.*|WOLFRAM_APPID=$WOLFRAM_APPID|" .env
+sed -i'' "s|GROQ_API_KEY=.*|GROQ_API_KEY=$GROQ_API_KEY|" .env
 
-echo "=== Setting up calculator ==="
+echo ""
+read -p "Run the bot now? (y/n): " RUN_BOT
 
-if ! command -v qalc >/dev/null 2>&1; then
-
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        brew install qalculate >/dev/null 2>&1 || true
-    else
-        sudo -n apt install -y qalc >/dev/null 2>&1 || true
-    fi
-
+if [[ "$RUN_BOT" == "y" || "$RUN_BOT" == "Y" ]]; then
+    npm start
+else
+    echo "Aight, Goodluck"
 fi
-
-
-echo "=== Setup complete ==="
-exit 0
