@@ -25,7 +25,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const mathMod = require('./math_commands');
 const yaml = require('js-yaml');
-const sqlite3 = require('sqlite3');
+const Database = require('better-sqlite3');
 const { OpenAI } = require('openai');
 
 // ══════════════════════════════════════════════════════════
@@ -253,29 +253,29 @@ function ai2InitDb() {
         if (!fs.existsSync(cfgDir)) fs.mkdirSync(cfgDir, { recursive: true });
     } catch {}
     try {
-        ai2Db = new sqlite3.Database(AI2_DB_PATH);
-        ai2Db.serialize(() => {
-            ai2Db.run('CREATE TABLE IF NOT EXISTS channels (id INTEGER PRIMARY KEY)');
-            ai2Db.run('CREATE TABLE IF NOT EXISTS ignored_users (id INTEGER PRIMARY KEY)');
-        });
+        ai2Db = new Database(AI2_DB_PATH);
+        ai2Db.exec('CREATE TABLE IF NOT EXISTS channels (id INTEGER PRIMARY KEY)');
+        ai2Db.exec('CREATE TABLE IF NOT EXISTS ignored_users (id INTEGER PRIMARY KEY)');
     } catch {
         ai2Db = null;
     }
 }
 function ai2DbAll(sql, params) {
-    return new Promise((resolve) => {
-        if (!ai2Db) return resolve([]);
-        ai2Db.all(sql, params || [], (err, rows) => {
-            if (err) return resolve([]);
-            resolve(rows || []);
-        });
-    });
+    try {
+        if (!ai2Db) return Promise.resolve([]);
+        return Promise.resolve(ai2Db.prepare(sql).all(params || []) || []);
+    } catch {
+        return Promise.resolve([]);
+    }
 }
 function ai2DbRun(sql, params) {
-    return new Promise((resolve) => {
-        if (!ai2Db) return resolve(false);
-        ai2Db.run(sql, params || [], (err) => resolve(!err));
-    });
+    try {
+        if (!ai2Db) return Promise.resolve(false);
+        ai2Db.prepare(sql).run(params || []);
+        return Promise.resolve(true);
+    } catch {
+        return Promise.resolve(false);
+    }
 }
 async function ai2LoadDbState() {
     if (!ai2Db) return;
@@ -790,7 +790,7 @@ for line in sys.stdin:
         _reply({'id': None, 'ok': False, 'error': str(ex)})
 `;
         const venvPy = process.env.PYTHON_BIN
-            || (process.env.HOME ? path.join(process.env.HOME, 'venvs', 'advikmathlib_env', 'bin', 'python') : null);
+            || path.join(__dirname, '.venv', 'bin', 'python');
         const pythonExe = (venvPy && fs.existsSync(venvPy)) ? venvPy : 'python3';
         this.proc = spawn(pythonExe, ['-u', '-c', workerCode], {
             stdio: ['pipe', 'pipe', 'pipe'],
@@ -911,7 +911,7 @@ async function superqalcTower(expression) {
 }
 
 const WOLFRAM_APPID = process.env.WOLFRAM_APPID || '';
-const QALCULATE_PATH = process.env.QALCULATE_PATH || '/opt/homebrew/bin/qalc';
+const QALCULATE_PATH = process.env.QALCULATE_PATH || path.join(__dirname, 'math_modules', 'qalc');
 
 async function qalcEval(expression) {
     return new Promise((resolve) => {
