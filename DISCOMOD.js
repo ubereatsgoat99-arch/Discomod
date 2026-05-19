@@ -33,7 +33,8 @@ const { OpenAI } = require('openai');
 // ══════════════════════════════════════════════════════════
 const TOKEN     = process.env.DISCORD_TOKEN || '';
 if (!TOKEN) throw new Error("Missing DISCORD_TOKEN in .env");
-const CLIENT_ID = '1391892478373789786';
+const CLIENT_ID = process.env.CLIENT_ID || '';
+if (!CLIENT_ID) throw new Error('Missing CLIENT_ID in .env');
 
 // Fallback channel / role IDs (overridden per-guild via /setup)
 const DEFAULT_TARGET_CHANNEL_ID   = '1417395956357267516';
@@ -72,6 +73,20 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
 const BOT_START_TS = Date.now();
+
+// ── Terminal command counters ─────────────────────────────────────────────────
+const CMD_STATS = { slash: 0, message: 0 };
+function logCmdStats(type, name) {
+    CMD_STATS[type]++;
+    const upSecs = Math.floor((Date.now() - BOT_START_TS) / 1000);
+    const h = Math.floor(upSecs / 3600);
+    const m = Math.floor((upSecs % 3600) / 60);
+    const s = upSecs % 60;
+    const upStr = `${h}h ${m}m ${s}s`;
+    const prefix = type === 'slash' ? '⚡ [SLASH]' : '💬 [MSG]';
+    console.log(`${prefix} ${name.padEnd(24)} | slash: ${CMD_STATS.slash}  msg: ${CMD_STATS.message}  uptime: ${upStr}`);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ══════════════════════════════════════════════════════════
 //  AI CHAT SYSTEM (ported from main.py)
@@ -965,6 +980,38 @@ function formatDuration(ms) {
     parts.push(`${secs}s`);
     return parts.join(' ');
 }
+
+// ── Flexible duration parser → returns minutes ──────────────────────────────
+// Supports: 30s / 30sec / 30secs / 30second / 30seconds
+//           10m / 10min / 10mins / 10minute / 10minutes (default unit)
+//           2h  / 2hr  / 2hrs  / 2hour  / 2hours
+//           1d  / 1day / 1days / 1week / 1w
+//           Plain integers are treated as minutes (backwards-compatible).
+// Returns null if unparseable.
+function parseDuration(str) {
+    if (str == null) return null;
+    const s = String(str).trim().toLowerCase();
+    const m = s.match(/^(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/);
+    if (!m) return null;
+    const val = parseFloat(m[1]);
+    if (!isFinite(val) || val <= 0) return null;
+    const unit = m[2] || 'm';
+    switch (unit) {
+        case 's': case 'sec': case 'secs': case 'second': case 'seconds':
+            return Math.max(1, Math.round(val / 60));
+        case 'm': case 'min': case 'mins': case 'minute': case 'minutes':
+            return Math.max(1, Math.round(val));
+        case 'h': case 'hr': case 'hrs': case 'hour': case 'hours':
+            return Math.max(1, Math.round(val * 60));
+        case 'd': case 'day': case 'days':
+            return Math.max(1, Math.round(val * 1440));
+        case 'w': case 'week': case 'weeks':
+            return Math.max(1, Math.round(val * 10080));
+        default:
+            return Math.max(1, Math.round(val));
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const _aiQueues = new Map();
 function getAiQueue(guildId) {
@@ -7863,7 +7910,7 @@ const slashCommands = [
         .setDescription('Exile a member')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addUserOption(o => o.setName('user').setDescription('Member to exile').setRequired(true))
-        .addIntegerOption(o => o.setName('duration').setDescription('Duration in minutes (default 45)').setRequired(false))
+        .addStringOption(o => o.setName('duration').setDescription('Duration: 30s, 10m, 2h, 1d, 1w — default 45m').setRequired(false))
         .addStringOption(o => o.setName('reason').setDescription('Reason for exile').setRequired(false)),
     new SlashCommandBuilder()
         .setName('unexile')
@@ -7975,6 +8022,21 @@ const slashCommands = [
         .setDescription('Set default exile duration in minutes (admin only)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addIntegerOption(o => o.setName('minutes').setDescription('Minutes (1-1440)').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('exileduration')
+        .setDescription('Manage the default exile duration')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s
+            .setName('set')
+            .setDescription('Set the default exile duration (supports 30s, 10m, 2h, 1d, 1w)')
+            .addStringOption(o => o
+                .setName('duration')
+                .setDescription('e.g. 45m, 2h, 1d, 30s — no limit enforced')
+                .setRequired(true)))
+        .addSubcommand(s => s
+            .setName('status')
+            .setDescription('Show the current default exile duration')),
 
     new SlashCommandBuilder()
         .setName('togglescam')
@@ -9103,6 +9165,7 @@ client.on('interactionCreate', async interaction => {
 
     // ── SLASH COMMANDS ─────────────────────────────────────
     if (!interaction.isChatInputCommand()) return;
+    logCmdStats('slash', interaction.commandName);
     const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
     const isMod   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
 
@@ -10400,7 +10463,8 @@ client.on('interactionCreate', async interaction => {
                 return;
             }
             const targetUser = interaction.options.getUser('user');
-            const duration   = interaction.options.getInteger('duration') || EXILE_DURATION_MINS;
+            const durationRaw = interaction.options.getString('duration');
+            const duration    = (durationRaw ? parseDuration(durationRaw) : null) ?? EXILE_DURATION_MINS;
             const reason     = interaction.options.getString('reason') || 'Admin action';
             const target     = await interaction.guild.members.fetch(targetUser.id).catch(()=>null);
             if (!target) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Member not found.' }); return; }
@@ -10860,6 +10924,71 @@ client.on('interactionCreate', async interaction => {
             gs.exileDurationMins = mins;
             saveData(data);
             await interaction.reply({ content: `✅ Default exile duration set to **${mins} minutes**.`, ephemeral: true });
+            break;
+        }
+
+        case 'exileduration': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const edSub = interaction.options.getSubcommand();
+
+            if (edSub === 'status') {
+                const cur = gs.exileDurationMins || EXILE_DURATION_MINS;
+                const d = Math.floor(cur / 1440), h = Math.floor((cur % 1440) / 60), m = cur % 60;
+                const parts = [];
+                if (d) parts.push(`${d}d`);
+                if (h) parts.push(`${h}h`);
+                if (m || !parts.length) parts.push(`${m}m`);
+                await interaction.reply({
+                    embeds: [new EmbedBuilder()
+                        .setTitle('⏱️ Default Exile Duration')
+                        .setColor(0x5865F2)
+                        .addFields(
+                            { name: 'Current default', value: `**${parts.join(' ')}** (${cur} minutes)`, inline: false },
+                        )
+                        .setFooter({ text: 'Change with /exileduration set <duration>' })
+                        .setTimestamp()],
+                    ephemeral: true,
+                });
+                break;
+            }
+
+            if (edSub === 'set') {
+                const raw = interaction.options.getString('duration') || '';
+                const parsed = parseDuration(raw);
+                if (!parsed || parsed < 1) {
+                    await interaction.reply({ content: '❌ Invalid duration. Examples: `30s`, `10m`, `2h`, `1d`, `1w`', ephemeral: true });
+                    return;
+                }
+                const prev = gs.exileDurationMins || EXILE_DURATION_MINS;
+                gs.exileDurationMins = parsed;
+                saveData(data);
+
+                // Human-readable breakdown of new duration
+                const dd = Math.floor(parsed / 1440), hh = Math.floor((parsed % 1440) / 60), mm = parsed % 60;
+                const parts = [];
+                if (dd) parts.push(`${dd}d`);
+                if (hh) parts.push(`${hh}h`);
+                if (mm || !parts.length) parts.push(`${mm}m`);
+                const label = parts.join(' ');
+
+                await interaction.reply({
+                    embeds: [new EmbedBuilder()
+                        .setTitle('⏱️ Default Exile Duration Updated')
+                        .setColor(0x00FF88)
+                        .addFields(
+                            { name: 'Previous', value: `${prev} minutes`, inline: true },
+                            { name: 'New default', value: `**${label}** (${parsed} minutes)`, inline: true },
+                        )
+                        .setFooter({ text: `Set by ${interaction.user.tag}` })
+                        .setTimestamp()],
+                    ephemeral: false,
+                });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Exile Duration Updated', [
+                    `exileDurationMins: **${prev}** → **${parsed}** (${label})`,
+                ]);
+                break;
+            }
+            await interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
             break;
         }
 
@@ -13213,6 +13342,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     if (!message.content.startsWith('!')) return;
     const args = message.content.slice(1).trim().split(/\s+/);
     const cmd  = args.shift().toLowerCase();
+    logCmdStats('message', '!' + cmd);
     const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
     const exileMins = Math.max(1, Math.min(1440, gs.exileDurationMins || EXILE_DURATION_MINS));
 
@@ -13428,9 +13558,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
         if (target.id === message.author.id) return message.channel.send('❌ You cannot exile yourself.');
         if (target.roles.highest.position >= message.member.roles.highest.position) return message.channel.send('❌ You cannot exile someone with equal or higher roles.');
-        const durArg = args.find((a, i) => i > 0 && /^\d+$/.test(a));
-        const duration = parseInt(durArg) || EXILE_DURATION_MINS;
-        const reason   = args.filter((a, i) => i > 0 && a !== durArg).join(' ') || 'Manual admin action';
+        const durArg   = args.slice(1).find(a => /^\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/.test(a.trim().toLowerCase()));
+        const duration = (durArg ? parseDuration(durArg) : null) ?? EXILE_DURATION_MINS;
+        const reason   = args.slice(1).filter(a => a !== durArg).join(' ') || 'Manual admin action';
         const fd = loadData();
         await performExile(target, message.guild, duration, reason, fd);
         saveData(fd);
