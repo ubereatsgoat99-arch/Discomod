@@ -82,3 +82,6 @@ Send me friend request to my discord: https://www.discord.com/users/142729941104
 If you use this project, please give credit to the original author, aka me, CyberNovaX (Xenostopic)
 Oh ya also: [Invite the Bot](https://discord.com/oauth2/authorize?client_id=1494250614123659294&permissions=8&integration_type=0&scope=bot+applications.commands) in case you wanna use the bot!
 
+## 📄 License 
+- License: AGPL v3
+- NOTICE file: see `/NOTICE`
