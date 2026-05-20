@@ -63,7 +63,7 @@ Originally made for MonkeyVerseYT's server, but extended the use for everyone an
 
 ## 🛠️ Installation
 
-This project has a bunch of hardcoded paths, so do the follwoing:
+This project has a bunch of paths, so do the follwoing:
 
 ```bash
 git clone https://github.com/xenostopic-cyber/Discomod
@@ -80,4 +80,5 @@ Send me friend request to my discord: https://www.discord.com/users/142729941104
 ## Credit
 
 If you use this project, please give credit to the original author, aka me, CyberNovaX (Xenostopic)
+Oh ya also: [Invite the Bot](https://discord.com/oauth2/authorize?client_id=1494250614123659294&permissions=8&integration_type=0&scope=bot+applications.commands) in case you wanna use the bot!
 
