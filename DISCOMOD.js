@@ -2589,6 +2589,11 @@ function getGuildSettings(guildId, data) {
             // ── Roast system ──────────────────────────────────────────
             roastProvider: 'roastedbyai',   // 'claude' | 'roastedbyai'
             roastContext:  true,     // include target's last 5 msgs as context
+
+            // ── Manager system ────────────────────────────────────────
+            // Roles/users granted full access to ALL bot commands (equal to Admin)
+            managerRoles: [],   // array of role IDs
+            managerUsers: [],   // array of user IDs
         };
     }
     const gs = data.guildSettings[guildId];
@@ -2627,6 +2632,8 @@ function getGuildSettings(guildId, data) {
     if (gs.policyPreset === undefined) gs.policyPreset = null;
     if (gs.roastProvider === undefined) gs.roastProvider = 'roastedbyai';
     if (gs.roastContext  === undefined) gs.roastContext  = true;
+    if (!Array.isArray(gs.managerRoles)) gs.managerRoles = [];
+    if (!Array.isArray(gs.managerUsers)) gs.managerUsers = [];
     return gs;
 }
 
@@ -2837,6 +2844,29 @@ function isCategoryImmune(member, guildId, data, category) {
     if (c.members.includes(member.id)) return true;
     for (const rid of c.roles) {
         if (member.roles?.cache?.has(rid)) return true;
+    }
+    return false;
+}
+
+// ══════════════════════════════════════════════════════════
+//  MANAGER SYSTEM — grants full bot access to specific roles/users
+// ══════════════════════════════════════════════════════════
+/**
+ * Returns true if the given GuildMember has been granted "Manager" status,
+ * meaning they have full access to every bot command regardless of Discord perms.
+ */
+function isManagerMember(member, guildId, data) {
+    if (!member) return false;
+    const gs = getGuildSettings(guildId, data);
+    const managerUsers = Array.isArray(gs.managerUsers) ? gs.managerUsers : [];
+    const managerRoles = Array.isArray(gs.managerRoles) ? gs.managerRoles : [];
+    // Check user ID
+    if (managerUsers.includes(member.id)) return true;
+    // Check any of the member's roles
+    if (member.roles && member.roles.cache) {
+        for (const roleId of managerRoles) {
+            if (member.roles.cache.has(roleId)) return true;
+        }
     }
     return false;
 }
@@ -8272,6 +8302,31 @@ const slashCommands = [
         .addSubcommand(s => s.setName('list')
             .setDescription('List all configured channel pools')),
 
+    // ── /manager — grant/revoke full bot access by role or user ─────────
+    new SlashCommandBuilder()
+        .setName('manager')
+        .setDescription('Grant or revoke full bot access to specific roles or users')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s
+            .setName('addrole')
+            .setDescription('Grant a role full access to every bot command')
+            .addRoleOption(o => o.setName('role').setDescription('Role to grant manager access').setRequired(true)))
+        .addSubcommand(s => s
+            .setName('removerole')
+            .setDescription('Revoke manager access from a role')
+            .addRoleOption(o => o.setName('role').setDescription('Role to remove manager access from').setRequired(true)))
+        .addSubcommand(s => s
+            .setName('adduser')
+            .setDescription('Grant a user full access to every bot command')
+            .addUserOption(o => o.setName('user').setDescription('User to grant manager access').setRequired(true)))
+        .addSubcommand(s => s
+            .setName('removeuser')
+            .setDescription('Revoke manager access from a user')
+            .addUserOption(o => o.setName('user').setDescription('User to remove manager access from').setRequired(true)))
+        .addSubcommand(s => s
+            .setName('list')
+            .setDescription('List all current manager roles and users')),
+
 ...mathMod.mathSlashCommandBuilders,
 ].map(c => c.toJSON());
 
@@ -8467,8 +8522,8 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cid.startsWith('appeal_accept_')) {
-            const isMod = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
-            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            const isMod = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
+            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const appealId = cid.replace('appeal_accept_', '');
             const appeal   = data.appeals[appealId];
@@ -8823,7 +8878,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cid === 'dash_toggle_checks' || cid === 'dash_toggle_ai' || cid === 'dash_toggle_mode' || cid.startsWith('dash_preset_')) {
-            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             if (cid === 'dash_toggle_checks') gs.checksEnabled = !gs.checksEnabled;
             if (cid === 'dash_toggle_ai') gs.aiEnabled = !gs.aiEnabled;
@@ -8872,8 +8927,8 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cid.startsWith('appeal_accept_')) {
-            const isMod = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
-            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            const isMod = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
+            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const appealId = cid.replace('appeal_accept_', '');
             const appeal   = data.appeals[appealId];
@@ -8946,7 +9001,7 @@ client.on('interactionCreate', async interaction => {
 
         // Remove a specific warn from violations (admin only, not your own)
         if (cid.startsWith('rmwarn_')) {
-            const isAdminCheck = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            const isAdminCheck = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
             if (!isAdminCheck) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const parts   = cid.split('_');
             const targetId = parts[2];
@@ -9026,8 +9081,8 @@ client.on('interactionCreate', async interaction => {
 
         // Warn appeal — accept
         if (cid.startsWith('warn_appeal_accept_')) {
-            const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
-            const isModBtn   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
+            const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+            const isModBtn   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
             if (!isAdminBtn && !isModBtn) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const appealId = cid.replace('warn_appeal_accept_', '');
             const fd4 = loadData();
@@ -9066,8 +9121,8 @@ client.on('interactionCreate', async interaction => {
 
         // Warn appeal — reject
         if (cid.startsWith('warn_appeal_reject_')) {
-            const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
-            const isModBtn   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
+            const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+            const isModBtn   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
             if (!isAdminBtn && !isModBtn) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const appealId = cid.replace('warn_appeal_reject_', '');
             const fd5 = loadData();
@@ -9166,8 +9221,8 @@ client.on('interactionCreate', async interaction => {
     // ── SLASH COMMANDS ─────────────────────────────────────
     if (!interaction.isChatInputCommand()) return;
     logCmdStats('slash', interaction.commandName);
-    const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
-    const isMod   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages);
+    const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+    const isMod   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
 
     async function handleCategoryImmunity(category) {
         if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
@@ -11653,6 +11708,104 @@ client.on('interactionCreate', async interaction => {
                 )], ephemeral: true });
             break;
         }
+
+        // ── /manager ──────────────────────────────────────────────────────────
+        // Grants/revokes full bot access (equal to Administrator) for roles/users
+        case 'manager': {
+            // Only true Admins (by Discord perm) can manage the manager list itself
+            const isRealAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
+            if (!isRealAdmin) {
+                await interaction.reply({ content: '❌ Only server Administrators can modify the manager list.', ephemeral: true });
+                return;
+            }
+            const sub = interaction.options.getSubcommand();
+            gs.managerRoles = Array.isArray(gs.managerRoles) ? gs.managerRoles : [];
+            gs.managerUsers = Array.isArray(gs.managerUsers) ? gs.managerUsers : [];
+
+            if (sub === 'addrole') {
+                const role = interaction.options.getRole('role');
+                if (!role) { await interaction.reply({ content: '❌ Role not found.', ephemeral: true }); return; }
+                if (gs.managerRoles.includes(role.id)) {
+                    await interaction.reply({ content: `⚠️ <@&${role.id}> already has manager access.`, ephemeral: true }); return;
+                }
+                gs.managerRoles.push(role.id);
+                saveData(data);
+                await interaction.reply({ embeds: [new EmbedBuilder()
+                    .setTitle('🔑 Manager Role Added')
+                    .setColor(0x00FF88)
+                    .setDescription(`<@&${role.id}> now has **full access** to every bot command.`)
+                    .setTimestamp()
+                ], ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager Role Added', [`<@&${role.id}> granted full bot access`]);
+            }
+            else if (sub === 'removerole') {
+                const role = interaction.options.getRole('role');
+                if (!role) { await interaction.reply({ content: '❌ Role not found.', ephemeral: true }); return; }
+                if (!gs.managerRoles.includes(role.id)) {
+                    await interaction.reply({ content: `⚠️ <@&${role.id}> does not have manager access.`, ephemeral: true }); return;
+                }
+                gs.managerRoles = gs.managerRoles.filter(id => id !== role.id);
+                saveData(data);
+                await interaction.reply({ embeds: [new EmbedBuilder()
+                    .setTitle('🔑 Manager Role Removed')
+                    .setColor(0xFF4444)
+                    .setDescription(`<@&${role.id}> no longer has manager access.`)
+                    .setTimestamp()
+                ], ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager Role Removed', [`<@&${role.id}> manager access revoked`]);
+            }
+            else if (sub === 'adduser') {
+                const user = interaction.options.getUser('user');
+                if (!user) { await interaction.reply({ content: '❌ User not found.', ephemeral: true }); return; }
+                if (gs.managerUsers.includes(user.id)) {
+                    await interaction.reply({ content: `⚠️ <@${user.id}> already has manager access.`, ephemeral: true }); return;
+                }
+                gs.managerUsers.push(user.id);
+                saveData(data);
+                await interaction.reply({ embeds: [new EmbedBuilder()
+                    .setTitle('🔑 Manager User Added')
+                    .setColor(0x00FF88)
+                    .setDescription(`<@${user.id}> now has **full access** to every bot command.`)
+                    .setTimestamp()
+                ], ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager User Added', [`<@${user.id}> granted full bot access`]);
+            }
+            else if (sub === 'removeuser') {
+                const user = interaction.options.getUser('user');
+                if (!user) { await interaction.reply({ content: '❌ User not found.', ephemeral: true }); return; }
+                if (!gs.managerUsers.includes(user.id)) {
+                    await interaction.reply({ content: `⚠️ <@${user.id}> does not have manager access.`, ephemeral: true }); return;
+                }
+                gs.managerUsers = gs.managerUsers.filter(id => id !== user.id);
+                saveData(data);
+                await interaction.reply({ embeds: [new EmbedBuilder()
+                    .setTitle('🔑 Manager User Removed')
+                    .setColor(0xFF4444)
+                    .setDescription(`<@${user.id}> no longer has manager access.`)
+                    .setTimestamp()
+                ], ephemeral: true });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager User Removed', [`<@${user.id}> manager access revoked`]);
+            }
+            else if (sub === 'list') {
+                const roleLines   = gs.managerRoles.length
+                    ? gs.managerRoles.map(id => { const r = interaction.guild.roles.cache.get(id); return r ? `<@&${id}>` : `Unknown role (${id})`; }).join('\n')
+                    : '*None*';
+                const userLines   = gs.managerUsers.length
+                    ? gs.managerUsers.map(id => `<@${id}>`).join('\n')
+                    : '*None*';
+                await interaction.reply({ embeds: [new EmbedBuilder()
+                    .setTitle('🔑 Bot Managers')
+                    .setColor(0x5865F2)
+                    .setDescription('These roles and users have **full access** to every bot command, equivalent to server Administrator.')
+                    .addFields(
+                        { name: '👥 Manager Roles', value: roleLines, inline: false },
+                        { name: '👤 Manager Users', value: userLines, inline: false },
+                    )
+                    .setTimestamp()
+                ], ephemeral: true });
+            }
+            break;
+        }
     }
 });
 
@@ -11943,8 +12096,8 @@ client.on('messageCreate', async message => {
     const data  = loadData();
     const guildId = message.guild.id;
     const gs    = getGuildSettings(guildId, data);
-    const isAdmin = message.member?.permissions.has(PermissionFlagsBits.Administrator);
-    const isMod   = message.member?.permissions.has(PermissionFlagsBits.ManageMessages);
+    const isAdmin = message.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(message.member, guildId, data);
+    const isMod   = message.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(message.member, guildId, data);
     const isStaff = isAdmin || isMod;
     const immune  = message.member ? isMemberImmune(message.member, guildId, data) : false;
     const immCfg  = getImmunitySettings(guildId, data);
