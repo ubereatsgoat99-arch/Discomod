@@ -2871,6 +2871,42 @@ function isManagerMember(member, guildId, data) {
     return false;
 }
 
+/**
+ * Checks whether `actor` is allowed to take action on `target`.
+ * Returns null if allowed, or an error message string if blocked.
+ *
+ * Rules:
+ *  - Can never target yourself
+ *  - Can never target someone whose highest role is >= your own highest role
+ *    (same role position = same tier, still blocked)
+ */
+function checkHierarchy(actorMember, targetMember) {
+    if (!actorMember || !targetMember) return null; // can't check, let it through
+    if (targetMember.id === actorMember.id) {
+        return '❌ You cannot do that to yourself.';
+    }
+    const actorPos  = actorMember.roles?.highest?.position ?? 0;
+    const targetPos = targetMember.roles?.highest?.position ?? 0;
+    if (targetPos >= actorPos) {
+        return '❌ You cannot do that to someone with an equal or higher role than you.';
+    }
+    return null;
+}
+
+/**
+ * Like checkHierarchy but for a Role object (not a member).
+ * Used in /manager addrole / removerole to prevent managing roles
+ * that are at or above the actor's own highest role.
+ */
+function checkRoleHierarchy(actorMember, role) {
+    if (!actorMember || !role) return null;
+    const actorPos = actorMember.roles?.highest?.position ?? 0;
+    if (role.position >= actorPos) {
+        return '❌ You cannot manage a role that is equal to or higher than your own highest role.';
+    }
+    return null;
+}
+
 function getImmunitySettings(guildId, data) {
     data.immunity = data.immunity || {};
     if (!data.immunity[guildId]) {
@@ -10523,8 +10559,8 @@ client.on('interactionCreate', async interaction => {
             const reason     = interaction.options.getString('reason') || 'Admin action';
             const target     = await interaction.guild.members.fetch(targetUser.id).catch(()=>null);
             if (!target) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Member not found.' }); return; }
-            if (target.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot exile yourself.' }); return; }
-            if (target.roles.highest.position >= interaction.member.roles.highest.position) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot exile someone with equal or higher roles.' }); return; }
+            const exileHierErr = checkHierarchy(interaction.member, target);
+            if (exileHierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: exileHierErr }); return; }
             await interaction.deferReply();
             await performExile(target, interaction.guild, duration, reason, data);
             saveData(data);
@@ -10610,6 +10646,12 @@ client.on('interactionCreate', async interaction => {
         case 'clearviolations': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const user = interaction.options.getUser('user');
+            // Hierarchy guard
+            const cvTargetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
+            if (cvTargetMember) {
+                const hierErr = checkHierarchy(interaction.member, cvTargetMember);
+                if (hierErr) { await interaction.reply({ content: hierErr, ephemeral: true }); return; }
+            }
             clearViolationEntry(data, user.id);
             saveData(data);
             await interaction.reply({ content: `✅ Cleared violations for <@${user.id}>.`, ephemeral: true });
@@ -10799,6 +10841,13 @@ client.on('interactionCreate', async interaction => {
                 return;
             }
 
+            // Hierarchy guard — fetch the target member first (pre-defer, cheap)
+            const warnTargetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
+            if (warnTargetMember) {
+                const hierErr = checkHierarchy(interaction.member, warnTargetMember);
+                if (hierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: hierErr }); return; }
+            }
+
             // Defer BEFORE any async work — keeps the interaction token alive
             await interaction.deferReply();
 
@@ -10877,6 +10926,12 @@ client.on('interactionCreate', async interaction => {
         case 'unwarn': {
             if (!isMod && !isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Mods only.' }); return; }
             const user = interaction.options.getUser('user');
+            // Hierarchy guard
+            const unwarnTargetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
+            if (unwarnTargetMember) {
+                const hierErr = checkHierarchy(interaction.member, unwarnTargetMember);
+                if (hierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: hierErr }); return; }
+            }
             await interaction.deferReply();
             const reason = interaction.options.getString('reason') || 'Manual unwarn';
             const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
@@ -11725,6 +11780,9 @@ client.on('interactionCreate', async interaction => {
             if (sub === 'addrole') {
                 const role = interaction.options.getRole('role');
                 if (!role) { await interaction.reply({ content: '❌ Role not found.', ephemeral: true }); return; }
+                // Hierarchy: can't add your own role or anything equal/higher
+                const roleHierErr = checkRoleHierarchy(interaction.member, role);
+                if (roleHierErr) { await interaction.reply({ content: roleHierErr, ephemeral: true }); return; }
                 if (gs.managerRoles.includes(role.id)) {
                     await interaction.reply({ content: `⚠️ <@&${role.id}> already has manager access.`, ephemeral: true }); return;
                 }
@@ -11734,6 +11792,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🔑 Manager Role Added')
                     .setColor(0x00FF88)
                     .setDescription(`<@&${role.id}> now has **full access** to every bot command.`)
+                    .setFooter({ text: `Added by ${interaction.user.tag}` })
                     .setTimestamp()
                 ], ephemeral: true });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager Role Added', [`<@&${role.id}> granted full bot access`]);
@@ -11741,6 +11800,9 @@ client.on('interactionCreate', async interaction => {
             else if (sub === 'removerole') {
                 const role = interaction.options.getRole('role');
                 if (!role) { await interaction.reply({ content: '❌ Role not found.', ephemeral: true }); return; }
+                // Hierarchy: can't remove a role equal/higher than yours
+                const roleHierErr = checkRoleHierarchy(interaction.member, role);
+                if (roleHierErr) { await interaction.reply({ content: roleHierErr, ephemeral: true }); return; }
                 if (!gs.managerRoles.includes(role.id)) {
                     await interaction.reply({ content: `⚠️ <@&${role.id}> does not have manager access.`, ephemeral: true }); return;
                 }
@@ -11750,6 +11812,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🔑 Manager Role Removed')
                     .setColor(0xFF4444)
                     .setDescription(`<@&${role.id}> no longer has manager access.`)
+                    .setFooter({ text: `Removed by ${interaction.user.tag}` })
                     .setTimestamp()
                 ], ephemeral: true });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager Role Removed', [`<@&${role.id}> manager access revoked`]);
@@ -11757,6 +11820,15 @@ client.on('interactionCreate', async interaction => {
             else if (sub === 'adduser') {
                 const user = interaction.options.getUser('user');
                 if (!user) { await interaction.reply({ content: '❌ User not found.', ephemeral: true }); return; }
+                // Hierarchy: can't add yourself or someone equal/higher
+                const targetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
+                const hierErr = checkHierarchy(interaction.member, targetMember || { id: user.id, roles: { highest: { position: 0 } } });
+                if (hierErr) { await interaction.reply({ content: hierErr, ephemeral: true }); return; }
+                // Extra check: if member is in guild, verify role position
+                if (targetMember) {
+                    const roleHierErr = checkHierarchy(interaction.member, targetMember);
+                    if (roleHierErr) { await interaction.reply({ content: roleHierErr, ephemeral: true }); return; }
+                }
                 if (gs.managerUsers.includes(user.id)) {
                     await interaction.reply({ content: `⚠️ <@${user.id}> already has manager access.`, ephemeral: true }); return;
                 }
@@ -11766,6 +11838,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🔑 Manager User Added')
                     .setColor(0x00FF88)
                     .setDescription(`<@${user.id}> now has **full access** to every bot command.`)
+                    .setFooter({ text: `Added by ${interaction.user.tag}` })
                     .setTimestamp()
                 ], ephemeral: true });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager User Added', [`<@${user.id}> granted full bot access`]);
@@ -11773,6 +11846,14 @@ client.on('interactionCreate', async interaction => {
             else if (sub === 'removeuser') {
                 const user = interaction.options.getUser('user');
                 if (!user) { await interaction.reply({ content: '❌ User not found.', ephemeral: true }); return; }
+                // Hierarchy: can't remove yourself or someone equal/higher
+                const targetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
+                if (targetMember) {
+                    const hierErr = checkHierarchy(interaction.member, targetMember);
+                    if (hierErr) { await interaction.reply({ content: hierErr, ephemeral: true }); return; }
+                } else if (user.id === interaction.user.id) {
+                    await interaction.reply({ content: '❌ You cannot remove yourself from the manager list.', ephemeral: true }); return;
+                }
                 if (!gs.managerUsers.includes(user.id)) {
                     await interaction.reply({ content: `⚠️ <@${user.id}> does not have manager access.`, ephemeral: true }); return;
                 }
@@ -11782,24 +11863,31 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🔑 Manager User Removed')
                     .setColor(0xFF4444)
                     .setDescription(`<@${user.id}> no longer has manager access.`)
+                    .setFooter({ text: `Removed by ${interaction.user.tag}` })
                     .setTimestamp()
                 ], ephemeral: true });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager User Removed', [`<@${user.id}> manager access revoked`]);
             }
             else if (sub === 'list') {
-                const roleLines   = gs.managerRoles.length
-                    ? gs.managerRoles.map(id => { const r = interaction.guild.roles.cache.get(id); return r ? `<@&${id}>` : `Unknown role (${id})`; }).join('\n')
-                    : '*None*';
-                const userLines   = gs.managerUsers.length
+                const roleLines = gs.managerRoles.length
+                    ? gs.managerRoles.map(id => {
+                        const r = interaction.guild.roles.cache.get(id);
+                        return r ? `<@&${id}> — position ${r.position}` : `Unknown role (\`${id}\`)`;
+                    }).join('\n')
+                    : '*None configured*';
+                const userLines = gs.managerUsers.length
                     ? gs.managerUsers.map(id => `<@${id}>`).join('\n')
-                    : '*None*';
+                    : '*None configured*';
                 await interaction.reply({ embeds: [new EmbedBuilder()
                     .setTitle('🔑 Bot Managers')
                     .setColor(0x5865F2)
-                    .setDescription('These roles and users have **full access** to every bot command, equivalent to server Administrator.')
+                    .setDescription(
+                        'These roles and users have **full access** to every bot command, equivalent to server Administrator.\n' +
+                        '> ⚠️ You cannot add/remove yourself, your own role, or anyone with equal or higher roles.'
+                    )
                     .addFields(
-                        { name: '👥 Manager Roles', value: roleLines, inline: false },
-                        { name: '👤 Manager Users', value: userLines, inline: false },
+                        { name: `👥 Manager Roles (${gs.managerRoles.length})`, value: roleLines, inline: false },
+                        { name: `👤 Manager Users (${gs.managerUsers.length})`, value: userLines, inline: false },
                     )
                     .setTimestamp()
                 ], ephemeral: true });
