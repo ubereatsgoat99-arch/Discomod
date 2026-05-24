@@ -65,6 +65,27 @@ fi
 echo ""
 echo "=== .env configured successfully ==="
 
+echo ""
+echo "=== Installing upgrade command ==="
+
+echo "You may be prompted for your sudo password..."
+
+# Make update_env.zsh executable
+chmod +x update_env.zsh
+
+# Copy to /usr/local/bin as 'upgrade'
+sudo cp update_env.zsh /usr/local/bin/upgrade
+
+echo "Upgrade command installed! You can now run 'upgrade' from anywhere."
+
+echo ""
+
+# Run upgrade immediately
+echo "=== Running upgrade ==="
+upgrade
+
+echo ""
+
 read -p "Run the bot now? (y/n): " RUN_BOT
 
 if [[ "$RUN_BOT" == "y" || "$RUN_BOT" == "Y" ]]; then
