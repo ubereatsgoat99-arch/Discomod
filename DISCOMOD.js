@@ -18,6 +18,7 @@ const {
     ModalBuilder, TextInputBuilder, TextInputStyle,
     ChannelType, Collection, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
     MessageFlags,
+    Partials,
 } = require('discord.js');
 const fs   = require('fs');
 const os   = require('os');
@@ -691,8 +692,30 @@ class PyWorker {
     start() {
         if (this.proc) return;
         const workerCode = `
-import sys, json
+import sys, os, json
 sys.set_int_max_str_digits(0)
+
+# ── Isolated mpmath 1.4.1 from _vendor_mpmath/mpmath14 ───────────────────────
+# Sympy requires mpmath<1.4 so it stays on 1.3.0 in the venv.
+# We load 1.4.1 from the vendor directory into MPMATH so the rest of the bot
+# (gaypy / mpmath_eval) always gets the newer version.
+_VENDOR_MPMATH_DIR = os.path.join(r'${__dirname}', '_vendor_mpmath')
+if os.path.isdir(_VENDOR_MPMATH_DIR) and _VENDOR_MPMATH_DIR not in sys.path:
+    sys.path.insert(0, _VENDOR_MPMATH_DIR)
+try:
+    import mpmath14 as mpmath          # 1.4.1 — folder renamed from mpmath → mpmath14
+    MPMATH_OK  = True
+    MPMATH_VER = getattr(mpmath, '__version__', '?')
+except Exception:
+    try:
+        import mpmath                  # fallback: whatever is in the venv
+        MPMATH_OK  = True
+        MPMATH_VER = getattr(mpmath, '__version__', '?')
+    except Exception:
+        MPMATH_OK  = False
+        MPMATH_VER = 'unavailable'
+        mpmath     = None
+# ─────────────────────────────────────────────────────────────────────────────
 
 try:
     import sympy
@@ -723,7 +746,23 @@ for line in sys.stdin:
         params=req.get('params') or {}
 
         if method=='ping':
-            _reply({'id': rid, 'ok': True, 'result': {'sympy': SYMPY_OK, 'roast': ROAST_OK}})
+            _reply({'id': rid, 'ok': True, 'result': {'sympy': SYMPY_OK, 'roast': ROAST_OK, 'mpmath': MPMATH_OK, 'mpmath_ver': MPMATH_VER}})
+            continue
+
+        if method=='mpmath_eval':
+            if not MPMATH_OK or mpmath is None:
+                _reply({'id': rid, 'ok': False, 'error': 'mpmath not available in python env'})
+                continue
+            expr = str(params.get('expression', ''))
+            prec = max(1, int(params.get('precision', 50)))  # unlimited — mpmath supports arbitrary precision
+            try:
+                mp = mpmath.mp.clone()
+                mp.dps = prec
+                ns  = {'mpmath': mpmath, 'mp': mp, '__builtins__': {}}
+                r   = eval(expr, ns)
+                _reply({'id': rid, 'ok': True, 'result': str(r), 'mpmath_ver': MPMATH_VER})
+            except Exception as ex:
+                _reply({'id': rid, 'ok': True, 'result': f"mpmath Error: {ex}", 'mpmath_ver': MPMATH_VER})
             continue
 
         if method=='sympy_eval':
@@ -744,6 +783,8 @@ for line in sys.stdin:
             code=str(params.get('code',''))
             buf=io.StringIO()
             globs={'__builtins__': __builtins__}
+            if MPMATH_OK and mpmath is not None:
+                globs['mpmath'] = mpmath   # 1.4.1 from _vendor_mpmath
             locs={}
             def _print(*args, **kwargs):
                 sep=kwargs.get('sep',' ')
@@ -1092,6 +1133,12 @@ const MESSAGE_COMMANDS_LIST = [
     { name: '!linkaction', desc: 'Set action for scam/link detections (admin).'},
     { name: '!verifygate', desc: 'Enable/disable & config verify gate (admin).'},
     { name: '!timeoutconfig', desc: 'Enable/disable & set timeout minutes (admin).'},
+    // ── Math & Calculation ──────────────────────────────────────────────────
+    { name: '!calc', desc: 'Calc CLI expression evaluator (multi-line: keep sending; type Evaluate to run).' },
+    { name: '!wolf', desc: 'Online math / science query (multi-line supported).' },
+    { name: '!supercalc', desc: 'Run superqalc_onefile expression engine (multi-line supported).' },
+    { name: '!supertower', desc: 'Run superqalc_tower expression engine (multi-line supported).' },
+    { name: '!gaypy', desc: 'Execute Python code — mpmath 1.4.1 pre-imported as `mpmath`, sympy available (multi-line supported).' },
 ];
 
 const SLASH_COMMANDS_LIST = [
@@ -1118,6 +1165,13 @@ const SLASH_COMMANDS_LIST = [
     { name: '/linkaction', desc: 'Set action for scam/link detections (admin).'},
     { name: '/verifygate', desc: 'Enable/disable & config verify gate (admin).'},
     { name: '/timeoutconfig', desc: 'Enable/disable & set timeout minutes (admin).'},
+    // ── Math & Calculation ──────────────────────────────────────────────────
+    { name: '/calc', desc: 'Calc CLI expression evaluator (multi-line: keep sending; type Evaluate to run).' },
+    { name: '/wolf', desc: 'Online math / science query (multi-line supported).' },
+    { name: '/supercalc', desc: 'Run superqalc_onefile expression engine (multi-line supported).' },
+    { name: '/supertower', desc: 'Run superqalc_tower expression engine (multi-line supported).' },
+    { name: '/gaypy', desc: 'Execute Python code — mpmath 1.4.1 pre-imported as `mpmath`, sympy available (multi-line supported).' },
+    { name: '/mpmath', desc: 'Evaluate an mpmath 1.4.1 expression with arbitrary precision (unlimited dps). e.g. mpmath.sqrt(2) with precision=100.' },
 ];
 
 function getCategoryPolicy(gs, category) {
@@ -1962,6 +2016,10 @@ const client = new Client({
         GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers,
         GatewayIntentBits.DirectMessages,
     ],
+    // BUG FIX: Partials are required for the bot to receive DMs and DM-based
+    // button interactions (appeal buttons sent to exiled users).
+    // Without these, Discord silently drops DM events.
+    partials: [Partials.Channel, Partials.Message],
 });
 
 function detectTrialsOrTrialsRecruitment(cleanText) {
@@ -3272,6 +3330,7 @@ client.on('guildMemberAdd', async member => {
                 if (gs.appealsChannelId && ch.id === gs.appealsChannelId) continue;
                 try {
                     await ch.permissionOverwrites.edit(member.guild.id, { SendMessages: false }, { reason });
+                    await grantAdminRolesSendMessages(ch, member.guild, gs);
                 } catch {}
             }
         }
@@ -7028,17 +7087,19 @@ async function issueViolation(message, data, gs, opts) {
 // spamTracker: userId -> { msgs: [{content, timestamp}], violations: number }
 const spamTracker = new Map();
 
-function recordSpamMsg(userId, content) {
+function recordSpamMsg(userId, content, guildId) {
     const now = Date.now();
-    if (!spamTracker.has(userId)) spamTracker.set(userId, { msgs: [], violations: 0 });
-    const s = spamTracker.get(userId);
+    // BUG FIX: key by guildId:userId so tracking doesn't bleed across servers
+    const key = `${guildId || 'global'}:${userId}`;
+    if (!spamTracker.has(key)) spamTracker.set(key, { msgs: [], violations: 0 });
+    const s = spamTracker.get(key);
     s.msgs.push({ content, timestamp: now });
     s.msgs = s.msgs.filter(m => now - m.timestamp < SPAM_WINDOW_MS);
     return s;
 }
 
-function checkSpam(userId, content, gs) {
-    const s = recordSpamMsg(userId, content);
+function checkSpam(userId, content, gs, guildId) {
+    const s = recordSpamMsg(userId, content, guildId);
     if (s.msgs.length >= SPAM_MSG_LIMIT) return { spam: true, reason: 'message flood' };
     const dupes = s.msgs.filter(m => m.content === content).length;
     if (dupes >= SPAM_DUPE_LIMIT) return { spam: true, reason: 'duplicate messages' };
@@ -7056,7 +7117,10 @@ function checkSpam(userId, content, gs) {
     return { spam: false };
 }
 
-function clearSpamHistory(userId) { spamTracker.delete(userId); }
+function clearSpamHistory(userId, guildId) {
+    const key = `${guildId || 'global'}:${userId}`;
+    spamTracker.delete(key);
+}
 
 // ══════════════════════════════════════════════════════════
 //  ANTI-RAID / JOIN SPIKE DETECTION
@@ -7390,6 +7454,68 @@ setInterval(() => {
     }
 }, 300000);
 
+/**
+ * After locking a channel for @everyone, explicitly grant SendMessages: true
+ * to every admin/manager role so staff can still talk in the locked channel.
+ * Roles with the Administrator flag bypass overrides natively, but manager
+ * roles (set via !managerroles) may not have that flag — they need an explicit
+ * allow override.
+ */
+async function grantAdminRolesSendMessages(channel, guild, gs) {
+    const managerRoles = Array.isArray(gs.managerRoles) ? gs.managerRoles : [];
+    const reason = 'SKYNET V7: Lock — preserving admin access';
+    const grantedRoleIds = new Set();
+
+    // 1. Grant explicit SendMessages: true to every configured manager role
+    for (const roleId of managerRoles) {
+        const role = guild.roles.cache.get(roleId);
+        if (!role) continue;
+        try {
+            await channel.permissionOverwrites.edit(role, { SendMessages: true }, { reason });
+            grantedRoleIds.add(roleId);
+        } catch {}
+    }
+
+    // 2. Also grant any role that has the Administrator permission flag
+    //    (so even roles not in managerRoles but with server-level admin are covered)
+    for (const [, role] of guild.roles.cache) {
+        if (grantedRoleIds.has(role.id)) continue;
+        if (role.permissions.has(PermissionFlagsBits.Administrator)) {
+            try {
+                await channel.permissionOverwrites.edit(role, { SendMessages: true }, { reason });
+            } catch {}
+        }
+    }
+}
+
+/**
+ * Reverts the per-role SendMessages: true overrides added by grantAdminRolesSendMessages
+ * when a channel is unlocked, so the roles go back to inheriting from the category.
+ */
+async function revokeAdminRolesSendMessages(channel, guild, gs) {
+    const managerRoles = Array.isArray(gs.managerRoles) ? gs.managerRoles : [];
+    const reason = 'SKYNET V7: Unlock — removing per-role send overrides';
+    const processedRoleIds = new Set();
+
+    for (const roleId of managerRoles) {
+        const role = guild.roles.cache.get(roleId);
+        if (!role) continue;
+        try {
+            await channel.permissionOverwrites.edit(role, { SendMessages: null }, { reason });
+            processedRoleIds.add(roleId);
+        } catch {}
+    }
+
+    for (const [, role] of guild.roles.cache) {
+        if (processedRoleIds.has(role.id)) continue;
+        if (role.permissions.has(PermissionFlagsBits.Administrator)) {
+            try {
+                await channel.permissionOverwrites.edit(role, { SendMessages: null }, { reason });
+            } catch {}
+        }
+    }
+}
+
 async function unlockGuildTextChannels(guild, gs) {
     const reason = 'SKYNET V7: Raid lockdown manual unlock';
     for (const [, ch] of guild.channels.cache) {
@@ -7397,6 +7523,7 @@ async function unlockGuildTextChannels(guild, gs) {
         if (gs.logChannelId && ch.id === gs.logChannelId) continue;
         if (gs.appealsChannelId && ch.id === gs.appealsChannelId) continue;
         try {
+            await revokeAdminRolesSendMessages(ch, guild, gs);
             await ch.permissionOverwrites.edit(guild.id, { SendMessages: null }, { reason });
         } catch {}
     }
@@ -7764,6 +7891,11 @@ const slashCommands = [
         .setName('gaypy')
         .setDescription('Evaluate using damn code (multi-line: send more, then Evaluate)')
         .addStringOption(o => o.setName('expression').setDescription("Expression, or type 'Evaluate' to run accumulated input").setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('mpmath')
+        .setDescription('Evaluate an mpmath 1.4.1 expression (isolated from sympy) with arbitrary precision')
+        .addStringOption(o => o.setName('expression').setDescription('Python expression — mpmath and mp are in scope. e.g. mpmath.sqrt(2)').setRequired(true))
+        .addIntegerOption(o => o.setName('precision').setDescription('Decimal places of precision (default 50, unlimited)').setRequired(false).setMinValue(1)),
 
     new SlashCommandBuilder()
         .setName('diagnose')
@@ -8061,14 +8193,14 @@ const slashCommands = [
 
     new SlashCommandBuilder()
         .setName('lock')
-        .setDescription('Lock the current channel (deny SendMessages for @everyone)')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageChannels)
+        .setDescription('Lock the current channel — ONLY admins can send messages after locking')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)),
 
     new SlashCommandBuilder()
         .setName('unlock')
-        .setDescription('Unlock the current channel (allow SendMessages for @everyone)')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageChannels)
+        .setDescription('Unlock the current channel (restore @everyone SendMessages)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)),
 
     new SlashCommandBuilder()
@@ -8373,7 +8505,25 @@ let _didReady = false;
 async function onClientReady() {
     if (_didReady) return;
     _didReady = true;
-    console.log(`🚨 SKYNET V7 ONLINE: ${client.user.tag}`);
+    console.log(`🚨 SKYNET V7 ONLINE: ${client.user.username}`);
+
+    // ── Run environment upgrade script on every startup ────────────────────
+    try {
+        const upgradeProc = spawn('/usr/local/bin/upgrade', [], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            detached: false,
+        });
+        upgradeProc.stdout.on('data', d => process.stdout.write(`[upgrade] ${d}`));
+        upgradeProc.stderr.on('data', d => process.stderr.write(`[upgrade] ${d}`));
+        upgradeProc.on('close', code => {
+            if (code === 0) console.log('✅ [upgrade] Environment upgrade completed successfully.');
+            else console.error(`⚠️ [upgrade] Upgrade script exited with code ${code}.`);
+        });
+        upgradeProc.on('error', err => console.error(`⚠️ [upgrade] Failed to spawn upgrade script: ${err.message}`));
+    } catch (e) {
+        console.error(`⚠️ [upgrade] Could not start upgrade script: ${e.message}`);
+    }
+    // ───────────────────────────────────────────────────────────────────────
     try {
         const rest = new REST({ version: '10' }).setToken(TOKEN);
         const seen = new Set();
@@ -8395,18 +8545,20 @@ async function onClientReady() {
 
     // Auto-unexile loop
     setInterval(async () => {
+        // BUG FIX: load data once for the whole tick; delete from the same object
+        // and save once at the end instead of loadData() per-member + loadData() again.
         const data = loadData();
         const now  = Date.now()/1000;
-        const done = [];
+        let dirty = false;
         for (const [uid, info] of Object.entries(data.exiles)) {
             if (now >= info.expiry) {
                 for (const guild of client.guilds.cache.values()) {
                     let member = guild.members.cache.get(uid) || await guild.members.fetch(uid).catch(()=>null);
                     if (member) {
-                        const fd = loadData();
-                        if (await performUnexile(member, guild, fd)) {
-                            done.push(uid);
-                            await sendLog(guild, fd, new EmbedBuilder()
+                        if (await performUnexile(member, guild, data)) {
+                            delete data.exiles[uid];
+                            dirty = true;
+                            await sendLog(guild, data, new EmbedBuilder()
                                 .setTitle('🔓 Exile Expired')
                                 .setDescription(`<@${uid}> (${uid}) has been automatically unexiled.`)
                                 .setColor(0x00FF88)
@@ -8417,11 +8569,7 @@ async function onClientReady() {
                 }
             }
         }
-        if (done.length) {
-            const fd = loadData();
-            for (const uid of done) delete fd.exiles[uid];
-            saveData(fd);
-        }
+        if (dirty) saveData(data);
     }, 30000);
 }
 
@@ -8569,14 +8717,15 @@ client.on('interactionCreate', async interaction => {
 
             appeal.status    = 'accepted';
             appeal.handledBy = interaction.user.id;
-            saveData(data);
-
+            // BUG FIX: perform unexile on same `data` object — eliminates double-save race.
             const member = await interaction.guild.members.fetch(appeal.userId).catch(()=>null);
             if (member) {
-                const fd = loadData();
-                await performUnexile(member, interaction.guild, fd);
-                delete fd.exiles[appeal.userId];
-                saveData(fd);
+                await performUnexile(member, interaction.guild, data);
+                delete data.exiles[appeal.userId];
+            }
+            saveData(data);
+
+            if (member) {
                 member.send({
                     embeds: [new EmbedBuilder()
                         .setTitle('✅ Appeal Accepted')
@@ -8974,14 +9123,15 @@ client.on('interactionCreate', async interaction => {
 
             appeal.status    = 'accepted';
             appeal.handledBy = interaction.user.id;
-            saveData(data);
-
+            // BUG FIX: perform unexile on same `data` object — eliminates double-save race.
             const member = await interaction.guild.members.fetch(appeal.userId).catch(()=>null);
             if (member) {
-                const fd = loadData();
-                await performUnexile(member, interaction.guild, fd);
-                delete fd.exiles[appeal.userId];
-                saveData(fd);
+                await performUnexile(member, interaction.guild, data);
+                delete data.exiles[appeal.userId];
+            }
+            saveData(data);
+
+            if (member) {
                 member.send({
                     embeds: [new EmbedBuilder()
                         .setTitle('✅ Appeal Accepted')
@@ -9799,6 +9949,24 @@ client.on('interactionCreate', async interaction => {
             await safeReply(interaction, { content: '🧮 Multi-line SymPy mode started. Send more lines or type `Evaluate`.', ephemeral: false });
             break;
         }
+        case 'mpmath': {
+            await safeDefer(interaction, { ephemeral: false });
+            const expr  = interaction.options.getString('expression') || '';
+            const prec  = interaction.options.getInteger('precision') ?? 50;
+            let res, ver;
+            try {
+                const r = await pyWorker.request('mpmath_eval', { expression: expr, precision: prec });
+                // pyWorker returns plain string result; mpmath_ver is in the raw reply but
+                // request() resolves to result field only — extract version from a ping if needed
+                res = typeof r === 'object' ? (r.result ?? String(r)) : String(r);
+                ver = typeof r === 'object' ? r.mpmath_ver : null;
+            } catch (e) {
+                res = `mpmath Error: ${String(e?.message || e)}`;
+            }
+            const label = ver ? `mpmath ${ver}` : 'mpmath';
+            await sendLongToInteraction(interaction, `**[${label} | dps=${prec}]**\n${res}`);
+            break;
+        }
         case 'policymode': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             gs.enforcementMode = mode;
@@ -10573,7 +10741,7 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Reason', value: reason,                            inline: false },
                     { name: 'Duration', value: `${duration} minutes`,           inline: true },
                 ).setTimestamp());
-            await interaction.editReply({ content: `🔨 Exiled **${target.user.tag}** for **${duration}m**. Reason: ${reason}` });
+            await interaction.editReply({ content: `🔨 Exiled **${target.user.username}** for **${duration}m**. Reason: ${reason}` });
             break;
         }
 
@@ -10596,7 +10764,7 @@ client.on('interactionCreate', async interaction => {
                     { name: 'User', value: `<@${userId}>`, inline: true },
                     { name: 'By',   value: `<@${interaction.user.id}>`, inline: true },
                 ).setTimestamp());
-            await interaction.editReply({ content: `✅ Unexiled **${member.user.tag}**.` });
+            await interaction.editReply({ content: `✅ Unexiled **${member.user.username}**.` });
             break;
         }
 
@@ -10985,12 +11153,14 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'lock': {
-            if (!interaction.member?.permissions.has(PermissionFlagsBits.ManageChannels) && !isAdmin) { await interaction.reply({ content: '❌ Missing permission: Manage Channels.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ This command is restricted to admins only.', ephemeral: true }); return; }
             const reason = interaction.options.getString('reason') || 'Channel locked';
             const ch = interaction.channel;
             try {
                 await ch.permissionOverwrites.edit(interaction.guild.id, { SendMessages: false }, { reason });
-                await interaction.reply({ content: `🔒 Locked <#${ch.id}>.`, ephemeral: false });
+                const gs = getGuildSettings(interaction.guildId, loadData());
+                await grantAdminRolesSendMessages(ch, interaction.guild, gs);
+                await interaction.reply({ content: `🔒 Locked <#${ch.id}>. Only admins can send messages.`, ephemeral: false });
             } catch(e) {
                 await interaction.reply({ content: `❌ Lock failed: ${e.message}`, ephemeral: true });
             }
@@ -10998,10 +11168,11 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'unlock': {
-            if (!interaction.member?.permissions.has(PermissionFlagsBits.ManageChannels) && !isAdmin) { await interaction.reply({ content: '❌ Missing permission: Manage Channels.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ This command is restricted to admins only.', ephemeral: true }); return; }
             const reason = interaction.options.getString('reason') || 'Channel unlocked';
             const ch = interaction.channel;
             try {
+                await revokeAdminRolesSendMessages(ch, interaction.guild, getGuildSettings(interaction.guildId, loadData()));
                 await ch.permissionOverwrites.edit(interaction.guild.id, { SendMessages: null }, { reason });
                 await interaction.reply({ content: `🔓 Unlocked <#${ch.id}>.`, ephemeral: false });
             } catch(e) {
@@ -11089,7 +11260,7 @@ client.on('interactionCreate', async interaction => {
                             { name: 'Previous', value: `${prev} minutes`, inline: true },
                             { name: 'New default', value: `**${label}** (${parsed} minutes)`, inline: true },
                         )
-                        .setFooter({ text: `Set by ${interaction.user.tag}` })
+                        .setFooter({ text: `Set by ${interaction.user.username}` })
                         .setTimestamp()],
                     ephemeral: false,
                 });
@@ -11792,7 +11963,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🔑 Manager Role Added')
                     .setColor(0x00FF88)
                     .setDescription(`<@&${role.id}> now has **full access** to every bot command.`)
-                    .setFooter({ text: `Added by ${interaction.user.tag}` })
+                    .setFooter({ text: `Added by ${interaction.user.username}` })
                     .setTimestamp()
                 ], ephemeral: true });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager Role Added', [`<@&${role.id}> granted full bot access`]);
@@ -11812,7 +11983,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🔑 Manager Role Removed')
                     .setColor(0xFF4444)
                     .setDescription(`<@&${role.id}> no longer has manager access.`)
-                    .setFooter({ text: `Removed by ${interaction.user.tag}` })
+                    .setFooter({ text: `Removed by ${interaction.user.username}` })
                     .setTimestamp()
                 ], ephemeral: true });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager Role Removed', [`<@&${role.id}> manager access revoked`]);
@@ -11838,7 +12009,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🔑 Manager User Added')
                     .setColor(0x00FF88)
                     .setDescription(`<@${user.id}> now has **full access** to every bot command.`)
-                    .setFooter({ text: `Added by ${interaction.user.tag}` })
+                    .setFooter({ text: `Added by ${interaction.user.username}` })
                     .setTimestamp()
                 ], ephemeral: true });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager User Added', [`<@${user.id}> granted full bot access`]);
@@ -11863,7 +12034,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🔑 Manager User Removed')
                     .setColor(0xFF4444)
                     .setDescription(`<@${user.id}> no longer has manager access.`)
-                    .setFooter({ text: `Removed by ${interaction.user.tag}` })
+                    .setFooter({ text: `Removed by ${interaction.user.username}` })
                     .setTimestamp()
                 ], ephemeral: true });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager User Removed', [`<@${user.id}> manager access revoked`]);
@@ -12847,9 +13018,9 @@ client.on('messageCreate', async message => {
     // fewer than 4 alphanumeric chars so the guard would return early and the
     // spam tracker would never record them, making the threshold unreachable.
     if (gs.spamWarnEnabled !== false && !isCategoryImmune(message.member, guildId, data, 'spam')) {
-        const spamResult = checkSpam(message.author.id, message.content, gs);
+        const spamResult = checkSpam(message.author.id, message.content, gs, guildId);
         if (spamResult.spam) {
-            clearSpamHistory(message.author.id);
+            clearSpamHistory(message.author.id, guildId);
             await handlePolicyViolation(message, data, gs, 'spam', {
                 title: '⚠️ Spam Detected',
                 color: 0xFF8800,
@@ -13056,7 +13227,7 @@ async function handleSpamViolation(message, reason, data, gs) {
         footerLabel: 'Spam',
         ttlMs: 10000,
     });
-    if (res?.exiled) clearSpamHistory(message.author.id);
+    if (res?.exiled) clearSpamHistory(message.author.id, guildId);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -13538,7 +13709,7 @@ async function performExile(userOrMember, guild, minutes, reason, data) {
         .setTitle('⛓️ Member Exiled')
         .setColor(0xFF2222)
         .setThumbnail(member.user.displayAvatarURL())
-        .setDescription(`**${member.user.tag}** has landed in exile.`)
+        .setDescription(`**${member.user.username}** has landed in exile.`)
         .addFields(
             { name: 'User',     value: `<@${member.id}> (${member.id})`, inline: true },
             { name: 'Reason',   value: reason,                            inline: true },
@@ -13723,6 +13894,14 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             `${pfx}togglegc - Toggle if the bot should be active in group chats\n` +
             `${pfx}ignore [user] - Stop a user from using the bot\n` +
             `${pfx}prompt [prompt / clear] - View, set or clear the prompt for the AI\n` +
+            "\nMath & Calculation:\n" +
+            `!calc [expr] — Calc CLI evaluator (multi-line; type Evaluate to run)\n` +
+            `/calc [expr] — Same via slash command\n` +
+            `!wolf [query] — Online math/science query (multi-line supported)\n` +
+            `!supercalc [expr] — superqalc_onefile engine (multi-line supported)\n` +
+            `!supertower [expr] — superqalc_tower engine (multi-line supported)\n` +
+            `!gaypy [code] — Python exec; mpmath 1.4.1 pre-loaded as \`mpmath\`, sympy available\n` +
+            `                e.g.  mpmath.mp.dps=100; print(mpmath.sqrt(2))\n` +
             "```";
         await message.channel.send(helpText);
         return;
@@ -14441,15 +14620,16 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !lock [#channel|id] [reason...]
     else if (cmd === 'lock' && (isAdmin || isMod)) {
+        if (!isAdmin)
+            return message.channel.send('❌ `/lock` is restricted to admins only.');
         const chArg = args[0] ? await resolveChannel(args[0]) : null;
         const targetCh = chArg || message.channel;
         const reasonStart = chArg ? 1 : 0;
         const reason = args.slice(reasonStart).join(' ') || 'Channel locked';
-        if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels) && !isAdmin)
-            return message.channel.send('❌ You need **Manage Channels** permission.');
         try {
             await targetCh.permissionOverwrites.edit(message.guild.id, { SendMessages: false }, { reason });
-            await message.channel.send(`🔒 <#${targetCh.id}> locked. Reason: ${reason}`);
+            await grantAdminRolesSendMessages(targetCh, message.guild, gs);
+            await message.channel.send(`🔒 <#${targetCh.id}> locked. Only admins can send messages. Reason: ${reason}`);
         } catch (e) {
             await message.channel.send(`❌ Lock failed: ${e.message}`);
         }
@@ -14457,13 +14637,14 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !unlock [#channel|id] [reason...]
     else if (cmd === 'unlock' && (isAdmin || isMod)) {
+        if (!isAdmin)
+            return message.channel.send('❌ `/unlock` is restricted to admins only.');
         const chArg = args[0] ? await resolveChannel(args[0]) : null;
         const targetCh = chArg || message.channel;
         const reasonStart = chArg ? 1 : 0;
         const reason = args.slice(reasonStart).join(' ') || 'Channel unlocked';
-        if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels) && !isAdmin)
-            return message.channel.send('❌ You need **Manage Channels** permission.');
         try {
+            await revokeAdminRolesSendMessages(targetCh, message.guild, gs);
             await targetCh.permissionOverwrites.edit(message.guild.id, { SendMessages: null }, { reason });
             await message.channel.send(`🔓 <#${targetCh.id}> unlocked. Reason: ${reason}`);
         } catch (e) {
