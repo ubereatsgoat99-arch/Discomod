@@ -64,10 +64,10 @@ pip check || warn "Pre-existing conflicts detected"
 # ── 4. Snapshot before ────────────────────────────────────────────────────────
 pip list > /tmp/pip_before.txt
 
-# ── 5. Upgrade pip ────────────────────────────────────────────────────────────
-info "Upgrading pip..."
-pip install --upgrade pip -q
-success "pip $(pip --version | cut -d' ' -f2)"
+# ── 5. Upgrade pip & Ensure Prereqs ───────────────────────────────────────────
+info "Upgrading pip and ensuring verification tools..."
+pip install --upgrade pip packaging -q
+success "pip $(pip --version | cut -d' ' -f2) and packaging library ready"
 
 # ── 6. Upgrade ALL packages (with dynamic mpmath adjustment) ──────────────────
 info "Upgrading all packages to latest..."
