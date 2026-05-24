@@ -69,19 +69,24 @@ info "Upgrading pip..."
 pip install --upgrade pip -q
 success "pip $(pip --version | cut -d' ' -f2)"
 
-# ── 6. Upgrade ALL packages (excluding mpmath to protect sympy) ───────────────
+# ── 6. Upgrade ALL packages (with dynamic mpmath adjustment) ──────────────────
 info "Upgrading all packages to latest..."
 
-# FIXED: Added grep filter to exclude mpmath so it doesn't trigger dependency conflicts with sympy
+# Exclude mpmath from the bulk upgrade list to prevent dependency resolver crashes
 OUTDATED=$(python -c "import json, sys; print('\n'.join([p['name'] for p in json.load(sys.stdin)]))" 2>/dev/null <<< "$(pip list --outdated --format=json)" | grep -vE "^mpmath$")
 
 if [[ -z "$OUTDATED" ]]; then
-    success "Nothing to upgrade"
+    success "Nothing to upgrade in bulk"
 else
     echo "$OUTDATED" | xargs pip install -U -q
     print -P "%F{green}   Upgraded:%f"
     echo "$OUTDATED" | sed 's/^/     - /'
 fi
+
+# Dynamically force-install the absolute highest version of mpmath that sympy allows
+info "Ensuring optimal mpmath version for sympy in main environment..."
+pip install "mpmath>=1.1.0,<1.4" -q
+success "Installed maximum supported main mpmath: $(pip show mpmath | grep Version | cut -d' ' -f2)"
 
 # ── 7. Snapshot after + diff ──────────────────────────────────────────────────
 info "Changes:"
@@ -122,13 +127,13 @@ import sympy
 print(f"   sympy    {sympy.__version__} ✅")
 
 import mpmath
-print(f"   mpmath   {mpmath.__version__} (venv, latest) ✅")
+print(f"   mpmath   {mpmath.__version__} (venv, sympy-supported) ✅")
 
 vendor = os.environ["VENDOR_DIR"]
 sys.path.insert(0, vendor)
 
 import mpmath14
-print(f"   mpmath14 {mpmath14.__version__} (vendor copy) ✅")
+print(f"   mpmath14 {mpmath14.__version__} (vendor copy, latest) ✅")
 
 # ensure sympy still works
 import sympy as s
