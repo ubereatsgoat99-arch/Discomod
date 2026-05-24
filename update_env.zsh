@@ -69,31 +69,33 @@ info "Upgrading pip and ensuring verification tools..."
 pip install --upgrade pip packaging -q
 success "pip $(pip --version | cut -d' ' -f2) and packaging library ready"
 
-# ── 6. Upgrade ALL packages (with dynamic mpmath adjustment) ──────────────────
-info "Upgrading all packages to latest..."
+# ── 6. Upgrade ALL packages (SAFE MODE) ───────────────────────────────────────
+info "Upgrading all packages to latest (dependency-safe)..."
 
-# Exclude mpmath from the bulk upgrade list to prevent dependency resolver crashes
 OUTDATED=$(python -c "import json, sys; print('\n'.join([p['name'] for p in json.load(sys.stdin)]))" 2>/dev/null <<< "$(pip list --outdated --format=json)" | grep -vE "^mpmath$")
 
 if [[ -z "$OUTDATED" ]]; then
     success "Nothing to upgrade in bulk"
 else
-    echo "$OUTDATED" | xargs pip install -U -q
+    print -l $OUTDATED | xargs pip install -U --upgrade-strategy only-if-needed -q
     print -P "%F{green}   Upgraded:%f"
-    echo "$OUTDATED" | sed 's/^/     - /'
+    print -l $OUTDATED | sed 's/^/     - /'
 fi
 
-# Dynamically force-install the absolute highest version of mpmath that sympy allows
+# ── 6b. Ensure correct pydantic pairing (extra safety) ─────────────────────────
+pip install -q "pydantic>=2.0" "pydantic-core<3"
+
+# ── 7. mpmath handling ────────────────────────────────────────────────────────
 info "Ensuring optimal mpmath version for sympy in main environment..."
 pip install "mpmath>=1.1.0,<1.4" -q
 success "Installed maximum supported main mpmath: $(pip show mpmath | grep Version | cut -d' ' -f2)"
 
-# ── 7. Snapshot after + diff ──────────────────────────────────────────────────
+# ── 8. Snapshot after + diff ──────────────────────────────────────────────────
 info "Changes:"
 pip list > /tmp/pip_after.txt
 diff /tmp/pip_before.txt /tmp/pip_after.txt || true
 
-# ── 8. Post-check ─────────────────────────────────────────────────────────────
+# ── 9. Post-check ─────────────────────────────────────────────────────────────
 info "Verifying environment..."
 if ! pip check; then
     warn "Conflicts detected — rolling back"
@@ -103,7 +105,7 @@ else
     success "Environment is consistent"
 fi
 
-# ── 9. Vendor latest mpmath (independent copy) ────────────────────────────────
+# ── 10. Vendor latest mpmath (independent copy) ───────────────────────────────
 if [[ "$SCRIPT_DIR" == "/usr/local/bin" || "$SCRIPT_DIR" == "/bin" || "$SCRIPT_DIR" == "/usr/bin" ]]; then
     VENDOR_DIR="$PWD/_vendor_mpmath"
 else
@@ -116,7 +118,7 @@ pip install mpmath --target="$VENDOR_DIR" --no-deps -q
 mv "$VENDOR_DIR/mpmath" "$VENDOR_DIR/mpmath14"
 success "Vendored mpmath → mpmath14"
 
-# ── 10. Sanity check ──────────────────────────────────────────────────────────
+# ── 11. Sanity check ──────────────────────────────────────────────────────────
 info "Sanity check..."
 
 VENDOR_DIR="$VENDOR_DIR" python - <<'PYEOF'
@@ -135,14 +137,13 @@ sys.path.insert(0, vendor)
 import mpmath14
 print(f"   mpmath14 {mpmath14.__version__} (vendor copy, latest) ✅")
 
-# ensure sympy still works
 import sympy as s
 assert s.sqrt(2)
 print("   sympy functional ✅")
 PYEOF
 
-# ── 11. Cleanup ───────────────────────────────────────────────────────────────
+# ── 12. Cleanup ───────────────────────────────────────────────────────────────
 rm -f "$LOCKFILE"
 SUCCESS=1
 
-print -P "\n%F{green}%B✅ All done — fully upgraded + dual mpmath ready.%b%f"
+print -P "\n%F{green}%B✅ All done — fully upgraded + dependency-safe.%b%f"
