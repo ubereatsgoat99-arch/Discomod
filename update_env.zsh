@@ -72,7 +72,8 @@ success "pip $(pip --version | cut -d' ' -f2)"
 # ── 6. Upgrade ALL packages (including sympy + mpmath) ────────────────────────
 info "Upgrading all packages to latest..."
 
-OUTDATED=$(pip list --outdated --format=freeze | cut -d= -f1 || true)
+# Fixed: Using python to parse pip's JSON output cleanly instead of format=freeze
+OUTDATED=$(python -c "import json, sys; print('\n'.join([p['name'] for p in json.load(sys.stdin)]))" 2>/dev/null <<< "$(pip list --outdated --format=json)")
 
 if [[ -z "$OUTDATED" ]]; then
     success "Nothing to upgrade"
@@ -98,9 +99,14 @@ else
 fi
 
 # ── 9. Vendor latest mpmath (independent copy) ────────────────────────────────
-VENDOR_DIR="$SCRIPT_DIR/_vendor_mpmath"
+# Fixed: If script lives in system bin, look at current working directory instead
+if [[ "$SCRIPT_DIR" == "/usr/local/bin" || "$SCRIPT_DIR" == "/bin" || "$SCRIPT_DIR" == "/usr/bin" ]]; then
+    VENDOR_DIR="$PWD/_vendor_mpmath"
+else
+    VENDOR_DIR="$SCRIPT_DIR/_vendor_mpmath"
+fi
 
-info "Vendoring latest mpmath..."
+info "Vendoring latest mpmath to $VENDOR_DIR..."
 rm -rf "$VENDOR_DIR"
 pip install mpmath --target="$VENDOR_DIR" --no-deps -q
 mv "$VENDOR_DIR/mpmath" "$VENDOR_DIR/mpmath14"
