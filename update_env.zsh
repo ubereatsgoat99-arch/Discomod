@@ -69,11 +69,11 @@ info "Upgrading pip..."
 pip install --upgrade pip -q
 success "pip $(pip --version | cut -d' ' -f2)"
 
-# ── 6. Upgrade ALL packages (including sympy + mpmath) ────────────────────────
+# ── 6. Upgrade ALL packages (excluding mpmath to protect sympy) ───────────────
 info "Upgrading all packages to latest..."
 
-# Fixed: Using python to parse pip's JSON output cleanly instead of format=freeze
-OUTDATED=$(python -c "import json, sys; print('\n'.join([p['name'] for p in json.load(sys.stdin)]))" 2>/dev/null <<< "$(pip list --outdated --format=json)")
+# FIXED: Added grep filter to exclude mpmath so it doesn't trigger dependency conflicts with sympy
+OUTDATED=$(python -c "import json, sys; print('\n'.join([p['name'] for p in json.load(sys.stdin)]))" 2>/dev/null <<< "$(pip list --outdated --format=json)" | grep -vE "^mpmath$")
 
 if [[ -z "$OUTDATED" ]]; then
     success "Nothing to upgrade"
@@ -99,7 +99,6 @@ else
 fi
 
 # ── 9. Vendor latest mpmath (independent copy) ────────────────────────────────
-# Fixed: If script lives in system bin, look at current working directory instead
 if [[ "$SCRIPT_DIR" == "/usr/local/bin" || "$SCRIPT_DIR" == "/bin" || "$SCRIPT_DIR" == "/usr/bin" ]]; then
     VENDOR_DIR="$PWD/_vendor_mpmath"
 else
