@@ -50,8 +50,12 @@ Originally made for MonkeyVerseYT's server, but extended the use for everyone an
 
 ## 📦 Requirements
 
-- Node.js v18+
+- Node.js 
 - Discord bot token
+- API Keys as mentioned in the .env file
+- Ofc having python installed
+- All the files inside here (do not trim out any, shit will break)
+- Your damn brain
 - Discord application with intents enabled:
   - Guilds
   - GuildMessages
@@ -73,6 +77,7 @@ chmod +x setup.sh
 ```
 
 Fill out your shit which it asks you to do, and go mad!
+Occasionally also upgrade your system pip in case stuff breaks and if it's serious jst ask AI to set up your stuff 🥀
 
 Have a lovely moderation bot hosting, dm me at my discord user: 1427299411049840640 for bugs that you found, and with that have a lovely day!
 Send me friend request to my discord: https://www.discord.com/users/1427299411049840640 for discussing, constructive feedback is very much welcomed!
