@@ -843,7 +843,7 @@ for line in sys.stdin:
 
         _reply({'id': rid, 'ok': False, 'error': 'unknown method'})
     except Exception as ex:
-        _reply({'id': None, 'ok': False, 'error': str(ex)})
+        _reply({'id': locals().get('rid', None), 'ok': False, 'error': str(ex)})
 `;
         const venvPy = process.env.PYTHON_BIN
             || path.join(__dirname, '.venv', 'bin', 'python');
@@ -1776,7 +1776,7 @@ function extractDomains(text) {
         if (MEDIA_FILE_EXTENSIONS.has(tld)) continue;
         // Skip if this bare match is just a partial sub-string of a URL domain already captured
         // e.g. "cdn.discordapp" is already covered by "cdn.discordapp.com"
-        const isPartialOfUrlDomain = [...urlDomains].some(ud => ud === b || ud.endsWith('.' + b) || ud.startsWith(b + '.'));
+        const isPartialOfUrlDomain = [...urlDomains].some(ud => ud === b || ud.endsWith('.' + b));
         if (isPartialOfUrlDomain) continue;
         domains.push(b);
     }
@@ -2198,6 +2198,7 @@ function makeDefaultData() {
     return {
         violations: {}, exiles: {}, immunity: {},
         guildSettings: {}, appeals: {}, spamTracker: {},
+        bans: {}, timeouts: {}, hardBans: {},
         logMessages: [],
         guildStats: {},
         cases: {},
@@ -3258,7 +3259,7 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
         }
 
         const { contentClean } = prepareText(message.content, message);
-        const scam = gs.scamEnabled ? detectScamOrExploit(contentClean, message.content) : { hit: false };
+        const scam = gs.scamEnabled ? detectScamByMode(gs, contentClean, message.content) : { hit: false };
         if (scam?.hit) {
             try { await message.delete(); } catch {}
             incStat(message.guild.id, data, 'scam', 1);
@@ -8495,7 +8496,60 @@ const slashCommands = [
             .setName('list')
             .setDescription('List all current manager roles and users')),
 
-...mathMod.mathSlashCommandBuilders,
+...(mathMod.mathSlashCommandBuilders || []),
+
+    // ── /timeout ── /untimeout ── /kick ── /ban ── /unban ── /hardban ── /softban ──
+    new SlashCommandBuilder()
+        .setName('timeout')
+        .setDescription('Timeout a member (default: 45 min). Supports repeating chunks for durations > 28 days.')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
+        .addUserOption(o => o.setName('user').setDescription('Member to timeout').setRequired(true))
+        .addStringOption(o => o.setName('duration').setDescription('Duration e.g. 30m, 2h, 7d, 1w (default: 45m)').setRequired(false))
+        .addStringOption(o => o.setName('reason').setDescription('Reason for timeout').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('untimeout')
+        .setDescription('Remove an active timeout from a member')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
+        .addUserOption(o => o.setName('user').setDescription('Member to un-timeout').setRequired(true))
+        .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('kick')
+        .setDescription('Kick a member from the server (no appeal)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.KickMembers)
+        .addUserOption(o => o.setName('user').setDescription('Member to kick').setRequired(true))
+        .addStringOption(o => o.setName('reason').setDescription('Reason for kick').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('ban')
+        .setDescription('Ban a member (appealable after 14 days; optional duration)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
+        .addUserOption(o => o.setName('user').setDescription('Member to ban').setRequired(true))
+        .addStringOption(o => o.setName('duration').setDescription('Optional ban duration e.g. 30d, 1w (leave blank = permanent until unban)').setRequired(false))
+        .addStringOption(o => o.setName('reason').setDescription('Reason for ban').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('unban')
+        .setDescription('Unban a user by ID')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
+        .addStringOption(o => o.setName('user').setDescription('User ID or @mention to unban').setRequired(true))
+        .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('hardban')
+        .setDescription('Permanently ban a member — no appeal ever')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
+        .addUserOption(o => o.setName('user').setDescription('Member to permanently ban').setRequired(true))
+        .addStringOption(o => o.setName('reason').setDescription('Reason for hardban').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('softban')
+        .setDescription('Softban: ban then immediately unban (purges recent messages, no lasting ban)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
+        .addUserOption(o => o.setName('user').setDescription('Member to softban').setRequired(true))
+        .addStringOption(o => o.setName('reason').setDescription('Reason for softban').setRequired(false)),
+
 ].map(c => c.toJSON());
 
 // ══════════════════════════════════════════════════════════
@@ -8571,6 +8625,42 @@ async function onClientReady() {
         }
         if (dirty) saveData(data);
     }, 30000);
+
+    // ── Restore in-progress long-timeout schedulers on restart ────────────────
+    try {
+        const startupData = loadData();
+        if (startupData.timeouts) {
+            for (const [gId, byUser] of Object.entries(startupData.timeouts)) {
+                for (const [uId, tInfo] of Object.entries(byUser || {})) {
+                    if (tInfo && tInfo.endsAt > Date.now()) {
+                        scheduleLongTimeout(client, gId, uId, startupData);
+                    }
+                }
+            }
+        }
+    } catch (e) { console.error('[startup] long-timeout restore error:', e); }
+
+    // ── Auto-unban timed bans loop (checks every 60s) ─────────────────────────
+    setInterval(async () => {
+        const banData = loadData();
+        let dirty2 = false;
+        if (banData.bans) {
+            for (const [gId, byUser] of Object.entries(banData.bans)) {
+                for (const [uId, bInfo] of Object.entries(byUser || {})) {
+                    if (bInfo && bInfo.duration && (bInfo.bannedAt + bInfo.duration) <= Date.now()) {
+                        try {
+                            const g = await client.guilds.fetch(gId).catch(() => null);
+                            if (g) await g.bans.remove(uId, 'Temporary ban expired').catch(() => {});
+                        } catch {}
+                        delete banData.bans[gId][uId];
+                        dirty2 = true;
+                    }
+                }
+            }
+        }
+        if (dirty2) saveData(banData);
+    }, 60000);
+
 }
 
 client.once('clientReady', onClientReady);
@@ -8604,6 +8694,28 @@ client.on('interactionCreate', async interaction => {
         // Modal submit also fires in DM: warn_appeal_modal_<guildId>_<warnId>
         if (customId.startsWith('warn_appeal_modal_')) {
             const rest = customId.slice('warn_appeal_modal_'.length);
+            const candidate = rest.split('_')[0];
+            if (/^\d{15,20}$/.test(candidate)) derivedGuildId = candidate;
+        }
+        // Timeout appeal — fires in DM: open_timeout_appeal_<guildId>_<timeoutId>
+        if (customId.startsWith('open_timeout_appeal_')) {
+            const rest = customId.slice('open_timeout_appeal_'.length);
+            const candidate = rest.split('_')[0];
+            if (/^\d{15,20}$/.test(candidate)) derivedGuildId = candidate;
+        }
+        if (customId.startsWith('timeout_appeal_modal_')) {
+            const rest = customId.slice('timeout_appeal_modal_'.length);
+            const candidate = rest.split('_')[0];
+            if (/^\d{15,20}$/.test(candidate)) derivedGuildId = candidate;
+        }
+        // Ban appeal — fires in DM: open_ban_appeal_<guildId>_<banId>
+        if (customId.startsWith('open_ban_appeal_')) {
+            const rest = customId.slice('open_ban_appeal_'.length);
+            const candidate = rest.split('_')[0];
+            if (/^\d{15,20}$/.test(candidate)) derivedGuildId = candidate;
+        }
+        if (customId.startsWith('ban_appeal_modal_')) {
+            const rest = customId.slice('ban_appeal_modal_'.length);
             const candidate = rest.split('_')[0];
             if (/^\d{15,20}$/.test(candidate)) derivedGuildId = candidate;
         }
@@ -9404,7 +9516,334 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // ── SLASH COMMANDS ─────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  TIMEOUT APPEAL — buttons + modal
+    // ══════════════════════════════════════════════════════════
+
+    // Step 1: User clicks "Appeal this Timeout" button (fires in DM) → show modal
+    if (interaction.isButton() && interaction.customId.startsWith('open_timeout_appeal_')) {
+        const rest    = interaction.customId.slice('open_timeout_appeal_'.length);
+        const sepIdx  = rest.indexOf('_');
+        const tGuildId  = rest.slice(0, sepIdx);
+        const timeoutId = rest.slice(sepIdx + 1);
+        const tfd = loadData();
+        if (hasAppealedTimeout(timeoutId, tfd)) {
+            try { await interaction.reply({ content: '❌ You have already submitted an appeal for this timeout. Only one appeal is allowed.', ephemeral: true }); } catch {}
+            return;
+        }
+        const modal = new ModalBuilder()
+            .setCustomId(`timeout_appeal_modal_${tGuildId}_${timeoutId}`)
+            .setTitle('📩 Appeal Your Timeout');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('appeal_reason')
+                    .setLabel('Why should your timeout be removed?')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setMinLength(20)
+                    .setMaxLength(1000)
+                    .setRequired(true)
+                    .setPlaceholder('Explain why you believe this timeout was unfair. Be respectful and honest.')
+            )
+        );
+        try { await interaction.showModal(modal); } catch {
+            await interaction.reply({ content: '❌ Failed to open the appeal form. Try again.', ephemeral: true }).catch(() => {});
+        }
+        return;
+    }
+
+    // Step 2: User submits the timeout appeal modal
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('timeout_appeal_modal_')) {
+        try { await interaction.deferReply({ ephemeral: true }); } catch {}
+        const rest      = interaction.customId.slice('timeout_appeal_modal_'.length);
+        const sepIdx    = rest.indexOf('_');
+        const tGuildId  = rest.slice(0, sepIdx);
+        const timeoutId = rest.slice(sepIdx + 1);
+        const reason    = interaction.fields.getTextInputValue('appeal_reason');
+        const tfd2 = loadData();
+        if (hasAppealedTimeout(timeoutId, tfd2)) {
+            try { await interaction.editReply({ content: '❌ You have already submitted a timeout appeal. Only one appeal is allowed.' }); } catch {}
+            return;
+        }
+        const tInfo = tfd2.timeouts?.[tGuildId]?.[interaction.user.id];
+        const appealId = `toappeal_${Date.now()}_${interaction.user.id}`;
+        tfd2.appeals = tfd2.appeals || {};
+        tfd2.appeals[appealId] = {
+            type: 'timeout', timeoutId,
+            userId: interaction.user.id, guildId: tGuildId,
+            reason,
+            timeoutReason: tInfo?.reason || 'Unknown',
+            issuedBy: tInfo?.issuedBy || null,
+            timestamp: Date.now(), createdAt: Date.now(),
+            status: 'pending', handledBy: null,
+        };
+        saveData(tfd2);
+        const tGS = getGuildSettings(tGuildId, tfd2);
+        const appealsChId = tGS.appealsChannelId || tGS.logChannelId;
+        if (!appealsChId) {
+            try { await interaction.editReply({ content: '❌ No appeals channel is configured in this server. Contact an admin.' }); } catch {}
+            return;
+        }
+        try {
+            const tGuild = await client.guilds.fetch(tGuildId).catch(() => null);
+            const appealsCh = tGuild ? await tGuild.channels.fetch(appealsChId).catch(() => null) : null;
+            if (!appealsCh) { try { await interaction.editReply({ content: '❌ Appeals channel not found.' }); } catch {} return; }
+            const appealEmbed = new EmbedBuilder()
+                .setTitle('📩 New Timeout Appeal')
+                .setColor(0xFF8C00)
+                .setThumbnail(interaction.user.displayAvatarURL())
+                .addFields(
+                    { name: '👤 User',           value: `<@${interaction.user.id}> (${interaction.user.id})`, inline: true },
+                    { name: '📅 Submitted',       value: `<t:${Math.floor(Date.now()/1000)}:R>`,              inline: true },
+                    { name: '📝 Timeout Reason',  value: (tInfo?.reason || 'Unknown').slice(0, 512),           inline: false },
+                    ...(tInfo?.issuedBy ? [{ name: '🛡️ Issued by', value: `<@${tInfo.issuedBy}>`, inline: true }] : []),
+                    { name: '💬 Appeal Reason',   value: reason.slice(0, 1024),                                inline: false },
+                )
+                .setFooter({ text: `Appeal ID: ${appealId} • Timeout ID: ${timeoutId}` })
+                .setTimestamp();
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`timeout_appeal_accept_${appealId}`).setLabel('✅ Accept Appeal').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`timeout_appeal_reject_${appealId}`).setLabel('❌ Reject Appeal').setStyle(ButtonStyle.Danger),
+            );
+            await appealsCh.send({ embeds: [appealEmbed], components: [row] });
+            try { await interaction.editReply({ content: '✅ Your timeout appeal has been submitted! Admins will review it shortly.' }); } catch {}
+        } catch {
+            try { await interaction.editReply({ content: '❌ Failed to submit appeal.' }); } catch {}
+        }
+        return;
+    }
+
+    // Step 3a: Staff accepts the timeout appeal
+    if (interaction.isButton() && interaction.customId.startsWith('timeout_appeal_accept_')) {
+        const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        const appealId = interaction.customId.replace('timeout_appeal_accept_', '');
+        const tfd3 = loadData();
+        const appeal = tfd3.appeals[appealId];
+        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
+        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
+        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+        appeal.status = 'accepted'; appeal.handledBy = interaction.user.id;
+        // Remove timeout
+        try {
+            const tg = await client.guilds.fetch(appeal.guildId).catch(() => null);
+            const tm = tg ? await tg.members.fetch(appeal.userId).catch(() => null) : null;
+            if (tm) await tm.timeout(null, 'Timeout appeal accepted').catch(() => {});
+            // Clear the stored long-timeout record
+            if (tfd3.timeouts?.[appeal.guildId]?.[appeal.userId]) {
+                delete tfd3.timeouts[appeal.guildId][appeal.userId];
+                const key = `${appeal.guildId}:${appeal.userId}`;
+                const h = _activeTimeoutTimers.get(key);
+                if (h) { clearTimeout(h); _activeTimeoutTimers.delete(key); }
+            }
+        } catch {}
+        saveData(tfd3);
+        const tUser = await client.users.fetch(appeal.userId).catch(() => null);
+        if (tUser) tUser.send({ embeds: [new EmbedBuilder()
+            .setTitle('✅ Timeout Appeal Accepted')
+            .setDescription('Your timeout appeal has been **accepted** and your timeout has been removed.\nPlease make sure to follow the server rules going forward.')
+            .setColor(0x00FF88).setTimestamp()] }).catch(() => {});
+        const updated = EmbedBuilder.from(interaction.message.embeds[0])
+            .setColor(0x00FF88).setTitle('📩 Timeout Appeal — ACCEPTED ✅')
+            .addFields({ name: 'Handled by', value: `<@${interaction.user.id}>`, inline: true });
+        await interaction.update({ embeds: [updated], components: [] });
+        return;
+    }
+
+    // Step 3b: Staff rejects the timeout appeal
+    if (interaction.isButton() && interaction.customId.startsWith('timeout_appeal_reject_')) {
+        const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        const appealId = interaction.customId.replace('timeout_appeal_reject_', '');
+        const tfd4 = loadData();
+        const appeal = tfd4.appeals[appealId];
+        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
+        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', ephemeral: true }); return; }
+        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+        appeal.status = 'rejected'; appeal.handledBy = interaction.user.id;
+        saveData(tfd4);
+        const tUser = await client.users.fetch(appeal.userId).catch(() => null);
+        if (tUser) tUser.send({ embeds: [new EmbedBuilder()
+            .setTitle('❌ Timeout Appeal Rejected')
+            .setDescription('Your timeout appeal has been **rejected**.\nYour timeout remains in place. If you have questions, contact a server admin.')
+            .setColor(0xFF4444).setTimestamp()] }).catch(() => {});
+        const updated = EmbedBuilder.from(interaction.message.embeds[0])
+            .setColor(0xFF4444).setTitle('📩 Timeout Appeal — REJECTED ❌')
+            .addFields({ name: 'Handled by', value: `<@${interaction.user.id}>`, inline: true });
+        await interaction.update({ embeds: [updated], components: [] });
+        return;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  BAN APPEAL — buttons + modal (available after 14 days)
+    // ══════════════════════════════════════════════════════════
+
+    // Step 1: User clicks "Appeal this Ban" button (fires in DM) → show modal
+    if (interaction.isButton() && interaction.customId.startsWith('open_ban_appeal_')) {
+        const rest   = interaction.customId.slice('open_ban_appeal_'.length);
+        const sepIdx = rest.indexOf('_');
+        const bGuildId = rest.slice(0, sepIdx);
+        const banId    = rest.slice(sepIdx + 1);
+        const bfd = loadData();
+        if (hasAppealedBan(banId, bfd)) {
+            try { await interaction.reply({ content: '❌ You have already submitted an appeal for this ban. Only one appeal is allowed.', ephemeral: true }); } catch {}
+            return;
+        }
+        const banInfo = bfd.bans?.[bGuildId]?.[interaction.user.id];
+        if (banInfo && banInfo.bannedAt) {
+            const msSinceBan = Date.now() - banInfo.bannedAt;
+            const msIn14Days = 14 * 24 * 60 * 60 * 1000;
+            if (msSinceBan < msIn14Days) {
+                const unlocksAt = Math.floor((banInfo.bannedAt + msIn14Days) / 1000);
+                try { await interaction.reply({ content: `❌ You cannot appeal yet. Ban appeals unlock <t:${unlocksAt}:R>.`, ephemeral: true }); } catch {}
+                return;
+            }
+        }
+        const modal = new ModalBuilder()
+            .setCustomId(`ban_appeal_modal_${bGuildId}_${banId}`)
+            .setTitle('📩 Appeal Your Ban');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('appeal_reason')
+                    .setLabel('Why should your ban be lifted?')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setMinLength(20)
+                    .setMaxLength(1000)
+                    .setRequired(true)
+                    .setPlaceholder('Explain why you should be unbanned. Be honest, respectful, and specific.')
+            )
+        );
+        try { await interaction.showModal(modal); } catch {
+            await interaction.reply({ content: '❌ Failed to open the appeal form. Try again.', ephemeral: true }).catch(() => {});
+        }
+        return;
+    }
+
+    // Step 2: User submits the ban appeal modal
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('ban_appeal_modal_')) {
+        try { await interaction.deferReply({ ephemeral: true }); } catch {}
+        const rest     = interaction.customId.slice('ban_appeal_modal_'.length);
+        const sepIdx   = rest.indexOf('_');
+        const bGuildId = rest.slice(0, sepIdx);
+        const banId    = rest.slice(sepIdx + 1);
+        const reason   = interaction.fields.getTextInputValue('appeal_reason');
+        const bfd2 = loadData();
+        if (hasAppealedBan(banId, bfd2)) {
+            try { await interaction.editReply({ content: '❌ You have already submitted a ban appeal. Only one appeal is allowed.' }); } catch {}
+            return;
+        }
+        const banInfo = bfd2.bans?.[bGuildId]?.[interaction.user.id];
+        if (banInfo && banInfo.bannedAt) {
+            const msSinceBan = Date.now() - banInfo.bannedAt;
+            const msIn14Days = 14 * 24 * 60 * 60 * 1000;
+            if (msSinceBan < msIn14Days) {
+                const unlocksAt = Math.floor((banInfo.bannedAt + msIn14Days) / 1000);
+                try { await interaction.editReply({ content: `❌ Ban appeals unlock <t:${unlocksAt}:R>. Please wait and try again after that.` }); } catch {}
+                return;
+            }
+        }
+        const appealId = `banappeal_${Date.now()}_${interaction.user.id}`;
+        bfd2.appeals = bfd2.appeals || {};
+        bfd2.appeals[appealId] = {
+            type: 'ban', banId,
+            userId: interaction.user.id, guildId: bGuildId,
+            reason,
+            banReason: banInfo?.reason || 'Unknown',
+            issuedBy: banInfo?.issuedBy || null,
+            bannedAt: banInfo?.bannedAt || null,
+            timestamp: Date.now(), createdAt: Date.now(),
+            status: 'pending', handledBy: null,
+        };
+        saveData(bfd2);
+        const bGS = getGuildSettings(bGuildId, bfd2);
+        const appealsChId = bGS.appealsChannelId || bGS.logChannelId;
+        if (!appealsChId) {
+            try { await interaction.editReply({ content: '❌ No appeals channel is configured in this server. Contact an admin.' }); } catch {}
+            return;
+        }
+        try {
+            const bGuild = await client.guilds.fetch(bGuildId).catch(() => null);
+            const appealsCh = bGuild ? await bGuild.channels.fetch(appealsChId).catch(() => null) : null;
+            if (!appealsCh) { try { await interaction.editReply({ content: '❌ Appeals channel not found.' }); } catch {} return; }
+            const appealEmbed = new EmbedBuilder()
+                .setTitle('📩 New Ban Appeal')
+                .setColor(0xFF4444)
+                .setThumbnail(interaction.user.displayAvatarURL())
+                .addFields(
+                    { name: '👤 User',        value: `<@${interaction.user.id}> (${interaction.user.id})`, inline: true },
+                    { name: '📅 Submitted',   value: `<t:${Math.floor(Date.now()/1000)}:R>`,              inline: true },
+                    { name: '📝 Ban Reason',  value: (banInfo?.reason || 'Unknown').slice(0, 512),         inline: false },
+                    ...(banInfo?.issuedBy ? [{ name: '🛡️ Issued by', value: `<@${banInfo.issuedBy}>`, inline: true }] : []),
+                    ...(banInfo?.bannedAt ? [{ name: '📆 Banned at', value: `<t:${Math.floor(banInfo.bannedAt/1000)}:F>`, inline: true }] : []),
+                    { name: '💬 Appeal Reason', value: reason.slice(0, 1024), inline: false },
+                )
+                .setFooter({ text: `Appeal ID: ${appealId} • Ban ID: ${banId}` })
+                .setTimestamp();
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`ban_appeal_accept_${appealId}`).setLabel('✅ Accept Appeal').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`ban_appeal_reject_${appealId}`).setLabel('❌ Reject Appeal').setStyle(ButtonStyle.Danger),
+            );
+            await appealsCh.send({ embeds: [appealEmbed], components: [row] });
+            try { await interaction.editReply({ content: '✅ Your ban appeal has been submitted! Admins will review it.' }); } catch {}
+        } catch {
+            try { await interaction.editReply({ content: '❌ Failed to submit appeal.' }); } catch {}
+        }
+        return;
+    }
+
+    // Step 3a: Staff accepts the ban appeal → unban the user
+    if (interaction.isButton() && interaction.customId.startsWith('ban_appeal_accept_')) {
+        const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        const appealId = interaction.customId.replace('ban_appeal_accept_', '');
+        const bfd3 = loadData();
+        const appeal = bfd3.appeals[appealId];
+        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
+        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
+        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+        appeal.status = 'accepted'; appeal.handledBy = interaction.user.id;
+        try {
+            const bg = await client.guilds.fetch(appeal.guildId).catch(() => null);
+            if (bg) await bg.bans.remove(appeal.userId, 'Ban appeal accepted').catch(() => {});
+            if (bfd3.bans?.[appeal.guildId]?.[appeal.userId]) delete bfd3.bans[appeal.guildId][appeal.userId];
+        } catch {}
+        saveData(bfd3);
+        const bUser = await client.users.fetch(appeal.userId).catch(() => null);
+        if (bUser) bUser.send({ embeds: [new EmbedBuilder()
+            .setTitle('✅ Ban Appeal Accepted')
+            .setDescription('Your ban appeal has been **accepted** and your ban has been lifted.\nWelcome back — please make sure to follow the server rules.')
+            .setColor(0x00FF88).setTimestamp()] }).catch(() => {});
+        const updated = EmbedBuilder.from(interaction.message.embeds[0])
+            .setColor(0x00FF88).setTitle('📩 Ban Appeal — ACCEPTED ✅')
+            .addFields({ name: 'Handled by', value: `<@${interaction.user.id}>`, inline: true });
+        await interaction.update({ embeds: [updated], components: [] });
+        return;
+    }
+
+    // Step 3b: Staff rejects the ban appeal
+    if (interaction.isButton() && interaction.customId.startsWith('ban_appeal_reject_')) {
+        const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        const appealId = interaction.customId.replace('ban_appeal_reject_', '');
+        const bfd4 = loadData();
+        const appeal = bfd4.appeals[appealId];
+        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
+        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', ephemeral: true }); return; }
+        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+        appeal.status = 'rejected'; appeal.handledBy = interaction.user.id;
+        saveData(bfd4);
+        const bUser = await client.users.fetch(appeal.userId).catch(() => null);
+        if (bUser) bUser.send({ embeds: [new EmbedBuilder()
+            .setTitle('❌ Ban Appeal Rejected')
+            .setDescription('Your ban appeal has been **rejected**.\nYour ban remains in place. If you have further questions, contact a server admin.')
+            .setColor(0xFF4444).setTimestamp()] }).catch(() => {});
+        const updated = EmbedBuilder.from(interaction.message.embeds[0])
+            .setColor(0xFF4444).setTitle('📩 Ban Appeal — REJECTED ❌')
+            .addFields({ name: 'Handled by', value: `<@${interaction.user.id}>`, inline: true });
+        await interaction.update({ embeds: [updated], components: [] });
+        return;
+    }
     if (!interaction.isChatInputCommand()) return;
     logCmdStats('slash', interaction.commandName);
     const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
@@ -9969,6 +10408,8 @@ client.on('interactionCreate', async interaction => {
         }
         case 'policymode': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const mode = (interaction.options.getString('mode') || '').toLowerCase();
+            const before = gs.enforcementMode;
             gs.enforcementMode = mode;
             saveData(data);
             await interaction.reply({ content: `✅ Enforcement mode: **${before}** -> **${gs.enforcementMode}**`, ephemeral: true });
@@ -11935,10 +12376,455 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
+        // ── /timeout ──────────────────────────────────────────────────────────
+        case 'timeout': {
+            if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            const user = interaction.options.getUser('user');
+            if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot timeout a bot.' }); return; }
+            if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot timeout yourself.' }); return; }
+            const target = await interaction.guild.members.fetch(user.id).catch(() => null);
+            if (!target) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Member not found in this server.' }); return; }
+            const hierErr = checkHierarchy(interaction.member, target);
+            if (hierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: hierErr }); return; }
+
+            await interaction.deferReply();
+
+            const durRaw  = interaction.options.getString('duration');
+            const durMins = durRaw ? parseDuration(durRaw) : 45; // default 45 minutes
+            if (!durMins || durMins <= 0) { await interaction.editReply({ content: '❌ Invalid duration. Examples: `30m`, `2h`, `1d`, `1w`.' }); return; }
+            const durMs   = durMins * 60 * 1000;
+            const reason  = interaction.options.getString('reason') || 'No reason provided';
+            const timeoutId = `to_${Date.now()}_${user.id}`;
+            const endsAt    = Date.now() + durMs;
+
+            // Store long-timeout data (needed even for sub-28-day so appeal system can reference it)
+            data.timeouts              = data.timeouts || {};
+            data.timeouts[guildId]     = data.timeouts[guildId] || {};
+            data.timeouts[guildId][user.id] = {
+                timeoutId, reason,
+                issuedBy: interaction.user.id,
+                totalMs: durMs, endsAt,
+                issuedAt: Date.now(),
+            };
+            saveData(data);
+
+            // Apply the first chunk (≤ 28 days)
+            const firstChunk = Math.min(durMs, MAX_DISCORD_TIMEOUT_MS);
+            await target.timeout(firstChunk, reason).catch(() => {});
+
+            // If longer than 28 days, schedule re-timeouts
+            if (durMs > MAX_DISCORD_TIMEOUT_MS) {
+                scheduleLongTimeout(client, guildId, user.id, data);
+            }
+
+            // Human-readable duration
+            let durStr;
+            if (durMins < 60)          durStr = `${durMins} minute${durMins !== 1 ? 's' : ''}`;
+            else if (durMins < 1440)   durStr = `${Math.round(durMins/60)} hour${Math.round(durMins/60) !== 1 ? 's' : ''}`;
+            else if (durMins < 10080)  durStr = `${Math.round(durMins/1440)} day${Math.round(durMins/1440) !== 1 ? 's' : ''}`;
+            else                       durStr = `${Math.round(durMins/10080)} week${Math.round(durMins/10080) !== 1 ? 's' : ''}`;
+
+            const replyEmbed = new EmbedBuilder()
+                .setTitle('🔇 Member Timed Out')
+                .setColor(0xFF8C00)
+                .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+                .addFields(
+                    { name: '👤 User',       value: `<@${user.id}>`,              inline: true },
+                    { name: '🛡️ Issued by',  value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: '⏱️ Duration',   value: durStr,                        inline: true },
+                    { name: '🔚 Expires',    value: `<t:${Math.floor(endsAt/1000)}:R>`, inline: true },
+                    { name: '📝 Reason',     value: reason.slice(0, 1024),         inline: false },
+                )
+                .setFooter({ text: `Timeout ID: ${timeoutId}` })
+                .setTimestamp();
+            await interaction.editReply({ embeds: [replyEmbed] });
+
+            await sendLog(interaction.guild, data, new EmbedBuilder()
+                .setTitle('🔇 Manual Timeout')
+                .setColor(0xFF8C00)
+                .addFields(
+                    { name: 'User',     value: `<@${user.id}> (${user.id})`,  inline: true },
+                    { name: 'By',       value: `<@${interaction.user.id}>`,   inline: true },
+                    { name: 'Duration', value: durStr,                         inline: true },
+                    { name: 'Expires',  value: `<t:${Math.floor(endsAt/1000)}:R>`, inline: true },
+                    { name: 'Reason',   value: reason.slice(0, 1024),          inline: false },
+                ).setFooter({ text: `ID: ${timeoutId}` }).setTimestamp());
+
+            // DM the user with appeal button
+            const guildIcon = interaction.guild.iconURL({ dynamic: true });
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('🔇 You have been Timed Out')
+                .setColor(0xFF8C00)
+                .setThumbnail(guildIcon || null)
+                .setAuthor({ name: interaction.guild.name, iconURL: guildIcon || undefined })
+                .setDescription(
+                    `Hey <@${user.id}>, you have been **timed out** in **${interaction.guild.name}**.\n` +
+                    `If you believe this was a mistake, you can appeal it below — but you only get **one shot**.\n\u200b`
+                )
+                .addFields(
+                    { name: '📝 Reason',      value: reason.slice(0, 1024),    inline: false },
+                    { name: '🛡️ Issued by',   value: `<@${interaction.user.id}>`, inline: true },
+                    { name: '⏱️ Duration',    value: durStr,                    inline: true },
+                    { name: '🔚 Expires',     value: `<t:${Math.floor(endsAt/1000)}:R>`, inline: true },
+                )
+                .setFooter({ text: 'You may submit exactly 1 appeal per timeout.' })
+                .setTimestamp();
+            const appealRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`open_timeout_appeal_${guildId}_${timeoutId}`)
+                    .setLabel('📩 Appeal this Timeout')
+                    .setStyle(ButtonStyle.Primary)
+            );
+            target.send({ embeds: [dmEmbed], components: [appealRow] }).catch(() => {});
+            break;
+        }
+
+        // ── /untimeout ────────────────────────────────────────────────────────
+        case 'untimeout': {
+            if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            const user   = interaction.options.getUser('user');
+            const target = await interaction.guild.members.fetch(user.id).catch(() => null);
+            if (!target) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Member not found.' }); return; }
+            const hierErr = checkHierarchy(interaction.member, target);
+            if (hierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: hierErr }); return; }
+            await interaction.deferReply();
+            const reason = interaction.options.getString('reason') || 'No reason provided';
+
+            // Remove Discord timeout
+            await target.timeout(null, reason).catch(() => {});
+
+            // Cancel any scheduled long-timeout
+            data.timeouts = data.timeouts || {};
+            if (data.timeouts[guildId]?.[user.id]) {
+                delete data.timeouts[guildId][user.id];
+                const key = `${guildId}:${user.id}`;
+                const h = _activeTimeoutTimers.get(key);
+                if (h) { clearTimeout(h); _activeTimeoutTimers.delete(key); }
+                saveData(data);
+            }
+
+            await sendLog(interaction.guild, data, new EmbedBuilder()
+                .setTitle('🔊 Manual Untimeout')
+                .setColor(0x00FF88)
+                .addFields(
+                    { name: 'User',   value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',     value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Reason', value: reason.slice(0, 1024),        inline: false },
+                ).setTimestamp());
+            await interaction.editReply({ content: `✅ Removed timeout from **${target.user.username}**.` });
+
+            // DM the user
+            target.send({ embeds: [new EmbedBuilder()
+                .setTitle('🔊 Your Timeout Has Been Removed')
+                .setDescription(`Your timeout in **${interaction.guild.name}** has been lifted.\nReason: ${reason}`)
+                .setColor(0x00FF88).setTimestamp()] }).catch(() => {});
+            break;
+        }
+
+        // ── /kick ─────────────────────────────────────────────────────────────
+        case 'kick': {
+            if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            const user   = interaction.options.getUser('user');
+            if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot kick a bot.' }); return; }
+            if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot kick yourself.' }); return; }
+            const target = await interaction.guild.members.fetch(user.id).catch(() => null);
+            if (!target) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Member not found.' }); return; }
+            const hierErr = checkHierarchy(interaction.member, target);
+            if (hierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: hierErr }); return; }
+            await interaction.deferReply();
+            const reason = interaction.options.getString('reason') || 'No reason provided';
+
+            // DM before kicking (they'll be removed after)
+            const guildIcon = interaction.guild.iconURL({ dynamic: true });
+            await target.send({ embeds: [new EmbedBuilder()
+                .setTitle('👢 You Have Been Kicked')
+                .setColor(0xFF6600)
+                .setThumbnail(guildIcon || null)
+                .setAuthor({ name: interaction.guild.name, iconURL: guildIcon || undefined })
+                .setDescription(`You have been **kicked** from **${interaction.guild.name}**.\nYou are free to rejoin using a valid invite link.`)
+                .addFields(
+                    { name: '📝 Reason',     value: reason.slice(0, 1024), inline: false },
+                    { name: '🛡️ Issued by',  value: `<@${interaction.user.id}>`, inline: true },
+                )
+                .setTimestamp()] }).catch(() => {});
+
+            await target.kick(reason).catch(() => {});
+
+            await sendLog(interaction.guild, data, new EmbedBuilder()
+                .setTitle('👢 Manual Kick')
+                .setColor(0xFF6600)
+                .addFields(
+                    { name: 'User',   value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',     value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Reason', value: reason.slice(0, 1024),        inline: false },
+                ).setTimestamp());
+
+            await interaction.editReply({ embeds: [new EmbedBuilder()
+                .setTitle('👢 Member Kicked')
+                .setColor(0xFF6600)
+                .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+                .addFields(
+                    { name: '👤 User',      value: `<@${user.id}>`,             inline: true },
+                    { name: '🛡️ By',        value: `<@${interaction.user.id}>`, inline: true },
+                    { name: '📝 Reason',    value: reason.slice(0, 1024),        inline: false },
+                ).setTimestamp()] });
+            break;
+        }
+
+        // ── /ban ──────────────────────────────────────────────────────────────
+        case 'ban': {
+            if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            const user = interaction.options.getUser('user');
+            if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot ban a bot.' }); return; }
+            if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot ban yourself.' }); return; }
+            const target = await interaction.guild.members.fetch(user.id).catch(() => null);
+            if (target) {
+                const hierErr = checkHierarchy(interaction.member, target);
+                if (hierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: hierErr }); return; }
+            }
+            await interaction.deferReply();
+            const reason  = interaction.options.getString('reason') || 'No reason provided';
+            const durRaw  = interaction.options.getString('duration');
+            const durMins = durRaw ? parseDuration(durRaw) : null;
+            const durMs   = durMins ? durMins * 60 * 1000 : null;
+            const banId   = `ban_${Date.now()}_${user.id}`;
+            const bannedAt = Date.now();
+
+            // Store ban record
+            data.bans            = data.bans || {};
+            data.bans[guildId]   = data.bans[guildId] || {};
+            data.bans[guildId][user.id] = {
+                banId, reason,
+                issuedBy: interaction.user.id,
+                bannedAt,
+                duration: durMs || null,
+                hardban: false,
+            };
+            saveData(data);
+
+            // DM before banning
+            const guildIcon = interaction.guild.iconURL({ dynamic: true });
+            const appealUnlockTs = Math.floor((bannedAt + 14 * 24 * 60 * 60 * 1000) / 1000);
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('🔨 You Have Been Banned')
+                .setColor(0xFF0000)
+                .setThumbnail(guildIcon || null)
+                .setAuthor({ name: interaction.guild.name, iconURL: guildIcon || undefined })
+                .setDescription(
+                    `You have been **banned** from **${interaction.guild.name}**.\n` +
+                    `You may appeal this ban **after 14 days** (<t:${appealUnlockTs}:R>). You only get **one appeal**.\n\u200b`
+                )
+                .addFields(
+                    { name: '📝 Reason',     value: reason.slice(0, 1024), inline: false },
+                    { name: '🛡️ Issued by',  value: `<@${interaction.user.id}>`, inline: true },
+                    ...(durMs ? [{ name: '⏱️ Duration', value: durRaw, inline: true }] : [{ name: '⏱️ Duration', value: 'Permanent (until unbanned)', inline: true }]),
+                    { name: '📩 Appeal',     value: `Appeal unlocks <t:${appealUnlockTs}:R>`, inline: false },
+                )
+                .setFooter({ text: 'You may submit exactly 1 appeal per ban. Use the button below after 14 days.' })
+                .setTimestamp();
+            const appealRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`open_ban_appeal_${guildId}_${banId}`)
+                    .setLabel('📩 Appeal this Ban (available after 14 days)')
+                    .setStyle(ButtonStyle.Primary)
+            );
+            if (target) await target.send({ embeds: [dmEmbed], components: [appealRow] }).catch(() => {});
+            else {
+                // User may not be in the server — try fetching their DM
+                const fetchedUser = await client.users.fetch(user.id).catch(() => null);
+                if (fetchedUser) await fetchedUser.send({ embeds: [dmEmbed], components: [appealRow] }).catch(() => {});
+            }
+
+            await interaction.guild.bans.create(user.id, { reason: reason.slice(0, 512), deleteMessageSeconds: 0 }).catch(() => {});
+
+            let durStr = durMs ? (durMins < 1440 ? `${Math.round(durMins/60)}h` : `${Math.round(durMins/1440)}d`) : 'Permanent';
+            await sendLog(interaction.guild, data, new EmbedBuilder()
+                .setTitle('🔨 Manual Ban')
+                .setColor(0xFF0000)
+                .addFields(
+                    { name: 'User',     value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',       value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Duration', value: durStr,                        inline: true },
+                    { name: 'Reason',   value: reason.slice(0, 1024),        inline: false },
+                ).setFooter({ text: `Ban ID: ${banId}` }).setTimestamp());
+
+            await interaction.editReply({ embeds: [new EmbedBuilder()
+                .setTitle('🔨 Member Banned')
+                .setColor(0xFF0000)
+                .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+                .addFields(
+                    { name: '👤 User',      value: `<@${user.id}>`,             inline: true },
+                    { name: '🛡️ By',        value: `<@${interaction.user.id}>`, inline: true },
+                    { name: '⏱️ Duration',  value: durStr,                       inline: true },
+                    { name: '📝 Reason',    value: reason.slice(0, 1024),        inline: false },
+                    { name: '📩 Appeal',    value: `User may appeal after <t:${appealUnlockTs}:R>`, inline: false },
+                ).setFooter({ text: `Ban ID: ${banId}` }).setTimestamp()] });
+            break;
+        }
+
+        // ── /unban ────────────────────────────────────────────────────────────
+        case 'unban': {
+            if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            await interaction.deferReply();
+            const input  = interaction.options.getString('user') || '';
+            const userId = (input.match(/<@!?(\d+)>/) || input.match(/^(\d{15,20})$/) || [])[1] || input.trim();
+            const reason = interaction.options.getString('reason') || 'No reason provided';
+            if (!userId || !/^\d{15,20}$/.test(userId)) {
+                await interaction.editReply({ content: '❌ Please provide a valid user ID.' }); return;
+            }
+            await interaction.guild.bans.remove(userId, reason).catch(() => {});
+            // Clean stored ban record
+            data.bans = data.bans || {};
+            if (data.bans[guildId]?.[userId]) delete data.bans[guildId][userId];
+            saveData(data);
+            await sendLog(interaction.guild, data, new EmbedBuilder()
+                .setTitle('🔓 Manual Unban')
+                .setColor(0x00FF88)
+                .addFields(
+                    { name: 'User',   value: `<@${userId}> (${userId})`,   inline: true },
+                    { name: 'By',     value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Reason', value: reason.slice(0, 1024),        inline: false },
+                ).setTimestamp());
+            // DM the unbanned user
+            const unbannedUser = await client.users.fetch(userId).catch(() => null);
+            if (unbannedUser) unbannedUser.send({ embeds: [new EmbedBuilder()
+                .setTitle('✅ You Have Been Unbanned')
+                .setDescription(`Your ban from **${interaction.guild.name}** has been lifted.\nYou may now rejoin using an invite link.`)
+                .setColor(0x00FF88).setTimestamp()] }).catch(() => {});
+            await interaction.editReply({ content: `✅ Unbanned <@${userId}>.` });
+            break;
+        }
+
+        // ── /hardban ──────────────────────────────────────────────────────────
+        case 'hardban': {
+            if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            const user = interaction.options.getUser('user');
+            if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot hardban a bot.' }); return; }
+            if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot hardban yourself.' }); return; }
+            const target = await interaction.guild.members.fetch(user.id).catch(() => null);
+            if (target) {
+                const hierErr = checkHierarchy(interaction.member, target);
+                if (hierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: hierErr }); return; }
+            }
+            await interaction.deferReply();
+            const reason = interaction.options.getString('reason') || 'No reason provided';
+            const banId  = `hban_${Date.now()}_${user.id}`;
+
+            // Store hardban record (no appeal flag)
+            data.bans          = data.bans || {};
+            data.bans[guildId] = data.bans[guildId] || {};
+            data.bans[guildId][user.id] = {
+                banId, reason,
+                issuedBy: interaction.user.id,
+                bannedAt: Date.now(),
+                duration: null,
+                hardban: true,
+            };
+            saveData(data);
+
+            // DM the user (no appeal button)
+            const guildIcon = interaction.guild.iconURL({ dynamic: true });
+            const dmPayload = { embeds: [new EmbedBuilder()
+                .setTitle('🔒 You Have Been Permanently Banned')
+                .setColor(0x800000)
+                .setThumbnail(guildIcon || null)
+                .setAuthor({ name: interaction.guild.name, iconURL: guildIcon || undefined })
+                .setDescription(`You have been **permanently banned** from **${interaction.guild.name}**.\nThis ban has **no appeal process**.`)
+                .addFields(
+                    { name: '📝 Reason',    value: reason.slice(0, 1024), inline: false },
+                    { name: '🛡️ Issued by', value: `<@${interaction.user.id}>`, inline: true },
+                )
+                .setTimestamp()] };
+            if (target) await target.send(dmPayload).catch(() => {});
+            else { const fu = await client.users.fetch(user.id).catch(() => null); if (fu) await fu.send(dmPayload).catch(() => {}); }
+
+            await interaction.guild.bans.create(user.id, { reason: reason.slice(0, 512), deleteMessageSeconds: 0 }).catch(() => {});
+
+            await sendLog(interaction.guild, data, new EmbedBuilder()
+                .setTitle('🔒 Hardban (Permanent)')
+                .setColor(0x800000)
+                .addFields(
+                    { name: 'User',   value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',     value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Reason', value: reason.slice(0, 1024),        inline: false },
+                ).setFooter({ text: 'HARDBAN — No appeal allowed.' }).setTimestamp());
+
+            await interaction.editReply({ embeds: [new EmbedBuilder()
+                .setTitle('🔒 Member Hard-Banned')
+                .setColor(0x800000)
+                .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+                .addFields(
+                    { name: '👤 User',      value: `<@${user.id}>`,             inline: true },
+                    { name: '🛡️ By',        value: `<@${interaction.user.id}>`, inline: true },
+                    { name: '📝 Reason',    value: reason.slice(0, 1024),        inline: false },
+                    { name: '🔒 Appeal',    value: 'None — permanent ban.',       inline: false },
+                ).setTimestamp()] });
+            break;
+        }
+
+        // ── /softban ──────────────────────────────────────────────────────────
+        case 'softban': {
+            if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            const user = interaction.options.getUser('user');
+            if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot softban a bot.' }); return; }
+            if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot softban yourself.' }); return; }
+            const target = await interaction.guild.members.fetch(user.id).catch(() => null);
+            if (target) {
+                const hierErr = checkHierarchy(interaction.member, target);
+                if (hierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: hierErr }); return; }
+            }
+            await interaction.deferReply();
+            const reason = interaction.options.getString('reason') || 'No reason provided';
+
+            // DM before banning
+            const guildIcon = interaction.guild.iconURL({ dynamic: true });
+            const dmPayload = { embeds: [new EmbedBuilder()
+                .setTitle('🧹 You Have Been Softbanned')
+                .setColor(0xFFA500)
+                .setThumbnail(guildIcon || null)
+                .setAuthor({ name: interaction.guild.name, iconURL: guildIcon || undefined })
+                .setDescription(
+                    `You have been **softbanned** from **${interaction.guild.name}**.\n` +
+                    `A softban means you were briefly banned and immediately unbanned to clear your recent messages. **You are free to rejoin using an invite.**`
+                )
+                .addFields(
+                    { name: '📝 Reason',    value: reason.slice(0, 1024), inline: false },
+                    { name: '🛡️ Issued by', value: `<@${interaction.user.id}>`, inline: true },
+                )
+                .setTimestamp()] };
+            if (target) await target.send(dmPayload).catch(() => {});
+            else { const fu = await client.users.fetch(user.id).catch(() => null); if (fu) await fu.send(dmPayload).catch(() => {}); }
+
+            // Ban (purge last 7 days of messages), then immediately unban
+            await interaction.guild.bans.create(user.id, { reason: `[SOFTBAN] ${reason}`.slice(0, 512), deleteMessageSeconds: 604800 }).catch(() => {});
+            await new Promise(r => setTimeout(r, 1500));
+            await interaction.guild.bans.remove(user.id, `[SOFTBAN unban] ${reason}`.slice(0, 512)).catch(() => {});
+
+            await sendLog(interaction.guild, data, new EmbedBuilder()
+                .setTitle('🧹 Softban')
+                .setColor(0xFFA500)
+                .addFields(
+                    { name: 'User',   value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',     value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Reason', value: reason.slice(0, 1024),        inline: false },
+                ).setFooter({ text: 'User was banned and immediately unbanned (message purge).' }).setTimestamp());
+
+            await interaction.editReply({ embeds: [new EmbedBuilder()
+                .setTitle('🧹 Member Softbanned')
+                .setColor(0xFFA500)
+                .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+                .addFields(
+                    { name: '👤 User',      value: `<@${user.id}>`,             inline: true },
+                    { name: '🛡️ By',        value: `<@${interaction.user.id}>`, inline: true },
+                    { name: '📝 Reason',    value: reason.slice(0, 1024),        inline: false },
+                    { name: 'ℹ️ Note',      value: 'User was banned then immediately unbanned. They may rejoin freely.', inline: false },
+                ).setTimestamp()] });
+            break;
+        }
+
         // ── /manager ──────────────────────────────────────────────────────────
         // Grants/revokes full bot access (equal to Administrator) for roles/users
-        case 'manager': {
-            // Only true Admins (by Discord perm) can manage the manager list itself
+        case 'manager': {            // Only true Admins (by Discord perm) can manage the manager list itself
             const isRealAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
             if (!isRealAdmin) {
                 await interaction.reply({ content: '❌ Only server Administrators can modify the manager list.', ephemeral: true });
@@ -13227,7 +14113,7 @@ async function handleSpamViolation(message, reason, data, gs) {
         footerLabel: 'Spam',
         ttlMs: 10000,
     });
-    if (res?.exiled) clearSpamHistory(message.author.id, guildId);
+    if (res?.exiled) clearSpamHistory(message.author.id, message.guild.id);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -13638,6 +14524,74 @@ function hasAppealedWarn(warnId, data) {
         if (appeal.type === 'warn' && appeal.warnId === warnId) return true;
     }
     return false;
+}
+
+// ── Timeout appeal helper ─────────────────────────────────────────────────────
+function hasAppealedTimeout(timeoutId, data) {
+    if (!timeoutId) return false;
+    const appeals = data.appeals || {};
+    for (const appeal of Object.values(appeals)) {
+        if (appeal.type === 'timeout' && appeal.timeoutId === timeoutId) return true;
+    }
+    return false;
+}
+
+// ── Ban appeal helper ─────────────────────────────────────────────────────────
+function hasAppealedBan(banId, data) {
+    if (!banId) return false;
+    const appeals = data.appeals || {};
+    for (const appeal of Object.values(appeals)) {
+        if (appeal.type === 'ban' && appeal.banId === banId) return true;
+    }
+    return false;
+}
+
+// ── Long-timeout scheduler (repeats every ≤28 days until total duration ends) ─
+const _activeTimeoutTimers = new Map(); // key: `${guildId}:${userId}`
+const MAX_DISCORD_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000; // 28 days in ms
+
+function scheduleLongTimeout(botClient, guildId, userId, data) {
+    const key = `${guildId}:${userId}`;
+    const existing = _activeTimeoutTimers.get(key);
+    if (existing) clearTimeout(existing);
+
+    const tInfo = (data.timeouts || {})?.[guildId]?.[userId];
+    if (!tInfo) return;
+
+    const now = Date.now();
+    const remaining = tInfo.endsAt - now;
+    if (remaining <= 0) {
+        if (data.timeouts?.[guildId]) delete data.timeouts[guildId][userId];
+        saveData(data);
+        return;
+    }
+
+    // Schedule next re-timeout just before the current 28-day chunk expires (5s buffer)
+    const chunk = Math.min(remaining, MAX_DISCORD_TIMEOUT_MS) - 5000;
+    const fireIn = Math.max(chunk, 1000);
+
+    const handle = setTimeout(async () => {
+        _activeTimeoutTimers.delete(key);
+        const freshData = loadData();
+        const freshInfo = (freshData.timeouts || {})?.[guildId]?.[userId];
+        if (!freshInfo) return;
+        const freshRemaining = freshInfo.endsAt - Date.now();
+        if (freshRemaining <= 0) {
+            if (freshData.timeouts?.[guildId]) delete freshData.timeouts[guildId][userId];
+            saveData(freshData);
+            return;
+        }
+        try {
+            const g = await botClient.guilds.fetch(guildId).catch(() => null);
+            if (!g) return;
+            const m = await g.members.fetch(userId).catch(() => null);
+            if (!m) return;
+            const reChunk = Math.min(freshRemaining, MAX_DISCORD_TIMEOUT_MS);
+            await m.timeout(reChunk, freshInfo.reason || 'Extended timeout').catch(() => {});
+            scheduleLongTimeout(botClient, guildId, userId, freshData);
+        } catch {}
+    }, fireIn);
+    _activeTimeoutTimers.set(key, handle);
 }
 
 async function performExile(userOrMember, guild, minutes, reason, data) {
