@@ -13,7 +13,7 @@ We actively patch and secure the current major version of our Discord bot. Pleas
 ## Reporting a Vulnerability
 **DO NOT open a public GitHub issue for security bugs.** 
 
-A project servicing millions of users requires confidential handling of exploits, token exposure, or data-handling vulnerabilities. 
+A project servicing lots of features requires confidential handling of exploits, token exposure, or data-handling vulnerabilities. 
 
 To report a vulnerability responsibly:
 1. Please email me privately at: **advik.mukherjee1@gmail.com**
