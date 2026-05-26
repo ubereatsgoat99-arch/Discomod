@@ -55,9 +55,56 @@ const { OpenAI } = require('openai');
 //  CONFIGURATION — overridden by /setup
 // ══════════════════════════════════════════════════════════
 const TOKEN     = process.env.DISCORD_TOKEN || '';
-if (!TOKEN) throw new Error("Missing DISCORD_TOKEN in .env");
 const CLIENT_ID = process.env.CLIENT_ID || '';
-if (!CLIENT_ID) throw new Error('Missing CLIENT_ID in .env');
+
+// ══════════════════════════════════════════════════════════
+//  STARTUP VALIDATION — graceful failures, no hard throws
+// ══════════════════════════════════════════════════════════
+(function validateStartup() {
+    const errors   = [];
+    const warnings = [];
+
+    if (!TOKEN)     errors.push('DISCORD_TOKEN is missing or empty in .env');
+    if (!CLIENT_ID) errors.push('CLIENT_ID is missing or empty in .env');
+
+    // API key warnings (non-fatal — subsystems soft-disable themselves later)
+    if (!process.env.ANTHROPIC_API_KEY) warnings.push('ANTHROPIC_API_KEY not set — Claude AI disabled');
+    if (!process.env.GROQ_API_KEY)      warnings.push('GROQ_API_KEY not set — Groq AI disabled');
+    if (!process.env.OPENAI_API_KEY)    warnings.push('OPENAI_API_KEY not set — OpenAI AI disabled');
+    if (!process.env.WOLFRAM_APPID)     warnings.push('WOLFRAM_APPID not set — /wolf command may fail');
+
+    // Required files check
+    const requiredFiles = ['math_commands.js'];
+    for (const f of requiredFiles) {
+        if (!fs.existsSync(path.join(__dirname, f)))
+            warnings.push(`Required file missing: ${f}`);
+    }
+
+    // Executable availability check (non-fatal)
+    const exeChecks = [
+        { env: 'QALCULATE_PATH', fallback: path.join(__dirname, 'math_modules', 'qalc'), label: 'qalc' },
+        { env: null, fallback: path.join(__dirname, 'superqalc_onefile'), label: 'superqalc_onefile' },
+        { env: null, fallback: path.join(__dirname, 'superqalc_tower'),   label: 'superqalc_tower' },
+    ];
+    for (const { env, fallback, label } of exeChecks) {
+        const p = (env && process.env[env]) ? process.env[env] : fallback;
+        if (!fs.existsSync(p)) warnings.push(`Executable not found: ${label} (${p}) — related commands may fail`);
+    }
+
+    console.log('\n[STARTUP] ══════ SKYNET V7 — Subsystem Validation ══════');
+    if (warnings.length) {
+        for (const w of warnings) console.warn(`[STARTUP] ⚠  ${w}`);
+    } else {
+        console.log('[STARTUP] ✅ All optional subsystems look good.');
+    }
+
+    if (errors.length) {
+        for (const e of errors) console.error(`[STARTUP] ❌ FATAL: ${e}`);
+        console.error('[STARTUP] Cannot start bot — fix the above errors in your .env file.\n');
+        process.exit(1);
+    }
+    console.log('[STARTUP] ✅ Core env vars present — proceeding with login.\n');
+})();
 
 // Fallback channel / role IDs (overridden per-guild via /setup)
 const DEFAULT_TARGET_CHANNEL_ID   = '1417395956357267516';
@@ -740,9 +787,94 @@ async function ai2HandleChatMessage(message) {
     return true;
 }
 
-const mathSessions = new Map();
-const slashSessions = new Map();
-const roastBattles = new Map();
+// ══════════════════════════════════════════════════════════
+//  CENTRALIZED SAFE INTERACTION HELPERS (module-level)
+//  Prevents InteractionAlreadyReplied, Unknown Interaction,
+//  expired interaction edits, double replies, and race conditions.
+// ══════════════════════════════════════════════════════════
+function isInteractionExpired(interaction) {
+    // Discord interactions expire after 15 minutes; tokens expire after 3s without deferral.
+    // We use a conservative 14-minute check.
+    try {
+        const created = interaction?.createdTimestamp || Date.now();
+        return (Date.now() - created) > 14 * 60 * 1000;
+    } catch { return false; }
+}
+
+async function safeDefer(interaction, opts = {}) {
+    try {
+        if (interaction.deferred || interaction.replied) return true;
+        if (isInteractionExpired(interaction)) return false;
+        await interaction.deferReply(opts);
+        return true;
+    } catch (e) {
+        if (!String(e?.message || '').includes('Unknown Interaction'))
+            console.warn('[safeDefer] error:', e?.message || e);
+        return false;
+    }
+}
+
+async function safeReply(interaction, payload) {
+    try {
+        if (isInteractionExpired(interaction)) return false;
+        if (interaction.deferred || interaction.replied) {
+            await interaction.followUp(payload);
+            return true;
+        }
+        await interaction.reply(payload);
+        return true;
+    } catch (e) {
+        const msg = String(e?.message || '');
+        if (!msg.includes('Unknown Interaction') && !msg.includes('already been acknowledged'))
+            console.warn('[safeReply] error:', msg);
+        return false;
+    }
+}
+
+async function safeEditReply(interaction, payload) {
+    try {
+        if (isInteractionExpired(interaction)) return false;
+        await interaction.editReply(payload);
+        return true;
+    } catch (e) {
+        const msg = String(e?.message || '');
+        if (!msg.includes('Unknown Interaction') && !msg.includes('Invalid Webhook Token'))
+            console.warn('[safeEditReply] error:', msg);
+        return false;
+    }
+}
+
+// Legacy alias used throughout the file
+const safeEdit = safeEditReply;
+
+async function safeFollowUp(interaction, payload) {
+    try {
+        if (isInteractionExpired(interaction)) return false;
+        await interaction.followUp(payload);
+        return true;
+    } catch (e) {
+        const msg = String(e?.message || '');
+        if (!msg.includes('Unknown Interaction') && !msg.includes('Invalid Webhook Token'))
+            console.warn('[safeFollowUp] error:', msg);
+        return false;
+    }
+}
+
+// Wraps an entire slash-command execution with a timeout fallback
+async function withCommandTimeout(interaction, fn, timeoutMs = 25000) {
+    const timer = setTimeout(async () => {
+        try { await safeFollowUp(interaction, { content: '⏳ This command is taking longer than expected. Please try again.', ephemeral: true }); } catch {}
+    }, timeoutMs);
+    try {
+        return await fn();
+    } catch (e) {
+        console.error('[commandTimeout] uncaught error in command handler:', e);
+        try { await safeReply(interaction, { content: '❌ An error occurred while running this command.', ephemeral: true }); } catch {}
+    } finally {
+        clearTimeout(timer);
+    }
+}
+// ══════════════════════════════════════════════════════════
 
 class PyWorker {
     constructor() {
