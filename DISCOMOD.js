@@ -915,11 +915,30 @@ for line in sys.stdin:
             stdio: ['pipe', 'pipe', 'pipe'],
         });
         this.proc.stdout.on('data', (d) => this._onData(d));
-        this.proc.stderr.on('data', () => {});
-        this.proc.on('exit', () => {
+        // PATCH: log stderr instead of silently dropping it
+        this.proc.stderr.on('data', (d) => {
+            const msg = d.toString('utf8').trim();
+            if (msg) console.error(`[PyWorker/stderr] ${msg}`);
+        });
+        this.proc.on('exit', (code) => {
+            console.warn(`[PyWorker] process exited (code=${code}); rejecting ${this.pending.size} pending request(s)`);
             this.proc = null;
             for (const [, p] of this.pending) {
                 try { p.reject(new Error('PyWorker exited')); } catch {}
+            }
+            this.pending.clear();
+            // PATCH: auto-restart after a short delay so math commands recover
+            setTimeout(() => {
+                try { this.start(); } catch (e) {
+                    console.error('[PyWorker] auto-restart failed:', e);
+                }
+            }, 2000);
+        });
+        this.proc.on('error', (e) => {
+            console.error('[PyWorker] spawn error:', e);
+            this.proc = null;
+            for (const [, p] of this.pending) {
+                try { p.reject(e); } catch {}
             }
             this.pending.clear();
         });
@@ -938,21 +957,35 @@ for line in sys.stdin:
             const pending = this.pending.get(id);
             if (!pending) continue;
             this.pending.delete(id);
+            // PATCH: clear the per-request timeout timer before resolving/rejecting
+            if (pending.timer) clearTimeout(pending.timer);
             if (msg.ok) pending.resolve(msg.result);
             else pending.reject(new Error(String(msg.error || 'PyWorker error')));
         }
     }
 
-    request(method, params) {
+    // PATCH: added timeoutMs param (default 60 s). Requests that exceed the
+    // timeout are rejected and the worker is killed + auto-restarted so no
+    // future command ever hangs permanently.
+    request(method, params, timeoutMs = 60000) {
         this.start();
         const id = this.nextId++;
         const payload = { id, method, params: params || {} };
         return new Promise((resolve, reject) => {
-            this.pending.set(id, { resolve, reject });
+            const timer = setTimeout(() => {
+                if (!this.pending.has(id)) return;
+                this.pending.delete(id);
+                console.error(`[PyWorker] request "${method}" id=${id} timed out after ${timeoutMs}ms — killing worker`);
+                reject(new Error(`PyWorker request "${method}" timed out`));
+                // Kill the hung process — the exit handler will auto-restart it
+                try { if (this.proc) { this.proc.kill('SIGKILL'); } } catch {}
+            }, timeoutMs);
+            this.pending.set(id, { resolve, reject, timer });
             try {
                 this.proc.stdin.write(JSON.stringify(payload) + '\n');
             } catch (e) {
                 this.pending.delete(id);
+                clearTimeout(timer);
                 reject(e);
             }
         });
