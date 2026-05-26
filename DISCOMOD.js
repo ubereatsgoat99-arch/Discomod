@@ -11,6 +11,28 @@
 'use strict';
 require('dotenv').config();
 
+// ══════════════════════════════════════════════════════════
+//  PATCH: GLOBAL CRASH PROTECTION
+//  Prevents ANY unhandled error from silently killing the bot.
+// ══════════════════════════════════════════════════════════
+process.on('uncaughtException', (err, origin) => {
+    console.error(`\n[CRASH GUARD] uncaughtException — origin: ${origin}`);
+    console.error(err);
+    // Do NOT exit; let the bot keep running unless it's a truly fatal state.
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[CRASH GUARD] unhandledRejection at:', promise);
+    console.error('[CRASH GUARD] Reason:', reason);
+});
+process.on('warning', (warning) => {
+    console.warn('[CRASH GUARD] Node Warning:', warning.name, warning.message);
+});
+process.on('multipleResolves', (type, promise, reason) => {
+    // Only log; never throw — some libs trigger this harmlessly.
+    console.warn(`[CRASH GUARD] multipleResolves (${type}):`, reason);
+});
+// ══════════════════════════════════════════════════════════
+
 const {
     Client, GatewayIntentBits, EmbedBuilder, PermissionFlagsBits,
     REST, Routes, SlashCommandBuilder, PermissionsBitField,
@@ -66,8 +88,10 @@ const AI_API_URL    = 'https://api.anthropic.com/v1/messages';
 const AI_MODEL      = 'claude-haiku-4-5-20251001';
 const AI_ENABLED    = true; // set true + add ANTHROPIC_API_KEY env var to enable
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
+// PATCH: soft-disable instead of crash — allows bot to start without Claude key
+// (will fall back to Groq/OpenAI if available, or disable AI chat gracefully)
 if (AI_ENABLED && !ANTHROPIC_KEY) {
-    throw new Error("AI is enabled but ANTHROPIC_API_KEY is missing");
+    console.warn('[STARTUP] WARNING: AI is enabled but ANTHROPIC_API_KEY is missing. Claude provider disabled; will fall back to Groq/OpenAI if keys are present.');
 }
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -370,7 +394,16 @@ async function ai2WebhookLog(message, error) {
         ? `Message: \`${String(message.content || '').slice(0, 1800)}\`\nError: \`${String(error || '')}\``
         : `Error: \`${String(error || '')}\``;
     const payload = { username: 'AI Selfbot', embeds: [{ title: 'AI Selfbot Error', description: desc, color: 0xED4245, timestamp: new Date().toISOString() }] };
-    try { await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); } catch {}
+    // PATCH: add timeout so webhook failures never block execution
+    try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 8000);
+        try {
+            await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
+        } finally {
+            clearTimeout(tid);
+        }
+    } catch {}
 }
 
 function ai2SplitResponse(response, maxLen = 1900) {
@@ -483,6 +516,9 @@ function ai2IsTriggerMessage(message) {
 // ── Claude (Anthropic) chat generation — uses fetch since Claude has its own API format ──
 async function ai2GenerateResponseClaude(prompt, instructions, history) {
     if (!ANTHROPIC_KEY) return "Sorry, ANTHROPIC_API_KEY is not set.";
+    // PATCH: AbortController with 30s timeout to prevent hanging forever
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
         const messages = [];
         if (history && Array.isArray(history)) {
@@ -506,13 +542,27 @@ async function ai2GenerateResponseClaude(prompt, instructions, history) {
                 'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify(body),
+            signal: controller.signal,
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+        if (!res.ok) {
+            // PATCH: handle 429 rate-limit gracefully
+            if (res.status === 429) {
+                console.warn('[AI/Claude] Rate limited (429). Will retry on next request.');
+                return "Sorry, I'm rate-limited right now. Please try again in a moment.";
+            }
+            throw new Error(data?.error?.message || `HTTP ${res.status}`);
+        }
         return String(data?.content?.[0]?.text || "Sorry, I couldn't generate a response.");
     } catch (e) {
+        if (e?.name === 'AbortError') {
+            console.warn('[AI/Claude] Request timed out after 30s.');
+            return "Sorry, the AI took too long to respond. Please try again.";
+        }
         await ai2WebhookLog(null, e);
         return "Sorry, I couldn't generate a response.";
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 
@@ -532,9 +582,22 @@ async function ai2GenerateResponse(prompt, instructions, history) {
             }
         }
         msgs.push({ role: 'user', content: String(prompt || '') });
-        const r = await ai2Client.chat.completions.create({ model: ai2Model, messages: msgs });
+        // PATCH: race against a 30s timeout so we never hang on slow providers
+        const completionPromise = ai2Client.chat.completions.create({ model: ai2Model, messages: msgs });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT')), 30000));
+        const r = await Promise.race([completionPromise, timeoutPromise]);
         return String(r?.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.");
     } catch (e) {
+        if (e?.message === 'AI_TIMEOUT') {
+            console.warn('[AI/OpenAI-Groq] Request timed out after 30s.');
+            return "Sorry, the AI took too long to respond. Please try again.";
+        }
+        // PATCH: handle 429 rate-limits gracefully
+        const status = e?.status || e?.response?.status;
+        if (status === 429) {
+            console.warn('[AI/OpenAI-Groq] Rate limited (429).');
+            return "Sorry, I'm rate-limited right now. Please try again in a moment.";
+        }
         await ai2WebhookLog(null, e);
         return "Sorry, I couldn't generate a response.";
     }
