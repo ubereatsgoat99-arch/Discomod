@@ -2865,7 +2865,7 @@ function detectScamByMode(gs, contentClean, rawText) {
     }
     const base = detectScamOrExploit(contentClean, rawText);
     if (base?.hit) return base;
-    const obf = detectObfuscatedDomains(rawText);
+    const obf = detectObfuscatedDomains(rawText, gs?.linkAllowlistedDomains || []);
     if (obf.length) return { hit: true, reason: `Obfuscated domain(s): ${obf.join(', ')}` };
     return { hit: false };
 }
@@ -2879,10 +2879,17 @@ function normalizeObfuscatedDomainText(raw) {
         .replace(/\s+/g, ' ');
 }
 
-function detectObfuscatedDomains(rawText) {
+function detectObfuscatedDomains(rawText, extraAllowed) {
     const t = normalizeObfuscatedDomainText(rawText);
-    const hit = (t.match(/(?<![a-z0-9])[a-z0-9][a-z0-9\-]{0,60}\s*(?:\.|\s+dot\s+)\s*[a-z]{2,}(?![a-z0-9])/gi) || []);
-    return hit.length ? hit.slice(0, 5) : [];
+    const hits = (t.match(/(?<![a-z0-9])[a-z0-9][a-z0-9\-]{0,60}\s*(?:\.|\s+dot\s+)\s*[a-z]{2,}(?![a-z0-9])/gi) || []);
+    if (!hits.length) return [];
+    // Filter out any match that is already a known-safe domain
+    const combined = [...COMMON_ALLOWED_DOMAINS, ...(extraAllowed || [])];
+    const suspicious = hits.filter(h => {
+        const cleaned = h.replace(/\s+/g, '').toLowerCase();
+        return !domainInList(cleaned, combined);
+    });
+    return suspicious.slice(0, 5);
 }
 
 function getCategoryImmunity(guildId, data, category) {
@@ -7322,6 +7329,193 @@ const COMMON_ALLOWED_DOMAINS = [
     'twitch.tv',
     'jtvnw.net',
     'twitchsvc.net',
+    // ── Google (all services) ─────────────────────────────────────────────────
+    'google.com',
+    'googleapis.com',
+    'googleusercontent.com',
+    'googlevideo.com',
+    'gstatic.com',
+    'ggpht.com',
+    'google.co.uk','google.ca','google.com.au','google.de','google.fr',
+    'google.co.jp','google.co.in','google.es','google.it','google.nl',
+    'google.com.br','google.com.mx','google.ru','google.pl','google.se',
+    'google.no','google.dk','google.fi','google.be','google.at','google.ch',
+    'drive.google.com','docs.google.com','sheets.google.com','slides.google.com',
+    'forms.google.com','maps.google.com','photos.google.com','mail.google.com',
+    'accounts.google.com','play.google.com','classroom.google.com',
+    // ── Gmail / Google Mail ───────────────────────────────────────────────────
+    'gmail.com',
+    // ── Google Cloud / Firebase ───────────────────────────────────────────────
+    'firebase.google.com','firebaseapp.com','firebasestorage.googleapis.com',
+    'storage.googleapis.com','cloudfunctions.net','appspot.com',
+    // ── Bing / Microsoft ─────────────────────────────────────────────────────
+    'bing.com',
+    'microsoft.com',
+    'microsoftonline.com',
+    'live.com',
+    'hotmail.com',
+    'outlook.com',
+    'office.com','office365.com','officeapps.live.com',
+    'onedrive.live.com','sharepoint.com',
+    'azure.com','azurewebsites.net','azureedge.net',
+    'visualstudio.com','vsassets.io',
+    'xbox.com','xboxlive.com',
+    'windows.com','windowsupdate.com',
+    'msn.com','skype.com','teams.microsoft.com',
+    // ── Apple ────────────────────────────────────────────────────────────────
+    'apple.com','icloud.com','me.com','mac.com',
+    'itunes.apple.com','apps.apple.com','developer.apple.com',
+    'aaplimg.com',
+    // ── Amazon / AWS ─────────────────────────────────────────────────────────
+    'amazon.com','amazon.co.uk','amazon.de','amazon.ca','amazon.com.au',
+    'amazonaws.com','cloudfront.net','s3.amazonaws.com',
+    'aws.amazon.com','awsstatic.com',
+    // ── Cloudflare ────────────────────────────────────────────────────────────
+    'cloudflare.com','cloudflareinsights.com','cdnjs.cloudflare.com',
+    'workers.dev','pages.dev',
+    // ── Meta / Facebook / Instagram ───────────────────────────────────────────
+    'facebook.com','fb.com','fb.me',
+    'fbcdn.net','scontent.fbcdn.net',
+    'instagram.com','instagr.am',
+    'cdninstagram.com',
+    'threads.net',
+    'meta.com',
+    'oculus.com','meta.quest.com',
+    'whatsapp.com','whatsapp.net',
+    // ── TikTok ───────────────────────────────────────────────────────────────
+    'tiktok.com','tiktokcdn.com','musical.ly',
+    // ── Snapchat ─────────────────────────────────────────────────────────────
+    'snapchat.com','snap.com',
+    // ── LinkedIn ─────────────────────────────────────────────────────────────
+    'linkedin.com','licdn.com',
+    // ── Pinterest ────────────────────────────────────────────────────────────
+    'pinterest.com','pinimg.com',
+    // ── Tumblr ───────────────────────────────────────────────────────────────
+    'tumblr.com',
+    // ── Mastodon / Bluesky / Fediverse ────────────────────────────────────────
+    'bsky.app','bsky.social',
+    'mastodon.social','mstdn.social',
+    // ── Kick (streaming) ─────────────────────────────────────────────────────
+    'kick.com',
+    // ── YouTube Music / Spotify / SoundCloud ──────────────────────────────────
+    'music.youtube.com',
+    'spotify.com','spotifycdn.com','scdn.co','open.spotify.com',
+    'soundcloud.com','sndcdn.com',
+    'audiomack.com','bandcamp.com',
+    'deezer.com',
+    'tidal.com',
+    'last.fm',
+    'genius.com',
+    // ── Steam / Valve ─────────────────────────────────────────────────────────
+    'steampowered.com','steamcommunity.com','steamstatic.com','steam.pm',
+    'steamusercontent.com','steampowered.com',
+    'valvesoftware.com',
+    // ── Epic Games ───────────────────────────────────────────────────────────
+    'epicgames.com','epicgames.dev','unrealengine.com',
+    'fortnite.com',
+    // ── PlayStation / Sony ───────────────────────────────────────────────────
+    'playstation.com','playstation.net','sonyentertainmentnetwork.com',
+    'psnprofiles.com',
+    // ── Nintendo ─────────────────────────────────────────────────────────────
+    'nintendo.com','nintendo.net',
+    // ── Xbox / Microsoft Gaming ───────────────────────────────────────────────
+    'xbox.com','xboxlive.com','xboxgamebar.com',
+    // ── Roblox (extra) ────────────────────────────────────────────────────────
+    'roblox.com','rbxcdn.com','rbx.com',
+    'robloxlabs.com',
+    'setup.rbxcdn.com',
+    // ── Minecraft ────────────────────────────────────────────────────────────
+    'minecraft.net','mojang.com','minecraftforum.net',
+    // ── Riot Games / League / Valorant ────────────────────────────────────────
+    'riotgames.com','leagueoflegends.com','valorant.com',
+    'riven.io','cdn.riotgames.com',
+    // ── Blizzard / Battle.net ─────────────────────────────────────────────────
+    'blizzard.com','battle.net','bnet.app',
+    // ── EA / Origin ──────────────────────────────────────────────────────────
+    'ea.com','origin.com','eaplay.com',
+    // ── Ubisoft ──────────────────────────────────────────────────────────────
+    'ubisoft.com','ubi.com',
+    // ── Rockstar ─────────────────────────────────────────────────────────────
+    'rockstargames.com','socialclub.rockstargames.com',
+    // ── Genshin / HoYoverse ───────────────────────────────────────────────────
+    'hoyoverse.com','mihoyo.com','genshin.hoyoverse.com',
+    'hoyolab.com',
+    // ── Other gaming platforms ────────────────────────────────────────────────
+    'gog.com','gogcdn.net',
+    'itch.io',
+    'curseforge.com','cfu.curse.com','forgecdn.net',
+    'modrinth.com',
+    'nexusmods.com',
+    'gamebanana.com',
+    // ── Wikipedia / Wikimedia ─────────────────────────────────────────────────
+    'wikipedia.org','wikimedia.org','wikidata.org',
+    'upload.wikimedia.org',
+    // ── Stack Overflow / Stack Exchange ───────────────────────────────────────
+    'stackoverflow.com','stackexchange.com','superuser.com','serverfault.com',
+    'askubuntu.com',
+    // ── npm / PyPI / package registries ──────────────────────────────────────
+    'npmjs.com','pypi.org','crates.io','rubygems.org','packagist.org',
+    'nuget.org',
+    // ── GitLab / Bitbucket ────────────────────────────────────────────────────
+    'gitlab.com','bitbucket.org',
+    'sourceforge.net',
+    'codepen.io','jsfiddle.net','replit.com','codesandbox.io','glitch.com',
+    // ── Vercel / Netlify / Railway / render.com ───────────────────────────────
+    'vercel.app','netlify.app','netlify.com',
+    'railway.app','render.com','fly.dev','heroku.com',
+    // ── CDNs ──────────────────────────────────────────────────────────────────
+    'jsdelivr.net','unpkg.com','cdnjs.cloudflare.com',
+    'bootstrapcdn.com','fontawesome.com',
+    'fonts.googleapis.com','fonts.gstatic.com',
+    // ── News & general web ────────────────────────────────────────────────────
+    'bbc.com','bbc.co.uk','bbci.co.uk',
+    'cnn.com',
+    'nytimes.com','wsj.com','theguardian.com',
+    'reuters.com','apnews.com',
+    'cbsnews.com','nbcnews.com','abcnews.go.com',
+    'foxnews.com','msnbc.com',
+    'vice.com','vox.com','buzzfeed.com',
+    'huffpost.com','independent.co.uk','telegraph.co.uk',
+    'medium.com','substack.com',
+    'quora.com',
+    // ── Image / video file hosts (extra) ─────────────────────────────────────
+    'ibb.co',
+    'imgbb.com',
+    'cloudinary.com','res.cloudinary.com',
+    'staticflickr.com','flickr.com',
+    '500px.com',
+    'unsplash.com','images.unsplash.com',
+    'pexels.com',
+    'pixabay.com',
+    'giphymedia.com',
+    // ── URL shorteners that are safe / official ───────────────────────────────
+    'youtu.be',   // already above but doubling up is harmless
+    'discord.com', // already above
+    // ── Linktree / bio link pages ─────────────────────────────────────────────
+    'linktr.ee',
+    'beacons.ai',
+    'carrd.co',
+    // ── PayPal / payment (safe to link, not scam) ──────────────────────────────
+    'paypal.com','paypal.me',
+    'venmo.com','cash.app',
+    'stripe.com',
+    // ── Misc trusted / popular ────────────────────────────────────────────────
+    'archive.org','web.archive.org',
+    'cloudflare.com',
+    'namemc.com',            // Minecraft name lookup
+    'plancke.io',            // Hypixel stats
+    'sky.shiiyu.moe',        // Hypixel SkyBlock
+    'coflnet.com',           // Hypixel SkyBlock auction
+    'bloxfruits.fandom.com',
+    'blox-fruits.fandom.com',
+    'www.roblox.com',
+    'create.roblox.com',
+    'devforum.roblox.com',
+    'trello.com',
+    'notion.so','notion.com',
+    'docs.google.com',
+    'canva.com',
+    'figma.com',
 ];
 function classifyLinkDomains(domains, gs) {
     const allow = (gs?.linkAllowlistedDomains || []).map(normalizeDomain);
