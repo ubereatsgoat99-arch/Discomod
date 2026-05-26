@@ -1,3 +1,4 @@
+const roastBattles = new Map();
 // ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║  SKYNET V7 — BLOX FRUITS ULTRA GUARDIAN                                     ║
 // ║  Professional-grade Discord moderation bot                                   ║
@@ -2011,9 +2012,13 @@ function extractDomains(text) {
     return [...new Set(domains)];
 }
 
-function detectScamOrExploit(cleanText, rawText) {
+function detectScamOrExploit(cleanText, rawText, guildAllowlist) {
     const t = cleanText;
     const ns = t.replace(/[\s_]/g,'');
+    // Combine the hard-coded safe list with any domains the guild admin has explicitly allowed
+    const _safeList = guildAllowlist && guildAllowlist.length
+        ? [...COMMON_ALLOWED_DOMAINS, ...guildAllowlist]
+        : COMMON_ALLOWED_DOMAINS;
 
     for (const phrase of SCAM_OR_EXPLOIT_PHRASES) {
         const p = phrase.toLowerCase();
@@ -2041,8 +2046,8 @@ function detectScamOrExploit(cleanText, rawText) {
 
     const domains = extractDomains(rawText || t);
     for (const d of domains) {
-        // Always skip known-safe domains (Discord CDN, Tenor, Giphy, Roblox CDN, etc.)
-        if (domainInList(d, COMMON_ALLOWED_DOMAINS)) continue;
+        // Skip any domain in the hard-coded safe list OR the guild's explicit /link allow list
+        if (domainInList(d, _safeList)) continue;
         if (LINK_SHORTENERS.has(d)) return { hit: true, reason: `Suspicious link shortener: ${d}` };
         if (LINK_SHORTENERS_EXTRA.has(d)) return { hit: true, reason: `Suspicious link shortener: ${d}` };
         if (SCAM_DOMAIN_BLACKLIST.has(d)) return { hit: true, reason: `Blacklisted scam domain: ${d}` };
@@ -3085,15 +3090,16 @@ async function applyConfiguredAction(message, data, gs, opts) {
 
 function detectScamByMode(gs, contentClean, rawText) {
     if (gs.linkMode === 'off') return { hit: false };
+    const guildAllowlist = gs?.linkAllowlistedDomains || [];
     if (gs.linkMode === 'medium') {
         const raw = rawText || '';
         const hasUrl = /https?:\/\//i.test(raw);
         if (!hasUrl) return { hit: false };
-        return detectScamOrExploit(contentClean, rawText);
+        return detectScamOrExploit(contentClean, rawText, guildAllowlist);
     }
-    const base = detectScamOrExploit(contentClean, rawText);
+    const base = detectScamOrExploit(contentClean, rawText, guildAllowlist);
     if (base?.hit) return base;
-    const obf = detectObfuscatedDomains(rawText, gs?.linkAllowlistedDomains || []);
+    const obf = detectObfuscatedDomains(rawText, guildAllowlist);
     if (obf.length) return { hit: true, reason: `Obfuscated domain(s): ${obf.join(', ')}` };
     return { hit: false };
 }
@@ -7456,7 +7462,6 @@ function domainInList(domain, list) {
 
 const COMMON_ALLOWED_DOMAINS = [
     // ── Discord (every CDN / attachment / media subdomain) ─────────────────────
-    // Adding both the exact subdomain AND the parent so domainInList(suffix match) covers anything new
     'discord.com',
     'discordapp.com',       // covers cdn.discordapp.com, attachments.discordapp.com, etc.
     'discordapp.net',       // covers media.discordapp.net, images-ext-*.discordapp.net, etc.
@@ -7464,7 +7469,6 @@ const COMMON_ALLOWED_DOMAINS = [
     'discord.co',
     'discord.media',
     'discordcdn.com',
-    // Explicit subdomains (belt + suspenders)
     'cdn.discordapp.com',
     'media.discordapp.net',
     'images-ext-1.discordapp.net',
@@ -7477,12 +7481,15 @@ const COMMON_ALLOWED_DOMAINS = [
     'cdn3.discordapp.com',
     'cdn4.discordapp.com',
     // ── Tenor (GIF platform) ───────────────────────────────────────────────────
-    'tenor.com',            // covers media.tenor.com, c.tenor.com, g.tenor.com, etc.
+    'tenor.com',
     'media.tenor.com',
     'c.tenor.com',
     'g.tenor.com',
+    'media1.tenor.com',
+    'media2.tenor.com',
+    'media3.tenor.com',
     // ── Giphy ─────────────────────────────────────────────────────────────────
-    'giphy.com',            // covers media.giphy.com, media0-4.giphy.com, i.giphy.com
+    'giphy.com',
     'media.giphy.com',
     'media0.giphy.com',
     'media1.giphy.com',
@@ -7490,8 +7497,9 @@ const COMMON_ALLOWED_DOMAINS = [
     'media3.giphy.com',
     'media4.giphy.com',
     'i.giphy.com',
+    'giphymedia.com',
     // ── Imgur ─────────────────────────────────────────────────────────────────
-    'imgur.com',            // covers i.imgur.com, m.imgur.com
+    'imgur.com',
     'i.imgur.com',
     'm.imgur.com',
     // ── Gyazo ────────────────────────────────────────────────────────────────
@@ -7502,10 +7510,9 @@ const COMMON_ALLOWED_DOMAINS = [
     'thumbs.gfycat.com',
     'giant.gfycat.com',
     // ── Roblox (every CDN) ────────────────────────────────────────────────────
-    'roblox.com',           // covers all *.roblox.com subdomains
-    'rbxcdn.com',           // covers t1-t3.rbxcdn.com, setup.rbxcdn.com, etc.
+    'roblox.com',
+    'rbxcdn.com',
     'rbx.com',
-    // Explicit Roblox CDN subdomains
     'cdn.roblox.com',
     'assetgame.roblox.com',
     'thumbnails.roblox.com',
@@ -7513,50 +7520,94 @@ const COMMON_ALLOWED_DOMAINS = [
     't1.rbxcdn.com',
     't2.rbxcdn.com',
     't3.rbxcdn.com',
+    'setup.rbxcdn.com',
+    'robloxlabs.com',
+    'www.roblox.com',
+    'create.roblox.com',
+    'devforum.roblox.com',
+    'bloxfruits.fandom.com',
+    'blox-fruits.fandom.com',
     // ── YouTube ───────────────────────────────────────────────────────────────
     'youtube.com',
     'youtu.be',
     'i.ytimg.com',
     'img.youtube.com',
+    'music.youtube.com',
+    'yt.be',
     // ── Twitter/X ────────────────────────────────────────────────────────────
     'twitter.com',
     'x.com',
     't.co',
     'pbs.twimg.com',
     'abs.twimg.com',
+    'twimg.com',
     // ── Reddit ───────────────────────────────────────────────────────────────
     'reddit.com',
     'redd.it',
     'i.redd.it',
     'v.redd.it',
     'preview.redd.it',
+    'old.reddit.com',
+    'www.reddit.com',
+    'external-preview.redd.it',
     // ── GitHub ───────────────────────────────────────────────────────────────
     'github.com',
-    'githubusercontent.com', // covers raw.githubusercontent.com, user-images, camo, etc.
+    'githubusercontent.com',
     'github.io',
-    // ── Streamable / Medal / other clip hosts ────────────────────────────────
+    'gist.github.com',
+    'raw.githubusercontent.com',
+    // ── Streamable / Medal / clip hosts ──────────────────────────────────────
     'streamable.com',
     'medal.tv',
     'cdn.medal.tv',
-    // ── Misc safe media / paste hosts ────────────────────────────────────────
+    'clips.twitch.tv',
+    'clips2.twitch.tv',
+    'vod.twitch.tv',
+    'outplayed.tv',
+    'plays.tv',
+    'outplayed.com',
+    'clipped.gg',
+    // ── Image / file sharing ─────────────────────────────────────────────────
     'postimg.cc',
     'i.postimg.cc',
     'prnt.sc',
     'catbox.moe',
     'litter.catbox.moe',
     'files.catbox.moe',
+    'paste.gg',
     'pastebin.com',
     'rentry.co',
     'hastebin.com',
-    // ── Blox Fruits / Roblox wikis ───────────────────────────────────────────
-    'fandom.com',           // covers blox-fruits.fandom.com, roblox.fandom.com, etc.
+    'ibb.co',
+    'imgbb.com',
+    'cloudinary.com',
+    'res.cloudinary.com',
+    'staticflickr.com',
+    'flickr.com',
+    '500px.com',
+    'unsplash.com',
+    'images.unsplash.com',
+    'pexels.com',
+    'pixabay.com',
+    // ── Blox Fruits / Roblox wikis / gaming wikis ────────────────────────────
+    'fandom.com',
     'wikia.com',
     'wikia.nocookie.net',
     'static.wikia.nocookie.net',
+    'gamespot.com',
+    'ign.com',
+    'kotaku.com',
+    'polygon.com',
+    'pcgamer.com',
+    'rockpapershotgun.com',
+    'gameranx.com',
+    'eurogamer.net',
     // ── Twitch ───────────────────────────────────────────────────────────────
     'twitch.tv',
     'jtvnw.net',
     'twitchsvc.net',
+    'twitchapps.com',
+    'static-cdn.jtvnw.net',
     // ── Google (all services) ─────────────────────────────────────────────────
     'google.com',
     'googleapis.com',
@@ -7571,9 +7622,7 @@ const COMMON_ALLOWED_DOMAINS = [
     'drive.google.com','docs.google.com','sheets.google.com','slides.google.com',
     'forms.google.com','maps.google.com','photos.google.com','mail.google.com',
     'accounts.google.com','play.google.com','classroom.google.com',
-    // ── Gmail / Google Mail ───────────────────────────────────────────────────
     'gmail.com',
-    // ── Google Cloud / Firebase ───────────────────────────────────────────────
     'firebase.google.com','firebaseapp.com','firebasestorage.googleapis.com',
     'storage.googleapis.com','cloudfunctions.net','appspot.com',
     // ── Bing / Microsoft ─────────────────────────────────────────────────────
@@ -7590,6 +7639,7 @@ const COMMON_ALLOWED_DOMAINS = [
     'xbox.com','xboxlive.com',
     'windows.com','windowsupdate.com',
     'msn.com','skype.com','teams.microsoft.com',
+    'bing.net',
     // ── Apple ────────────────────────────────────────────────────────────────
     'apple.com','icloud.com','me.com','mac.com',
     'itunes.apple.com','apps.apple.com','developer.apple.com',
@@ -7601,6 +7651,7 @@ const COMMON_ALLOWED_DOMAINS = [
     // ── Cloudflare ────────────────────────────────────────────────────────────
     'cloudflare.com','cloudflareinsights.com','cdnjs.cloudflare.com',
     'workers.dev','pages.dev',
+    'cloudflare-ipfs.com',
     // ── Meta / Facebook / Instagram ───────────────────────────────────────────
     'facebook.com','fb.com','fb.me',
     'fbcdn.net','scontent.fbcdn.net',
@@ -7625,7 +7676,7 @@ const COMMON_ALLOWED_DOMAINS = [
     'mastodon.social','mstdn.social',
     // ── Kick (streaming) ─────────────────────────────────────────────────────
     'kick.com',
-    // ── YouTube Music / Spotify / SoundCloud ──────────────────────────────────
+    // ── Music streaming ───────────────────────────────────────────────────────
     'music.youtube.com',
     'spotify.com','spotifycdn.com','scdn.co','open.spotify.com',
     'soundcloud.com','sndcdn.com',
@@ -7634,9 +7685,11 @@ const COMMON_ALLOWED_DOMAINS = [
     'tidal.com',
     'last.fm',
     'genius.com',
+    'napster.com',
+    'iheart.com',
     // ── Steam / Valve ─────────────────────────────────────────────────────────
     'steampowered.com','steamcommunity.com','steamstatic.com','steam.pm',
-    'steamusercontent.com','steampowered.com',
+    'steamusercontent.com',
     'valvesoftware.com',
     // ── Epic Games ───────────────────────────────────────────────────────────
     'epicgames.com','epicgames.dev','unrealengine.com',
@@ -7648,10 +7701,6 @@ const COMMON_ALLOWED_DOMAINS = [
     'nintendo.com','nintendo.net',
     // ── Xbox / Microsoft Gaming ───────────────────────────────────────────────
     'xbox.com','xboxlive.com','xboxgamebar.com',
-    // ── Roblox (extra) ────────────────────────────────────────────────────────
-    'roblox.com','rbxcdn.com','rbx.com',
-    'robloxlabs.com',
-    'setup.rbxcdn.com',
     // ── Minecraft ────────────────────────────────────────────────────────────
     'minecraft.net','mojang.com','minecraftforum.net',
     // ── Riot Games / League / Valorant ────────────────────────────────────────
@@ -7668,13 +7717,36 @@ const COMMON_ALLOWED_DOMAINS = [
     // ── Genshin / HoYoverse ───────────────────────────────────────────────────
     'hoyoverse.com','mihoyo.com','genshin.hoyoverse.com',
     'hoyolab.com',
-    // ── Other gaming platforms ────────────────────────────────────────────────
+    // ── Other gaming platforms / leaderboards / stats ────────────────────────
     'gog.com','gogcdn.net',
     'itch.io',
     'curseforge.com','cfu.curse.com','forgecdn.net',
     'modrinth.com',
     'nexusmods.com',
     'gamebanana.com',
+    'overwolf.com',
+    'tracker.gg',
+    'op.gg',
+    'u.gg',
+    'mobafire.com',
+    'dotabuff.com',
+    'stratz.com',
+    'faceit.com',
+    'leetify.com',
+    'hltv.org',
+    'csgostats.gg',
+    'leetify.com',
+    'battlefy.com',
+    'toornament.com',
+    'challengermode.com',
+    'battlefy.com',
+    'speedrun.com',
+    'howlongtobeat.com',
+    'backloggd.com',
+    'rawg.io',
+    'igdb.com',
+    'metascore.com',
+    'metacritic.com',
     // ── Wikipedia / Wikimedia ─────────────────────────────────────────────────
     'wikipedia.org','wikimedia.org','wikidata.org',
     'upload.wikimedia.org',
@@ -7688,14 +7760,14 @@ const COMMON_ALLOWED_DOMAINS = [
     'gitlab.com','bitbucket.org',
     'sourceforge.net',
     'codepen.io','jsfiddle.net','replit.com','codesandbox.io','glitch.com',
-    // ── Vercel / Netlify / Railway / render.com ───────────────────────────────
+    // ── Hosting / devops ─────────────────────────────────────────────────────
     'vercel.app','netlify.app','netlify.com',
     'railway.app','render.com','fly.dev','heroku.com',
     // ── CDNs ──────────────────────────────────────────────────────────────────
-    'jsdelivr.net','unpkg.com','cdnjs.cloudflare.com',
+    'jsdelivr.net','unpkg.com',
     'bootstrapcdn.com','fontawesome.com',
     'fonts.googleapis.com','fonts.gstatic.com',
-    // ── News & general web ────────────────────────────────────────────────────
+    // ── News & media ────────────────────────────────────────────────────────
     'bbc.com','bbc.co.uk','bbci.co.uk',
     'cnn.com',
     'nytimes.com','wsj.com','theguardian.com',
@@ -7706,45 +7778,624 @@ const COMMON_ALLOWED_DOMAINS = [
     'huffpost.com','independent.co.uk','telegraph.co.uk',
     'medium.com','substack.com',
     'quora.com',
-    // ── Image / video file hosts (extra) ─────────────────────────────────────
-    'ibb.co',
-    'imgbb.com',
-    'cloudinary.com','res.cloudinary.com',
-    'staticflickr.com','flickr.com',
-    '500px.com',
-    'unsplash.com','images.unsplash.com',
-    'pexels.com',
-    'pixabay.com',
-    'giphymedia.com',
-    // ── URL shorteners that are safe / official ───────────────────────────────
-    'youtu.be',   // already above but doubling up is harmless
-    'discord.com', // already above
-    // ── Linktree / bio link pages ─────────────────────────────────────────────
-    'linktr.ee',
-    'beacons.ai',
-    'carrd.co',
-    // ── PayPal / payment (safe to link, not scam) ──────────────────────────────
-    'paypal.com','paypal.me',
-    'venmo.com','cash.app',
-    'stripe.com',
-    // ── Misc trusted / popular ────────────────────────────────────────────────
-    'archive.org','web.archive.org',
-    'cloudflare.com',
-    'namemc.com',            // Minecraft name lookup
-    'plancke.io',            // Hypixel stats
-    'sky.shiiyu.moe',        // Hypixel SkyBlock
-    'coflnet.com',           // Hypixel SkyBlock auction
-    'bloxfruits.fandom.com',
-    'blox-fruits.fandom.com',
-    'www.roblox.com',
-    'create.roblox.com',
-    'devforum.roblox.com',
+    // ── Productivity / collab tools ───────────────────────────────────────────
     'trello.com',
     'notion.so','notion.com',
     'docs.google.com',
     'canva.com',
     'figma.com',
+    'miro.com',
+    'airtable.com',
+    'asana.com',
+    'basecamp.com',
+    'clickup.com',
+    'monday.com',
+    'linear.app',
+    'jira.atlassian.com',
+    'confluence.atlassian.com',
+    'atlassian.com',
+    'atlassian.net',
+    'slack.com',
+    'zoom.us',
+    // ── Linktree / bio link pages ─────────────────────────────────────────────
+    'linktr.ee',
+    'beacons.ai',
+    'carrd.co',
+    'bio.link',
+    'solo.to',
+    'linkt.ree',
+    // ── Payment / finance (safe to link, not scam) ────────────────────────────
+    'paypal.com','paypal.me',
+    'venmo.com','cash.app',
+    'stripe.com',
+    'ko-fi.com',
+    'patreon.com',
+    'gofundme.com',
+    // ── Misc trusted / popular ────────────────────────────────────────────────
+    'archive.org','web.archive.org',
+    'namemc.com',
+    'plancke.io',
+    'sky.shiiyu.moe',
+    'coflnet.com',
+    'wolfram.com',
+    'wolframalpha.com',
+    // ── URL shorteners that are provably safe (official/brand-owned) ──────────
+    'youtu.be',
+    'discord.com',
+    // ── Additional GIF / video / media embed CDNs ────────────────────────────
+    'gph.is',           // Giphy short links
+    'media.giphy.com',
+    'i.kym-cdn.com',    // KnowYourMeme
+    'knowyourmeme.com',
+    'cdn.discordapp.com',
+    'images.genius.com',
+    'is.gd',            // safe generic shortener
+    'v.redd.it',
+    // ── Messaging / community platforms ──────────────────────────────────────
+    'telegram.org',
+    't.me',
+    'guilded.gg',
+    'revolt.chat',
+    'matrix.org',
+    'element.io',
+    'signal.org',
+    // ── Common image search / stock photo ─────────────────────────────────────
+    'images.google.com',
+    'search.google.com',
+    'photos.app.goo.gl',
+    'goo.gl',
+    'lens.google.com',
+    // ── Additional safe hosting / app platforms ───────────────────────────────
+    'repl.it',
+    'onrender.com',
+    'up.railway.app',
+    'firebaseio.com',
+    'web.app',
+    // ── AI / LLM tools (commonly shared in gaming communities) ──────────────
+    'chat.openai.com',
+    'chatgpt.com',
+    'openai.com',
+    'claude.ai',
+    'anthropic.com',
+    'gemini.google.com',
+    'perplexity.ai',
+    'copilot.microsoft.com',
+    // ── Top-level social / video (non-Western markets common in BF) ──────────
+    'bilibili.com',
+    'nicovideo.jp',
+    'weibo.com',
+    'qq.com',
+    'youku.com',
+    'twitch.com',     // some users type .com
+    // ── Commonly shared in Discord gaming servers ─────────────────────────────
+    'prntscr.com',    // Lightshot screenshot
+    'screencast.com',
+    'share.icloud.com',
+    'photos.app.goo.gl',
+    'drive.google.com',
+    'dropbox.com',
+    'dropboxusercontent.com',
+    'dl.dropboxusercontent.com',
+    'box.com',
+    'box.net',
+    'wetransfer.com',
+    'we.tl',
+    // ── Major websites people link in servers ─────────────────────────────────
+    'amazon.com',
+    'ebay.com',
+    'walmart.com',
+    'target.com',
+    'bestbuy.com',
+    'newegg.com',
+    'bhphotovideo.com',
+    'etsy.com',
+    'aliexpress.com',
+    'temu.com',
+    'shein.com',
+    // ── Secure info / reference ───────────────────────────────────────────────
+    'cve.mitre.org',
+    'nvd.nist.gov',
+    'nist.gov',
+    'cert.org',
+    'owasp.org',
+    // ── Popular Discord bot / utility sites ───────────────────────────────────
+    'top.gg',
+    'discordbotlist.com',
+    'discordservers.com',
+    'disboard.org',
+    'discord.boats',
+    'mee6.xyz',
+    'carl.gg',
+    'dynobot.net',
+    'arcane-bot.com',
+    'probot.io',
+    'statbot.net',
+    'combot.org',
+    'wick.fun',
+    'zeppelin.gg',
+    'atlas.bot',
+    'combot.org',
+    'cleanbot.xyz',
+    'hammertime.cyou',
+    'discordbotlist.com',
+    'discordstatus.com',
+    'statuspage.io',
+    // ── VirusTotal / safe-link checkers ──────────────────────────────────────
+    'virustotal.com',
+    'urlvoid.com',
+    'sucuri.net',
+    'isitphishing.ai',
+    'phishtank.com',
+    // ── Additional common image/video CDNs ────────────────────────────────────
+    'imagekit.io',
+    'imgix.net',
+    'fastly.net',
+    'akamaized.net',
+    'akamai.com',
+    'akamaihd.net',
+    'llnwd.net',
+    'edgecastcdn.net',
+    'limelight.com',
+    'insnw.net',
+    'i.ibb.co',
+    // ── Commonly shared safe CDN subdomains ───────────────────────────────────
+    'cdn.discordapp.com',
+    'media.discordapp.net',
+    'cdn.betterttv.net',
+    'betterttv.com',
+    'cdn.frankerfacez.com',
+    'frankerfacez.com',
+    '7tv.app',
+    'cdn.7tv.app',
+    // ── Google AMP / Google link proxy ───────────────────────────────────────
+    'amp.dev',
+    'google.com',
+    'google-analytics.com',
+    // ── Streaming / vods ─────────────────────────────────────────────────────
+    'dailymotion.com',
+    'vimeo.com',
+    'player.vimeo.com',
+    'vimeocdn.com',
+    'rumble.com',
+    'odysee.com',
+    'peertube.social',
+    'lbry.tv',
+    // ── Browser / extension stores ────────────────────────────────────────────
+    'chrome.google.com',
+    'addons.mozilla.org',
+    'addons.opera.com',
+    'microsoftedge.microsoft.com',
+    // ── Popular social link aggregators ──────────────────────────────────────
+    'allmylinks.com',
+    'taplink.cc',
+    'lnk.bio',
+    'hoo.be',
+    'campsite.bio',
+    'stan.store',
+    'koji.com',
+
+    // ── Additional image / media hosts ───────────────────────────────────────────
+'imgbox.com',
+'thumbs.imgbox.com',
+'imagebam.com',
+'imagevenue.com',
+'imgpile.com',
+'imgsafe.org',
+'pixhost.to',
+'postimages.org',
+'imageupload.io',
+'imageban.ru',
+'imageupper.com',
+'imgdrive.net',
+'imagecurl.org',
+
+// ── More GIF / meme / reaction platforms ─────────────────────────────────────
+'reactiongifs.com',
+'reactionimages.me',
+'memedroid.com',
+'imgflip.com',
+'kapwing.com',
+'makeameme.org',
+
+// ── More video / clip / streaming hosts ──────────────────────────────────────
+'ok.ru',
+'okcdn.ru',
+'streamja.com',
+'streamff.com',
+'vidyard.com',
+'jwplayer.com',
+'jwplatform.com',
+'brightcove.com',
+'cdn.jwplayer.com',
+
+// ── File sharing / uploads (safe/common) ─────────────────────────────────────
+'mega.nz',
+'mega.io',
+'anonfiles.com',
+'file.io',
+'ufile.io',
+'upload.ee',
+'fileditch.com',
+'pixeldrain.com',
+'pixeldrain.dev',
+'transfer.sh',
+'sendgb.com',
+'sendspace.com',
+'zippyshare.com',
+'mediafire.com',
+'4shared.com',
+
+// ── Paste / code sharing (more) ──────────────────────────────────────────────
+'ghostbin.com',
+'controlc.com',
+'dpaste.org',
+'justpaste.it',
+'paste.ee',
+'paste2.org',
+'codebeautify.org',
+
+// ── Forums / nerdy communities ───────────────────────────────────────────────
+'resetera.com',
+'neogaf.com',
+'gamefaqs.gamespot.com',
+'trueachievements.com',
+'truetrophies.com',
+'steamdb.info',
+'pcgamingwiki.com',
+'moddb.com',
+'indiedb.com',
+'vg247.com',
+
+// ── Anime / manga / otaku stuff ──────────────────────────────────────────────
+'myanimelist.net',
+'anilist.co',
+'kitsu.io',
+'crunchyroll.com',
+'funimation.com',
+'hidive.com',
+'aniwave.to',
+'9anime.to',
+
+// ── Minecraft / sandbox communities ──────────────────────────────────────────
+'planetminecraft.com',
+'mcpedl.com',
+'spigotmc.org',
+'bukkit.org',
+'cursecdn.com',
+
+// ── FPS / competitive gaming tools ───────────────────────────────────────────
+'tracker.network',
+'fortnitetracker.com',
+'cod.tracker.gg',
+'apex.tracker.gg',
+'valoranttracker.gg',
+'r6.tracker.network',
+'rocketleague.tracker.network',
+
+// ── Speedrunning / challenge / niche gaming ──────────────────────────────────
+'splits.io',
+'speedrunstats.com',
+'therun.gg',
+
+// ── Emulation / ROM-safe communities (non-piracy hosting) ────────────────────
+'retroachievements.org',
+'emulatorgames.net',
+'vimm.net',
+
+// ── Tech / dev / nerd tools ──────────────────────────────────────────────────
+'stackblitz.com',
+'codeshare.io',
+'glot.io',
+'ideone.com',
+'judge0.com',
+'wandbox.org',
+
+// ── Cyber / security / nerd stuff ────────────────────────────────────────────
+'haveibeenpwned.com',
+'shields.io',
+'badge.fury.io',
+'securitytrails.com',
+'crt.sh',
+
+// ── More hosting / infra ─────────────────────────────────────────────────────
+'digitalocean.com',
+'linode.com',
+'vultr.com',
+'oraclecloud.com',
+'ovhcloud.com',
+'contabo.com',
+
+// ── CDN / asset delivery (more obscure) ──────────────────────────────────────
+'stackpathcdn.com',
+'quantserve.com',
+'cdn.jsdelivr.com',
+'cdnjs.com',
+'fastlylb.net',
+'cdn77.org',
+
+// ── Blogging / writing / docs ────────────────────────────────────────────────
+'dev.to',
+'hashnode.dev',
+'readthedocs.io',
+'gitbook.io',
+'notion.site',
+
+// ── AI / tools (more niche) ──────────────────────────────────────────────────
+'poe.com',
+'huggingface.co',
+'replicate.com',
+'runpod.io',
+'jan.ai',
+
+// ── Maps / geo / tracking ────────────────────────────────────────────────────
+'openstreetmap.org',
+'mapbox.com',
+'here.com',
+'waze.com',
+
+// ── Alternative socials / communities ────────────────────────────────────────
+'cohost.org',
+'counter.social',
+'plurk.com',
+'vk.com',
+'vkcdn.net',
+
+// ── Messaging / VOIP extras ──────────────────────────────────────────────────
+'teamspeak.com',
+'mumble.info',
+'ventrilo.com',
+
+// ── Browser-based games / casual ─────────────────────────────────────────────
+'poki.com',
+'crazygames.com',
+'miniclip.com',
+'coolmathgames.com',
+
+// ── Hardware / PC building / benchmarks ──────────────────────────────────────
+'userbenchmark.com',
+'passmark.com',
+'cpubenchmark.net',
+'gpubenchmark.net',
+'pcpartpicker.com',
+
+// ── Shopping / trading (more niche) ──────────────────────────────────────────
+'stockx.com',
+'grailed.com',
+'mercari.com',
+'carousell.com',
+
+// ── Crypto / web3 (commonly shared links) ────────────────────────────────────
+'coinmarketcap.com',
+'coingecko.com',
+'etherscan.io',
+'bscscan.com',
+'polygonscan.com',
+
+// ── URL tools / utilities ────────────────────────────────────────────────────
+'wheregoes.com',
+'checkshorturl.com',
+'redirectdetective.com',
+
+// ── Archive / backups / mirrors ──────────────────────────────────────────────
+'archive.ph',
+'archive.is',
+'ghostarchive.org',
+
+// ── Misc nerd / fun / tools ──────────────────────────────────────────────────
+'neal.fun',
+'pointerpointer.com',
+'zoomquilt.org',
+'futureme.org',
+
+// ── Fonts / assets / design ──────────────────────────────────────────────────
+'dafont.com',
+'fontsquirrel.com',
+'1001fonts.com',
+
+// ── Esports / tournaments / orgs ─────────────────────────────────────────────
+'liquipedia.net',
+'esl.com',
+'faceittracker.net',
+'esea.net',
+
+// ── Game servers / hosting ───────────────────────────────────────────────────
+'aternos.org',
+'shockbyte.com',
+'bisecthosting.com',
+
+// ── Misc commonly seen CDN/random embeds ─────────────────────────────────────
+'cdn.segment.com',
+'cdn.optimizely.com',
+'cdn.amplitude.com',
+'cdn.split.io',
+
+// ── Misc extra link shorteners (reputable) ───────────────────────────────────
+'cutt.ly',
+'short.io',
+'rebrand.ly',
+
+// ── Extra cloud storage / sharing ────────────────────────────────────────────
+'pcloud.com',
+'sync.com',
+'icedrive.net',
+
+// ── Misc educational / reference ─────────────────────────────────────────────
+'brilliant.org',
+'desmos.com',
+'symbolab.com',
+
+// ── Misc gaming communities / hubs ───────────────────────────────────────────
+'guildwars2.com',
+'warframe.com',
+'pathofexile.com',
+'runescape.com',
+
+// ── Misc random but commonly linked ──────────────────────────────────────────
+'paste.rs',
+'envs.sh',
+'0x0.st',
+'ttm.sh',
+
+// ── Education / learning ─────────────────────────────────────────────────────
+'khanacademy.org',
+'en.khanacademy.org',
+'khanacademy.org',
+'khanacademy.nl',
+'pt.khanacademy.org',
+'es.khanacademy.org',
+'fr.khanacademy.org',
+'khanacademy.org/api',
+'khanacademy.org/humanities',
+'khanacademy.org/math',
+
+// ── Math / graphing / calculators ────────────────────────────────────────────
+'desmos.com',
+'www.desmos.com',
+'calculator.desmos.com',
+'teacher.desmos.com',
+'geometry.desmos.com',
+
+'symbolab.com',
+'www.symbolab.com',
+'api.symbolab.com',
+
+'geogebra.org',
+'www.geogebra.org',
+'classic.geogebra.org',
+
+'wolframalpha.com',
+'products.wolframalpha.com',
+
+'mathway.com',
+'quickmath.com',
+
+// ── Science / simulations ────────────────────────────────────────────────────
+'phet.colorado.edu',
+'phet-dev.colorado.edu',
+
+// ── Coding / CS learning ─────────────────────────────────────────────────────
+'scratch.mit.edu',
+'mit.edu',
+'appinventor.mit.edu',
+
+'code.org',
+'studio.code.org',
+
+'replit.com',
+'ghostwriter.replit.com',
+
+'glitch.com',
+
+'codesandbox.io',
+'stackblitz.com',
+
+// ── Notes / study / flashcards ───────────────────────────────────────────────
+'quizlet.com',
+'quizlet.live',
+
+'knowt.com',
+
+'ankiweb.net',
+
+'studocu.com',
+'coursehero.com',
+
+// ── Docs / writing / school tools ────────────────────────────────────────────
+'overleaf.com',
+'latexbase.com',
+
+'grammarly.com',
+'app.grammarly.com',
+
+'hemingwayapp.com',
+
+// ── Diagram / whiteboard / visual tools ──────────────────────────────────────
+'whiteboard.fi',
+'excalidraw.com',
+'excalidraw.net',
+
+'draw.io',
+'diagrams.net',
+
+// ── File conversion / utility tools ──────────────────────────────────────────
+'ilovepdf.com',
+'smallpdf.com',
+'pdfescape.com',
+
+'remove.bg',
+
+// ── Research / references ────────────────────────────────────────────────────
+'scholar.google.com',
+'arxiv.org',
+'semanticscholar.org',
+
+'jstor.org',
+
+// ── Language learning / writing ──────────────────────────────────────────────
+'deepl.com',
+'translate.google.com',
+
+'reverso.net',
+
+// ── School platforms (commonly shared links) ─────────────────────────────────
+'canvas.instructure.com',
+'instructure.com',
+
+'blackboard.com',
+
+'moodle.org',
+'moodlecloud.com',
+
+// ── Classroom / assignments ──────────────────────────────────────────────────
+'classroom.google.com',
+'assignments.google.com',
+
+// ── Misc student tools / random but common ───────────────────────────────────
+'tinypng.com',
+'compressor.io',
+
+'coolors.co',        // color palettes (design classes etc.)
+'colormind.io',
+
+// ── Physics / math visualizers ───────────────────────────────────────────────
+'falstad.com',       // circuit simulator
+'falstad.net',
+
+'betterexplained.com',
+
+// ── Logic / puzzles / nerdy tools ────────────────────────────────────────────
+'brilliant.org',
+'ncase.me',
+
+// ── Timers / productivity (shared a lot in study servers) ────────────────────
+'pomo.rs',
+'tomatotimers.com',
+'pomofocus.io',
+
+// ── Extra misc useful school links ───────────────────────────────────────────
+'kialo.com',         // debate tool
+'perusall.com',
+
+'turnitin.com',
+'turnitinuk.com',
+
+    // ── School / education ────────────────────────────────────────────────────
+    'khanacademy.org',
+    'coursera.org',
+    'udemy.com',
+    'edx.org',
+    'duolingo.com',
+    // ── Additional safe game-related sites people post in BF servers ──────────
+    'gg.deals',
+    'isthereanydeal.com',
+    'gameflip.com',
+    'playerauctions.com',
+    'g2g.com',
+    'eldorado.gg',
+    'z2u.com',
+    'igvault.com',
 ];
+
 function classifyLinkDomains(domains, gs) {
     const allow = (gs?.linkAllowlistedDomains || []).map(normalizeDomain);
     const deny  = (gs?.linkDenylistedDomains || []).map(normalizeDomain);
@@ -8971,6 +9622,20 @@ const slashCommands = [
         .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
         .addUserOption(o => o.setName('user').setDescription('Member to softban').setRequired(true))
         .addStringOption(o => o.setName('reason').setDescription('Reason for softban').setRequired(false)),
+
+    // ── /regex — enable or disable regex-based detection ────────────────────
+    new SlashCommandBuilder()
+        .setName('regex')
+        .setDescription('Enable or disable regex-based detection')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o
+            .setName('mode')
+            .setDescription('enabled = use regex patterns | disabled = name/alias/shortener matching only')
+            .setRequired(true)
+            .addChoices(
+                { name: 'enabled',  value: 'enabled'  },
+                { name: 'disabled', value: 'disabled' },
+            )),
 
 ].map(c => c.toJSON());
 
@@ -12145,6 +12810,24 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
+        // ── /regex ────────────────────────────────────────────────────────────
+        case 'regex': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const mode = (interaction.options.getString('mode') || '').toLowerCase();
+            if (mode !== 'enabled' && mode !== 'disabled') {
+                await interaction.reply({ content: '❌ Invalid mode. Use `enabled` or `disabled`.', ephemeral: true });
+                return;
+            }
+            gs.regexEnabled = (mode === 'enabled');
+            saveData(data);
+            const statusLine = gs.regexEnabled
+                ? '✅ Regex detection is now **ENABLED** — tradeRegex, bossRegex, fruitRaidRegex, raceTierRegex, and no-space patterns are all active.'
+                : '✅ Regex detection is now **DISABLED** — detection relies on name/alias/shortener matching only.';
+            await interaction.reply({ content: statusLine, ephemeral: true });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '🔧 Regex Detection', [`regexEnabled → ${gs.regexEnabled}`]);
+            break;
+        }
+
         // ── Legacy slash case fallbacks (slash commands removed; /bloxfruits covers these) ──
         case 'commandredirect': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
@@ -13473,6 +14156,8 @@ setInterval(() => {
 }, 180000);
 
 const emojiSpamTracker = new Map();
+// PATCH: mathSessions was used but never declared — tracks multi-line .Calc/.qalc sessions per user
+const mathSessions = new Map();
 function recordEmojiSpam(uid, guildId, count) {
     const key = `${guildId}:${uid}`;
     const now = Date.now();
@@ -14579,8 +15264,9 @@ async function checkBegging(message, contentClean, data, gs) {
 //  SERVICES / ITEMS CHECKER
 // ══════════════════════════════════════════════════════════
 async function checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs) {
-    const hasBossRegex   = bossRegex.test(contentClean);
-    const hasFruitRaid   = fruitRaidRegex.test(contentClean);
+    const _regexEnabled  = gs.regexEnabled !== false;
+    const hasBossRegex   = _regexEnabled && bossRegex.test(contentClean);
+    const hasFruitRaid   = _regexEnabled && fruitRaidRegex.test(contentClean);
     const hasSvcForRaid  = svcForRaidRegex.test(contentClean);
     const bossesFound    = scanForBosses(contentClean);
     for (const b of BOSSES) { const bc=b.replace(/[\s\-']/g,''); if(bc.length>=4&&contentNospace.includes(bc)&&!bossesFound.includes(b)) bossesFound.push(b); }
@@ -14762,7 +15448,8 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
 async function checkRaceViolation(message, contentClean, contentNospace, data, gs) {
     if (!scanForServiceIntent(contentClean, getStrictness(gs))) return;
     if (!hasTierKeyword(contentClean)) return;
-    const regexHit = raceTierRegex.test(contentClean) || raceTierRegex.test(contentNospace);
+    const _regexEnabled = gs.regexEnabled !== false;
+    const regexHit = _regexEnabled && (raceTierRegex.test(contentClean) || raceTierRegex.test(contentNospace));
     if (!regexHit) return;
     const racesFound = scanForRaces(contentClean);
     for (const r of RACES) { const rc=r.replace(/[\s\-]/g,''); if(rc.length>=4&&contentNospace.includes(rc)&&!racesFound.includes(r)) racesFound.push(r); }
@@ -14838,8 +15525,8 @@ async function checkTradeViolation(message, contentClean, contentNospace, data, 
             if (kns.length >= 5 && contentNospace.includes(kns)) { hasIntent = true; break; }
         }
     }
-    let isExchange = tradeRegex.test(contentClean);
-    if (!isExchange) for (const p of NOSPACE_PATTERNS) if(p.test(contentNospace)){isExchange=true;break;}
+    let isExchange = (gs.regexEnabled !== false) && tradeRegex.test(contentClean);
+    if (!isExchange && gs.regexEnabled !== false) for (const p of NOSPACE_PATTERNS) if(p.test(contentNospace)){isExchange=true;break;}
 
     // Scan for fruit emojis — check BOTH message.content AND any forwarded snapshot content
     // so a forwarded trade post using only fruit emojis is still caught.
