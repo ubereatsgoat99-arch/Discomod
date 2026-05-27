@@ -2388,6 +2388,79 @@ function strictnessHasBypassMode(gs, min = 9) {
     return getStrictness(gs) >= min;
 }
 
+/**
+ * Returns the AI confidence threshold scaled by regexStrictness.
+ * Higher strictness = lower threshold = flags more aggressively.
+ */
+function getAiConfidenceThreshold(gs) {
+    const s = getStrictness(gs);
+    if (s <= 2) return 0.97;
+    if (s <= 4) return 0.93;
+    if (s <= 6) return 0.90;
+    if (s <= 8) return 0.82;
+    return 0.72;
+}
+
+/**
+ * Returns true if the guild has completed /setup (channels have been configured).
+ * When false, ALL redirect checks are skipped — only scam/spam/begging/acctrade run.
+ */
+function isServerSetup(gs) {
+    return !!(gs?.serverSetupComplete);
+}
+
+/**
+ * Enable all content redirects after /setup completes.
+ * NOTE: stretchSpamEnabled and capsSpamEnabled are intentionally NOT touched —
+ * they stay at whatever the admin manually configured.
+ */
+function applySetupRedirects(gs) {
+    gs.tradeRedirectEnabled   = true;
+    gs.serviceRedirectEnabled = true;
+    gs.commandRedirectEnabled = true;
+    gs.spamWarnEnabled        = gs.spamWarnEnabled        !== false ? true : gs.spamWarnEnabled;
+    gs.begWarnEnabled         = gs.begWarnEnabled         !== false ? true : gs.begWarnEnabled;
+    gs.scamWarnEnabled        = gs.scamWarnEnabled        !== false ? true : gs.scamWarnEnabled;
+    gs.accTradeWarnEnabled    = gs.accTradeWarnEnabled    !== false ? true : gs.accTradeWarnEnabled;
+    gs.serverSetupComplete    = true;
+    // stretchSpamEnabled and capsSpamEnabled are NOT changed by setup
+}
+
+// ══════════════════════════════════════════════════════════
+//  1v1 / PvP SPLIT-MESSAGE TRACKER
+//  "who wanna 1v1" alone → tracked; if next msg says "blox fruits" → flag
+//  "who wanna 1v1 in bf" in single msg → flag immediately
+// ══════════════════════════════════════════════════════════
+const pvpSplitTracker = new Map(); // key: `${guildId}:${userId}` → { ts: timestamp }
+const PVP_SPLIT_TTL   = 90_000;   // 90 seconds (matches SPLIT_MESSAGE_TTL)
+
+// Regex: matches 1v1/pvp/duel challenge phrased as "who wanna ..." style invites
+const ONE_V_ONE_INVITE_RE = /\bwho\s+(?:wanna?|wants?\s+to|can|is\s+down(?:\s+to)?|tryna?|is)\s+(?:1\s*[vV]\s*1|1vs1|one\s*[vV]\s*one|pvp|duel)\b/i;
+// Regex: a message that IS just a 1v1 invite + optionally trailing punctuation/emoji, with no BF context
+const ONE_V_ONE_SOLO_RE  = /^[\s\S]{0,20}(?:who\s+(?:wanna?|wants?\s+to|can|is\s+down(?:\s+to)?|tryna?|is)\s+(?:1\s*[vV]\s*1|1vs1|one\s*[vV]\s*one|pvp|duel))[\s\S]{0,30}$/i;
+// Regex: Blox Fruits context — game name mentioned
+const BF_PVP_CONTEXT_RE  = /\b(?:bf|blox\s*fruits?|bloxfruits?)\b/i;
+
+function recordPvpSplit(guildId, userId) {
+    pvpSplitTracker.set(`${guildId}:${userId}`, { ts: Date.now() });
+}
+function getPvpSplit(guildId, userId) {
+    const key = `${guildId}:${userId}`;
+    const e   = pvpSplitTracker.get(key);
+    if (!e) return false;
+    if (Date.now() - e.ts > PVP_SPLIT_TTL) { pvpSplitTracker.delete(key); return false; }
+    return true;
+}
+function clearPvpSplit(guildId, userId) {
+    pvpSplitTracker.delete(`${guildId}:${userId}`);
+}
+setInterval(() => {
+    const now = Date.now();
+    for (const [k, e] of pvpSplitTracker) {
+        if (now - (e.ts || 0) > PVP_SPLIT_TTL * 2) pvpSplitTracker.delete(k);
+    }
+}, 120_000);
+
 function buildFuzzyTokenPattern(token, strictness) {
     const t = String(token || '').toLowerCase();
     const base = t.replace(/[\s\-']/g, '');
@@ -2737,9 +2810,9 @@ function getGuildSettings(guildId, data) {
             appealsChannelId:  null,
             redirectEmojiId:   DEFAULT_REDIRECT_EMOJI_ID,
             scamEnabled:       true,
-            commandRedirectEnabled: true,
-            serviceRedirectEnabled: true,
-            tradeRedirectEnabled:   true,
+            commandRedirectEnabled: false,  // off until /setup is run
+            serviceRedirectEnabled: false,  // off until /setup is run
+            tradeRedirectEnabled:   false,  // off until /setup is run
             spamWarnEnabled:        true,
             begWarnEnabled:         true,
             scamWarnEnabled:        true,
@@ -2747,6 +2820,7 @@ function getGuildSettings(guildId, data) {
             aiEnabled: false,
             checksEnabled: true,
             noAffiliationEnabled: false,
+            serverSetupComplete: false,  // true once /setup or /set channels run
             exileStripRoles: false,
             botOwnerId: null,
             botFooterText: null,
@@ -2926,6 +3000,28 @@ function getGuildSettings(guildId, data) {
     if (gs.roastContext  === undefined) gs.roastContext  = true;
     if (!Array.isArray(gs.managerRoles)) gs.managerRoles = [];
     if (!Array.isArray(gs.managerUsers)) gs.managerUsers = [];
+
+    // ── Auto-detect setup from existing channel data ──────────────────────────
+    // If channels differ from raw defaults, someone already configured them —
+    // treat the server as set up and enable all redirects.
+    if (gs.serverSetupComplete === undefined || gs.serverSetupComplete === null) {
+        const hasCustomTrade    = gs.tradeChannelId    && gs.tradeChannelId    !== DEFAULT_TARGET_CHANNEL_ID;
+        const hasCustomServices = gs.servicesChannelId && gs.servicesChannelId !== DEFAULT_SERVICES_CHANNEL_ID;
+        if (hasCustomTrade || hasCustomServices) {
+            applySetupRedirects(gs);
+        } else {
+            gs.serverSetupComplete = false;
+        }
+    }
+    // If setup is complete but redirect flags are still at their original defaults,
+    // ensure they are actually on (handles upgrades from old saves).
+    if (gs.serverSetupComplete) {
+        if (gs.commandRedirectEnabled === undefined) gs.commandRedirectEnabled = true;
+        if (gs.serviceRedirectEnabled === undefined) gs.serviceRedirectEnabled = true;
+        if (gs.tradeRedirectEnabled   === undefined) gs.tradeRedirectEnabled   = true;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     return gs;
 }
 
@@ -9989,6 +10085,7 @@ client.on('interactionCreate', async interaction => {
             if (exileRole)  gs.exiledRoleId      = exileRole;
             if (logId)      gs.logChannelId      = logId;
             if (appId)      gs.appealsChannelId  = appId;
+            applySetupRedirects(gs);  // enable all redirects (except stretch/caps spam)
             saveData(data);
             await interaction.reply({
                 embeds: [buildSetupPickerEmbed(gs)
@@ -10084,6 +10181,7 @@ client.on('interactionCreate', async interaction => {
             const appId          = interaction.fields.getTextInputValue('appeals_channel_id').trim();
             if (logId) gs.logChannelId = logId;
             if (appId) gs.appealsChannelId = appId;
+            applySetupRedirects(gs);  // enable all redirects (except stretch/caps spam)
             saveData(data);
             await interaction.reply({
                 embeds: [buildSetupPickerEmbed(gs).setTitle('✅ SKYNET V7 — Setup Complete').setColor(0x00FF88)],
@@ -11549,6 +11647,9 @@ client.on('interactionCreate', async interaction => {
                 .setTitle('📊 Bot Status / Configuration')
                 .setColor(0x5865F2)
                 .addFields(
+                    { name: 'Setup',       value: isServerSetup(gs) ? '✅ Complete' : '⚠️ Not Set Up (redirects OFF)', inline: true },
+                    { name: 'Strictness',  value: `${getStrictness(gs)}/10`, inline: true },
+                    { name: 'AI Thresh',   value: `${(getAiConfidenceThreshold(gs)*100).toFixed(0)}%`, inline: true },
                     { name: 'Checks', value: gs.checksEnabled ? '✅ ON' : '❌ OFF', inline: true },
                     { name: 'AI', value: gs.aiEnabled ? '✅ ON' : '❌ OFF', inline: true },
                     { name: 'No-Affiliation', value: gs.noAffiliationEnabled ? '✅ ON' : '❌ OFF', inline: true },
@@ -11594,12 +11695,12 @@ client.on('interactionCreate', async interaction => {
                 return;
             }
 
-            if (sub === 'tradechannel')    { gs.tradeChannelId    = resolvedCh.id; }
-            if (sub === 'serviceschannel') { gs.servicesChannelId = resolvedCh.id; }
+            if (sub === 'tradechannel')    { gs.tradeChannelId    = resolvedCh.id; applySetupRedirects(gs); }
+            if (sub === 'serviceschannel') { gs.servicesChannelId = resolvedCh.id; applySetupRedirects(gs); }
             if (sub === 'logchannel')      { gs.logChannelId      = interaction.options.getChannel('channel').id; }
             if (sub === 'exilerole')       { gs.exiledRoleId      = interaction.options.getRole('role').id; }
             if (sub === 'appealschannel')  { gs.appealsChannelId  = interaction.options.getChannel('channel').id; }
-            if (sub === 'commandchannel')  { gs.gamesHubId        = resolvedCh.id; }
+            if (sub === 'commandchannel')  { gs.gamesHubId        = resolvedCh.id; if (isServerSetup(gs)) gs.commandRedirectEnabled = true; }
             saveData(data);
             await interaction.reply({ content: `✅ **${sub}** updated successfully.`, ephemeral: true });
             if (sub === 'tradechannel') {
@@ -14725,7 +14826,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── COMMAND LOCKDOWN ──────────────────────────────────
-    if ((gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message)) {
+    if (isServerSetup(gs) && (gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message)) {
         if (!isGamesHubChannelId(message.channel.id, gs)) {
             try { await message.delete(); } catch {}
             recordCommandAbuse(message.author.id);
@@ -14743,7 +14844,7 @@ client.on('messageCreate', async message => {
         }
     }
 
-    if ((gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && !isGamesHubChannelId(message.channel.id, gs)) {
+    if (isServerSetup(gs) && (gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && !isGamesHubChannelId(message.channel.id, gs)) {
         const { contentClean: cmdClean } = prepareText(message.content);
         if (looksLikeCommandButNotCaught(message.content, cmdClean)) {
             try { await message.delete(); } catch {}
@@ -15051,7 +15152,8 @@ client.on('messageCreate', async message => {
     // Only run AI at strictness 4+ — below that, simple regex only.
     if (AI_ENABLED && gs.aiEnabled && getStrictness(gs) >= 4) {
         const aiResult = await aiDetectViolation(message, [], gs);
-        if (aiResult?.violation && aiResult.confidence > 0.85 && aiResult.category && aiResult.category !== 'none') {
+        const _aiThreshInline = getAiConfidenceThreshold(gs);
+        if (aiResult?.violation && aiResult.confidence > _aiThreshInline && aiResult.category && aiResult.category !== 'none') {
             const cat = String(aiResult.category || '').toLowerCase();
             if (!isCategoryImmune(message.member, guildId, data, cat)) {
                 incStat(guildId, data, 'aiFlag', 1);
@@ -15105,17 +15207,19 @@ client.on('messageCreate', async message => {
                     return;
                 }
 
-                if (cat === 'service' && gs.serviceRedirectEnabled !== false && !isInCorrectServiceChannel(message.channel.id, gs)) {
+                // Service/trade/command redirects from AI also require setup to be complete
+                const _aiServerReady = isServerSetup(gs);
+                if (_aiServerReady && cat === 'service' && gs.serviceRedirectEnabled !== false && !isInCorrectServiceChannel(message.channel.id, gs)) {
                     const flagged = await checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs);
                     if (flagged) return;
                 }
 
-                if (cat === 'trade' && gs.tradeRedirectEnabled !== false && !isInCorrectTradeChannel(message.channel.id, gs)) {
+                if (_aiServerReady && cat === 'trade' && gs.tradeRedirectEnabled !== false && !isInCorrectTradeChannel(message.channel.id, gs)) {
                     const flagged = await checkTradeViolation(message, contentClean, contentNospace, data, gs);
                     if (flagged) return;
                 }
 
-                if (cat === 'command' && gs.commandRedirectEnabled !== false) {
+                if (_aiServerReady && cat === 'command' && gs.commandRedirectEnabled !== false) {
                     const hub = gs.gamesHubId || DEFAULT_GAMES_HUB_ID;
                     if (hub && message.channel.id !== hub && !GAMES_HUB_CHANNELS.has(message.channel.id)) {
                         await handlePolicyViolation(message, data, gs, 'command', {
@@ -15167,23 +15271,71 @@ client.on('messageCreate', async message => {
         return;
     }
 
+    // ── REDIRECT CHECKS — only run when server has been set up ────────────────
+    // Scam/spam/begging/acctrade always run above; redirects only after /setup.
+    const _serverReady = isServerSetup(gs);
+
+    // ── 1v1 PvP DETECTION (no-affiliation mode) ───────────────────────────────
+    // "who wanna 1v1 in bf" or split: msg1="who wanna 1v1", msg2="blox fruits"
+    if (gs.noAffiliationEnabled && (_serverReady || gs.noAffiliationEnabled)) {
+        const has1v1Invite  = ONE_V_ONE_INVITE_RE.test(contentClean);
+        const hasBFContext  = BF_PVP_CONTEXT_RE.test(contentClean);
+        const hadPrior1v1   = getPvpSplit(guildId, message.author.id);
+
+        if (has1v1Invite && hasBFContext) {
+            // Complete flag: 1v1 + BF context in same message
+            clearPvpSplit(guildId, message.author.id);
+            if (!isCategoryImmune(message.member, guildId, data, 'service')) {
+                try { await message.delete(); } catch {}
+                await issueViolation(message, data, gs, {
+                    title: '📢 Notice — No Affiliation (PvP)',
+                    color: 0x5865F2,
+                    reason: `${message.guild?.name || 'This server'} is not Blox Fruits related anymore. Please use the Official Blox Fruits Discord for game requests.`,
+                    details: message.content,
+                    footerLabel: 'No Affiliation',
+                    ttlMs: 12000,
+                    redirectChannelId: gs.servicesChannelId,
+                });
+                return;
+            }
+        } else if (hadPrior1v1 && hasBFContext && !has1v1Invite) {
+            // Split-message flag: prior msg had 1v1, this msg has BF context
+            clearPvpSplit(guildId, message.author.id);
+            if (!isCategoryImmune(message.member, guildId, data, 'service')) {
+                try { await message.delete(); } catch {}
+                await issueViolation(message, data, gs, {
+                    title: '📢 Notice — No Affiliation (PvP)',
+                    color: 0x5865F2,
+                    reason: `${message.guild?.name || 'This server'} is not Blox Fruits related anymore. Please use the Official Blox Fruits Discord for game requests.`,
+                    details: message.content,
+                    footerLabel: 'No Affiliation',
+                    ttlMs: 12000,
+                    redirectChannelId: gs.servicesChannelId,
+                });
+                return;
+            }
+        } else if (has1v1Invite && !hasBFContext) {
+            // Bare "who wanna 1v1" — track it, don't flag yet
+            recordPvpSplit(guildId, message.author.id);
+        }
+    }
+
     // ── SERVICES / ITEMS ──────────────────────────────────
-    // noAffiliationEnabled bypasses the serviceRedirectEnabled gate so the no-affiliation
-    // notice still fires even when service redirects are turned off.
-    if ((gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
+    // noAffiliationEnabled bypasses the serverReady gate so the no-affiliation
+    // notice still fires even when redirects are turned off.
+    if ((_serverReady || gs.noAffiliationEnabled) && (gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
         const flagged = await checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs);
         if (flagged) return;
     }
 
     // ── TRADE ─────────────────────────────────────────────
-    // Same — noAffiliationEnabled must bypass the tradeRedirectEnabled gate.
-    if ((gs.tradeRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'trade') && (gs.noAffiliationEnabled || !isInCorrectTradeChannel(message.channel.id, gs))) {
+    if ((_serverReady || gs.noAffiliationEnabled) && (gs.tradeRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'trade') && (gs.noAffiliationEnabled || !isInCorrectTradeChannel(message.channel.id, gs))) {
         const flagged = await checkTradeViolation(message, contentClean, contentNospace, data, gs);
         if (flagged) return;
     }
 
     // ── RACE + TIER + INTENT ──────────────────────────────
-    if ((gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
+    if (_serverReady && (gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
         await checkRaceViolation(message, contentClean, contentNospace, data, gs);
     }
 
@@ -15191,7 +15343,8 @@ client.on('messageCreate', async message => {
     if (AI_ENABLED && gs.aiEnabled) {
         setImmediate(async () => {
             const aiResult = await aiDetectViolation(message, [], gs);
-            if (aiResult?.violation && aiResult.confidence > 0.9) {
+            const aiConfThreshold = getAiConfidenceThreshold(gs);
+            if (aiResult?.violation && aiResult.confidence > aiConfThreshold) {
                 await sendLog(message.guild, data, new EmbedBuilder()
                     .setTitle('🤖 AI Detection Alert')
                     .setColor(0xFF00FF)
