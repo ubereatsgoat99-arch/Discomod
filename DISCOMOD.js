@@ -1,4 +1,7 @@
+'use strict';
+
 const roastBattles = new Map();
+const slashSessions = new Map();
 // ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║  SKYNET V7 — BLOX FRUITS ULTRA GUARDIAN                                     ║
 // ║  Professional-grade Discord moderation bot                                   ║
@@ -872,13 +875,13 @@ async function safeFollowUp(interaction, payload) {
 // Wraps an entire slash-command execution with a timeout fallback
 async function withCommandTimeout(interaction, fn, timeoutMs = 25000) {
     const timer = setTimeout(async () => {
-        try { await safeFollowUp(interaction, { content: '⏳ This command is taking longer than expected. Please try again.', ephemeral: true }); } catch {}
+        try { await safeFollowUp(interaction, { content: '⏳ This command is taking longer than expected. Please try again.', flags: MessageFlags.Ephemeral }); } catch {}
     }, timeoutMs);
     try {
         return await fn();
     } catch (e) {
         console.error('[commandTimeout] uncaught error in command handler:', e);
-        try { await safeReply(interaction, { content: '❌ An error occurred while running this command.', ephemeral: true }); } catch {}
+        try { await safeReply(interaction, { content: '❌ An error occurred while running this command.', flags: MessageFlags.Ephemeral }); } catch {}
     } finally {
         clearTimeout(timer);
     }
@@ -9957,7 +9960,7 @@ client.on('interactionCreate', async interaction => {
     const earlyCmd = interaction.isChatInputCommand() ? String(interaction.commandName || '') : '';
     const earlyDefer = earlyCmd === 'setowner' || earlyCmd === 'clearowner';
     if (earlyDefer) {
-        try { await interaction.deferReply({ ephemeral: true }); } catch {}
+        try { await interaction.deferReply({ flags: MessageFlags.Ephemeral }); } catch {}
     }
 
     const guild = interaction.guild || await client.guilds.fetch(guildId).catch(()=>null);
@@ -9994,12 +9997,12 @@ client.on('interactionCreate', async interaction => {
             // key format: guildId:channelId:userId — only the starter can stop it
             const starterId = key.split(':')[2];
             if (interaction.user.id !== starterId) {
-                await interaction.reply({ content: '❌ Only the person who started this roast battle can stop it.', ephemeral: true }).catch(()=>{});
+                await interaction.reply({ content: '❌ Only the person who started this roast battle can stop it.', flags: MessageFlags.Ephemeral }).catch(()=>{});
                 return;
             }
             // Guard: if the battle is already gone, tell them instead of silently no-oping
             if (!roastBattles.has(key)) {
-                await interaction.reply({ content: '⚠️ You already stopped the roast battle!', ephemeral: true }).catch(()=>{});
+                await interaction.reply({ content: '⚠️ You already stopped the roast battle!', flags: MessageFlags.Ephemeral }).catch(()=>{});
                 return;
             }
             await interaction.deferUpdate().catch(()=>{});
@@ -10043,7 +10046,7 @@ client.on('interactionCreate', async interaction => {
             try {
                 await interaction.showModal(modal);
             } catch {
-                await safeReply(interaction, { content: '❌ Failed to open the appeal form. Try again.', ephemeral: true });
+                await safeReply(interaction, { content: '❌ Failed to open the appeal form. Try again.', flags: MessageFlags.Ephemeral });
             }
             return;
         }
@@ -10051,12 +10054,12 @@ client.on('interactionCreate', async interaction => {
         if (cid.startsWith('appeal_accept_')) {
             const isMod = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
             const isAdmin = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const appealId = cid.replace('appeal_accept_', '');
             const appeal   = data.appeals[appealId];
-            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-            if (appeal.userId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
-            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.userId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
 
             appeal.status    = 'accepted';
             appeal.handledBy = interaction.user.id;
@@ -10090,9 +10093,9 @@ client.on('interactionCreate', async interaction => {
         if (cid.startsWith('appeal_reject_')) {
             const appealId = cid.replace('appeal_reject_', '');
             const appeal   = data.appeals[appealId];
-            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', ephemeral: true }); return; }
-            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
 
             appeal.status    = 'rejected';
             appeal.handledBy = interaction.user.id;
@@ -10151,7 +10154,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('✅ Setup — Page 1 Saved')
                     .setColor(0x00FF88)],
                 components: buildSetupPickerComponents(),
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
@@ -10205,7 +10208,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('✅ Setup — Page 2 Saved')
                     .setColor(0x00FF88)],
                 components: buildSetupPickerComponents(),
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
@@ -10232,7 +10235,7 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('✅ Setup — Page 3 Saved')
                     .setColor(0x00FF88)],
                 components: buildSetupPickerComponents(),
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
@@ -10251,14 +10254,14 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({
                 embeds: [buildSetupPickerEmbed(gs).setTitle('✅ SKYNET V7 — Setup Complete').setColor(0x00FF88)],
                 components: buildSetupPickerComponents(),
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
 
         // Appeal modal
         if (interaction.customId.startsWith('appeal_modal_')) {
-            await safeDefer(interaction, { ephemeral: true });
+            await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
             const parts = interaction.customId.split('_');
             const exiledUserId = parts.length >= 4 ? parts.slice(3).join('_') : interaction.customId.replace('appeal_modal_', '');
             const reason       = interaction.fields.getTextInputValue('appeal_reason');
@@ -10315,7 +10318,7 @@ client.on('interactionCreate', async interaction => {
 
         // ── Setup page button → open the right modal ────────
         if (cid === 'setup_open_page1') {
-            if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             // Build current values — prefer the multi-channel array, fall back to single legacy ID
             const tradeCur    = (gs.tradeChannelIds?.length ? gs.tradeChannelIds : (gs.tradeChannelId ? [gs.tradeChannelId] : [])).join(', ');
             const servicesCur = (gs.servicesChannelIds?.length ? gs.servicesChannelIds : (gs.servicesChannelId ? [gs.servicesChannelId] : [])).join(', ');
@@ -10352,7 +10355,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cid === 'setup_open_page2') {
-            if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             // Each field = one pool; comma-separated IDs for multi-channel pools
             const raidCur  = (gs.raidServiceChannelIds        || []).join(', ');
             const raceCur  = (gs.raceV4ServiceChannelIds       || []).join(', ');
@@ -10399,7 +10402,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cid === 'setup_open_page3') {
-            if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const hubCur = (gs.gamesHubIds?.length ? gs.gamesHubIds : (gs.gamesHubId ? [gs.gamesHubId] : [])).join(', ');
             const modal = new ModalBuilder().setCustomId('setup_modal_p3').setTitle('🔧 Setup — Page 3: Misc');
             modal.addComponents(
@@ -10430,7 +10433,7 @@ client.on('interactionCreate', async interaction => {
 
         if (cid === 'dash_toggle_checks' || cid === 'dash_toggle_ai' || cid === 'dash_toggle_mode' || cid.startsWith('dash_preset_')) {
             const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             if (cid === 'dash_toggle_checks') gs.checksEnabled = !gs.checksEnabled;
             if (cid === 'dash_toggle_ai') gs.aiEnabled = !gs.aiEnabled;
             if (cid === 'dash_toggle_mode') gs.enforcementMode = (gs.enforcementMode === 'monitor') ? 'enforce' : 'monitor';
@@ -10450,7 +10453,7 @@ client.on('interactionCreate', async interaction => {
         if (hasAppealedCurrentExile(exiledUserId, fd_btn)) {
             await interaction.reply({
                 content: '❌ You have already submitted an appeal for your current exile.',
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             }).catch(() => {});
             return;
         }
@@ -10472,7 +10475,7 @@ client.on('interactionCreate', async interaction => {
             try {
                 await interaction.showModal(modal);
             } catch {
-                await safeReply(interaction, { content: '❌ Failed to open the appeal form. Try again.', ephemeral: true });
+                await safeReply(interaction, { content: '❌ Failed to open the appeal form. Try again.', flags: MessageFlags.Ephemeral });
             }
             return;
         }
@@ -10480,12 +10483,12 @@ client.on('interactionCreate', async interaction => {
         if (cid.startsWith('appeal_accept_')) {
             const isMod = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
             const isAdmin = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const appealId = cid.replace('appeal_accept_', '');
             const appeal   = data.appeals[appealId];
-            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-            if (appeal.userId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
-            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.userId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
 
             appeal.status    = 'accepted';
             appeal.handledBy = interaction.user.id;
@@ -10519,9 +10522,9 @@ client.on('interactionCreate', async interaction => {
         if (cid.startsWith('appeal_reject_')) {
             const appealId = cid.replace('appeal_reject_', '');
             const appeal   = data.appeals[appealId];
-            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', ephemeral: true }); return; }
-            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
 
             appeal.status    = 'rejected';
             appeal.handledBy = interaction.user.id;
@@ -10554,14 +10557,14 @@ client.on('interactionCreate', async interaction => {
         // Remove a specific warn from violations (admin only, not your own)
         if (cid.startsWith('rmwarn_')) {
             const isAdminCheck = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
-            if (!isAdminCheck) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdminCheck) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const parts   = cid.split('_');
             const targetId = parts[2];
-            if (targetId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot remove your own warns.', ephemeral: true }); return; }
+            if (targetId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot remove your own warns.', flags: MessageFlags.Ephemeral }); return; }
             const selectedWarnId = interaction.values[0];
             const fd2 = loadData();
             const vObj = fd2.violations[targetId];
-            if (!vObj || typeof vObj === 'number') { await interaction.reply({ content: '❌ No violation history found.', ephemeral: true }); return; }
+            if (!vObj || typeof vObj === 'number') { await interaction.reply({ content: '❌ No violation history found.', flags: MessageFlags.Ephemeral }); return; }
             const oldHistory = Array.isArray(vObj.history) ? vObj.history : [];
             const newHistory = oldHistory.filter(h => {
                 const hid = h.warnId || null;
@@ -10605,7 +10608,7 @@ client.on('interactionCreate', async interaction => {
             const warnId   = rest.slice(sepIdx + 1);
             const fd3 = loadData();
             if (hasAppealedWarn(warnId, fd3)) {
-                await interaction.reply({ content: '❌ You have already submitted an appeal for this warning.', ephemeral: true }).catch(()=>{});
+                await interaction.reply({ content: '❌ You have already submitted an appeal for this warning.', flags: MessageFlags.Ephemeral }).catch(()=>{});
                 return;
             }
             const modal = new ModalBuilder()
@@ -10626,7 +10629,7 @@ client.on('interactionCreate', async interaction => {
             try {
                 await interaction.showModal(modal);
             } catch {
-                await interaction.reply({ content: '❌ Failed to open the appeal form. Try again.', ephemeral: true }).catch(()=>{});
+                await interaction.reply({ content: '❌ Failed to open the appeal form. Try again.', flags: MessageFlags.Ephemeral }).catch(()=>{});
             }
             return;
         }
@@ -10635,13 +10638,13 @@ client.on('interactionCreate', async interaction => {
         if (cid.startsWith('warn_appeal_accept_')) {
             const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
             const isModBtn   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
-            if (!isAdminBtn && !isModBtn) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isAdminBtn && !isModBtn) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const appealId = cid.replace('warn_appeal_accept_', '');
             const fd4 = loadData();
             const appeal = fd4.appeals[appealId];
-            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
-            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
             // Remove the specific warn from history
             const targetId = appeal.userId;
             const warnId   = appeal.warnId;
@@ -10675,13 +10678,13 @@ client.on('interactionCreate', async interaction => {
         if (cid.startsWith('warn_appeal_reject_')) {
             const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
             const isModBtn   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
-            if (!isAdminBtn && !isModBtn) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isAdminBtn && !isModBtn) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const appealId = cid.replace('warn_appeal_reject_', '');
             const fd5 = loadData();
             const appeal = fd5.appeals[appealId];
-            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', ephemeral: true }); return; }
-            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+            if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+            if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
             appeal.status    = 'rejected';
             appeal.handledBy = interaction.user.id;
             saveData(fd5);
@@ -10704,7 +10707,7 @@ client.on('interactionCreate', async interaction => {
 
     // ── WARN APPEAL — modal submit ────────────────────────
     if (interaction.isModalSubmit() && interaction.customId.startsWith('warn_appeal_modal_')) {
-        try { await interaction.deferReply({ ephemeral: true }); } catch {}
+        try { await interaction.deferReply({ flags: MessageFlags.Ephemeral }); } catch {}
         const rest     = interaction.customId.slice('warn_appeal_modal_'.length);
         const sepIdx   = rest.indexOf('_');
         const wGuildId = rest.slice(0, sepIdx);
@@ -10782,7 +10785,7 @@ client.on('interactionCreate', async interaction => {
         const timeoutId = rest.slice(sepIdx + 1);
         const tfd = loadData();
         if (hasAppealedTimeout(timeoutId, tfd)) {
-            try { await interaction.reply({ content: '❌ You have already submitted an appeal for this timeout. Only one appeal is allowed.', ephemeral: true }); } catch {}
+            try { await interaction.reply({ content: '❌ You have already submitted an appeal for this timeout. Only one appeal is allowed.', flags: MessageFlags.Ephemeral }); } catch {}
             return;
         }
         const modal = new ModalBuilder()
@@ -10801,14 +10804,14 @@ client.on('interactionCreate', async interaction => {
             )
         );
         try { await interaction.showModal(modal); } catch {
-            await interaction.reply({ content: '❌ Failed to open the appeal form. Try again.', ephemeral: true }).catch(() => {});
+            await interaction.reply({ content: '❌ Failed to open the appeal form. Try again.', flags: MessageFlags.Ephemeral }).catch(() => {});
         }
         return;
     }
 
     // Step 2: User submits the timeout appeal modal
     if (interaction.isModalSubmit() && interaction.customId.startsWith('timeout_appeal_modal_')) {
-        try { await interaction.deferReply({ ephemeral: true }); } catch {}
+        try { await interaction.deferReply({ flags: MessageFlags.Ephemeral }); } catch {}
         const rest      = interaction.customId.slice('timeout_appeal_modal_'.length);
         const sepIdx    = rest.indexOf('_');
         const tGuildId  = rest.slice(0, sepIdx);
@@ -10870,13 +10873,13 @@ client.on('interactionCreate', async interaction => {
     // Step 3a: Staff accepts the timeout appeal
     if (interaction.isButton() && interaction.customId.startsWith('timeout_appeal_accept_')) {
         const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
-        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
         const appealId = interaction.customId.replace('timeout_appeal_accept_', '');
         const tfd3 = loadData();
         const appeal = tfd3.appeals[appealId];
-        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
-        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
         appeal.status = 'accepted'; appeal.handledBy = interaction.user.id;
         // Remove timeout
         try {
@@ -10907,13 +10910,13 @@ client.on('interactionCreate', async interaction => {
     // Step 3b: Staff rejects the timeout appeal
     if (interaction.isButton() && interaction.customId.startsWith('timeout_appeal_reject_')) {
         const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
-        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
         const appealId = interaction.customId.replace('timeout_appeal_reject_', '');
         const tfd4 = loadData();
         const appeal = tfd4.appeals[appealId];
-        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', ephemeral: true }); return; }
-        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
         appeal.status = 'rejected'; appeal.handledBy = interaction.user.id;
         saveData(tfd4);
         const tUser = await client.users.fetch(appeal.userId).catch(() => null);
@@ -10940,7 +10943,7 @@ client.on('interactionCreate', async interaction => {
         const banId    = rest.slice(sepIdx + 1);
         const bfd = loadData();
         if (hasAppealedBan(banId, bfd)) {
-            try { await interaction.reply({ content: '❌ You have already submitted an appeal for this ban. Only one appeal is allowed.', ephemeral: true }); } catch {}
+            try { await interaction.reply({ content: '❌ You have already submitted an appeal for this ban. Only one appeal is allowed.', flags: MessageFlags.Ephemeral }); } catch {}
             return;
         }
         const banInfo = bfd.bans?.[bGuildId]?.[interaction.user.id];
@@ -10949,7 +10952,7 @@ client.on('interactionCreate', async interaction => {
             const msIn14Days = 14 * 24 * 60 * 60 * 1000;
             if (msSinceBan < msIn14Days) {
                 const unlocksAt = Math.floor((banInfo.bannedAt + msIn14Days) / 1000);
-                try { await interaction.reply({ content: `❌ You cannot appeal yet. Ban appeals unlock <t:${unlocksAt}:R>.`, ephemeral: true }); } catch {}
+                try { await interaction.reply({ content: `❌ You cannot appeal yet. Ban appeals unlock <t:${unlocksAt}:R>.`, flags: MessageFlags.Ephemeral }); } catch {}
                 return;
             }
         }
@@ -10969,14 +10972,14 @@ client.on('interactionCreate', async interaction => {
             )
         );
         try { await interaction.showModal(modal); } catch {
-            await interaction.reply({ content: '❌ Failed to open the appeal form. Try again.', ephemeral: true }).catch(() => {});
+            await interaction.reply({ content: '❌ Failed to open the appeal form. Try again.', flags: MessageFlags.Ephemeral }).catch(() => {});
         }
         return;
     }
 
     // Step 2: User submits the ban appeal modal
     if (interaction.isModalSubmit() && interaction.customId.startsWith('ban_appeal_modal_')) {
-        try { await interaction.deferReply({ ephemeral: true }); } catch {}
+        try { await interaction.deferReply({ flags: MessageFlags.Ephemeral }); } catch {}
         const rest     = interaction.customId.slice('ban_appeal_modal_'.length);
         const sepIdx   = rest.indexOf('_');
         const bGuildId = rest.slice(0, sepIdx);
@@ -11049,13 +11052,13 @@ client.on('interactionCreate', async interaction => {
     // Step 3a: Staff accepts the ban appeal → unban the user
     if (interaction.isButton() && interaction.customId.startsWith('ban_appeal_accept_')) {
         const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
-        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
         const appealId = interaction.customId.replace('ban_appeal_accept_', '');
         const bfd3 = loadData();
         const appeal = bfd3.appeals[appealId];
-        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
-        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
         appeal.status = 'accepted'; appeal.handledBy = interaction.user.id;
         try {
             const bg = await client.guilds.fetch(appeal.guildId).catch(() => null);
@@ -11078,13 +11081,13 @@ client.on('interactionCreate', async interaction => {
     // Step 3b: Staff rejects the ban appeal
     if (interaction.isButton() && interaction.customId.startsWith('ban_appeal_reject_')) {
         const isAdminBtn = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
-        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        if (!isAdminBtn) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
         const appealId = interaction.customId.replace('ban_appeal_reject_', '');
         const bfd4 = loadData();
         const appeal = bfd4.appeals[appealId];
-        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', ephemeral: true }); return; }
-        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
+        if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', flags: MessageFlags.Ephemeral }); return; }
+        if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot reject your own appeal.', flags: MessageFlags.Ephemeral }); return; }
+        if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', flags: MessageFlags.Ephemeral }); return; }
         appeal.status = 'rejected'; appeal.handledBy = interaction.user.id;
         saveData(bfd4);
         const bUser = await client.users.fetch(appeal.userId).catch(() => null);
@@ -11105,7 +11108,7 @@ client.on('interactionCreate', async interaction => {
     const isMod   = _isBotOwner_slash || interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
 
     async function handleCategoryImmunity(category) {
-        if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+        if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
         const c = getCategoryImmunity(guildId, data, category);
 
         const group = interaction.options.getSubcommandGroup(false);
@@ -11115,15 +11118,15 @@ client.on('interactionCreate', async interaction => {
             if (group === 'role') {
                 if (sub === 'list') {
                     const list = c.roles.map(rid => interaction.guild.roles.cache.get(rid) ? `<@&${rid}>` : `Unknown (${rid})`).slice(0, 60);
-                    await interaction.reply({ content: `✅ **${category}** role immunity list (${c.roles.length}):\n${list.join('\n') || 'None'}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ **${category}** role immunity list (${c.roles.length}):\n${list.join('\n') || 'None'}`, flags: MessageFlags.Ephemeral });
                     return;
                 }
                 const role = interaction.options.getRole('role');
-                if (!role) { await interaction.reply({ content: '❌ Provide a role.', ephemeral: true }); return; }
+                if (!role) { await interaction.reply({ content: '❌ Provide a role.', flags: MessageFlags.Ephemeral }); return; }
                 if (sub === 'add') {
                     if (!c.roles.includes(role.id)) c.roles.push(role.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Added role immunity for **${category}**: ${role}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Added role immunity for **${category}**: ${role}`, flags: MessageFlags.Ephemeral });
                     await sendConfigLog(interaction.guild, data, interaction.user.id, '🛡️ Immunity Updated', [
                         `Category: **${category}**`,
                         `Role add: ${role} (${role.id})`,
@@ -11133,29 +11136,29 @@ client.on('interactionCreate', async interaction => {
                 if (sub === 'remove') {
                     c.roles = c.roles.filter(x => x !== role.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Removed role immunity for **${category}**: ${role}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Removed role immunity for **${category}**: ${role}`, flags: MessageFlags.Ephemeral });
                     await sendConfigLog(interaction.guild, data, interaction.user.id, '🛡️ Immunity Updated', [
                         `Category: **${category}**`,
                         `Role remove: ${role} (${role.id})`,
                     ]);
                     return;
                 }
-                await interaction.reply({ content: '❌ Invalid subcommand.', ephemeral: true });
+                await interaction.reply({ content: '❌ Invalid subcommand.', flags: MessageFlags.Ephemeral });
                 return;
             }
 
             if (group === 'member') {
                 if (sub === 'list') {
                     const list = c.members.map(uid => `<@${uid}> (${uid})`).slice(0, 60);
-                    await interaction.reply({ content: `✅ **${category}** member immunity list (${c.members.length}):\n${list.join('\n') || 'None'}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ **${category}** member immunity list (${c.members.length}):\n${list.join('\n') || 'None'}`, flags: MessageFlags.Ephemeral });
                     return;
                 }
                 const member = interaction.options.getUser('member');
-                if (!member) { await interaction.reply({ content: '❌ Provide a member.', ephemeral: true }); return; }
+                if (!member) { await interaction.reply({ content: '❌ Provide a member.', flags: MessageFlags.Ephemeral }); return; }
                 if (sub === 'add') {
                     if (!c.members.includes(member.id)) c.members.push(member.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Added member immunity for **${category}**: <@${member.id}>`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Added member immunity for **${category}**: <@${member.id}>`, flags: MessageFlags.Ephemeral });
                     await sendConfigLog(interaction.guild, data, interaction.user.id, '🛡️ Immunity Updated', [
                         `Category: **${category}**`,
                         `Member add: <@${member.id}> (${member.id})`,
@@ -11165,14 +11168,14 @@ client.on('interactionCreate', async interaction => {
                 if (sub === 'remove') {
                     c.members = c.members.filter(x => x !== member.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Removed member immunity for **${category}**: <@${member.id}>`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Removed member immunity for **${category}**: <@${member.id}>`, flags: MessageFlags.Ephemeral });
                     await sendConfigLog(interaction.guild, data, interaction.user.id, '🛡️ Immunity Updated', [
                         `Category: **${category}**`,
                         `Member remove: <@${member.id}> (${member.id})`,
                     ]);
                     return;
                 }
-                await interaction.reply({ content: '❌ Invalid subcommand.', ephemeral: true });
+                await interaction.reply({ content: '❌ Invalid subcommand.', flags: MessageFlags.Ephemeral });
                 return;
             }
         }
@@ -11184,20 +11187,20 @@ client.on('interactionCreate', async interaction => {
                 const role = interaction.options.getRole('role');
                 if (legacyMode === 'list') {
                     const list = c.roles.map(rid => interaction.guild.roles.cache.get(rid) ? `<@&${rid}>` : `Unknown (${rid})`).slice(0, 60);
-                    await interaction.reply({ content: `✅ **${category}** role immunity list (${c.roles.length}):\n${list.join('\n') || 'None'}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ **${category}** role immunity list (${c.roles.length}):\n${list.join('\n') || 'None'}`, flags: MessageFlags.Ephemeral });
                     return;
                 }
-                if (!role) { await interaction.reply({ content: '❌ Provide a role.', ephemeral: true }); return; }
+                if (!role) { await interaction.reply({ content: '❌ Provide a role.', flags: MessageFlags.Ephemeral }); return; }
                 if (legacyMode === 'add') {
                     if (!c.roles.includes(role.id)) c.roles.push(role.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Added role immunity for **${category}**: ${role}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Added role immunity for **${category}**: ${role}`, flags: MessageFlags.Ephemeral });
                     return;
                 }
                 if (legacyMode === 'remove') {
                     c.roles = c.roles.filter(x => x !== role.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Removed role immunity for **${category}**: ${role}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Removed role immunity for **${category}**: ${role}`, flags: MessageFlags.Ephemeral });
                     return;
                 }
             }
@@ -11205,26 +11208,26 @@ client.on('interactionCreate', async interaction => {
                 const member = interaction.options.getUser('member');
                 if (legacyMode === 'list') {
                     const list = c.members.map(uid => `<@${uid}> (${uid})`).slice(0, 60);
-                    await interaction.reply({ content: `✅ **${category}** member immunity list (${c.members.length}):\n${list.join('\n') || 'None'}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ **${category}** member immunity list (${c.members.length}):\n${list.join('\n') || 'None'}`, flags: MessageFlags.Ephemeral });
                     return;
                 }
-                if (!member) { await interaction.reply({ content: '❌ Provide a member.', ephemeral: true }); return; }
+                if (!member) { await interaction.reply({ content: '❌ Provide a member.', flags: MessageFlags.Ephemeral }); return; }
                 if (legacyMode === 'add') {
                     if (!c.members.includes(member.id)) c.members.push(member.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Added member immunity for **${category}**: <@${member.id}>`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Added member immunity for **${category}**: <@${member.id}>`, flags: MessageFlags.Ephemeral });
                     return;
                 }
                 if (legacyMode === 'remove') {
                     c.members = c.members.filter(x => x !== member.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Removed member immunity for **${category}**: <@${member.id}>`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Removed member immunity for **${category}**: <@${member.id}>`, flags: MessageFlags.Ephemeral });
                     return;
                 }
             }
         }
 
-        await interaction.reply({ content: '❌ Invalid immunity command usage.', ephemeral: true });
+        await interaction.reply({ content: '❌ Invalid immunity command usage.', flags: MessageFlags.Ephemeral });
     }
 
     switch (interaction.commandName) {
@@ -11232,12 +11235,12 @@ client.on('interactionCreate', async interaction => {
         // ── /setup & /changesetup ─────────────────────────
         case 'setup':
         case 'changesetup': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand(false);
 
             // /setup open  OR  /changesetup  (no subcommand) → open the wizard
             if (!sub || sub === 'open') {
-                await interaction.reply({ embeds: [buildSetupPickerEmbed(gs)], components: buildSetupPickerComponents(), ephemeral: true });
+                await interaction.reply({ embeds: [buildSetupPickerEmbed(gs)], components: buildSetupPickerComponents(), flags: MessageFlags.Ephemeral });
                 break;
             }
 
@@ -11254,7 +11257,7 @@ client.on('interactionCreate', async interaction => {
                             { name: '🔕 Manual-only (still OFF)', value: '`/capsconfig on` — Caps spam\n`/stretchconfig on` — Stretch spam\n`/noaffiliation enable` — No-affiliation mode\n`/zalgoconfig enabled:True` — Zalgo/glitch text\n`/invitepolicy on` — Invite link blocking\n`/attachmentpolicy on` — Attachment blocking\n`/timeout enable` — Auto-timeouts', inline: false },
                         )
                         .setTimestamp()],
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Setup Completed', [
                     'Core detections enabled via /setup completeset',
@@ -11297,7 +11300,7 @@ client.on('interactionCreate', async interaction => {
                         )
                         .setFooter({ text: 'Use /setup completeset to enable all (except manual-only ones)' })
                         .setTimestamp()],
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
                 break;
             }
@@ -11306,31 +11309,31 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'dashboard': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            await interaction.reply({ embeds: [buildDashboardEmbed(gs)], components: buildDashboardComponents(), ephemeral: true });
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            await interaction.reply({ embeds: [buildDashboardEmbed(gs)], components: buildDashboardComponents(), flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'policypreset': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const preset = interaction.options.getString('preset') || '';
             if (!applyPolicyPreset(gs, preset)) {
-                await interaction.reply({ content: '❌ Invalid preset. Use strict|balanced|soft|monitor', ephemeral: true });
+                await interaction.reply({ content: '❌ Invalid preset. Use strict|balanced|soft|monitor', flags: MessageFlags.Ephemeral });
                 return;
             }
             saveData(data);
-            await interaction.reply({ content: `✅ Policy preset applied: **${gs.policyPreset}**`, ephemeral: true });
+            await interaction.reply({ content: `✅ Policy preset applied: **${gs.policyPreset}**`, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Policy Preset Applied', [String(gs.policyPreset)]);
             break;
         }
 
         case 'strictness': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const lvl = interaction.options.getInteger('level');
             const before = Number(gs.regexStrictness || 5);
             gs.regexStrictness = Math.max(1, Math.min(10, Number(lvl || 5)));
             saveData(data);
-            await interaction.reply({ content: `✅ Strictness updated: **${before}** -> **${gs.regexStrictness}**`, ephemeral: true });
+            await interaction.reply({ content: `✅ Strictness updated: **${before}** -> **${gs.regexStrictness}**`, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Strictness Updated', [
                 `regexStrictness: **${before}** -> **${gs.regexStrictness}**`,
             ]);
@@ -11338,13 +11341,13 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'case': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand();
             const cases = getGuildCases(guildId, data);
             if (sub === 'view') {
                 const id = (interaction.options.getString('id') || '').trim();
                 const c = cases?.[id];
-                if (!c) { await interaction.reply({ content: '❌ Case not found.', ephemeral: true }); return; }
+                if (!c) { await interaction.reply({ content: '❌ Case not found.', flags: MessageFlags.Ephemeral }); return; }
                 const embed = new EmbedBuilder()
                     .setTitle(`📁 Case #${c.id}`)
                     .setColor(c.voided ? 0x777777 : 0x5865F2)
@@ -11362,7 +11365,7 @@ client.on('interactionCreate', async interaction => {
                     const nl = c.notes.slice(-5).map(n => `• <t:${Math.floor((n.at||Date.now())/1000)}:R> <@${n.by}>: ${String(n.text||'')}`);
                     embed.addFields({ name: 'Notes (latest 5)', value: nl.join('\n').slice(0, 1024), inline: false });
                 }
-                await interaction.reply({ embeds: [embed], ephemeral: true });
+                await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
                 return;
             }
             if (sub === 'list') {
@@ -11370,34 +11373,34 @@ client.on('interactionCreate', async interaction => {
                 const all = Object.values(cases || {}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
                 const filtered = user ? all.filter(x => x.userId === user.id) : all;
                 const lines = filtered.slice(0, 20).map(c => `#${c.id} — ${c.voided ? 'VOID ' : ''}${String(c.action||'warn')} — <@${c.userId}> — ${String(c.category||'')}`);
-                await interaction.reply({ content: lines.length ? lines.join('\n') : 'No cases found.', ephemeral: true });
+                await interaction.reply({ content: lines.length ? lines.join('\n') : 'No cases found.', flags: MessageFlags.Ephemeral });
                 return;
             }
             if (sub === 'note') {
                 const id = (interaction.options.getString('id') || '').trim();
                 const text = interaction.options.getString('text') || '';
                 const c = addCaseNote(guildId, data, id, interaction.user.id, text);
-                if (!c) { await interaction.reply({ content: '❌ Case not found.', ephemeral: true }); return; }
-                await interaction.reply({ content: `✅ Note added to case #${id}.`, ephemeral: true });
+                if (!c) { await interaction.reply({ content: '❌ Case not found.', flags: MessageFlags.Ephemeral }); return; }
+                await interaction.reply({ content: `✅ Note added to case #${id}.`, flags: MessageFlags.Ephemeral });
                 return;
             }
             if (sub === 'void') {
-                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
                 const id = (interaction.options.getString('id') || '').trim();
                 const reason = interaction.options.getString('reason') || '';
                 const c = voidCase(guildId, data, id, interaction.user.id, reason);
-                if (!c) { await interaction.reply({ content: '❌ Case not found.', ephemeral: true }); return; }
-                await interaction.reply({ content: `✅ Case #${id} voided.`, ephemeral: true });
+                if (!c) { await interaction.reply({ content: '❌ Case not found.', flags: MessageFlags.Ephemeral }); return; }
+                await interaction.reply({ content: `✅ Case #${id} voided.`, flags: MessageFlags.Ephemeral });
                 return;
             }
-            await interaction.reply({ content: '❌ Invalid case command.', ephemeral: true });
+            await interaction.reply({ content: '❌ Invalid case command.', flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'appeal': {
             const sub = interaction.options.getSubcommand();
-            if (sub !== 'submit') { await interaction.reply({ content: '❌ Invalid appeal command.', ephemeral: true }); return; }
-            await interaction.deferReply({ ephemeral: true });
+            if (sub !== 'submit') { await interaction.reply({ content: '❌ Invalid appeal command.', flags: MessageFlags.Ephemeral }); return; }
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const fd_slash = loadData();
             if (hasAppealedCurrentExile(interaction.user.id, fd_slash)) {
                 await interaction.editReply({
@@ -11440,7 +11443,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'diagnose': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const me = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(()=>null);
             const perms = me?.permissions;
             const mm = perms?.has(PermissionFlagsBits.ManageMessages) ? '✅' : '❌';
@@ -11481,19 +11484,19 @@ client.on('interactionCreate', async interaction => {
 
             const ft = footerText(gs);
             if (ft) embed.setFooter({ text: ft });
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'config': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand();
 
             if (sub === 'export') {
                 const payload = exportGuildConfig(interaction.guildId, data);
                 const json = JSON.stringify(payload, null, 2);
                 const safe = json.length > 1800 ? json.slice(0, 1800) + "\n... (truncated)" : json;
-                await interaction.reply({ content: `\`\`\`json\n${safe}\n\`\`\``, ephemeral: true });
+                await interaction.reply({ content: `\`\`\`json\n${safe}\n\`\`\``, flags: MessageFlags.Ephemeral });
                 break;
             }
 
@@ -11503,17 +11506,17 @@ client.on('interactionCreate', async interaction => {
                 try {
                     payload = JSON.parse(raw);
                 } catch {
-                    await interaction.reply({ content: '❌ Invalid JSON.', ephemeral: true });
+                    await interaction.reply({ content: '❌ Invalid JSON.', flags: MessageFlags.Ephemeral });
                     break;
                 }
                 try {
                     importGuildConfig(interaction.guildId, data, payload);
                     saveData(data);
                 } catch (e) {
-                    await interaction.reply({ content: `❌ Import failed: ${String(e?.message || e)}`, ephemeral: true });
+                    await interaction.reply({ content: `❌ Import failed: ${String(e?.message || e)}`, flags: MessageFlags.Ephemeral });
                     break;
                 }
-                await interaction.reply({ content: '✅ Config imported for this server.', ephemeral: true });
+                await interaction.reply({ content: '✅ Config imported for this server.', flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Config Imported', []);
                 break;
             }
@@ -11521,51 +11524,51 @@ client.on('interactionCreate', async interaction => {
             if (sub === 'backup') {
                 const p = createBackupFile(DATA_FILE);
                 rotateBackups(25);
-                await interaction.reply({ content: `✅ Backup created: ${p ? path.basename(p) : 'Failed'}`, ephemeral: true });
+                await interaction.reply({ content: `✅ Backup created: ${p ? path.basename(p) : 'Failed'}`, flags: MessageFlags.Ephemeral });
                 break;
             }
 
             if (sub === 'list') {
                 const files = listBackupFiles().slice(0, 20);
-                await interaction.reply({ content: `✅ Backups (${files.length} shown):\n${files.join('\n') || 'None'}`, ephemeral: true });
+                await interaction.reply({ content: `✅ Backups (${files.length} shown):\n${files.join('\n') || 'None'}`, flags: MessageFlags.Ephemeral });
                 break;
             }
 
             if (sub === 'restore') {
                 const file = (interaction.options.getString('file') || '').trim();
-                if (!/^skynet_data\.(\d{8}_\d{6})\.json$/.test(file)) { await interaction.reply({ content: '❌ Invalid backup filename.', ephemeral: true }); break; }
+                if (!/^skynet_data\.(\d{8}_\d{6})\.json$/.test(file)) { await interaction.reply({ content: '❌ Invalid backup filename.', flags: MessageFlags.Ephemeral }); break; }
                 const full = path.join(BACKUP_DIR, file);
-                if (!fs.existsSync(full)) { await interaction.reply({ content: '❌ Backup not found.', ephemeral: true }); break; }
+                if (!fs.existsSync(full)) { await interaction.reply({ content: '❌ Backup not found.', flags: MessageFlags.Ephemeral }); break; }
                 try {
                     const d = JSON.parse(fs.readFileSync(full, 'utf8'));
                     createBackupFile(DATA_FILE);
                     safeWriteJsonAtomic(DATA_FILE, Object.assign(makeDefaultData(), d));
                 } catch (e) {
-                    await interaction.reply({ content: `❌ Restore failed: ${String(e?.message || e)}`, ephemeral: true });
+                    await interaction.reply({ content: `❌ Restore failed: ${String(e?.message || e)}`, flags: MessageFlags.Ephemeral });
                     break;
                 }
-                await interaction.reply({ content: `✅ Restored from ${file}.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Restored from ${file}.`, flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Config Restored', [file]);
                 break;
             }
-            await interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
+            await interaction.reply({ content: '❌ Unknown subcommand.', flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'messagecommandslist': {
             const embeds = buildCommandListEmbeds('💬 Message Commands', MESSAGE_COMMANDS_LIST, gs);
-            await interaction.reply({ embeds: [embeds[0]], ephemeral: true });
+            await interaction.reply({ embeds: [embeds[0]], flags: MessageFlags.Ephemeral });
             for (let i = 1; i < embeds.length; i++) {
-                await interaction.followUp({ embeds: [embeds[i]], ephemeral: true });
+                await interaction.followUp({ embeds: [embeds[i]], flags: MessageFlags.Ephemeral });
             }
             break;
         }
 
         case 'slashcommandslist': {
             const embeds = buildCommandListEmbeds('✨ Slash Commands', SLASH_COMMANDS_LIST, gs);
-            await interaction.reply({ embeds: [embeds[0]], ephemeral: true });
+            await interaction.reply({ embeds: [embeds[0]], flags: MessageFlags.Ephemeral });
             for (let i = 1; i < embeds.length; i++) {
-                await interaction.followUp({ embeds: [embeds[i]], ephemeral: true });
+                await interaction.followUp({ embeds: [embeds[i]], flags: MessageFlags.Ephemeral });
             }
             break;
         }
@@ -11584,12 +11587,12 @@ client.on('interactionCreate', async interaction => {
                 .setTimestamp();
             const ft = footerText(gs);
             if (ft) embed.setFooter({ text: ft });
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'calc': {
-            await safeDefer(interaction, { ephemeral: false });
+            await safeDefer(interaction, {  });
             const uid = interaction.user.id;
             const expr = interaction.options.getString('expression') || '';
             const st = slashSessions.get(uid) || { mode: 'calc', lines: [] };
@@ -11603,12 +11606,12 @@ client.on('interactionCreate', async interaction => {
             st.mode = 'calc';
             st.lines.push(expr);
             slashSessions.set(uid, st);
-            await safeReply(interaction, { content: '🧮 Multi-line calc mode started. Send more lines or type `Evaluate`.', ephemeral: false });
+            await safeReply(interaction, { content: '🧮 Multi-line calc mode started. Send more lines or type `Evaluate`.',  });
             break;
         }
 
         case 'wolf': {
-            await safeDefer(interaction, { ephemeral: false });
+            await safeDefer(interaction, {  });
             const uid = interaction.user.id;
             const q = interaction.options.getString('question') || '';
             const st = slashSessions.get(uid) || { mode: 'wolf', lines: [] };
@@ -11622,12 +11625,12 @@ client.on('interactionCreate', async interaction => {
             st.mode = 'wolf';
             st.lines.push(q);
             slashSessions.set(uid, st);
-            await safeReply(interaction, { content: '🔭 Multi-line Wolfram mode started. Send more lines or type `Evaluate`.', ephemeral: false });
+            await safeReply(interaction, { content: '🔭 Multi-line Wolfram mode started. Send more lines or type `Evaluate`.',  });
             break;
         }
 
         case 'supercalc': {
-            await safeDefer(interaction, { ephemeral: false });
+            await safeDefer(interaction, {  });
             const uid = interaction.user.id;
             const expr = interaction.options.getString('expression') || '';
             const st = slashSessions.get(uid) || { mode: 'supercalc', lines: [] };
@@ -11641,12 +11644,12 @@ client.on('interactionCreate', async interaction => {
             st.mode = 'supercalc';
             st.lines.push(expr);
             slashSessions.set(uid, st);
-            await safeReply(interaction, { content: '🧮 Multi-line supercalc mode started. Send more lines or type `Evaluate`.', ephemeral: false });
+            await safeReply(interaction, { content: '🧮 Multi-line supercalc mode started. Send more lines or type `Evaluate`.',  });
             break;
         }
 
         case 'supertower': {
-            await safeDefer(interaction, { ephemeral: false });
+            await safeDefer(interaction, {  });
             const uid = interaction.user.id;
             const expr = interaction.options.getString('expression') || '';
             const st = slashSessions.get(uid) || { mode: 'supertower', lines: [] };
@@ -11660,12 +11663,12 @@ client.on('interactionCreate', async interaction => {
             st.mode = 'supertower';
             st.lines.push(expr);
             slashSessions.set(uid, st);
-            await safeReply(interaction, { content: '🧮 Multi-line supertower mode started. Send more lines or type `Evaluate`.', ephemeral: false });
+            await safeReply(interaction, { content: '🧮 Multi-line supertower mode started. Send more lines or type `Evaluate`.',  });
             break;
         }
 
         case 'sympy': {
-            await safeDefer(interaction, { ephemeral: false });
+            await safeDefer(interaction, {  });
             const uid = interaction.user.id;
             const expr = interaction.options.getString('expression') || '';
             const st = slashSessions.get(uid) || { mode: 'sympy', lines: [] };
@@ -11684,12 +11687,12 @@ client.on('interactionCreate', async interaction => {
             st.mode = 'sympy';
             st.lines.push(expr);
             slashSessions.set(uid, st);
-            await safeReply(interaction, { content: '🧮 Multi-line GayPy mode started. Send more lines or type `Evaluate`.', ephemeral: false });
+            await safeReply(interaction, { content: '🧮 Multi-line GayPy mode started. Send more lines or type `Evaluate`.',  });
             break;
         }
 
         case 'gaypy': {
-            await safeDefer(interaction, { ephemeral: false });
+            await safeDefer(interaction, {  });
             const uid = interaction.user.id;
             const expr = interaction.options.getString('expression') || '';
             const st = slashSessions.get(uid) || { mode: 'gaypy', lines: [] };
@@ -11708,11 +11711,11 @@ client.on('interactionCreate', async interaction => {
             st.mode = 'gaypy';
             st.lines.push(expr);
             slashSessions.set(uid, st);
-            await safeReply(interaction, { content: '🧮 Multi-line SymPy mode started. Send more lines or type `Evaluate`.', ephemeral: false });
+            await safeReply(interaction, { content: '🧮 Multi-line gaypy mode started. Send more lines or type `Evaluate`.',  });
             break;
         }
         case 'mpmath': {
-            await safeDefer(interaction, { ephemeral: false });
+            await safeDefer(interaction, {  });
             const expr  = interaction.options.getString('expression') || '';
             const prec  = interaction.options.getInteger('precision') ?? 50;
             let res, ver;
@@ -11730,12 +11733,12 @@ client.on('interactionCreate', async interaction => {
             break;
         }
         case 'policymode': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const mode = (interaction.options.getString('mode') || '').toLowerCase();
             const before = gs.enforcementMode;
             gs.enforcementMode = mode;
             saveData(data);
-            await interaction.reply({ content: `✅ Enforcement mode: **${before}** -> **${gs.enforcementMode}**`, ephemeral: true });
+            await interaction.reply({ content: `✅ Enforcement mode: **${before}** -> **${gs.enforcementMode}**`, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Enforcement Mode Updated', [
                 `enforcementMode: **${before}** -> **${gs.enforcementMode}**`,
             ]);
@@ -11743,17 +11746,17 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'policyset': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const cat = (interaction.options.getString('category') || '').toLowerCase();
             const action = (interaction.options.getString('action') || '').toLowerCase();
             const mins = interaction.options.getInteger('minutes');
-            if (!['spam','scam','command','trade','service','beg','acctrade'].includes(cat)) { await interaction.reply({ content: '❌ Invalid category.', ephemeral: true }); return; }
-            if (!['warn','delete','timeout','exile','log'].includes(action)) { await interaction.reply({ content: '❌ Invalid action.', ephemeral: true }); return; }
+            if (!['spam','scam','command','trade','service','beg','acctrade'].includes(cat)) { await interaction.reply({ content: '❌ Invalid category.', flags: MessageFlags.Ephemeral }); return; }
+            if (!['warn','delete','timeout','exile','log'].includes(action)) { await interaction.reply({ content: '❌ Invalid action.', flags: MessageFlags.Ephemeral }); return; }
             gs.categoryPolicies = gs.categoryPolicies && typeof gs.categoryPolicies === 'object' ? gs.categoryPolicies : {};
             const before = gs.categoryPolicies[cat] || null;
             gs.categoryPolicies[cat] = { action, minutes: action === 'timeout' && mins ? Math.max(1, Math.min(10080, mins)) : (before?.minutes || 0) };
             saveData(data);
-            await interaction.reply({ content: `✅ Policy updated for **${cat}**: action=${action}${action === 'timeout' ? ` minutes=${gs.categoryPolicies[cat].minutes}` : ''}`, ephemeral: true });
+            await interaction.reply({ content: `✅ Policy updated for **${cat}**: action=${action}${action === 'timeout' ? ` minutes=${gs.categoryPolicies[cat].minutes}` : ''}`, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Policy Updated', [
                 `category: **${cat}**`,
                 `action: **${before?.action || 'default'}** -> **${action}**`,
@@ -11763,7 +11766,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'policystatus': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const cats = ['spam','scam','command','trade','service','beg','acctrade'];
             const lines = cats.map(c => {
                 const p = getCategoryPolicy(gs, c);
@@ -11775,12 +11778,12 @@ client.on('interactionCreate', async interaction => {
                 .setDescription(lines.join('\n'))
                 .addFields({ name: 'Mode', value: `**${gs.enforcementMode}**`, inline: true })
                 .setTimestamp();
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'botstatus': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const embed = new EmbedBuilder()
                 .setTitle('📊 Bot Status / Configuration')
                 .setColor(0x5865F2)
@@ -11810,13 +11813,13 @@ client.on('interactionCreate', async interaction => {
                 .setTimestamp();
             const ft = footerText(gs);
             if (ft) embed.setFooter({ text: ft });
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
             break;
         }
 
         // ── /set subcommands ──────────────────────────────
         case 'set': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand();
             const beforeTrade = gs.tradeChannelId;
             const beforeServices = gs.servicesChannelId;
@@ -11829,7 +11832,7 @@ client.on('interactionCreate', async interaction => {
             }
 
             if ((sub === 'tradechannel' || sub === 'serviceschannel' || sub === 'commandchannel') && !resolvedCh) {
-                await interaction.reply({ content: '❌ Provide a channel or a valid channel ID.', ephemeral: true });
+                await interaction.reply({ content: '❌ Provide a channel or a valid channel ID.', flags: MessageFlags.Ephemeral });
                 return;
             }
 
@@ -11842,7 +11845,7 @@ client.on('interactionCreate', async interaction => {
             if (sub === 'prefix') {
                 const newPrefix = interaction.options.getString('prefix');
                 if (!newPrefix || newPrefix.length > 5) {
-                    await interaction.reply({ content: '❌ Prefix must be between 1–5 characters.', ephemeral: true });
+                    await interaction.reply({ content: '❌ Prefix must be between 1–5 characters.', flags: MessageFlags.Ephemeral });
                     return;
                 }
                 const oldPrefix = gs.commandPrefix || '!';
@@ -11851,14 +11854,14 @@ client.on('interactionCreate', async interaction => {
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Prefix Updated', [
                     `Message command prefix changed: \`${oldPrefix}\` → \`${newPrefix}\``,
                 ]);
-                await interaction.reply({ content: `✅ Message command prefix set to \`${newPrefix}\`. Use it like: \`${newPrefix}warn\`, \`${newPrefix}exile\`, etc.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Message command prefix set to \`${newPrefix}\`. Use it like: \`${newPrefix}warn\`, \`${newPrefix}exile\`, etc.`, flags: MessageFlags.Ephemeral });
                 return;
             }
             // /set only saves the value — it NEVER enables any detections.
             // Run /setup completeset to enable all detections at once.
             if (gs.noAffiliationEnabled === undefined) gs.noAffiliationEnabled = false;
             saveData(data);
-            await interaction.reply({ content: `✅ **${sub}** updated successfully.`, ephemeral: true });
+            await interaction.reply({ content: `✅ **${sub}** updated successfully.`, flags: MessageFlags.Ephemeral });
             if (sub === 'tradechannel') {
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Config Updated', [
                     `Trade channel: <#${beforeTrade}> -> <#${gs.tradeChannelId}>`,
@@ -11882,7 +11885,7 @@ client.on('interactionCreate', async interaction => {
 
         // ── /clear subcommands ────────────────────────────
         case 'clear': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand();
             const beforeTrade = gs.tradeChannelId;
             const beforeServices = gs.servicesChannelId;
@@ -11891,7 +11894,7 @@ client.on('interactionCreate', async interaction => {
             if (sub === 'serviceschannel') gs.servicesChannelId = DEFAULT_SERVICES_CHANNEL_ID;
             if (sub === 'commandchannel')  gs.gamesHubId        = DEFAULT_GAMES_HUB_ID;
             saveData(data);
-            await interaction.reply({ content: `✅ **${sub}** cleared (reverted to default).`, ephemeral: true });
+            await interaction.reply({ content: `✅ **${sub}** cleared (reverted to default).`, flags: MessageFlags.Ephemeral });
             if (sub === 'tradechannel') {
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🧹 Config Cleared', [
                     `Trade channel: <#${beforeTrade}> -> <#${gs.tradeChannelId}> (default)`,
@@ -11915,9 +11918,9 @@ client.on('interactionCreate', async interaction => {
 
         // ── /exilechannel create ──────────────────────────
         case 'exilechannel': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             if (interaction.options.getSubcommand() === 'create') {
-                await safeDefer(interaction, { ephemeral: true });
+                await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
                 try {
                     const exRole = interaction.guild.roles.cache.get(gs.exiledRoleId);
                     const permOverwrites = [
@@ -11942,9 +11945,9 @@ client.on('interactionCreate', async interaction => {
 
         // ── /exilerole create ─────────────────────────────
         case 'exilerole': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             if (interaction.options.getSubcommand() === 'create') {
-                await safeDefer(interaction, { ephemeral: true });
+                await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
                 try {
                     const role = await interaction.guild.roles.create({
                         name: '⛓️ Exiled',
@@ -11969,7 +11972,7 @@ client.on('interactionCreate', async interaction => {
 
         // ── /exileconfig ──────────────────────────────────
         case 'exileconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const ecSub = interaction.options.getSubcommand();
             if (ecSub === 'setrole') {
                 const role = interaction.options.getRole('role');
@@ -11984,7 +11987,7 @@ client.on('interactionCreate', async interaction => {
                             { name: 'Strip Roles on Exile', value: gs.exileStripRoles ? '✅ ON — roles are NOT restored on unexile' : '❌ OFF — roles are restored on unexile', inline: false },
                         )
                         .setTimestamp()],
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
                 await sendLog(interaction.guild, data, new EmbedBuilder()
                     .setTitle('⛓️ Exile Config — Role Updated')
@@ -12006,7 +12009,7 @@ client.on('interactionCreate', async interaction => {
                             { name: 'Exile Role', value: gs.exiledRoleId ? `<@&${gs.exiledRoleId}>` : 'Not set — use `/exileconfig setrole`', inline: false },
                         )
                         .setTimestamp()],
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
                 await sendLog(interaction.guild, data, new EmbedBuilder()
                     .setTitle('⛓️ Exile Config — Strip Roles Toggled')
@@ -12030,7 +12033,7 @@ client.on('interactionCreate', async interaction => {
                             { name: 'Remove Role',   value: gs.exileRemoveRole ? '✅ ON (remove & restore)' : '❌ OFF (add-only)', inline: true },
                         )
                         .setTimestamp()],
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
                 await sendLog(interaction.guild, data, new EmbedBuilder()
                     .setTitle('⛓️ Exile Config — Remove Role Toggled')
@@ -12043,13 +12046,13 @@ client.on('interactionCreate', async interaction => {
 
         // ── /immunity ─────────────────────────────────────
         case 'immunity': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub   = interaction.options.getSubcommand(false);
             const group = interaction.options.getSubcommandGroup(false);
             // enable / disable / status
             if (!group) {
-                if (sub === 'enable')  { imm.enabled = true;  saveData(data); await interaction.reply({ content: '✅ **Staff immunity ENABLED.** Admins/mods are now immune from scanning.', ephemeral: true }); return; }
-                if (sub === 'disable') { imm.enabled = false; saveData(data); await interaction.reply({ content: '⚠️ **Staff immunity DISABLED.** Everyone is scanned, including staff.', ephemeral: true }); return; }
+                if (sub === 'enable')  { imm.enabled = true;  saveData(data); await interaction.reply({ content: '✅ **Staff immunity ENABLED.** Admins/mods are now immune from scanning.', flags: MessageFlags.Ephemeral }); return; }
+                if (sub === 'disable') { imm.enabled = false; saveData(data); await interaction.reply({ content: '⚠️ **Staff immunity DISABLED.** Everyone is scanned, including staff.', flags: MessageFlags.Ephemeral }); return; }
                 if (sub === 'status') {
                     const roleNames   = imm.whitelistedRoles.map(rid => { const r = interaction.guild.roles.cache.get(rid); return r ? `<@&${rid}>` : `Unknown (${rid})`; });
                     const memberNames = imm.whitelistedMembers.map(uid => `<@${uid}>`);
@@ -12060,7 +12063,7 @@ client.on('interactionCreate', async interaction => {
                             { name: 'Immunity Status',     value: imm.enabled ? '✅ ENABLED' : '❌ DISABLED', inline: true },
                             { name: 'Whitelisted Roles',   value: roleNames.length   ? roleNames.join('\n')   : 'None', inline: false },
                             { name: 'Whitelisted Members', value: memberNames.length ? memberNames.join('\n') : 'None', inline: false },
-                        )], ephemeral: true });
+                        )], flags: MessageFlags.Ephemeral });
                     return;
                 }
             }
@@ -12069,11 +12072,11 @@ client.on('interactionCreate', async interaction => {
                 if (sub === 'role') {
                     const role = interaction.options.getRole('role');
                     if (!imm.whitelistedRoles.includes(role.id)) { imm.whitelistedRoles.push(role.id); saveData(data); }
-                    await interaction.reply({ content: `✅ Role **${role.name}** added to immunity whitelist.`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Role **${role.name}** added to immunity whitelist.`, flags: MessageFlags.Ephemeral });
                 } else if (sub === 'member') {
                     const user = interaction.options.getUser('user');
                     if (!imm.whitelistedMembers.includes(user.id)) { imm.whitelistedMembers.push(user.id); saveData(data); }
-                    await interaction.reply({ content: `✅ Member <@${user.id}> added to immunity whitelist.`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Member <@${user.id}> added to immunity whitelist.`, flags: MessageFlags.Ephemeral });
                 }
                 return;
             }
@@ -12083,12 +12086,12 @@ client.on('interactionCreate', async interaction => {
                     const role = interaction.options.getRole('role');
                     imm.whitelistedRoles = imm.whitelistedRoles.filter(id => id !== role.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Role **${role.name}** removed from immunity whitelist.`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Role **${role.name}** removed from immunity whitelist.`, flags: MessageFlags.Ephemeral });
                 } else if (sub === 'member') {
                     const user = interaction.options.getUser('user');
                     imm.whitelistedMembers = imm.whitelistedMembers.filter(id => id !== user.id);
                     saveData(data);
-                    await interaction.reply({ content: `✅ Member <@${user.id}> removed from immunity whitelist.`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Member <@${user.id}> removed from immunity whitelist.`, flags: MessageFlags.Ephemeral });
                 }
                 return;
             }
@@ -12096,14 +12099,14 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'aienable': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand(false);
 
             // /aienable off → disable AI detection
             if (sub === 'off') {
                 gs.aiEnabled = false;
                 saveData(data);
-                await interaction.reply({ content: '⚠️ AI detection is now **DISABLED** for this server.', ephemeral: true });
+                await interaction.reply({ content: '⚠️ AI detection is now **DISABLED** for this server.', flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Disabled', [`AI detection: **OFF**`]);
                 break;
             }
@@ -12138,31 +12141,31 @@ client.on('interactionCreate', async interaction => {
                 }
             }
 
-            await interaction.reply({ content: `✅ AI detection is now **ENABLED** for this server.${modelLine}`, ephemeral: true });
+            await interaction.reply({ content: `✅ AI detection is now **ENABLED** for this server.${modelLine}`, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Enabled', [`AI detection: **ON**${modelLine}`]);
             break;
         }
 
         // Legacy fallback — aidisable slash was removed; handled above via /aienable off
         case 'aidisable': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             gs.aiEnabled = false;
             saveData(data);
-            await interaction.reply({ content: '⚠️ AI detection is now **DISABLED**. (Tip: use `/aienable off` going forward)', ephemeral: true });
+            await interaction.reply({ content: '⚠️ AI detection is now **DISABLED**. (Tip: use `/aienable off` going forward)', flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '🤖 AI Disabled', [`AI detection: **OFF**`]);
             break;
         }
 
         // /check enable|disable|status — replaces /enablecheck and /disablecheck
         case 'check': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const csub = interaction.options.getSubcommand();
             if (csub === 'status') {
-                await interaction.reply({ content: `🛡️ Moderation checks are currently **${gs.checksEnabled !== false ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `🛡️ Moderation checks are currently **${gs.checksEnabled !== false ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             } else {
                 gs.checksEnabled = (csub === 'enable');
                 saveData(data);
-                await interaction.reply({ content: `${gs.checksEnabled ? '✅' : '🛑'} All moderation checks are now **${gs.checksEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `${gs.checksEnabled ? '✅' : '🛑'} All moderation checks are now **${gs.checksEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, gs.checksEnabled ? '✅ Checks Enabled' : '🛑 Checks Disabled', [`Checks: **${gs.checksEnabled ? 'ON' : 'OFF'}**`]);
             }
             break;
@@ -12170,30 +12173,30 @@ client.on('interactionCreate', async interaction => {
 
         // Legacy fallbacks — disablecheck/enablecheck slash commands removed; /check replaces them
         case 'disablecheck': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             gs.checksEnabled = false;
             saveData(data);
-            await interaction.reply({ content: '🛑 All moderation checks are now **DISABLED**. (Tip: use `/check disable` going forward)', ephemeral: true });
+            await interaction.reply({ content: '🛑 All moderation checks are now **DISABLED**. (Tip: use `/check disable` going forward)', flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '🛑 Checks Disabled', [`Checks: **OFF**`]);
             break;
         }
         case 'enablecheck': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             gs.checksEnabled = true;
             saveData(data);
-            await interaction.reply({ content: '✅ All moderation checks are now **ENABLED**. (Tip: use `/check enable` going forward)', ephemeral: true });
+            await interaction.reply({ content: '✅ All moderation checks are now **ENABLED**. (Tip: use `/check enable` going forward)', flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Checks Enabled', [`Checks: **ON**`]);
             break;
         }
 
         case 'noaffiliation':
         case 'noaffliation': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand();
             const before = gs.noAffiliationEnabled;
             gs.noAffiliationEnabled = (sub === 'enable');
             saveData(data);
-            await interaction.reply({ content: `✅ No-affiliation mode is now **${gs.noAffiliationEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ No-affiliation mode is now **${gs.noAffiliationEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '🏷️ No-Affiliation Mode', [
                 `No-affiliation: **${before ? 'ON' : 'OFF'}** -> **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**`,
             ]);
@@ -12218,11 +12221,11 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'setowner': {
-            if (!isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ Only the bot superuser can set the bot owner.', ephemeral: true }); return; }
+            if (!isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ Only the bot superuser can set the bot owner.', flags: MessageFlags.Ephemeral }); return; }
             const u = interaction.options.getUser('owner');
             gs.botOwnerId = u?.id || null;
             saveData(data);
-            const payload = { content: `✅ Bot owner set to <@${gs.botOwnerId}> (${gs.botOwnerId}).`, ephemeral: true };
+            const payload = { content: `✅ Bot owner set to <@${gs.botOwnerId}> (${gs.botOwnerId}).`, flags: MessageFlags.Ephemeral };
             if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
             else await interaction.reply(payload);
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Bot Owner Updated', [
@@ -12232,10 +12235,10 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'clearowner': {
-            if (!isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ Only the bot superuser can clear the bot owner.', ephemeral: true }); return; }
+            if (!isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ Only the bot superuser can clear the bot owner.', flags: MessageFlags.Ephemeral }); return; }
             gs.botOwnerId = null;
             saveData(data);
-            const payload = { content: '✅ Bot owner cleared (Open Source / Community Run).', ephemeral: true };
+            const payload = { content: '✅ Bot owner cleared (Open Source / Community Run).', flags: MessageFlags.Ephemeral };
             if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
             else await interaction.reply(payload);
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Bot Owner Cleared', []);
@@ -12243,12 +12246,12 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'setfooter': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const t = String(interaction.options.getString('text') || '').trim().slice(0, 200);
-            if (!t) { await interaction.reply({ content: '❌ Provide footer text.', ephemeral: true }); return; }
+            if (!t) { await interaction.reply({ content: '❌ Provide footer text.', flags: MessageFlags.Ephemeral }); return; }
             gs.botFooterText = t;
             saveData(data);
-            await interaction.reply({ content: '✅ Footer updated.', ephemeral: true });
+            await interaction.reply({ content: '✅ Footer updated.', flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Footer Updated', [
                 `Footer: ${t}`,
             ]);
@@ -12256,24 +12259,24 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'clearfooter': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             gs.botFooterText = null;
             saveData(data);
-            await interaction.reply({ content: '✅ Footer cleared.', ephemeral: true });
+            await interaction.reply({ content: '✅ Footer cleared.', flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Footer Cleared', []);
             break;
         }
 
         case 'botinfopublic': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const m = (interaction.options.getString('mode') || '').toLowerCase();
             const v = ['on','true','yes','1','enable','enabled'].includes(m) ? true
                 : (['off','false','no','0','disable','disabled'].includes(m) ? false : null);
-            if (v === null) { await interaction.reply({ content: '❌ Use: on/off', ephemeral: true }); return; }
+            if (v === null) { await interaction.reply({ content: '❌ Use: on/off', flags: MessageFlags.Ephemeral }); return; }
             const before = gs.botInfoPublic;
             gs.botInfoPublic = v;
             saveData(data);
-            await interaction.reply({ content: `✅ /botinfo is now **${gs.botInfoPublic ? 'PUBLIC' : 'EPHEMERAL'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ /botinfo is now **${gs.botInfoPublic ? 'PUBLIC' : 'EPHEMERAL'}**.`, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ BotInfo Visibility', [
                 `botInfoPublic: **${before ? 'ON' : 'OFF'}** -> **${gs.botInfoPublic ? 'ON' : 'OFF'}**`,
             ]);
@@ -12284,51 +12287,51 @@ client.on('interactionCreate', async interaction => {
         case 'link': {
             const sub = interaction.options.getSubcommand();
             if (sub === 'mode') {
-                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
                 const mode = (interaction.options.getString('mode') || '').toLowerCase();
-                if (!['strict','medium','off'].includes(mode)) { await interaction.reply({ content: '❌ Use: strict|medium|off', ephemeral: true }); return; }
+                if (!['strict','medium','off'].includes(mode)) { await interaction.reply({ content: '❌ Use: strict|medium|off', flags: MessageFlags.Ephemeral }); return; }
                 const before = gs.linkMode;
                 gs.linkMode = mode;
                 saveData(data);
-                await interaction.reply({ content: `✅ Link mode set to **${mode}**.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Link mode set to **${mode}**.`, flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Link Mode Updated', [`linkMode: **${before}** -> **${gs.linkMode}**`]);
             } else if (sub === 'action') {
-                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
                 const action = (interaction.options.getString('action') || '').toLowerCase();
-                if (!['delete','warn','exile','timeout'].includes(action)) { await interaction.reply({ content: '❌ Use: delete|warn|exile|timeout', ephemeral: true }); return; }
+                if (!['delete','warn','exile','timeout'].includes(action)) { await interaction.reply({ content: '❌ Use: delete|warn|exile|timeout', flags: MessageFlags.Ephemeral }); return; }
                 const before = gs.linkAction;
                 gs.linkAction = action;
                 const mins = interaction.options.getInteger('minutes');
                 if (action === 'timeout' && mins) gs.timeoutMinutesScam = Math.max(1, Math.min(10080, mins));
                 saveData(data);
-                await interaction.reply({ content: `✅ Link action set to **${action}**.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Link action set to **${action}**.`, flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Link Action Updated', [
                     `linkAction: **${before}** -> **${gs.linkAction}**`,
                     action === 'timeout' ? `timeoutMinutesScam: ${gs.timeoutMinutesScam}` : null,
                 ]);
             } else if (sub === 'policy') {
-                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
                 gs.linkPolicyEnabled = !!interaction.options.getBoolean('enabled');
                 saveData(data);
-                await interaction.reply({ content: `✅ Link policy is now **${gs.linkPolicyEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Link policy is now **${gs.linkPolicyEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             } else if (sub === 'allow') {
-                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
                 const dom = normalizeDomain(interaction.options.getString('domain'));
-                if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', ephemeral: true }); return; }
+                if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', flags: MessageFlags.Ephemeral }); return; }
                 gs.linkAllowlistedDomains = Array.isArray(gs.linkAllowlistedDomains) ? gs.linkAllowlistedDomains : [];
                 if (!gs.linkAllowlistedDomains.includes(dom)) gs.linkAllowlistedDomains.push(dom);
                 saveData(data);
-                await interaction.reply({ content: `✅ Allowlisted: **${dom}**`, ephemeral: true });
+                await interaction.reply({ content: `✅ Allowlisted: **${dom}**`, flags: MessageFlags.Ephemeral });
             } else if (sub === 'deny') {
-                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
                 const dom = normalizeDomain(interaction.options.getString('domain'));
-                if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', ephemeral: true }); return; }
+                if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', flags: MessageFlags.Ephemeral }); return; }
                 gs.linkDenylistedDomains = Array.isArray(gs.linkDenylistedDomains) ? gs.linkDenylistedDomains : [];
                 if (!gs.linkDenylistedDomains.includes(dom)) gs.linkDenylistedDomains.push(dom);
                 saveData(data);
-                await interaction.reply({ content: `✅ Denylisted: **${dom}**`, ephemeral: true });
+                await interaction.reply({ content: `✅ Denylisted: **${dom}**`, flags: MessageFlags.Ephemeral });
             } else if (sub === 'list') {
-                if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+                if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
                 const allow = (gs.linkAllowlistedDomains || []).slice(0, 60);
                 const deny  = (gs.linkDenylistedDomains || []).slice(0, 60);
                 await interaction.reply({ embeds: [new EmbedBuilder()
@@ -12338,9 +12341,9 @@ client.on('interactionCreate', async interaction => {
                         { name: 'Policy', value: gs.linkPolicyEnabled ? '✅ ENABLED' : '❌ DISABLED', inline: true },
                         { name: 'Allowlist (first 60)', value: allow.length ? allow.join('\n').slice(0, 1024) : 'None', inline: false },
                         { name: 'Denylist (first 60)',  value: deny.length  ? deny.join('\n').slice(0, 1024)  : 'None', inline: false },
-                    ).setTimestamp()], ephemeral: true });
+                    ).setTimestamp()], flags: MessageFlags.Ephemeral });
             } else if (sub === 'status') {
-                if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+                if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
                 const allow = (gs.linkAllowlistedDomains || []).length;
                 const deny  = (gs.linkDenylistedDomains || []).length;
                 await interaction.reply({ embeds: [new EmbedBuilder()
@@ -12351,29 +12354,29 @@ client.on('interactionCreate', async interaction => {
                         { name: 'Allowlist Size', value: String(allow), inline: true },
                         { name: 'Denylist Size', value: String(deny), inline: true },
                         { name: 'Raid Block Links', value: gs.raidLinkBlockAll ? '✅ ON' : '❌ OFF', inline: true },
-                    ).setTimestamp()], ephemeral: true });
+                    ).setTimestamp()], flags: MessageFlags.Ephemeral });
             } else if (sub === 'remove') {
-                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
                 const list = (interaction.options.getString('list') || '').toLowerCase();
                 const dom = normalizeDomain(interaction.options.getString('domain'));
-                if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', ephemeral: true }); return; }
+                if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', flags: MessageFlags.Ephemeral }); return; }
                 if (list === 'allow') gs.linkAllowlistedDomains = (gs.linkAllowlistedDomains || []).filter(x => normalizeDomain(x) !== dom);
                 if (list === 'deny')  gs.linkDenylistedDomains  = (gs.linkDenylistedDomains  || []).filter(x => normalizeDomain(x) !== dom);
                 saveData(data);
-                await interaction.reply({ content: `✅ Removed **${dom}** from **${list}** list.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Removed **${dom}** from **${list}** list.`, flags: MessageFlags.Ephemeral });
             }
             break;
         }
         // legacy aliases kept for text-command compat — slash routes through 'link'
 
         case 'verifygate': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand();
             if (sub === 'enable' || sub === 'disable') {
                 const before = gs.verifyGateEnabled;
                 gs.verifyGateEnabled = (sub === 'enable');
                 saveData(data);
-                await interaction.reply({ content: `✅ Verify gate is now **${gs.verifyGateEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Verify gate is now **${gs.verifyGateEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Verify Gate', [
                     `verifyGateEnabled: **${before ? 'ON' : 'OFF'}** -> **${gs.verifyGateEnabled ? 'ON' : 'OFF'}**`,
                 ]);
@@ -12394,7 +12397,7 @@ client.on('interactionCreate', async interaction => {
             if (action && ['delete','warn','timeout'].includes(action)) gs.verifyGateAction = action;
             if (gs.verifyGateAction === 'timeout' && mins) gs.timeoutMinutesCommand = Math.max(1, Math.min(10080, mins));
             saveData(data);
-            await interaction.reply({ content: '✅ Verify gate config updated.', ephemeral: true });
+            await interaction.reply({ content: '✅ Verify gate config updated.', flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Verify Gate Config', [
                 `minAccountDays: **${beforeDays}** -> **${gs.verifyMinAccountAgeDays}**`,
                 `requiredRole: **${beforeRole || 'None'}** -> **${gs.verifyRequiredRoleId || 'None'}**`,
@@ -12404,13 +12407,13 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'timeoutconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand();
             if (sub === 'enable' || sub === 'disable') {
                 const before = gs.timeoutEnabled;
                 gs.timeoutEnabled = (sub === 'enable');
                 saveData(data);
-                await interaction.reply({ content: `✅ Auto-timeouts are now **${gs.timeoutEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Auto-timeouts are now **${gs.timeoutEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Auto-Timeouts', [
                     `timeoutEnabled: **${before ? 'ON' : 'OFF'}** -> **${gs.timeoutEnabled ? 'ON' : 'OFF'}**`,
                 ]);
@@ -12429,7 +12432,7 @@ client.on('interactionCreate', async interaction => {
             if (trade !== null) gs.timeoutMinutesTrade = Math.max(1, Math.min(10080, trade));
             if (service !== null) gs.timeoutMinutesService = Math.max(1, Math.min(10080, service));
             saveData(data);
-            await interaction.reply({ content: '✅ Timeout minutes updated.', ephemeral: true });
+            await interaction.reply({ content: '✅ Timeout minutes updated.', flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Timeout Config', [
                 `spam=${gs.timeoutMinutesSpam}m scam=${gs.timeoutMinutesScam}m command=${gs.timeoutMinutesCommand}m trade=${gs.timeoutMinutesTrade}m service=${gs.timeoutMinutesService}m`,
             ]);
@@ -12446,7 +12449,7 @@ client.on('interactionCreate', async interaction => {
 
         // ── /roastconfig ──────────────────────────────────
         case 'roastconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const rsub = interaction.options.getSubcommand();
 
             if (rsub === 'status') {
@@ -12468,7 +12471,7 @@ client.on('interactionCreate', async interaction => {
                     .setTimestamp();
                 const ft = footerText(gs);
                 if (ft) embed.setFooter({ text: ft });
-                await interaction.reply({ embeds: [embed], ephemeral: true });
+                await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
                 return;
             }
 
@@ -12476,7 +12479,7 @@ client.on('interactionCreate', async interaction => {
                 const prev = gs.roastProvider;
                 gs.roastProvider = interaction.options.getString('provider') || 'roastedbyai';
                 saveData(data);
-                await interaction.reply({ content: `✅ Roast provider set to **${gs.roastProvider}**.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Roast provider set to **${gs.roastProvider}**.`, flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔥 Roast Config', [
                     `provider: **${prev}** → **${gs.roastProvider}**`,
                 ]);
@@ -12488,14 +12491,14 @@ client.on('interactionCreate', async interaction => {
                 const prev = gs.roastContext;
                 gs.roastContext = (toggle === 'on');
                 saveData(data);
-                await interaction.reply({ content: `✅ Roast context is now **${gs.roastContext ? 'ON' : 'OFF'}**.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Roast context is now **${gs.roastContext ? 'ON' : 'OFF'}**.`, flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔥 Roast Config', [
                     `context: **${prev ? 'ON' : 'OFF'}** → **${gs.roastContext ? 'ON' : 'OFF'}**`,
                 ]);
                 return;
             }
 
-            await interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
+            await interaction.reply({ content: '❌ Unknown subcommand.', flags: MessageFlags.Ephemeral });
             break;
         }
 
@@ -12556,7 +12559,7 @@ client.on('interactionCreate', async interaction => {
 
         // ── /violations ───────────────────────────────────
         case 'violations': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const user  = interaction.options.getUser('user');
             const count = getViolationCount(data, user.id);
             const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
@@ -12592,30 +12595,30 @@ client.on('interactionCreate', async interaction => {
                     .addOptions(options);
                 components = [new ActionRowBuilder().addComponents(menu)];
             }
-            await interaction.reply({ embeds: [embed], components, ephemeral: true });
+            await interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
             break;
         }
 
         // ── /clearviolations ──────────────────────────────
         case 'clearviolations': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const user = interaction.options.getUser('user');
-            if (user.id === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot clear your own violations.', ephemeral: true }); return; }
+            if (user.id === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot clear your own violations.', flags: MessageFlags.Ephemeral }); return; }
             // Hierarchy guard
             const cvTargetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
             if (cvTargetMember) {
                 const hierErr = checkHierarchy(interaction.member, cvTargetMember);
-                if (hierErr) { await interaction.reply({ content: hierErr, ephemeral: true }); return; }
+                if (hierErr) { await interaction.reply({ content: hierErr, flags: MessageFlags.Ephemeral }); return; }
             }
             clearViolationEntry(data, user.id);
             saveData(data);
-            await interaction.reply({ content: `✅ Cleared violations for <@${user.id}>.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Cleared violations for <@${user.id}>.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         // ── /exilelist ────────────────────────────────────
         case 'exilelist': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const now   = Date.now()/1000;
             const lines = Object.entries(data.exiles).map(([uid, info]) =>
                 `• <@${uid}> — expires <t:${Math.floor(info.expiry)}:R>`
@@ -12623,14 +12626,14 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({ embeds: [new EmbedBuilder()
                 .setTitle('📋 Currently Exiled')
                 .setColor(0xFF4400)
-                .setDescription(lines.length ? lines.join('\n') : 'Nobody is currently exiled.')], ephemeral: true });
+                .setDescription(lines.length ? lines.join('\n') : 'Nobody is currently exiled.')], flags: MessageFlags.Ephemeral });
             break;
         }
 
         // ── /aimodel ──────────────────────────────────────
         case 'aimodel': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            if (!ai2State.enabled) { await interaction.reply({ content: '❌ AI chat system is not enabled (config/config.yaml missing).', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            if (!ai2State.enabled) { await interaction.reply({ content: '❌ AI chat system is not enabled (config/config.yaml missing).', flags: MessageFlags.Ephemeral }); return; }
             const providerChoice = interaction.options.getString('provider');
 
             // Map slash choice values → internal provider + model
@@ -12649,7 +12652,7 @@ client.on('interactionCreate', async interaction => {
             const prev = ai2State.activeProvider || 'groq';
             const prevLabel = providerMap[prev]?.label || prev;
             const chosen = providerMap[providerChoice];
-            if (!chosen) { await interaction.reply({ content: '❌ Unknown provider choice.', ephemeral: true }); return; }
+            if (!chosen) { await interaction.reply({ content: '❌ Unknown provider choice.', flags: MessageFlags.Ephemeral }); return; }
 
             ai2State.activeProvider = chosen.provider;
             ai2State.claudeModel    = chosen.provider === 'claude' ? chosen.model : ai2State.claudeModel;
@@ -12677,13 +12680,13 @@ client.on('interactionCreate', async interaction => {
                     { name: 'API Key', value: keyCheck, inline: false },
                 )
                 .setFooter({ text: 'Affects all !toggleactive AI channels immediately' })
-                .setTimestamp()], ephemeral: true });
+                .setTimestamp()], flags: MessageFlags.Ephemeral });
             break;
         }
 
         // ── /botstatus ────────────────────────────────────
         case 'botstatus': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const totalExiled     = Object.keys(data.exiles).length;
             const totalViolations = Object.values(data.violations).reduce((a, v) => a + (typeof v === 'number' ? v : (v?.count || 0)), 0);
             const tradeIds  = getChannelIds(gs, 'tradeChannelIds');
@@ -12719,13 +12722,13 @@ client.on('interactionCreate', async interaction => {
                     { name: '⚠️ Total Violations', value: String(totalViolations),                inline: true },
                     { name: '🤖 AI Detection',     value: AI_ENABLED ? '✅ ON' : '❌ OFF',         inline: true },
                 )
-                .setTimestamp()], ephemeral: true });
+                .setTimestamp()], flags: MessageFlags.Ephemeral });
             break;
         }
 
         // ── /channelconfig ────────────────────────────────
         case 'channelconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand();
 
             if (sub === 'list') {
@@ -12738,19 +12741,19 @@ client.on('interactionCreate', async interaction => {
                     .setColor(0x5865F2)
                     .setDescription(lines.join('\n\n'))
                     .setTimestamp();
-                await interaction.reply({ embeds: [embed], ephemeral: true });
+                await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
                 return;
             }
 
             const cat = (interaction.options.getString('category') || '').toLowerCase();
             const meta = CHANNEL_CATEGORIES[cat];
             if (!meta) {
-                await interaction.reply({ content: `❌ Unknown category \`${cat}\`. Valid: ${Object.keys(CHANNEL_CATEGORIES).join(', ')}`, ephemeral: true });
+                await interaction.reply({ content: `❌ Unknown category \`${cat}\`. Valid: ${Object.keys(CHANNEL_CATEGORIES).join(', ')}`, flags: MessageFlags.Ephemeral });
                 return;
             }
 
             const ch = interaction.options.getChannel('channel');
-            if (!ch) { await interaction.reply({ content: '❌ Provide a channel.', ephemeral: true }); return; }
+            if (!ch) { await interaction.reply({ content: '❌ Provide a channel.', flags: MessageFlags.Ephemeral }); return; }
 
             gs[meta.key] = Array.isArray(gs[meta.key]) ? gs[meta.key] : [];
 
@@ -12761,9 +12764,9 @@ client.on('interactionCreate', async interaction => {
                     await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Channel Pool Updated', [
                         `Added <#${ch.id}> to **${meta.label}** pool`,
                     ]);
-                    await interaction.reply({ content: `✅ Added <#${ch.id}> to the **${meta.label}** pool.\nPool now: ${formatChannelIds(gs[meta.key])}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Added <#${ch.id}> to the **${meta.label}** pool.\nPool now: ${formatChannelIds(gs[meta.key])}`, flags: MessageFlags.Ephemeral });
                 } else {
-                    await interaction.reply({ content: `⚠️ <#${ch.id}> is already in the **${meta.label}** pool.`, ephemeral: true });
+                    await interaction.reply({ content: `⚠️ <#${ch.id}> is already in the **${meta.label}** pool.`, flags: MessageFlags.Ephemeral });
                 }
                 return;
             }
@@ -12775,9 +12778,9 @@ client.on('interactionCreate', async interaction => {
                     await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Channel Pool Updated', [
                         `Removed <#${ch.id}> from **${meta.label}** pool`,
                     ]);
-                    await interaction.reply({ content: `✅ Removed <#${ch.id}> from the **${meta.label}** pool.\nPool now: ${formatChannelIds(gs[meta.key])}`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Removed <#${ch.id}> from the **${meta.label}** pool.\nPool now: ${formatChannelIds(gs[meta.key])}`, flags: MessageFlags.Ephemeral });
                 } else {
-                    await interaction.reply({ content: `⚠️ <#${ch.id}> was not in the **${meta.label}** pool.`, ephemeral: true });
+                    await interaction.reply({ content: `⚠️ <#${ch.id}> was not in the **${meta.label}** pool.`, flags: MessageFlags.Ephemeral });
                 }
                 return;
             }
@@ -12908,9 +12911,9 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'purge': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
-            if (!interaction.channel || !interaction.channel.isTextBased()) { await interaction.reply({ content: '❌ This command can only be used in a text channel.', ephemeral: true }); return; }
-            await interaction.deferReply({ ephemeral: true });
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            if (!interaction.channel || !interaction.channel.isTextBased()) { await interaction.reply({ content: '❌ This command can only be used in a text channel.', flags: MessageFlags.Ephemeral }); return; }
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const purgeSub = interaction.options.getSubcommand(false) || 'count';
 
             if (purgeSub === 'count') {
@@ -12941,63 +12944,63 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'lock': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ This command is restricted to admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ This command is restricted to admins only.', flags: MessageFlags.Ephemeral }); return; }
             const reason = interaction.options.getString('reason') || 'Channel locked';
             const ch = interaction.channel;
             try {
                 await ch.permissionOverwrites.edit(interaction.guild.id, { SendMessages: false }, { reason });
                 const gs = getGuildSettings(interaction.guildId, loadData());
                 await grantAdminRolesSendMessages(ch, interaction.guild, gs);
-                await interaction.reply({ content: `🔒 Locked <#${ch.id}>. Only admins can send messages.`, ephemeral: false });
+                await interaction.reply({ content: `🔒 Locked <#${ch.id}>. Only admins can send messages.`,  });
             } catch(e) {
-                await interaction.reply({ content: `❌ Lock failed: ${e.message}`, ephemeral: true });
+                await interaction.reply({ content: `❌ Lock failed: ${e.message}`, flags: MessageFlags.Ephemeral });
             }
             break;
         }
 
         case 'unlock': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ This command is restricted to admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ This command is restricted to admins only.', flags: MessageFlags.Ephemeral }); return; }
             const reason = interaction.options.getString('reason') || 'Channel unlocked';
             const ch = interaction.channel;
             try {
                 await revokeAdminRolesSendMessages(ch, interaction.guild, getGuildSettings(interaction.guildId, loadData()));
                 await ch.permissionOverwrites.edit(interaction.guild.id, { SendMessages: null }, { reason });
-                await interaction.reply({ content: `🔓 Unlocked <#${ch.id}>.`, ephemeral: false });
+                await interaction.reply({ content: `🔓 Unlocked <#${ch.id}>.`,  });
             } catch(e) {
-                await interaction.reply({ content: `❌ Unlock failed: ${e.message}`, ephemeral: true });
+                await interaction.reply({ content: `❌ Unlock failed: ${e.message}`, flags: MessageFlags.Ephemeral });
             }
             break;
         }
 
         case 'setgameshub': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const ch = interaction.options.getChannel('channel');
             gs.gamesHubId = ch.id;
             saveData(data);
-            await interaction.reply({ content: `✅ Games Hub set to <#${ch.id}>.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Games Hub set to <#${ch.id}>.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'setthreshold': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const v = Math.max(1, Math.min(10, interaction.options.getInteger('count')));
             gs.violationThreshold = v;
             saveData(data);
-            await interaction.reply({ content: `✅ Violation threshold set to **${v}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Violation threshold set to **${v}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'setexileduration': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const mins = Math.max(1, Math.min(1440, interaction.options.getInteger('minutes')));
             gs.exileDurationMins = mins;
             saveData(data);
-            await interaction.reply({ content: `✅ Default exile duration set to **${mins} minutes**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Default exile duration set to **${mins} minutes**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'exileduration': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const edSub = interaction.options.getSubcommand();
 
             if (edSub === 'status') {
@@ -13016,7 +13019,7 @@ client.on('interactionCreate', async interaction => {
                         )
                         .setFooter({ text: 'Change with /exileduration set <duration>' })
                         .setTimestamp()],
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
                 break;
             }
@@ -13025,7 +13028,7 @@ client.on('interactionCreate', async interaction => {
                 const raw = interaction.options.getString('duration') || '';
                 const parsed = parseDuration(raw);
                 if (!parsed || parsed < 1) {
-                    await interaction.reply({ content: '❌ Invalid duration. Examples: `30s`, `10m`, `2h`, `1d`, `1w`', ephemeral: true });
+                    await interaction.reply({ content: '❌ Invalid duration. Examples: `30s`, `10m`, `2h`, `1d`, `1w`', flags: MessageFlags.Ephemeral });
                     return;
                 }
                 const prev = gs.exileDurationMins || EXILE_DURATION_MINS;
@@ -13050,32 +13053,31 @@ client.on('interactionCreate', async interaction => {
                         )
                         .setFooter({ text: `Set by ${interaction.user.username}` })
                         .setTimestamp()],
-                    ephemeral: false,
                 });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Exile Duration Updated', [
                     `exileDurationMins: **${prev}** → **${parsed}** (${label})`,
                 ]);
                 break;
             }
-            await interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
+            await interaction.reply({ content: '❌ Unknown subcommand.', flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'togglescam': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             gs.scamEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Scam/Exploit detection is now **${gs.scamEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Scam/Exploit detection is now **${gs.scamEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         // ── /regex ────────────────────────────────────────────────────────────
         case 'regex': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const mode = (interaction.options.getString('mode') || '').toLowerCase();
             if (mode !== 'enabled' && mode !== 'disabled') {
-                await interaction.reply({ content: '❌ Invalid mode. Use `enabled` or `disabled`.', ephemeral: true });
+                await interaction.reply({ content: '❌ Invalid mode. Use `enabled` or `disabled`.', flags: MessageFlags.Ephemeral });
                 return;
             }
             gs.regexEnabled = (mode === 'enabled');
@@ -13083,72 +13085,72 @@ client.on('interactionCreate', async interaction => {
             const statusLine = gs.regexEnabled
                 ? '✅ Regex detection is now **ENABLED** — tradeRegex, bossRegex, fruitRaidRegex, raceTierRegex, and no-space patterns are all active.'
                 : '✅ Regex detection is now **DISABLED** — detection relies on name/alias/shortener matching only.';
-            await interaction.reply({ content: statusLine, ephemeral: true });
+            await interaction.reply({ content: statusLine, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '🔧 Regex Detection', [`regexEnabled → ${gs.regexEnabled}`]);
             break;
         }
 
         // ── Legacy slash case fallbacks (slash commands removed; /bloxfruits covers these) ──
         case 'commandredirect': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) { await interaction.reply({ content: `🧭 Command redirect: **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits command\` to change.`, ephemeral: true }); break; }
+            if (enabled === null) { await interaction.reply({ content: `🧭 Command redirect: **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits command\` to change.`, flags: MessageFlags.Ephemeral }); break; }
             gs.commandRedirectEnabled = !!enabled; saveData(data);
-            await interaction.reply({ content: `✅ Command redirect → **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits command\` going forward)`, ephemeral: true });
+            await interaction.reply({ content: `✅ Command redirect → **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits command\` going forward)`, flags: MessageFlags.Ephemeral });
             break;
         }
         case 'serviceredirect': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) { await interaction.reply({ content: `⚔️ Service redirect: **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits service\` to change.`, ephemeral: true }); break; }
+            if (enabled === null) { await interaction.reply({ content: `⚔️ Service redirect: **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits service\` to change.`, flags: MessageFlags.Ephemeral }); break; }
             gs.serviceRedirectEnabled = !!enabled; saveData(data);
-            await interaction.reply({ content: `✅ Service redirect → **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits service\` going forward)`, ephemeral: true });
+            await interaction.reply({ content: `✅ Service redirect → **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits service\` going forward)`, flags: MessageFlags.Ephemeral });
             break;
         }
         case 'traderedirect': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) { await interaction.reply({ content: `🔄 Trade redirect: **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits trade\` to change.`, ephemeral: true }); break; }
+            if (enabled === null) { await interaction.reply({ content: `🔄 Trade redirect: **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits trade\` to change.`, flags: MessageFlags.Ephemeral }); break; }
             gs.tradeRedirectEnabled = !!enabled; saveData(data);
-            await interaction.reply({ content: `✅ Trade redirect → **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits trade\` going forward)`, ephemeral: true });
+            await interaction.reply({ content: `✅ Trade redirect → **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits trade\` going forward)`, flags: MessageFlags.Ephemeral });
             break;
         }
         case 'spamwarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) { await interaction.reply({ content: `⚠️ Spam warnings: **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn spam\` to change.`, ephemeral: true }); break; }
+            if (enabled === null) { await interaction.reply({ content: `⚠️ Spam warnings: **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn spam\` to change.`, flags: MessageFlags.Ephemeral }); break; }
             gs.spamWarnEnabled = !!enabled; saveData(data);
-            await interaction.reply({ content: `✅ Spam warnings → **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn spam\` going forward)`, ephemeral: true });
+            await interaction.reply({ content: `✅ Spam warnings → **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn spam\` going forward)`, flags: MessageFlags.Ephemeral });
             break;
         }
         case 'begwarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) { await interaction.reply({ content: `🚫 Beg warnings: **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn beg\` to change.`, ephemeral: true }); break; }
+            if (enabled === null) { await interaction.reply({ content: `🚫 Beg warnings: **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn beg\` to change.`, flags: MessageFlags.Ephemeral }); break; }
             gs.begWarnEnabled = !!enabled; saveData(data);
-            await interaction.reply({ content: `✅ Beg warnings → **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn beg\` going forward)`, ephemeral: true });
+            await interaction.reply({ content: `✅ Beg warnings → **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn beg\` going forward)`, flags: MessageFlags.Ephemeral });
             break;
         }
         case 'scamwarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) { await interaction.reply({ content: `🚨 Scam warnings: **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn scam\` to change.`, ephemeral: true }); break; }
+            if (enabled === null) { await interaction.reply({ content: `🚨 Scam warnings: **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn scam\` to change.`, flags: MessageFlags.Ephemeral }); break; }
             gs.scamWarnEnabled = !!enabled; saveData(data);
-            await interaction.reply({ content: `✅ Scam warnings → **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn scam\` going forward)`, ephemeral: true });
+            await interaction.reply({ content: `✅ Scam warnings → **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn scam\` going forward)`, flags: MessageFlags.Ephemeral });
             break;
         }
         case 'acctradewarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) { await interaction.reply({ content: `📦 Acctrade warnings: **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn acctrade\` to change.`, ephemeral: true }); break; }
+            if (enabled === null) { await interaction.reply({ content: `📦 Acctrade warnings: **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**. Use \`/bloxfruits warn acctrade\` to change.`, flags: MessageFlags.Ephemeral }); break; }
             gs.accTradeWarnEnabled = !!enabled; saveData(data);
-            await interaction.reply({ content: `✅ Acctrade warnings → **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn acctrade\` going forward)`, ephemeral: true });
+            await interaction.reply({ content: `✅ Acctrade warnings → **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**. (Use \`/bloxfruits warn acctrade\` going forward)`, flags: MessageFlags.Ephemeral });
             break;
         }
 
 
         case 'bloxfruits': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const bfGroup = interaction.options.getSubcommandGroup(false);
             const bfSub   = interaction.options.getSubcommand(false);
 
@@ -13170,7 +13172,7 @@ client.on('interactionCreate', async interaction => {
                     )
                     .setFooter({ text: 'Use /bloxfruits redirect enable/disable to toggle all redirects at once' })
                     .setTimestamp();
-                await interaction.reply({ embeds: [e], ephemeral: true });
+                await interaction.reply({ embeds: [e], flags: MessageFlags.Ephemeral });
                 break;
             }
 
@@ -13181,15 +13183,15 @@ client.on('interactionCreate', async interaction => {
                     gs.serviceRedirectEnabled = true;
                     gs.commandRedirectEnabled = true;
                     saveData(data);
-                    await interaction.reply({ content: '✅ **All redirects enabled!**\n🔄 Trade redirect → ON\n⚔️ Service redirect → ON\n🧭 Command redirect → ON', ephemeral: true });
+                    await interaction.reply({ content: '✅ **All redirects enabled!**\n🔄 Trade redirect → ON\n⚔️ Service redirect → ON\n🧭 Command redirect → ON', flags: MessageFlags.Ephemeral });
                 } else if (bfSub === 'disable') {
                     gs.tradeRedirectEnabled = false;
                     gs.serviceRedirectEnabled = false;
                     gs.commandRedirectEnabled = false;
                     saveData(data);
-                    await interaction.reply({ content: '⛔ **All redirects disabled!**\n🔄 Trade redirect → OFF\n⚔️ Service redirect → OFF\n🧭 Command redirect → OFF', ephemeral: true });
+                    await interaction.reply({ content: '⛔ **All redirects disabled!**\n🔄 Trade redirect → OFF\n⚔️ Service redirect → OFF\n🧭 Command redirect → OFF', flags: MessageFlags.Ephemeral });
                 } else { // status
-                    await interaction.reply({ content: `🔄 **Trade redirect:** ${gs.tradeRedirectEnabled ? 'ENABLED ✅' : 'DISABLED ❌'}\n⚔️ **Service redirect:** ${gs.serviceRedirectEnabled ? 'ENABLED ✅' : 'DISABLED ❌'}\n🧭 **Command redirect:** ${gs.commandRedirectEnabled ? 'ENABLED ✅' : 'DISABLED ❌'}`, ephemeral: true });
+                    await interaction.reply({ content: `🔄 **Trade redirect:** ${gs.tradeRedirectEnabled ? 'ENABLED ✅' : 'DISABLED ❌'}\n⚔️ **Service redirect:** ${gs.serviceRedirectEnabled ? 'ENABLED ✅' : 'DISABLED ❌'}\n🧭 **Command redirect:** ${gs.commandRedirectEnabled ? 'ENABLED ✅' : 'DISABLED ❌'}`, flags: MessageFlags.Ephemeral });
                 }
                 break;
             }
@@ -13197,11 +13199,11 @@ client.on('interactionCreate', async interaction => {
             // /bloxfruits trade enable|disable|status
             if (bfGroup === 'trade') {
                 if (bfSub === 'status') {
-                    await interaction.reply({ content: `🔄 Trade redirect is currently **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                    await interaction.reply({ content: `🔄 Trade redirect is currently **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 } else {
                     gs.tradeRedirectEnabled = (bfSub === 'enable');
                     saveData(data);
-                    await interaction.reply({ content: `✅ Trade redirect is now **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Trade redirect is now **${gs.tradeRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 }
                 break;
             }
@@ -13209,11 +13211,11 @@ client.on('interactionCreate', async interaction => {
             // /bloxfruits service enable|disable|status
             if (bfGroup === 'service') {
                 if (bfSub === 'status') {
-                    await interaction.reply({ content: `⚔️ Service redirect is currently **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                    await interaction.reply({ content: `⚔️ Service redirect is currently **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 } else {
                     gs.serviceRedirectEnabled = (bfSub === 'enable');
                     saveData(data);
-                    await interaction.reply({ content: `✅ Service redirect is now **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Service redirect is now **${gs.serviceRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 }
                 break;
             }
@@ -13221,11 +13223,11 @@ client.on('interactionCreate', async interaction => {
             // /bloxfruits command enable|disable|status
             if (bfGroup === 'command') {
                 if (bfSub === 'status') {
-                    await interaction.reply({ content: `🧭 Command redirect is currently **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                    await interaction.reply({ content: `🧭 Command redirect is currently **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 } else {
                     gs.commandRedirectEnabled = (bfSub === 'enable');
                     saveData(data);
-                    await interaction.reply({ content: `✅ Command redirect is now **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                    await interaction.reply({ content: `✅ Command redirect is now **${gs.commandRedirectEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 }
                 break;
             }
@@ -13241,77 +13243,77 @@ client.on('interactionCreate', async interaction => {
                 else if (bfSub === 'spam')    { gs.spamWarnEnabled     = !!warnEnabled; warnName = '⚠️ Spam warnings'; }
                 else if (bfSub === 'acctrade'){ gs.accTradeWarnEnabled = !!warnEnabled; warnName = '📦 Account trading warnings'; }
                 saveData(data);
-                await interaction.reply({ content: `✅ **${warnName}** are now **${warnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `✅ **${warnName}** are now **${warnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 break;
             }
 
-            await interaction.reply({ content: '❓ Unknown subcommand. Use `/bloxfruits status` for an overview.', ephemeral: true });
+            await interaction.reply({ content: '❓ Unknown subcommand. Use `/bloxfruits status` for an overview.', flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'spamwarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             if (enabled === null) {
-                await interaction.reply({ content: `⚠️ Spam warnings are currently **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `⚠️ Spam warnings are currently **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 break;
             }
             gs.spamWarnEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Spam warnings are now **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Spam warnings are now **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'begwarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             if (enabled === null) {
-                await interaction.reply({ content: `🚫 Begging warnings are currently **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `🚫 Begging warnings are currently **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 break;
             }
             gs.begWarnEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Begging warnings are now **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Begging warnings are now **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'scamwarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             if (enabled === null) {
-                await interaction.reply({ content: `🚨 Scam warnings are currently **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `🚨 Scam warnings are currently **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 break;
             }
             gs.scamWarnEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Scam warnings are now **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Scam warnings are now **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'acctradewarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             if (enabled === null) {
-                await interaction.reply({ content: `🚫 Account trading warnings are currently **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+                await interaction.reply({ content: `🚫 Account trading warnings are currently **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
                 break;
             }
             gs.accTradeWarnEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Account trading warnings are now **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Account trading warnings are now **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'raidmode': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             gs.raidModeEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Raid mode is now **${gs.raidModeEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Raid mode is now **${gs.raidModeEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'raidstatus': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const e = joinSpikeTracker.get(guildId);
             const w = getJoinSpikeWindow(e, gs.raidJoinWindowSec || 25);
             const locked = isRaidLocked(guildId);
@@ -13327,43 +13329,43 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Threshold', value: String(gs.raidJoinThreshold || 7), inline: true },
                     { name: 'Lockdown', value: `${gs.raidLockdownMins || 8}m`, inline: true },
                     { name: 'State', value: lockInfo, inline: false },
-                ).setTimestamp()], ephemeral: true });
+                ).setTimestamp()], flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'linkpolicy': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             gs.linkPolicyEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Link policy is now **${gs.linkPolicyEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Link policy is now **${gs.linkPolicyEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'allowdomain': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const dom = normalizeDomain(interaction.options.getString('domain'));
-            if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', ephemeral: true }); return; }
+            if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', flags: MessageFlags.Ephemeral }); return; }
             gs.linkAllowlistedDomains = Array.isArray(gs.linkAllowlistedDomains) ? gs.linkAllowlistedDomains : [];
             if (!gs.linkAllowlistedDomains.includes(dom)) gs.linkAllowlistedDomains.push(dom);
             saveData(data);
-            await interaction.reply({ content: `✅ Allowlisted: **${dom}**`, ephemeral: true });
+            await interaction.reply({ content: `✅ Allowlisted: **${dom}**`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'denydomain': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const dom = normalizeDomain(interaction.options.getString('domain'));
-            if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', ephemeral: true }); return; }
+            if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', flags: MessageFlags.Ephemeral }); return; }
             gs.linkDenylistedDomains = Array.isArray(gs.linkDenylistedDomains) ? gs.linkDenylistedDomains : [];
             if (!gs.linkDenylistedDomains.includes(dom)) gs.linkDenylistedDomains.push(dom);
             saveData(data);
-            await interaction.reply({ content: `✅ Denylisted: **${dom}**`, ephemeral: true });
+            await interaction.reply({ content: `✅ Denylisted: **${dom}**`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'listdomains': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const allow = (gs.linkAllowlistedDomains || []).slice(0, 60);
             const deny  = (gs.linkDenylistedDomains || []).slice(0, 60);
             await interaction.reply({ embeds: [new EmbedBuilder()
@@ -13373,12 +13375,12 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Policy', value: gs.linkPolicyEnabled ? '✅ ENABLED' : '❌ DISABLED', inline: true },
                     { name: 'Allowlist (first 60)', value: allow.length ? allow.join('\n').slice(0, 1024) : 'None', inline: false },
                     { name: 'Denylist (first 60)',  value: deny.length  ? deny.join('\n').slice(0, 1024)  : 'None', inline: false },
-                ).setTimestamp()], ephemeral: true });
+                ).setTimestamp()], flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'mentionlimit': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const limit = Math.max(1, Math.min(30, interaction.options.getInteger('limit')));
             const windowSec = Math.max(3, Math.min(60, interaction.options.getInteger('window') || gs.mentionSpamWindowSec || 12));
             const unique = Math.max(1, Math.min(30, interaction.options.getInteger('unique') || gs.mentionSpamUniqueLimit || 5));
@@ -13386,21 +13388,21 @@ client.on('interactionCreate', async interaction => {
             gs.mentionSpamWindowSec = windowSec;
             gs.mentionSpamUniqueLimit = unique;
             saveData(data);
-            await interaction.reply({ content: `✅ Mention spam limits updated: total=${limit}, unique=${unique}, window=${windowSec}s`, ephemeral: true });
+            await interaction.reply({ content: `✅ Mention spam limits updated: total=${limit}, unique=${unique}, window=${windowSec}s`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'togglescanedits': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             gs.scanEditsEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Scan edits is now **${gs.scanEditsEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Scan edits is now **${gs.scanEditsEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'automodstats': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const st = getGuildStats(guildId, data);
             const c = st.counters || {};
             const last = st.lastUpdated ? `<t:${Math.floor(st.lastUpdated/1000)}:R>` : 'Unknown';
@@ -13422,12 +13424,12 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Mention Spam', value: String(c.mentionSpam || 0), inline: true },
                     { name: 'Raid Lockdown', value: String(c.raidLockdown || 0), inline: true },
                     { name: 'AI Flags', value: String(c.aiFlag || 0), inline: true },
-                ).setTimestamp()], ephemeral: true });
+                ).setTimestamp()], flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'raidconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const windowSec = interaction.options.getInteger('window');
             const threshold = interaction.options.getInteger('threshold');
             const lockdown = interaction.options.getInteger('lockdown');
@@ -13444,22 +13446,22 @@ client.on('interactionCreate', async interaction => {
             if (newAcctDays !== null) gs.raidNewAccountDays = Math.max(0, Math.min(90, newAcctDays));
             if (notify) gs.raidNotifyChannelId = notify.id;
             saveData(data);
-            await interaction.reply({ content: `✅ Raid config updated. window=${gs.raidJoinWindowSec}s threshold=${gs.raidJoinThreshold} lockdown=${gs.raidLockdownMins}m lockChannels=${gs.raidLockChannels} blockLinks=${gs.raidLinkBlockAll} newAcctDays=${gs.raidNewAccountDays}`, ephemeral: true });
+            await interaction.reply({ content: `✅ Raid config updated. window=${gs.raidJoinWindowSec}s threshold=${gs.raidJoinThreshold} lockdown=${gs.raidLockdownMins}m lockChannels=${gs.raidLockChannels} blockLinks=${gs.raidLinkBlockAll} newAcctDays=${gs.raidNewAccountDays}`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'unlockdown': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const unlockChannels = interaction.options.getBoolean('unlockchannels');
             const e = joinSpikeTracker.get(guildId);
             if (e) { e.lockedUntil = 0; joinSpikeTracker.set(guildId, e); }
             if (unlockChannels) await unlockGuildTextChannels(interaction.guild, gs);
-            await interaction.reply({ content: `✅ Raid lockdown disabled.${unlockChannels ? ' Channels unlocked.' : ''}`, ephemeral: true });
+            await interaction.reply({ content: `✅ Raid lockdown disabled.${unlockChannels ? ' Channels unlocked.' : ''}`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'linkstatus': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const allow = (gs.linkAllowlistedDomains || []).length;
             const deny  = (gs.linkDenylistedDomains || []).length;
             await interaction.reply({ embeds: [new EmbedBuilder()
@@ -13470,16 +13472,16 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Allowlist Size', value: String(allow), inline: true },
                     { name: 'Denylist Size', value: String(deny), inline: true },
                     { name: 'Raid Block Links', value: gs.raidLinkBlockAll ? '✅ ON' : '❌ OFF', inline: true },
-                ).setTimestamp()], ephemeral: true });
+                ).setTimestamp()], flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'domainremove': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const list = (interaction.options.getString('list') || '').toLowerCase();
             const dom = normalizeDomain(interaction.options.getString('domain'));
-            if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', ephemeral: true }); return; }
-            if (list !== 'allow' && list !== 'deny') { await interaction.reply({ content: '❌ list must be allow or deny.', ephemeral: true }); return; }
+            if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) { await interaction.reply({ content: '❌ Invalid domain.', flags: MessageFlags.Ephemeral }); return; }
+            if (list !== 'allow' && list !== 'deny') { await interaction.reply({ content: '❌ list must be allow or deny.', flags: MessageFlags.Ephemeral }); return; }
             if (list === 'allow') {
                 gs.linkAllowlistedDomains = (gs.linkAllowlistedDomains || []).filter(x => normalizeDomain(x) !== dom);
             }
@@ -13487,12 +13489,12 @@ client.on('interactionCreate', async interaction => {
                 gs.linkDenylistedDomains = (gs.linkDenylistedDomains || []).filter(x => normalizeDomain(x) !== dom);
             }
             saveData(data);
-            await interaction.reply({ content: `✅ Removed **${dom}** from **${list}** list.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Removed **${dom}** from **${list}** list.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'capsconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             const percent = interaction.options.getInteger('percent');
             const minletters = interaction.options.getInteger('minletters');
@@ -13502,12 +13504,12 @@ client.on('interactionCreate', async interaction => {
             if (minletters !== null) gs.capsMinLetters = Math.max(8, Math.min(80, minletters));
             if (maxrun !== null) gs.capsMaxRun = Math.max(10, Math.min(120, maxrun));
             saveData(data);
-            await interaction.reply({ content: `✅ Caps config: enabled=${gs.capsSpamEnabled} percent=${gs.capsMaxPercent} minLetters=${gs.capsMinLetters} maxRun=${gs.capsMaxRun}`, ephemeral: true });
+            await interaction.reply({ content: `✅ Caps config: enabled=${gs.capsSpamEnabled} percent=${gs.capsMaxPercent} minLetters=${gs.capsMinLetters} maxRun=${gs.capsMaxRun}`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'emojiconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             const max = interaction.options.getInteger('max');
             const windowSec = interaction.options.getInteger('window');
@@ -13515,32 +13517,32 @@ client.on('interactionCreate', async interaction => {
             if (max !== null) gs.emojiMaxCount = Math.max(5, Math.min(60, max));
             if (windowSec !== null) gs.emojiWindowSec = Math.max(3, Math.min(60, windowSec));
             saveData(data);
-            await interaction.reply({ content: `✅ Emoji config: enabled=${gs.emojiSpamEnabled} max=${gs.emojiMaxCount} window=${gs.emojiWindowSec}s`, ephemeral: true });
+            await interaction.reply({ content: `✅ Emoji config: enabled=${gs.emojiSpamEnabled} max=${gs.emojiMaxCount} window=${gs.emojiWindowSec}s`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'zalgoconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             const maxmarks = interaction.options.getInteger('maxmarks');
             if (enabled !== null) gs.zalgoEnabled = !!enabled;
             if (maxmarks !== null) gs.zalgoMaxCombining = Math.max(4, Math.min(80, maxmarks));
             saveData(data);
-            await interaction.reply({ content: `✅ Zalgo config: enabled=${gs.zalgoEnabled} maxMarks=${gs.zalgoMaxCombining}`, ephemeral: true });
+            await interaction.reply({ content: `✅ Zalgo config: enabled=${gs.zalgoEnabled} maxMarks=${gs.zalgoMaxCombining}`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'invitepolicy': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             gs.invitePolicyEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Invite policy is now **${gs.invitePolicyEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Invite policy is now **${gs.invitePolicyEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'invitechannel': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const mode = (interaction.options.getString('mode') || '').toLowerCase();
             const ch = interaction.options.getChannel('channel');
             gs.inviteAllowedChannelIds = Array.isArray(gs.inviteAllowedChannelIds) ? gs.inviteAllowedChannelIds : [];
@@ -13550,64 +13552,64 @@ client.on('interactionCreate', async interaction => {
                     const c = await interaction.guild.channels.fetch(id).catch(()=>null);
                     names.push(c ? `<#${id}>` : id);
                 }
-                await interaction.reply({ content: `✅ Allowed invite channels (${gs.inviteAllowedChannelIds.length}):\n${names.join('\n') || 'None'}`, ephemeral: true });
+                await interaction.reply({ content: `✅ Allowed invite channels (${gs.inviteAllowedChannelIds.length}):\n${names.join('\n') || 'None'}`, flags: MessageFlags.Ephemeral });
                 break;
             }
-            if (!ch) { await interaction.reply({ content: '❌ Provide a channel.', ephemeral: true }); return; }
+            if (!ch) { await interaction.reply({ content: '❌ Provide a channel.', flags: MessageFlags.Ephemeral }); return; }
             if (mode === 'add') {
                 if (!gs.inviteAllowedChannelIds.includes(ch.id)) gs.inviteAllowedChannelIds.push(ch.id);
                 saveData(data);
-                await interaction.reply({ content: `✅ Added allowed invite channel: <#${ch.id}>`, ephemeral: true });
+                await interaction.reply({ content: `✅ Added allowed invite channel: <#${ch.id}>`, flags: MessageFlags.Ephemeral });
                 break;
             }
             if (mode === 'remove') {
                 gs.inviteAllowedChannelIds = gs.inviteAllowedChannelIds.filter(x => x !== ch.id);
                 saveData(data);
-                await interaction.reply({ content: `✅ Removed allowed invite channel: <#${ch.id}>`, ephemeral: true });
+                await interaction.reply({ content: `✅ Removed allowed invite channel: <#${ch.id}>`, flags: MessageFlags.Ephemeral });
                 break;
             }
-            await interaction.reply({ content: '❌ mode must be add/remove/list.', ephemeral: true });
+            await interaction.reply({ content: '❌ mode must be add/remove/list.', flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'attachmentpolicy': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             gs.attachmentPolicyEnabled = !!enabled;
             saveData(data);
-            await interaction.reply({ content: `✅ Attachment policy is now **${gs.attachmentPolicyEnabled ? 'ENABLED' : 'DISABLED'}**.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Attachment policy is now **${gs.attachmentPolicyEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'attachmentext': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const mode = (interaction.options.getString('mode') || '').toLowerCase();
             const extRaw = (interaction.options.getString('ext') || '').toLowerCase().replace(/^\./,'').trim();
             gs.attachmentBlockExts = Array.isArray(gs.attachmentBlockExts) ? gs.attachmentBlockExts : [];
             if (mode === 'list') {
                 const list = gs.attachmentBlockExts.slice(0, 120).map(x => '.'+String(x));
-                await interaction.reply({ content: `✅ Blocked extensions (${gs.attachmentBlockExts.length}):\n${list.join(', ') || 'None'}`, ephemeral: true });
+                await interaction.reply({ content: `✅ Blocked extensions (${gs.attachmentBlockExts.length}):\n${list.join(', ') || 'None'}`, flags: MessageFlags.Ephemeral });
                 break;
             }
-            if (!extRaw || !/^[a-z0-9]{1,8}$/.test(extRaw)) { await interaction.reply({ content: '❌ Invalid ext. Example: exe', ephemeral: true }); return; }
+            if (!extRaw || !/^[a-z0-9]{1,8}$/.test(extRaw)) { await interaction.reply({ content: '❌ Invalid ext. Example: exe', flags: MessageFlags.Ephemeral }); return; }
             if (mode === 'add') {
                 if (!gs.attachmentBlockExts.includes(extRaw)) gs.attachmentBlockExts.push(extRaw);
                 saveData(data);
-                await interaction.reply({ content: `✅ Added blocked ext: .${extRaw}`, ephemeral: true });
+                await interaction.reply({ content: `✅ Added blocked ext: .${extRaw}`, flags: MessageFlags.Ephemeral });
                 break;
             }
             if (mode === 'remove') {
                 gs.attachmentBlockExts = gs.attachmentBlockExts.filter(x => String(x).toLowerCase() !== extRaw);
                 saveData(data);
-                await interaction.reply({ content: `✅ Removed blocked ext: .${extRaw}`, ephemeral: true });
+                await interaction.reply({ content: `✅ Removed blocked ext: .${extRaw}`, flags: MessageFlags.Ephemeral });
                 break;
             }
-            await interaction.reply({ content: '❌ mode must be add/remove/list.', ephemeral: true });
+            await interaction.reply({ content: '❌ mode must be add/remove/list.', flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'stretchconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             const maxChar = interaction.options.getInteger('maxcharrun');
             const maxPunc = interaction.options.getInteger('maxpunctrun');
@@ -13617,12 +13619,12 @@ client.on('interactionCreate', async interaction => {
             if (maxPunc !== null) gs.stretchMaxPunctRun = Math.max(6, Math.min(40, maxPunc));
             if (maxWord !== null) gs.stretchMaxWordRepeat = Math.max(3, Math.min(20, maxWord));
             saveData(data);
-            await interaction.reply({ content: `✅ Stretch config: enabled=${gs.stretchSpamEnabled} maxCharRun=${gs.stretchMaxCharRun} maxPunctRun=${gs.stretchMaxPunctRun} maxWordRepeat=${gs.stretchMaxWordRepeat}`, ephemeral: true });
+            await interaction.reply({ content: `✅ Stretch config: enabled=${gs.stretchSpamEnabled} maxCharRun=${gs.stretchMaxCharRun} maxPunctRun=${gs.stretchMaxPunctRun} maxWordRepeat=${gs.stretchMaxWordRepeat}`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         case 'dupeconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const enabled = interaction.options.getBoolean('enabled');
             const windowSec = interaction.options.getInteger('window');
             const threshold = interaction.options.getInteger('threshold');
@@ -13632,13 +13634,13 @@ client.on('interactionCreate', async interaction => {
             if (threshold !== null) gs.dupeThreshold = Math.max(2, Math.min(20, threshold));
             if (minlen !== null) gs.dupeMinLen = Math.max(5, Math.min(200, minlen));
             saveData(data);
-            await interaction.reply({ content: `✅ Dupe config: enabled=${gs.dupeSpamEnabled} window=${gs.dupeWindowSec}s threshold=${gs.dupeThreshold} minLen=${gs.dupeMinLen}`, ephemeral: true });
+            await interaction.reply({ content: `✅ Dupe config: enabled=${gs.dupeSpamEnabled} window=${gs.dupeWindowSec}s threshold=${gs.dupeThreshold} minLen=${gs.dupeMinLen}`, flags: MessageFlags.Ephemeral });
             break;
         }
 
         // ── /testscan ─────────────────────────────────────
         case 'testscan': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const text    = interaction.options.getString('text');
             const cleaned = fullClean(text);
             const ns      = cleaned.replace(/[\s_]/g,'');
@@ -13737,7 +13739,7 @@ client.on('interactionCreate', async interaction => {
                         `Lightning Flag: ${lightFlag ? '🚨 YES' : '✅ CLEAN'}`
                     },
 
-                )], ephemeral: true });
+                )], flags: MessageFlags.Ephemeral });
             break;
         }
 
@@ -14194,7 +14196,7 @@ client.on('interactionCreate', async interaction => {
         case 'manager': {            // Only true Admins (by Discord perm) can manage the manager list itself
             const isRealAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator);
             if (!isRealAdmin) {
-                await interaction.reply({ content: '❌ Only server Administrators can modify the manager list.', ephemeral: true });
+                await interaction.reply({ content: '❌ Only server Administrators can modify the manager list.', flags: MessageFlags.Ephemeral });
                 return;
             }
             const sub = interaction.options.getSubcommand();
@@ -14203,12 +14205,12 @@ client.on('interactionCreate', async interaction => {
 
             if (sub === 'addrole') {
                 const role = interaction.options.getRole('role');
-                if (!role) { await interaction.reply({ content: '❌ Role not found.', ephemeral: true }); return; }
+                if (!role) { await interaction.reply({ content: '❌ Role not found.', flags: MessageFlags.Ephemeral }); return; }
                 // Hierarchy: can't add your own role or anything equal/higher
                 const roleHierErr = checkRoleHierarchy(interaction.member, role);
-                if (roleHierErr) { await interaction.reply({ content: roleHierErr, ephemeral: true }); return; }
+                if (roleHierErr) { await interaction.reply({ content: roleHierErr, flags: MessageFlags.Ephemeral }); return; }
                 if (gs.managerRoles.includes(role.id)) {
-                    await interaction.reply({ content: `⚠️ <@&${role.id}> already has manager access.`, ephemeral: true }); return;
+                    await interaction.reply({ content: `⚠️ <@&${role.id}> already has manager access.`, flags: MessageFlags.Ephemeral }); return;
                 }
                 gs.managerRoles.push(role.id);
                 saveData(data);
@@ -14218,17 +14220,17 @@ client.on('interactionCreate', async interaction => {
                     .setDescription(`<@&${role.id}> now has **full access** to every bot command.`)
                     .setFooter({ text: `Added by ${interaction.user.username}` })
                     .setTimestamp()
-                ], ephemeral: true });
+                ], flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager Role Added', [`<@&${role.id}> granted full bot access`]);
             }
             else if (sub === 'removerole') {
                 const role = interaction.options.getRole('role');
-                if (!role) { await interaction.reply({ content: '❌ Role not found.', ephemeral: true }); return; }
+                if (!role) { await interaction.reply({ content: '❌ Role not found.', flags: MessageFlags.Ephemeral }); return; }
                 // Hierarchy: can't remove a role equal/higher than yours
                 const roleHierErr = checkRoleHierarchy(interaction.member, role);
-                if (roleHierErr) { await interaction.reply({ content: roleHierErr, ephemeral: true }); return; }
+                if (roleHierErr) { await interaction.reply({ content: roleHierErr, flags: MessageFlags.Ephemeral }); return; }
                 if (!gs.managerRoles.includes(role.id)) {
-                    await interaction.reply({ content: `⚠️ <@&${role.id}> does not have manager access.`, ephemeral: true }); return;
+                    await interaction.reply({ content: `⚠️ <@&${role.id}> does not have manager access.`, flags: MessageFlags.Ephemeral }); return;
                 }
                 gs.managerRoles = gs.managerRoles.filter(id => id !== role.id);
                 saveData(data);
@@ -14238,23 +14240,23 @@ client.on('interactionCreate', async interaction => {
                     .setDescription(`<@&${role.id}> no longer has manager access.`)
                     .setFooter({ text: `Removed by ${interaction.user.username}` })
                     .setTimestamp()
-                ], ephemeral: true });
+                ], flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager Role Removed', [`<@&${role.id}> manager access revoked`]);
             }
             else if (sub === 'adduser') {
                 const user = interaction.options.getUser('user');
-                if (!user) { await interaction.reply({ content: '❌ User not found.', ephemeral: true }); return; }
+                if (!user) { await interaction.reply({ content: '❌ User not found.', flags: MessageFlags.Ephemeral }); return; }
                 // Hierarchy: can't add yourself or someone equal/higher
                 const targetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
                 const hierErr = checkHierarchy(interaction.member, targetMember || { id: user.id, roles: { highest: { position: 0 } } });
-                if (hierErr) { await interaction.reply({ content: hierErr, ephemeral: true }); return; }
+                if (hierErr) { await interaction.reply({ content: hierErr, flags: MessageFlags.Ephemeral }); return; }
                 // Extra check: if member is in guild, verify role position
                 if (targetMember) {
                     const roleHierErr = checkHierarchy(interaction.member, targetMember);
-                    if (roleHierErr) { await interaction.reply({ content: roleHierErr, ephemeral: true }); return; }
+                    if (roleHierErr) { await interaction.reply({ content: roleHierErr, flags: MessageFlags.Ephemeral }); return; }
                 }
                 if (gs.managerUsers.includes(user.id)) {
-                    await interaction.reply({ content: `⚠️ <@${user.id}> already has manager access.`, ephemeral: true }); return;
+                    await interaction.reply({ content: `⚠️ <@${user.id}> already has manager access.`, flags: MessageFlags.Ephemeral }); return;
                 }
                 gs.managerUsers.push(user.id);
                 saveData(data);
@@ -14264,22 +14266,22 @@ client.on('interactionCreate', async interaction => {
                     .setDescription(`<@${user.id}> now has **full access** to every bot command.`)
                     .setFooter({ text: `Added by ${interaction.user.username}` })
                     .setTimestamp()
-                ], ephemeral: true });
+                ], flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager User Added', [`<@${user.id}> granted full bot access`]);
             }
             else if (sub === 'removeuser') {
                 const user = interaction.options.getUser('user');
-                if (!user) { await interaction.reply({ content: '❌ User not found.', ephemeral: true }); return; }
+                if (!user) { await interaction.reply({ content: '❌ User not found.', flags: MessageFlags.Ephemeral }); return; }
                 // Hierarchy: can't remove yourself or someone equal/higher
                 const targetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
                 if (targetMember) {
                     const hierErr = checkHierarchy(interaction.member, targetMember);
-                    if (hierErr) { await interaction.reply({ content: hierErr, ephemeral: true }); return; }
+                    if (hierErr) { await interaction.reply({ content: hierErr, flags: MessageFlags.Ephemeral }); return; }
                 } else if (user.id === interaction.user.id) {
-                    await interaction.reply({ content: '❌ You cannot remove yourself from the manager list.', ephemeral: true }); return;
+                    await interaction.reply({ content: '❌ You cannot remove yourself from the manager list.', flags: MessageFlags.Ephemeral }); return;
                 }
                 if (!gs.managerUsers.includes(user.id)) {
-                    await interaction.reply({ content: `⚠️ <@${user.id}> does not have manager access.`, ephemeral: true }); return;
+                    await interaction.reply({ content: `⚠️ <@${user.id}> does not have manager access.`, flags: MessageFlags.Ephemeral }); return;
                 }
                 gs.managerUsers = gs.managerUsers.filter(id => id !== user.id);
                 saveData(data);
@@ -14289,7 +14291,7 @@ client.on('interactionCreate', async interaction => {
                     .setDescription(`<@${user.id}> no longer has manager access.`)
                     .setFooter({ text: `Removed by ${interaction.user.username}` })
                     .setTimestamp()
-                ], ephemeral: true });
+                ], flags: MessageFlags.Ephemeral });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '🔑 Manager User Removed', [`<@${user.id}> manager access revoked`]);
             }
             else if (sub === 'list') {
@@ -14314,7 +14316,7 @@ client.on('interactionCreate', async interaction => {
                         { name: `👤 Manager Users (${gs.managerUsers.length})`, value: userLines, inline: false },
                     )
                     .setTimestamp()
-                ], ephemeral: true });
+                ], flags: MessageFlags.Ephemeral });
             }
             break;
         }
