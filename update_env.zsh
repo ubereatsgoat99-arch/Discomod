@@ -1,5 +1,5 @@
 #!/bin/zsh
-# upgrade — upgrade system + env + keep isolated latest mpmath + vendor qalc
+# upgrade — upgrade system + env + keep isolated latest mpmath + vendor latest qalc v5
 
 set -e
 set -o pipefail
@@ -28,24 +28,16 @@ _rollback() {
 }
 trap '_rollback' ERR
 
-# ── 0. System Upgrade (Sudo) & Qalc Setup ─────────────────────────────────────
+# ── 0. System Upgrade (Sudo) ──────────────────────────────────────────────────
 info "Checking system package manager for upgrades..."
 if command -v apt-get &>/dev/null; then
     info "Running system upgrade via apt..."
-    
-    # Force non-interactive mode and automatic config-keeping to prevent hanging
     export DEBIAN_FRONTEND=noninteractive
     APT_OPTS='-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
     
-    # Ultra-quiet mode, dump stdout to the void
     sudo -E apt-get update -qq > /dev/null
     sudo -E apt-get upgrade -y -qq $APT_OPTS > /dev/null
     success "System packages upgraded."
-    
-    if ! command -v qalc &>/dev/null; then
-        info "qalc not found. Installing via apt..."
-        sudo -E apt-get install -y -qq $APT_OPTS qalc > /dev/null
-    fi
 else
     warn "apt package manager not found. Skipping system-level upgrade."
 fi
@@ -64,15 +56,25 @@ if [[ -z "$MATH_MODULES_DIR" ]]; then
     mkdir -p "$MATH_MODULES_DIR"
 fi
 
-info "Placing qalc binary inside math_modules..."
-QALC_PATH=$(command -v qalc || true)
-if [[ -n "$QALC_PATH" ]]; then
-    cp "$QALC_PATH" "$MATH_MODULES_DIR/qalc"
-    chmod +x "$MATH_MODULES_DIR/qalc"
-    success "Copied qalc executable to $MATH_MODULES_DIR/qalc"
-else
-    warn "Could not locate qalc binary to copy to math_modules folder."
-fi
+# ── 0b. Fetch & Deploy True Latest Qalculate! (v5.11.0) ────────────────────────
+info "Downloading and deploying the absolute latest Qalculate! (v5.11.0)..."
+(
+    cd /tmp
+    # Pull the official, self-contained modern 64-bit release from GitHub creators
+    if wget -q --show-progress https://github.com/Qalculate/libqalculate/releases/download/v5.11.0/qalculate-5.11.0-x86_64.tar.xz; then
+        tar -xf qalculate-5.11.0-x86_64.tar.xz
+        
+        # Deploy as the direct, default 'qalc' executable binary your bot uses
+        cp ./qalculate-5.11.0/qalculate "$MATH_MODULES_DIR/qalc"
+        chmod +x "$MATH_MODULES_DIR/qalc"
+        
+        # Clean up temporary archive files safely
+        rm -rf qalculate-5.11.0*
+        success "Modern v5.11.0 runtime successfully deployed to $MATH_MODULES_DIR/qalc"
+    else
+        fail "Could not fetch the latest binary from GitHub repository."
+    fi
+)
 
 # ── 1. Activate venv ──────────────────────────────────────────────────────────
 VENV_ACTIVATED=0
@@ -117,8 +119,6 @@ success "pip $(pip --version | cut -d' ' -f2) and packaging library ready"
 
 # ── 6. Upgrade ALL packages (SAFE MODE) ───────────────────────────────────────
 info "Upgrading all packages to latest (dependency-safe)..."
-
-# FIXED: Removed the grep pipe and filtered out mpmath directly inside Python to avoid exit code 1 crashes
 OUTDATED=$(python -c "import json, sys; print('\n'.join([p['name'] for p in json.load(sys.stdin) if p['name'].lower() != 'mpmath']))" 2>/dev/null <<< "$(pip list --outdated --format=json)")
 
 if [[ -z "$OUTDATED" ]]; then
@@ -139,7 +139,6 @@ success "Installed maximum supported main mpmath: $(pip show mpmath | grep Versi
 
 # ── 8. Snapshot after ─────────────────────────────────────────────────────────
 pip list > /tmp/pip_after.txt
-# (Diff removed to prevent log spam)
 
 # ── 9. Post-check ─────────────────────────────────────────────────────────────
 info "Verifying environment..."
