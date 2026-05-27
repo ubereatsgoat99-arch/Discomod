@@ -2382,6 +2382,10 @@ function isGamesHubChannelId(channelId, gs) {
     const id = String(channelId || '');
     if (!id) return false;
     if (GAMES_HUB_CHANNELS && GAMES_HUB_CHANNELS.has(id)) return true;
+    // Multi-channel support: check the gamesHubIds array first
+    if (Array.isArray(gs?.gamesHubIds) && gs.gamesHubIds.length > 0) {
+        if (gs.gamesHubIds.includes(id)) return true;
+    }
     const conf = String(gs?.gamesHubId || DEFAULT_GAMES_HUB_ID || '');
     return conf ? id === conf : false;
 }
@@ -2744,6 +2748,7 @@ function isInCorrectTradeChannel(channelId, gs) {
 function isInCorrectServiceChannel(channelId, gs) {
     const allServiceIds = [
         gs.servicesChannelId,
+        ...(Array.isArray(gs.servicesChannelIds) ? gs.servicesChannelIds : []),
         ...getChannelIds(gs, 'raidServiceChannelIds'),
         ...getChannelIds(gs, 'raceV4ServiceChannelIds'),
         ...getChannelIds(gs, 'seaEventsChannelIds'),
@@ -2829,6 +2834,7 @@ function getGuildSettings(guildId, data) {
             tradeChannelId:    DEFAULT_TARGET_CHANNEL_ID,
             tradeChannelIds:   [],   // multi: fast-trading, slow-trading, fruit-value, etc.
             servicesChannelId: DEFAULT_SERVICES_CHANNEL_ID,
+            servicesChannelIds: [],  // multi: general service channels (fallback pool)
             // ── Specific service channel pools (each supports multiple channels) ──
             raidServiceChannelIds:       [],  // raids, dungeons, raid bosses, services, bosses, lvling, sword quests (CDK/TTK), enchants, materials
             raceV4ServiceChannelIds:     [],  // race-v4-service, trials, blue gear
@@ -2838,6 +2844,7 @@ function getGuildSettings(guildId, data) {
             kitsuneIslandChannelIds:     [],  // kitsune-island
             leviathanChannelIds:         [],  // leviathan-island, frozen dimension, levi heart
             gamesHubId:        DEFAULT_GAMES_HUB_ID,
+            gamesHubIds:       [],   // multi: all allowed bot-commands channels
             exiledRoleId:      DEFAULT_EXILED_ROLE_ID,
             logChannelId:      null,
             appealsChannelId:  null,
@@ -3418,8 +3425,8 @@ function buildSetupPickerEmbed(gs) {
             {
                 name: '📋 Page 1 — Core',
                 value: [
-                    `Trade Channel: ${fmtCh(gs.tradeChannelId)}`,
-                    `Services Channel: ${fmtCh(gs.servicesChannelId)}`,
+                    `Trade Channel(s): ${fmtFirstPool(gs, 'tradeChannelIds') !== '`not set`' ? fmtFirstPool(gs, 'tradeChannelIds') : fmtCh(gs.tradeChannelId)}`,
+                    `Services Channel(s): ${fmtFirstPool(gs, 'servicesChannelIds') !== '`not set`' ? fmtFirstPool(gs, 'servicesChannelIds') : fmtCh(gs.servicesChannelId)}`,
                     `Exile Role: ${gs.exiledRoleId ? `<@&${gs.exiledRoleId}>` : '`not set`'}`,
                     `Log Channel: ${fmtCh(gs.logChannelId)}`,
                     `Appeals Channel: ${fmtCh(gs.appealsChannelId)}`,
@@ -3442,7 +3449,7 @@ function buildSetupPickerEmbed(gs) {
             {
                 name: '📋 Page 3 — Misc',
                 value: [
-                    `Commands Hub: ${fmtCh(gs.gamesHubId)}`,
+                    `Commands Channel(s): ${fmtFirstPool(gs, 'gamesHubIds') !== '`not set`' ? fmtFirstPool(gs, 'gamesHubIds') : fmtCh(gs.gamesHubId)}`,
                     `Exile Channel: ${fmtCh(gs.exileChannelId)}`,
                     `Violation Threshold: **${gs.violationThreshold || 3}**`,
                     `Exile Duration: **${gs.exileDurationMins || 45}m**`,
@@ -8902,7 +8909,9 @@ const slashCommands = [
         .addSubcommand(sub => sub.setName('exilerole').setDescription('Set the exile role')
             .addRoleOption(o => o.setName('role').setDescription('Exile role').setRequired(true)))
         .addSubcommand(sub => sub.setName('appealschannel').setDescription('Set the appeals channel')
-            .addChannelOption(o => o.setName('channel').setDescription('Appeals channel').setRequired(true))),
+            .addChannelOption(o => o.setName('channel').setDescription('Appeals channel').setRequired(true)))
+        .addSubcommand(sub => sub.setName('prefix').setDescription('Set the message command prefix (e.g. g!, A!, §, ,)')
+            .addStringOption(o => o.setName('prefix').setDescription('New prefix — any string up to 5 chars').setRequired(true))),
 
     new SlashCommandBuilder()
         .setName('clear')
@@ -10114,13 +10123,24 @@ client.on('interactionCreate', async interaction => {
         // Setup modal
         // ── Setup modal page 1 — Core ────────────────────────
         if (interaction.customId === 'setup_modal_p1') {
-            const tradeId    = interaction.fields.getTextInputValue('trade_channel_id').trim();
-            const servicesId = interaction.fields.getTextInputValue('services_channel_id').trim();
-            const exileRole  = interaction.fields.getTextInputValue('exile_role_id').trim();
-            const logId      = interaction.fields.getTextInputValue('log_channel_id').trim();
-            const appId      = interaction.fields.getTextInputValue('appeals_channel_id').trim();
-            if (tradeId)    gs.tradeChannelId    = tradeId;
-            if (servicesId) gs.servicesChannelId = servicesId;
+            function parseIdsP1(raw) {
+                return raw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s));
+            }
+            const tradeRaw    = interaction.fields.getTextInputValue('trade_channel_ids').trim();
+            const servicesRaw = interaction.fields.getTextInputValue('services_channel_ids').trim();
+            const exileRole   = interaction.fields.getTextInputValue('exile_role_id').trim();
+            const logId       = interaction.fields.getTextInputValue('log_channel_id').trim();
+            const appId       = interaction.fields.getTextInputValue('appeals_channel_id').trim();
+            if (tradeRaw !== '') {
+                const ids = parseIdsP1(tradeRaw);
+                gs.tradeChannelIds = ids;
+                if (ids.length > 0) gs.tradeChannelId = ids[0];  // legacy single-ID compat
+            }
+            if (servicesRaw !== '') {
+                const ids = parseIdsP1(servicesRaw);
+                gs.servicesChannelIds = ids;
+                if (ids.length > 0) gs.servicesChannelId = ids[0];  // legacy single-ID compat
+            }
             if (exileRole)  gs.exiledRoleId      = exileRole;
             if (logId)      gs.logChannelId      = logId;
             if (appId)      gs.appealsChannelId  = appId;
@@ -10192,11 +10212,17 @@ client.on('interactionCreate', async interaction => {
 
         // ── Setup modal page 3 — Misc ────────────────────────
         if (interaction.customId === 'setup_modal_p3') {
-            const hubId    = interaction.fields.getTextInputValue('games_hub_id').trim();
+            const hubRaw   = interaction.fields.getTextInputValue('games_hub_ids').trim();
             const exileCh  = interaction.fields.getTextInputValue('exile_channel_id').trim();
             const thresh   = parseInt(interaction.fields.getTextInputValue('violation_threshold').trim()) || 0;
             const dur      = parseInt(interaction.fields.getTextInputValue('exile_duration_mins').trim())  || 0;
-            if (hubId)   gs.gamesHubId        = hubId;
+            if (hubRaw !== '') {
+                const hubIds = hubRaw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s));
+                if (hubIds.length > 0) {
+                    gs.gamesHubIds = hubIds;
+                    gs.gamesHubId  = hubIds[0]; // legacy single-ID compat
+                }
+            }
             if (exileCh) gs.exileChannelId    = exileCh;
             if (thresh)  gs.violationThreshold = Math.max(1, Math.min(10, thresh));
             if (dur)     gs.exileDurationMins  = Math.max(1, Math.min(1440, dur));
@@ -10290,17 +10316,20 @@ client.on('interactionCreate', async interaction => {
         // ── Setup page button → open the right modal ────────
         if (cid === 'setup_open_page1') {
             if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            // Build current values — prefer the multi-channel array, fall back to single legacy ID
+            const tradeCur    = (gs.tradeChannelIds?.length ? gs.tradeChannelIds : (gs.tradeChannelId ? [gs.tradeChannelId] : [])).join(', ');
+            const servicesCur = (gs.servicesChannelIds?.length ? gs.servicesChannelIds : (gs.servicesChannelId ? [gs.servicesChannelId] : [])).join(', ');
             const modal = new ModalBuilder().setCustomId('setup_modal_p1').setTitle('🔧 Setup — Page 1: Core');
             modal.addComponents(
                 new ActionRowBuilder().addComponents(
-                    new TextInputBuilder().setCustomId('trade_channel_id').setLabel('Trade Channel ID')
+                    new TextInputBuilder().setCustomId('trade_channel_ids').setLabel('Trade Channel ID(s) — comma-separated')
                         .setStyle(TextInputStyle.Short).setRequired(false)
-                        .setValue(gs.tradeChannelId || '').setPlaceholder('ID of your #trades channel')
+                        .setValue(tradeCur).setPlaceholder('e.g. 111111111,222222222,333333333')
                 ),
                 new ActionRowBuilder().addComponents(
-                    new TextInputBuilder().setCustomId('services_channel_id').setLabel('General Services Channel ID')
+                    new TextInputBuilder().setCustomId('services_channel_ids').setLabel('General Services Channel ID(s)')
                         .setStyle(TextInputStyle.Short).setRequired(false)
-                        .setValue(gs.servicesChannelId || '').setPlaceholder('ID of your #services channel')
+                        .setValue(servicesCur).setPlaceholder('Comma-separated IDs, e.g. 444444444,555555555')
                 ),
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder().setCustomId('exile_role_id').setLabel('Exile Role ID')
@@ -10371,12 +10400,13 @@ client.on('interactionCreate', async interaction => {
 
         if (cid === 'setup_open_page3') {
             if (!interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            const hubCur = (gs.gamesHubIds?.length ? gs.gamesHubIds : (gs.gamesHubId ? [gs.gamesHubId] : [])).join(', ');
             const modal = new ModalBuilder().setCustomId('setup_modal_p3').setTitle('🔧 Setup — Page 3: Misc');
             modal.addComponents(
                 new ActionRowBuilder().addComponents(
-                    new TextInputBuilder().setCustomId('games_hub_id').setLabel('Commands Hub Channel ID')
+                    new TextInputBuilder().setCustomId('games_hub_ids').setLabel('Commands Channel ID(s) — comma-separated')
                         .setStyle(TextInputStyle.Short).setRequired(false)
-                        .setValue(gs.gamesHubId || '').setPlaceholder('ID of your #games-hub / #bot-commands channel')
+                        .setValue(hubCur).setPlaceholder('e.g. 111111111,222222222 (all bot-command channels)')
                 ),
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder().setCustomId('exile_channel_id').setLabel('Exile Channel ID')
@@ -11809,6 +11839,21 @@ client.on('interactionCreate', async interaction => {
             if (sub === 'exilerole')       { gs.exiledRoleId      = interaction.options.getRole('role').id; }
             if (sub === 'appealschannel')  { gs.appealsChannelId  = interaction.options.getChannel('channel').id; }
             if (sub === 'commandchannel')  { gs.gamesHubId        = resolvedCh.id; }
+            if (sub === 'prefix') {
+                const newPrefix = interaction.options.getString('prefix');
+                if (!newPrefix || newPrefix.length > 5) {
+                    await interaction.reply({ content: '❌ Prefix must be between 1–5 characters.', ephemeral: true });
+                    return;
+                }
+                const oldPrefix = gs.commandPrefix || '!';
+                gs.commandPrefix = newPrefix;
+                saveData(data);
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Prefix Updated', [
+                    `Message command prefix changed: \`${oldPrefix}\` → \`${newPrefix}\``,
+                ]);
+                await interaction.reply({ content: `✅ Message command prefix set to \`${newPrefix}\`. Use it like: \`${newPrefix}warn\`, \`${newPrefix}exile\`, etc.`, ephemeral: true });
+                return;
+            }
             // /set only saves the value — it NEVER enables any detections.
             // Run /setup completeset to enable all detections at once.
             if (gs.noAffiliationEnabled === undefined) gs.noAffiliationEnabled = false;
@@ -14280,11 +14325,18 @@ client.on('interactionCreate', async interaction => {
 //  MESSAGE HANDLER
 // ══════════════════════════════════════════════════════════
 const CMD_PREFIX_RE = /^[^a-zA-Z0-9\s@]/;
-function isMessageCommand(msg) {
+function isMessageCommand(msg, gs) {
     const c = msg.content;
     if (!c) return false;
     const t = c.trimStart();
     if (msg.type === 20) return true;
+
+    // If the message starts with the guild's custom prefix, treat it as a command
+    const guildPrefix = gs?.commandPrefix;
+    if (guildPrefix && guildPrefix.length > 0 && t.startsWith(guildPrefix)) {
+        const afterPrefix = t.slice(guildPrefix.length);
+        if (afterPrefix.length > 0 && /^[a-zA-Z0-9]/.test(afterPrefix)) return true;
+    }
 
     if (/^[\p{P}\p{S}\s]+$/u.test(t)) return false;
     if (t.startsWith('@') || t.startsWith('<@')) return false;
@@ -14944,7 +14996,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── COMMAND LOCKDOWN ──────────────────────────────────
-    if (isServerSetup(gs) && (gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message)) {
+    if (isServerSetup(gs) && (gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message, gs)) {
         if (!isGamesHubChannelId(message.channel.id, gs)) {
             try { await message.delete(); } catch {}
             recordCommandAbuse(message.author.id);
@@ -16085,8 +16137,9 @@ async function performUnexile(member, guild, data) {
 //  PREFIX COMMAND HANDLER (!commands)
 // ══════════════════════════════════════════════════════════
 async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
-    if (!message.content.startsWith('!')) return;
-    const args = message.content.slice(1).trim().split(/\s+/);
+    const guildPrefix = (gs?.commandPrefix) || '!';
+    if (!message.content.startsWith(guildPrefix)) return;
+    const args = message.content.slice(guildPrefix.length).trim().split(/\s+/);
     const cmd  = args.shift().toLowerCase();
     logCmdStats('message', '!' + cmd);
     const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
