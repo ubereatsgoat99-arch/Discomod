@@ -2410,20 +2410,43 @@ function isServerSetup(gs) {
 }
 
 /**
- * Enable all content redirects after /setup completes.
- * NOTE: stretchSpamEnabled and capsSpamEnabled are intentionally NOT touched —
- * they stay at whatever the admin manually configured.
+ * Marks the server as configured (channels saved). Does NOT enable any detections.
+ * All detections remain off until /setup completeset is run.
  */
 function applySetupRedirects(gs) {
+    gs.serverSetupComplete = true;
+    // NO detections are enabled here — use /setup completeset to turn everything on.
+    // capsSpamEnabled, stretchSpamEnabled, noAffiliationEnabled are always manual only.
+    if (gs.noAffiliationEnabled === undefined) gs.noAffiliationEnabled = false;
+}
+
+/**
+ * Called by /setup completeset.
+ * Enables ALL detections except capsSpamEnabled, stretchSpamEnabled, noAffiliationEnabled —
+ * those three must always be turned on manually.
+ */
+function applyAllDetections(gs) {
+    gs.serverSetupComplete    = true;
+    gs.checksEnabled          = true;
     gs.tradeRedirectEnabled   = true;
     gs.serviceRedirectEnabled = true;
     gs.commandRedirectEnabled = true;
-    gs.spamWarnEnabled        = gs.spamWarnEnabled        !== false ? true : gs.spamWarnEnabled;
-    gs.begWarnEnabled         = gs.begWarnEnabled         !== false ? true : gs.begWarnEnabled;
-    gs.scamWarnEnabled        = gs.scamWarnEnabled        !== false ? true : gs.scamWarnEnabled;
-    gs.accTradeWarnEnabled    = gs.accTradeWarnEnabled    !== false ? true : gs.accTradeWarnEnabled;
-    gs.serverSetupComplete    = true;
-    // stretchSpamEnabled and capsSpamEnabled are NOT changed by setup
+    gs.spamWarnEnabled        = true;
+    gs.begWarnEnabled         = true;
+    gs.scamWarnEnabled        = true;
+    gs.accTradeWarnEnabled    = true;
+    gs.scamEnabled            = true;
+    gs.invitePolicyEnabled    = true;
+    gs.attachmentPolicyEnabled = true;
+    gs.linkPolicyEnabled      = true;
+    gs.zalgoEnabled           = true;
+    gs.emojiSpamEnabled       = true;
+    gs.dupeSpamEnabled        = true;
+    gs.scanEditsEnabled       = true;
+    // capsSpamEnabled  — NOT set here, manual only
+    // stretchSpamEnabled — NOT set here, manual only
+    // noAffiliationEnabled — NOT set here, manual only
+    // aiEnabled — NOT set here (requires API key setup)
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2809,16 +2832,16 @@ function getGuildSettings(guildId, data) {
             logChannelId:      null,
             appealsChannelId:  null,
             redirectEmojiId:   DEFAULT_REDIRECT_EMOJI_ID,
-            scamEnabled:       true,
-            commandRedirectEnabled: false,  // off until /setup is run
-            serviceRedirectEnabled: false,  // off until /setup is run
-            tradeRedirectEnabled:   false,  // off until /setup is run
-            spamWarnEnabled:        true,
-            begWarnEnabled:         true,
-            scamWarnEnabled:        true,
-            accTradeWarnEnabled:    true,
+            scamEnabled:       false,
+            commandRedirectEnabled: false,  // off until /setup completeset is run
+            serviceRedirectEnabled: false,  // off until /setup completeset is run
+            tradeRedirectEnabled:   false,  // off until /setup completeset is run
+            spamWarnEnabled:        false,
+            begWarnEnabled:         false,
+            scamWarnEnabled:        false,
+            accTradeWarnEnabled:    false,
             aiEnabled: false,
-            checksEnabled: true,
+            checksEnabled: false,
             noAffiliationEnabled: false,
             serverSetupComplete: false,  // true once /setup or /set channels run
             exileStripRoles: false,
@@ -2859,29 +2882,29 @@ function getGuildSettings(guildId, data) {
             raidLinkBlockAll:  true,
             raidNewAccountDays: 7,
 
-            capsSpamEnabled: true,
+            capsSpamEnabled: false,
             capsMaxPercent: 70,
             capsMinLetters: 16,
             capsMaxRun: 28,
 
-            emojiSpamEnabled: true,
+            emojiSpamEnabled: false,
             emojiMaxCount: 18,
             emojiWindowSec: 12,
 
-            zalgoEnabled: true,
+            zalgoEnabled: false,
             zalgoMaxCombining: 12,
 
-            stretchSpamEnabled: true,
+            stretchSpamEnabled: false,
             stretchMaxCharRun: 12,
             stretchMaxPunctRun: 10,
             stretchMaxWordRepeat: 5,
 
-            dupeSpamEnabled: true,
+            dupeSpamEnabled: false,
             dupeWindowSec: 20,
             dupeThreshold: 4,
             dupeMinLen: 10,
 
-            invitePolicyEnabled: true,
+            invitePolicyEnabled: false,
             inviteAllowlistDomains: [
                 'discord.com','discord.gg','discordapp.com',
             ],
@@ -2895,7 +2918,7 @@ function getGuildSettings(guildId, data) {
             ],
             inviteAllowedChannelIds: [],
 
-            attachmentPolicyEnabled: true,
+            attachmentPolicyEnabled: false,
             attachmentBlockExts: [
                 'exe','scr','com','bat','cmd','ps1','vbs','js','jse','jar','msi','msp','reg','dll','sys',
                 'apk','ipa','dmg','pkg','app','appimage','iso',
@@ -2912,7 +2935,7 @@ function getGuildSettings(guildId, data) {
                 'html','htm','xhtml','svg','xml',
                 'json','yml','yaml','toml','ini','cfg',
             ],
-            linkPolicyEnabled: true,
+            linkPolicyEnabled: false,
             linkAllowlistedDomains: [
                 // ── Discord (every CDN/attachment/media variant) ──────────────
                 'discord.com','discord.gg','discordapp.com','discordapp.net',
@@ -2949,7 +2972,7 @@ function getGuildSettings(guildId, data) {
                 'fandom.com','wikia.com',
             ],
             linkDenylistedDomains: [],
-            scanEditsEnabled: true,
+            scanEditsEnabled: false,
             policyPreset: null,
 
             // ── Roast system ──────────────────────────────────────────
@@ -2963,15 +2986,15 @@ function getGuildSettings(guildId, data) {
         };
     }
     const gs = data.guildSettings[guildId];
-    if (gs.commandRedirectEnabled === undefined) gs.commandRedirectEnabled = true;
-    if (gs.serviceRedirectEnabled === undefined) gs.serviceRedirectEnabled = true;
-    if (gs.tradeRedirectEnabled === undefined) gs.tradeRedirectEnabled = true;
-    if (gs.spamWarnEnabled === undefined) gs.spamWarnEnabled = true;
-    if (gs.begWarnEnabled === undefined) gs.begWarnEnabled = true;
-    if (gs.scamWarnEnabled === undefined) gs.scamWarnEnabled = true; 
-    if (gs.accTradeWarnEnabled === undefined) gs.accTradeWarnEnabled = true;
+    if (gs.commandRedirectEnabled === undefined) gs.commandRedirectEnabled = false;
+    if (gs.serviceRedirectEnabled === undefined) gs.serviceRedirectEnabled = false;
+    if (gs.tradeRedirectEnabled === undefined) gs.tradeRedirectEnabled = false;
+    if (gs.spamWarnEnabled === undefined) gs.spamWarnEnabled = false;
+    if (gs.begWarnEnabled === undefined) gs.begWarnEnabled = false;
+    if (gs.scamWarnEnabled === undefined) gs.scamWarnEnabled = false; 
+    if (gs.accTradeWarnEnabled === undefined) gs.accTradeWarnEnabled = false;
     if (gs.aiEnabled === undefined) gs.aiEnabled = false;
-    if (gs.checksEnabled === undefined) gs.checksEnabled = true;
+    if (gs.checksEnabled === undefined) gs.checksEnabled = false;
     if (gs.noAffiliationEnabled === undefined) gs.noAffiliationEnabled = false;
     if (gs.exileStripRoles === undefined) gs.exileStripRoles = false;
     if (gs.exileRemoveRole === undefined) gs.exileRemoveRole = true;
@@ -8841,8 +8864,11 @@ const slashCommands = [
     // Setup wizard
     new SlashCommandBuilder()
         .setName('setup')
-        .setDescription('Open the setup wizard to configure SKYNET for this server')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+        .setDescription('Configure SKYNET for this server')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('open').setDescription('Open the setup wizard to configure channels and settings'))
+        .addSubcommand(s => s.setName('completeset').setDescription('Mark setup complete — enables ALL detections (except caps/stretch/no-affiliation)'))
+        .addSubcommand(s => s.setName('status').setDescription('Show current setup and detection status')),
 
     // Set individual channels
     new SlashCommandBuilder()
@@ -10085,7 +10111,7 @@ client.on('interactionCreate', async interaction => {
             if (exileRole)  gs.exiledRoleId      = exileRole;
             if (logId)      gs.logChannelId      = logId;
             if (appId)      gs.appealsChannelId  = appId;
-            applySetupRedirects(gs);  // enable all redirects (except stretch/caps spam)
+            // Channels saved — detections NOT enabled yet. Run /setup completeset when ready.
             saveData(data);
             await interaction.reply({
                 embeds: [buildSetupPickerEmbed(gs)
@@ -10181,7 +10207,7 @@ client.on('interactionCreate', async interaction => {
             const appId          = interaction.fields.getTextInputValue('appeals_channel_id').trim();
             if (logId) gs.logChannelId = logId;
             if (appId) gs.appealsChannelId = appId;
-            applySetupRedirects(gs);  // enable all redirects (except stretch/caps spam)
+            // Channels saved — detections NOT enabled yet. Run /setup completeset when ready.
             saveData(data);
             await interaction.reply({
                 embeds: [buildSetupPickerEmbed(gs).setTitle('✅ SKYNET V7 — Setup Complete').setColor(0x00FF88)],
@@ -11163,7 +11189,75 @@ client.on('interactionCreate', async interaction => {
         case 'setup':
         case 'changesetup': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
-            await interaction.reply({ embeds: [buildSetupPickerEmbed(gs)], components: buildSetupPickerComponents(), ephemeral: true });
+            const sub = interaction.options.getSubcommand(false);
+
+            // /setup open  OR  /changesetup  (no subcommand) → open the wizard
+            if (!sub || sub === 'open') {
+                await interaction.reply({ embeds: [buildSetupPickerEmbed(gs)], components: buildSetupPickerComponents(), ephemeral: true });
+                break;
+            }
+
+            // /setup completeset → enable ALL detections (except caps/stretch/noAffiliation)
+            if (sub === 'completeset') {
+                applyAllDetections(gs);
+                saveData(data);
+                await interaction.reply({
+                    embeds: [new EmbedBuilder()
+                        .setTitle('✅ Setup Complete — All Detections Enabled')
+                        .setColor(0x00FF88)
+                        .setDescription('All moderation detections are now **ON**.\nThe following must still be enabled manually:')
+                        .addFields(
+                            { name: '🔕 Manual-only (still OFF)', value: '`/capsconfig on` — Caps spam\n`/stretchconfig on` — Stretch spam\n`/noaffiliation enable` — No-affiliation mode', inline: false },
+                        )
+                        .setTimestamp()],
+                    ephemeral: true,
+                });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Setup Completed', [
+                    'All detections enabled via /setup completeset',
+                    'Caps / Stretch / No-Affiliation remain OFF (manual only)',
+                ]);
+                break;
+            }
+
+            // /setup status → show what's on/off
+            if (sub === 'status') {
+                const on  = '✅ ON';
+                const off = '❌ OFF';
+                await interaction.reply({
+                    embeds: [new EmbedBuilder()
+                        .setTitle('🔧 Setup & Detection Status')
+                        .setColor(0x5865F2)
+                        .addFields(
+                            { name: 'Setup Complete',      value: gs.serverSetupComplete ? on : off, inline: true },
+                            { name: 'Checks Master',       value: gs.checksEnabled ? on : off, inline: true },
+                            { name: 'Trade Redirect',      value: gs.tradeRedirectEnabled ? on : off, inline: true },
+                            { name: 'Service Redirect',    value: gs.serviceRedirectEnabled ? on : off, inline: true },
+                            { name: 'Command Redirect',    value: gs.commandRedirectEnabled ? on : off, inline: true },
+                            { name: 'Spam Warn',           value: gs.spamWarnEnabled ? on : off, inline: true },
+                            { name: 'Beg Warn',            value: gs.begWarnEnabled ? on : off, inline: true },
+                            { name: 'Scam Warn',           value: gs.scamWarnEnabled ? on : off, inline: true },
+                            { name: 'Acc Trade Warn',      value: gs.accTradeWarnEnabled ? on : off, inline: true },
+                            { name: 'Scam Detection',      value: gs.scamEnabled ? on : off, inline: true },
+                            { name: 'Invite Policy',       value: gs.invitePolicyEnabled ? on : off, inline: true },
+                            { name: 'Attachment Policy',   value: gs.attachmentPolicyEnabled ? on : off, inline: true },
+                            { name: 'Link Policy',         value: gs.linkPolicyEnabled ? on : off, inline: true },
+                            { name: 'Zalgo',               value: gs.zalgoEnabled ? on : off, inline: true },
+                            { name: 'Emoji Spam',          value: gs.emojiSpamEnabled ? on : off, inline: true },
+                            { name: 'Dupe Spam',           value: gs.dupeSpamEnabled ? on : off, inline: true },
+                            { name: 'Scan Edits',          value: gs.scanEditsEnabled ? on : off, inline: true },
+                            { name: '— Manual Only —',     value: '\u200b', inline: false },
+                            { name: 'Caps Spam',           value: gs.capsSpamEnabled ? on : off, inline: true },
+                            { name: 'Stretch Spam',        value: gs.stretchSpamEnabled ? on : off, inline: true },
+                            { name: 'No-Affiliation',      value: gs.noAffiliationEnabled ? on : off, inline: true },
+                            { name: 'AI Detection',        value: gs.aiEnabled ? on : off, inline: true },
+                        )
+                        .setFooter({ text: 'Use /setup completeset to enable all (except manual-only ones)' })
+                        .setTimestamp()],
+                    ephemeral: true,
+                });
+                break;
+            }
+
             break;
         }
 
@@ -11695,12 +11789,15 @@ client.on('interactionCreate', async interaction => {
                 return;
             }
 
-            if (sub === 'tradechannel')    { gs.tradeChannelId    = resolvedCh.id; applySetupRedirects(gs); }
-            if (sub === 'serviceschannel') { gs.servicesChannelId = resolvedCh.id; applySetupRedirects(gs); }
+            if (sub === 'tradechannel')    { gs.tradeChannelId    = resolvedCh.id; }
+            if (sub === 'serviceschannel') { gs.servicesChannelId = resolvedCh.id; }
             if (sub === 'logchannel')      { gs.logChannelId      = interaction.options.getChannel('channel').id; }
             if (sub === 'exilerole')       { gs.exiledRoleId      = interaction.options.getRole('role').id; }
             if (sub === 'appealschannel')  { gs.appealsChannelId  = interaction.options.getChannel('channel').id; }
-            if (sub === 'commandchannel')  { gs.gamesHubId        = resolvedCh.id; if (isServerSetup(gs)) gs.commandRedirectEnabled = true; }
+            if (sub === 'commandchannel')  { gs.gamesHubId        = resolvedCh.id; }
+            // /set only saves the value — it NEVER enables any detections.
+            // Run /setup completeset to enable all detections at once.
+            if (gs.noAffiliationEnabled === undefined) gs.noAffiliationEnabled = false;
             saveData(data);
             await interaction.reply({ content: `✅ **${sub}** updated successfully.`, ephemeral: true });
             if (sub === 'tradechannel') {
