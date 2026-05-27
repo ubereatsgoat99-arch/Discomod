@@ -5715,12 +5715,14 @@ const INTENT_PHRASE_EXTRA = [
     "these: ",
     "those: ",
 ];
+// SERVICE_INTENT_EXACT — only words that unambiguously mean "service" on their own.
+// Generic trading/intent words (lf, need, run, farm, help, join, etc.) are NOT service
+// indicators by themselves — they're already covered by compound phrases in
+// SERVICE_INTENT_PHRASE (e.g. "lf service", "lf carry", "need carry").
+// Adding them here caused massive false-positives (e.g. any "lf" message flagging).
 const SERVICE_INTENT_EXACT = [
     "service","services","svc","svcs","carry","carries","carried",
-    "boost","boosting","raid","raids","dungeon","dungeons","help","helping",
-    "run","runs","clear","clearing","farm","farming","lf","lfg","lfs",
-    "need","wanna","wana","anyone","join","team","partner","looking",
-    "searching","hiring","enchant","enchanting",
+    "boost","boosting","hiring",
 ];
 const SERVICE_INTENT_PHRASE = [
     "looking for","looking 4","need help","need someone",
