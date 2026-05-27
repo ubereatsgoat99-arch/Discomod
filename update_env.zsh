@@ -1,5 +1,5 @@
 #!/bin/zsh
-# advik-upgrade — upgrade system + env + keep isolated latest mpmath + vendor qalc
+# upgrade — upgrade system + env + keep isolated latest mpmath + vendor qalc
 
 set -e
 set -o pipefail
@@ -32,19 +32,25 @@ trap '_rollback' ERR
 info "Checking system package manager for upgrades..."
 if command -v apt-get &>/dev/null; then
     info "Running system upgrade via apt..."
-    sudo apt-get update -y -q && sudo apt-get upgrade -y -q
+    
+    # Force non-interactive mode and automatic config-keeping to prevent hanging
+    export DEBIAN_FRONTEND=noninteractive
+    APT_OPTS='-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+    
+    # Ultra-quiet mode, dump stdout to the void
+    sudo -E apt-get update -qq > /dev/null
+    sudo -E apt-get upgrade -y -qq $APT_OPTS > /dev/null
     success "System packages upgraded."
     
     if ! command -v qalc &>/dev/null; then
         info "qalc not found. Installing via apt..."
-        sudo apt-get install -y -q qalculate-unit
+        sudo -E apt-get install -y -qq $APT_OPTS qalculate-unit > /dev/null
     fi
 else
     warn "apt package manager not found. Skipping system-level upgrade."
 fi
 
 # Locate math_modules directory relative to repository layout
-# Targets /workspaces/Discomod/math_modules if run from the repo
 MATH_MODULES_DIR=""
 for target in "$SCRIPT_DIR/math_modules" "$SCRIPT_DIR/../math_modules" "$PWD/math_modules"; do
     if [[ -d "$target" ]]; then
@@ -54,7 +60,6 @@ for target in "$SCRIPT_DIR/math_modules" "$SCRIPT_DIR/../math_modules" "$PWD/mat
 done
 
 if [[ -z "$MATH_MODULES_DIR" ]]; then
-    # Fallback: create it in the script directory if it can't be found
     MATH_MODULES_DIR="$SCRIPT_DIR/math_modules"
     mkdir -p "$MATH_MODULES_DIR"
 fi
@@ -96,11 +101,11 @@ print -P "   %F{green}Using:%f $(which python)  ($(python --version))"
 # ── 2. Save rollback snapshot ─────────────────────────────────────────────────
 info "Saving rollback snapshot..."
 pip freeze > "$LOCKFILE"
-success "Saved $(wc -l < $LOCKFILE | tr -d ' ') packages"
+success "Saved $(wc -l < "$LOCKFILE" | tr -d ' ') packages"
 
 # ── 3. Pre-flight check ───────────────────────────────────────────────────────
 info "Checking dependencies..."
-pip check || warn "Pre-existing conflicts detected"
+pip check > /dev/null 2>&1 || warn "Pre-existing conflicts detected"
 
 # ── 4. Snapshot before ────────────────────────────────────────────────────────
 pip list > /tmp/pip_before.txt
@@ -123,7 +128,7 @@ else
     print -l $OUTDATED | sed 's/^/     - /'
 fi
 
-# ── 6b. Ensure correct pydantic pairing (extra safety) ─────────────────────────
+# ── 6b. Ensure correct pydantic pairing (extra safety) ────────────────────────
 pip install -q "pydantic>=2.0" "pydantic-core<3"
 
 # ── 7. mpmath handling ────────────────────────────────────────────────────────
@@ -131,14 +136,13 @@ info "Ensuring optimal mpmath version for sympy in main environment..."
 pip install "mpmath>=1.1.0,<1.4" -q
 success "Installed maximum supported main mpmath: $(pip show mpmath | grep Version | cut -d' ' -f2)"
 
-# ── 8. Snapshot after + diff ──────────────────────────────────────────────────
-info "Changes:"
+# ── 8. Snapshot after ─────────────────────────────────────────────────────────
 pip list > /tmp/pip_after.txt
-diff /tmp/pip_before.txt /tmp/pip_after.txt || true
+# (Diff removed to prevent log spam)
 
 # ── 9. Post-check ─────────────────────────────────────────────────────────────
 info "Verifying environment..."
-if ! pip check; then
+if ! pip check > /dev/null 2>&1; then
     warn "Conflicts detected — rolling back"
     _rollback
     exit 1
