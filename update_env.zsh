@@ -1,5 +1,5 @@
 #!/bin/zsh
-# advik-upgrade — upgrade env + keep isolated latest mpmath
+# advik-upgrade — upgrade system + env + keep isolated latest mpmath + vendor qalc
 
 set -e
 set -o pipefail
@@ -27,6 +27,47 @@ _rollback() {
     fi
 }
 trap '_rollback' ERR
+
+# ── 0. System Upgrade (Sudo) & Qalc Setup ─────────────────────────────────────
+info "Checking system package manager for upgrades..."
+if command -v apt-get &>/dev/null; then
+    info "Running system upgrade via apt..."
+    sudo apt-get update -y -q && sudo apt-get upgrade -y -q
+    success "System packages upgraded."
+    
+    if ! command -v qalc &>/dev/null; then
+        info "qalc not found. Installing via apt..."
+        sudo apt-get install -y -q qalculate-unit
+    fi
+else
+    warn "apt package manager not found. Skipping system-level upgrade."
+fi
+
+# Locate math_modules directory relative to repository layout
+# Targets /workspaces/Discomod/math_modules if run from the repo
+MATH_MODULES_DIR=""
+for target in "$SCRIPT_DIR/math_modules" "$SCRIPT_DIR/../math_modules" "$PWD/math_modules"; do
+    if [[ -d "$target" ]]; then
+        MATH_MODULES_DIR="$target"
+        break
+    fi
+done
+
+if [[ -z "$MATH_MODULES_DIR" ]]; then
+    # Fallback: create it in the script directory if it can't be found
+    MATH_MODULES_DIR="$SCRIPT_DIR/math_modules"
+    mkdir -p "$MATH_MODULES_DIR"
+fi
+
+info "Placing qalc binary inside math_modules..."
+QALC_PATH=$(command -v qalc || true)
+if [[ -n "$QALC_PATH" ]]; then
+    cp "$QALC_PATH" "$MATH_MODULES_DIR/qalc"
+    chmod +x "$MATH_MODULES_DIR/qalc"
+    success "Copied qalc executable to $MATH_MODULES_DIR/qalc"
+else
+    warn "Could not locate qalc binary to copy to math_modules folder."
+fi
 
 # ── 1. Activate venv ──────────────────────────────────────────────────────────
 VENV_ACTIVATED=0
@@ -126,20 +167,20 @@ import sys, os
 from packaging.version import Version
 
 import sympy
-print(f"   sympy    {sympy.__version__} ✅")
+print(f"    sympy    {sympy.__version__} ✅")
 
 import mpmath
-print(f"   mpmath   {mpmath.__version__} (venv, sympy-supported) ✅")
+print(f"    mpmath   {mpmath.__version__} (venv, sympy-supported) ✅")
 
 vendor = os.environ["VENDOR_DIR"]
 sys.path.insert(0, vendor)
 
 import mpmath14
-print(f"   mpmath14 {mpmath14.__version__} (vendor copy, latest) ✅")
+print(f"    mpmath14 {mpmath14.__version__} (vendor copy, latest) ✅")
 
 import sympy as s
 assert s.sqrt(2)
-print("   sympy functional ✅")
+print("    sympy functional ✅")
 PYEOF
 
 # ── 12. Cleanup ───────────────────────────────────────────────────────────────
