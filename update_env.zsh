@@ -44,7 +44,7 @@ if command -v apt-get &>/dev/null; then
     
     if ! command -v qalc &>/dev/null; then
         info "qalc not found. Installing via apt..."
-        sudo -E apt-get install -y -qq $APT_OPTS qalculate > /dev/null
+        sudo -E apt-get install -y -qq $APT_OPTS qalc > /dev/null
     fi
 else
     warn "apt package manager not found. Skipping system-level upgrade."
