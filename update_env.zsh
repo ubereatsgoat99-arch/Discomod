@@ -118,12 +118,13 @@ success "pip $(pip --version | cut -d' ' -f2) and packaging library ready"
 # ── 6. Upgrade ALL packages (SAFE MODE) ───────────────────────────────────────
 info "Upgrading all packages to latest (dependency-safe)..."
 
-OUTDATED=$(python -c "import json, sys; print('\n'.join([p['name'] for p in json.load(sys.stdin)]))" 2>/dev/null <<< "$(pip list --outdated --format=json)" | grep -vE "^mpmath$")
+# FIXED: Removed the grep pipe and filtered out mpmath directly inside Python to avoid exit code 1 crashes
+OUTDATED=$(python -c "import json, sys; print('\n'.join([p['name'] for p in json.load(sys.stdin) if p['name'].lower() != 'mpmath']))" 2>/dev/null <<< "$(pip list --outdated --format=json)")
 
 if [[ -z "$OUTDATED" ]]; then
     success "Nothing to upgrade in bulk"
 else
-    print -l $OUTDATED | xargs pip install -U --upgrade-strategy only-if-needed -q
+    print -l $OUTDATED | xargs pip install -U --upgrade-strategy only-if-needed
     print -P "%F{green}   Upgraded:%f"
     print -l $OUTDATED | sed 's/^/     - /'
 fi
