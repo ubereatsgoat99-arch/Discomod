@@ -3769,6 +3769,10 @@ const HOMOGLYPHS_EXTRA = {
     'Ⓐ':'a','Ⓑ':'b','Ⓒ':'c','Ⓓ':'d','Ⓔ':'e','Ⓕ':'f','Ⓖ':'g','Ⓗ':'h','Ⓘ':'i','Ⓙ':'j','Ⓚ':'k','Ⓛ':'l','Ⓜ':'m','Ⓝ':'n','Ⓞ':'o','Ⓟ':'p','Ⓠ':'q','Ⓡ':'r','Ⓢ':'s','Ⓣ':'t','Ⓤ':'u','Ⓥ':'v','Ⓦ':'w','Ⓧ':'x','Ⓨ':'y','Ⓩ':'z',
     '🄰':'a','🄱':'b','🄲':'c','🄳':'d','🄴':'e','🄵':'f','🄶':'g','🄷':'h','🄸':'i','🄹':'j','🄺':'k','🄻':'l','🄼':'m','🄽':'n','🄾':'o','🄿':'p','🅀':'q','🅁':'r','🅂':'s','🅃':'t','🅄':'u','🅅':'v','🅆':'w','🅇':'x','🅈':'y','🅉':'z',
     '🅰':'a','🅱':'b','🅲':'c','🅳':'d','🅴':'e','🅵':'f','🅶':'g','🅷':'h','🅸':'i','🅹':'j','🅺':'k','🅻':'l','🅼':'m','🅽':'n','🅾':'o','🅿':'p','🆀':'q','🆁':'r','🆂':'s','🆃':'t','🆄':'u','🆅':'v','🆆':'w','🆇':'x','🆈':'y','🆉':'z',
+    // Regional indicator letters (🇦–🇿) — used in flag combos but also to spell words letter-by-letter
+    '🇦':'a','🇧':'b','🇨':'c','🇩':'d','🇪':'e','🇫':'f','🇬':'g','🇭':'h','🇮':'i','🇯':'j',
+    '🇰':'k','🇱':'l','🇲':'m','🇳':'n','🇴':'o','🇵':'p','🇶':'q','🇷':'r','🇸':'s','🇹':'t',
+    '🇺':'u','🇻':'v','🇼':'w','🇽':'x','🇾':'y','🇿':'z',
     '—':'-','–':'-','−':'-','‑':'-','‒':'-','﹘':'-','﹣':'-','－':'-','·':'.','•':'.','∙':'.','⋅':'.','•':'.','。':'.','｡':'.',
     '“':'"','”':'"','„':'"','‟':'"','′':'\'','＇':'\'','‘':'\'','’':'\'','‚':'\'','‛':'\'',
     '（':'(','）':')','［':'[','］':']','｛':'{','｝':'}','〈':'<','〉':'>','《':'<','》':'>',
@@ -3776,6 +3780,68 @@ const HOMOGLYPHS_EXTRA = {
     '\u2060':'','\u180e':'','\u200e':'','\u200f':'','\u202a':'','\u202b':'','\u202c':'','\u202d':'','\u202e':'',
     '\u2061':'','\u2062':'','\u2063':'','\u2064':'','\u034f':'',
 };
+// ══════════════════════════════════════════════════════════
+//  EMOJI → GAME WORD MAP
+//  Converts pictographic emoji used as item/fruit shortcuts
+//  into their plain-text equivalents BEFORE the decorative
+//  emoji strip, so "lf 🐉" → "lf dragon" and gets caught.
+//  Add new entries here whenever a new emoji shorthand appears.
+// ══════════════════════════════════════════════════════════
+const EMOJI_WORD_MAP = {
+    // ── Fruits ──────────────────────────────────────────────────────
+    '🐉':'dragon',   '🐲':'dragon',
+    '🔥':'flame',    '🌋':'magma',
+    '❄️':'ice',      '🧊':'ice',      '🌨':'blizzard',  '☃️':'blizzard', '🌨️':'blizzard',
+    '⚡':'lightning', '🌩':'lightning','🌩️':'lightning',
+    '🌀':'rumble',
+    '🌑':'shadow',   '🌙':'shadow',   '🌚':'dark',
+    '💎':'diamond',
+    '🐆':'leopard',
+    '🐯':'tiger',    '🐅':'tiger',
+    '🦊':'kitsune',
+    '🦣':'mammoth',
+    '🦖':'trex',     '🦕':'trex',
+    '👻':'ghost',
+    '🕷️':'spider',   '🕷':'spider',
+    '🍩':'dough',
+    '🐍':'venom',
+    '🌪️':'gravity',  '🌪':'gravity',
+    '💨':'smoke',    '🌫️':'smoke',    '🌫':'smoke',
+    '🔮':'control',
+    '💫':'spirit',   '✨':'light',
+    '🌸':'love',
+    '🌊':'flood',
+    '💀':'pain',
+    '❤️':'love',     '💗':'love',
+    '🌱':'spring',
+    '🧲':'gravity',
+    '🔵':'bubble',
+    '☠️':'shadow',
+    '🧬':'creation',
+    '🦋':'phoenix',
+    '🕊️':'phoenix',  '🕊':'phoenix',
+    '⚙️':'cyborg',   '⚙':'cyborg',
+    '🌍':'portal',   '🌐':'portal',
+    // ── Swords ──────────────────────────────────────────────────────
+    '⚔️':'sword',    '⚔':'sword',
+    '🗡️':'sword',    '🗡':'sword',
+    '🔱':'trident',
+    '🪝':'hook',
+    '🌀':'rumble',
+    // ── Bosses / items ───────────────────────────────────────────────
+    '🏆':'chalice',
+    '🦍':'gorilla',
+    '🐋':'leviathan','🦈':'sea beast','🐬':'sea beast',
+    '🧊':'ice admiral',
+    '🍰':'cake',
+    '🩸':'venom',
+    '🌟':'legendary',
+    // ── Actions / trade intent ────────────────────────────────────────
+    '💰':'pay',      '💵':'pay',      '💸':'pay',
+    '🤝':'trade',
+    '🔍':'looking',  '👀':'looking',  '🫵':'offer',
+};
+
 const LEET_MAP = {
     '4':'a','3':'e','1':'i','0':'o','@':'a','!':'',
     '5':'s','7':'t','8':'b','9':'g','6':'g','$':'s',
@@ -3823,6 +3889,28 @@ function normalizeUnicode(t) {
     t = t.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
     for (const [s, d] of Object.entries(HOMOGLYPHS)) t = t.split(s).join(d);
     for (const [s, d] of Object.entries(HOMOGLYPHS_EXTRA)) t = t.split(s).join(d);
+    // ── Step 1: Emoji → game word substitution ───────────────────────────────
+    // Must run BEFORE the decorative strip so "lf 🐉" → "lf dragon" (not "lf ").
+    // Variation-selector suffix (\uFE0F) is stripped alongside the base glyph
+    // so both 🔥 (plain) and 🔥️ (with VS-16) match the same entry.
+    for (const [emoji, word] of Object.entries(EMOJI_WORD_MAP)) {
+        // Build a regex that matches the emoji optionally followed by a variation selector
+        const esc = emoji.replace(/[\u{1F000}-\u{1FFFF}]/gu, c => c)
+                         .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        try { t = t.replace(new RegExp(esc + '\\uFE0F?', 'gu'), ' ' + word + ' '); } catch(_) {}
+    }
+    // ── Step 2: Decorative emoji → space ─────────────────────────────────────
+    // Convert all remaining decorative/pictographic Unicode emoji to spaces so
+    // they cannot act as invisible separators between letters (e.g. "L🔥F🔥K🔥I🔥T"
+    // → "L F K I T" → nospace → "lfkit").
+    // Letter-shaped emoji (🅰–🆉, 🄰–🄿, 🇦–🇿) have already been mapped above,
+    // so only decorative/non-letter emoji reach this step.
+    //   Range 1: Misc symbols ☀️–✂️ (U+2600–27BF) + arrows/shapes (U+2B00–2BFF)
+    //   Range 2: Emoticons 😀, pictographs 🌍, transport 🚀, supplemental 🤔 (U+1F004–1FAFF)
+    t = t.replace(/[\u2600-\u27BF\u2B00-\u2BFF]/g, ' ');
+    t = t.replace(/[\u{1F004}-\u{1FAFF}]/gu, ' ');
+    // Strip variation selectors (VS-1–VS-16) and combining enclosing keycap (used in #️⃣ 1️⃣)
+    t = t.replace(/[\uFE00-\uFE0F\u20E3]/g, '');
     return t;
 }
 function cleanLeet(t) {
