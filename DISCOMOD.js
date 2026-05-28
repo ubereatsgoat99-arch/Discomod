@@ -294,14 +294,17 @@ db/dk = dark blade | db = darkbeard (boss) | sb = sea beast | levi = leviathan |
 
 Always be helpful, concise, and knowledgeable about Blox Fruits when responding to server members. If someone asks about trade values, provide general guidance while noting values fluctuate with updates. If someone asks about how to get a fruit/sword/item, explain the in-game method clearly.`;
 
+// ── General assistant prompt — used by default unless !bloxmode on is set ──
+const GENERAL_ASSISTANT_PROMPT = `You are a helpful, knowledgeable AI assistant embedded in a Discord server. Answer questions clearly and accurately on any topic — coding, math, science, general knowledge, casual chat, and more. Be concise, friendly, and helpful. Do not restrict yourself to any specific game or topic unless the user brings one up.`;
+
 function ai2LoadInstructions() {
     const p = ai2ResourcePath('config/instructions.txt');
-    if (!fs.existsSync(p)) return BF_KNOWLEDGE_SYSTEM_PROMPT;
+    if (!fs.existsSync(p)) return GENERAL_ASSISTANT_PROMPT;
     try {
         const txt = fs.readFileSync(p, 'utf8');
-        // If the file is empty or whitespace, fall back to built-in BF knowledge
-        return txt.trim() ? txt : BF_KNOWLEDGE_SYSTEM_PROMPT;
-    } catch { return BF_KNOWLEDGE_SYSTEM_PROMPT; }
+        // If the file is empty or whitespace, fall back to general assistant prompt
+        return txt.trim() ? txt : GENERAL_ASSISTANT_PROMPT;
+    } catch { return GENERAL_ASSISTANT_PROMPT; }
 }
 function ai2SaveInstructions(text) {
     const p = ai2ResourcePath('config/instructions.txt');
@@ -718,6 +721,11 @@ async function ai2ProcessQueue(channelId) {
         const q = ai2State.messageQueues.get(cid) || [];
         while (q.length) {
             const msg = q.shift();
+            // Re-validate: if the channel was removed from active channels while
+            // this message was waiting in the queue, skip it silently.
+            const qChId = String(msg.channel?.id || '');
+            const qStillActive = ai2State.activeChannels.has(Number(qChId)) || msg.channel?.type === ChannelType.DM;
+            if (!qStillActive) continue;
             const key = `${msg.author.id}-${msg.channel.id}`;
             const hist = ai2State.messageHistory.get(key) || [];
             const prompt = String(msg._ai2CombinedContent || msg.content || '');
@@ -9461,6 +9469,19 @@ const slashCommands = [
                 { name: 'Claude — claude-opus-4-6 (powerful)', value: 'claude-opus' },
             )),
 
+    new SlashCommandBuilder()
+        .setName('bloxmode')
+        .setDescription('Toggle Blox Fruits-specific AI mode for this bot (off = general assistant)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o
+            .setName('mode')
+            .setDescription('on = Blox Fruits expert, off = general assistant')
+            .setRequired(true)
+            .addChoices(
+                { name: '🍎 On — Blox Fruits expert mode', value: 'on' },
+                { name: '🤖 Off — General assistant mode', value: 'off' },
+            )),
+
     // Violations
     new SlashCommandBuilder()
         .setName('violations')
@@ -12785,6 +12806,33 @@ client.on('interactionCreate', async interaction => {
                 )
                 .setFooter({ text: 'Affects all !toggleactive AI channels immediately' })
                 .setTimestamp()], flags: MessageFlags.Ephemeral });
+            break;
+        }
+
+        // ── /bloxmode ─────────────────────────────────────
+        case 'bloxmode': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            if (!ai2State.enabled) { await interaction.reply({ content: '❌ AI chat system is not enabled (config/config.yaml missing).', flags: MessageFlags.Ephemeral }); return; }
+            const modeChoice = interaction.options.getString('mode');
+            if (modeChoice === 'on') {
+                ai2State.instructions = BF_KNOWLEDGE_SYSTEM_PROMPT;
+                ai2SaveInstructions(BF_KNOWLEDGE_SYSTEM_PROMPT);
+                await interaction.reply({ embeds: [new EmbedBuilder()
+                    .setTitle('🍎 Blox Fruits Mode — ON')
+                    .setColor(0xFF6B00)
+                    .setDescription('The AI will now respond as a Blox Fruits expert with full knowledge of fruits, swords, trades, services, and more.')
+                    .setFooter({ text: 'Use /bloxmode off to return to general assistant mode' })
+                    .setTimestamp()], flags: MessageFlags.Ephemeral });
+            } else {
+                ai2State.instructions = GENERAL_ASSISTANT_PROMPT;
+                ai2SaveInstructions('');
+                await interaction.reply({ embeds: [new EmbedBuilder()
+                    .setTitle('🤖 General Assistant Mode — ON')
+                    .setColor(0x5865F2)
+                    .setDescription('The AI will now respond as a general assistant on any topic — no Blox Fruits focus.')
+                    .setFooter({ text: 'Use /bloxmode on to re-enable Blox Fruits expert mode' })
+                    .setTimestamp()], flags: MessageFlags.Ephemeral });
+            }
             break;
         }
 
@@ -16300,6 +16348,14 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (ai2State.activeChannels.has(numId)) {
             ai2State.activeChannels.delete(numId);
             await ai2DbRun('DELETE FROM channels WHERE id = ?', [numId]);
+            // Flush any queued messages for this channel so delayed/typing responses don't fire
+            ai2State.messageQueues.delete(String(channelId));
+            ai2State.messageQueues.delete(channelId);
+            // Clear holdConversation state for all users in this channel so the bot
+            // doesn't keep getting triggered by the inConversation flag after toggle-off
+            for (const key of ai2State.activeConversations.keys()) {
+                if (key.endsWith(`-${channelId}`)) ai2State.activeConversations.delete(key);
+            }
             await message.channel.send('Removed this channel from the list of active channels.');
         } else {
             ai2State.activeChannels.add(numId);
@@ -16346,6 +16402,25 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         await message.channel.send(`✅ AI provider switched from **${validProviders[prev] || prev}** → **${validProviders[providerArg]}**\nModel: \`${ai2Model || 'none (no API key?)'}\``);
         return;
     }
+    // !bloxmode [on|off] — toggle Blox Fruits-specific system prompt
+    if (ai2State.enabled && cmd === 'bloxmode' && ai2OwnerOk) {
+        const v = (args[0] || '').toLowerCase();
+        if (!v) {
+            const isBlox = ai2State.instructions === BF_KNOWLEDGE_SYSTEM_PROMPT;
+            return message.channel.send(`🍎 Blox Fruits mode is currently **${isBlox ? 'ON' : 'OFF'}**. Use: \`!bloxmode on\` or \`!bloxmode off\``);
+        }
+        if (v === 'on') {
+            ai2State.instructions = BF_KNOWLEDGE_SYSTEM_PROMPT;
+            ai2SaveInstructions(BF_KNOWLEDGE_SYSTEM_PROMPT);
+            return message.channel.send('✅ Blox Fruits mode **ON** — AI will now respond as a Blox Fruits expert.');
+        }
+        if (v === 'off') {
+            ai2State.instructions = GENERAL_ASSISTANT_PROMPT;
+            ai2SaveInstructions('');
+            return message.channel.send('✅ Blox Fruits mode **OFF** — AI is back to general assistant mode.');
+        }
+        return message.channel.send('❌ Use: `!bloxmode on` or `!bloxmode off`');
+    }
     if (ai2State.enabled && cmd === 'wipe' && ai2OwnerOk) {
         ai2State.messageHistory.clear();
         await message.channel.send("Wiped the bot's memory.");
@@ -16358,9 +16433,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             return;
         }
         if (prompt.toLowerCase() === 'clear') {
-            ai2State.instructions = BF_KNOWLEDGE_SYSTEM_PROMPT;
+            ai2State.instructions = GENERAL_ASSISTANT_PROMPT;
             ai2SaveInstructions('');
-            await message.channel.send('Cleared custom prompt. Restored built-in Blox Fruits knowledge system prompt.');
+            await message.channel.send('Cleared custom prompt. Restored default general assistant prompt. (Use `!bloxmode on` to re-enable Blox Fruits mode.)');
             return;
         }
         ai2State.instructions = prompt;
@@ -16382,6 +16457,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             `${pfx}wipe - Clears history of the bot\n` +
             `${pfx}ping - Shows the bot's latency\n` +
             `${pfx}toggleactive [id / channel] - Toggle a mentioned channel or the current channel\n` +
+            `${pfx}bloxmode [on|off] - Toggle Blox Fruits-specific AI mode (off = general assistant)\n` +
             `${pfx}aimodel [groq|openai|claude] [model] - Switch AI provider (Groq/OpenAI/Claude). For Claude, optionally add model name.\n` +
             `${pfx}toggledm - Toggle if the bot should be active in DM's\n` +
             `${pfx}togglegc - Toggle if the bot should be active in group chats\n` +
