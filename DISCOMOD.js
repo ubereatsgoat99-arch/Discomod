@@ -4553,19 +4553,25 @@ const COMMON_WORD_WHITELIST = new Set([
 const FRUITS = [
     // ── Common ────────────────────────────────────────────────────────────
     "rocket","spin","chop","spring","bomb","smoke","spike","flame","kilo",
+    "🚀","🌀","🪓","🌸","💣","💨","🦔","🔥","⚖️",
     // ── Uncommon ──────────────────────────────────────────────────────────
     "ice","sand","dark","eagle","diamond",
+    "🧊","🏜️","🖤","🦅","💎",
     // ── Rare ──────────────────────────────────────────────────────────────
     "light","rubber","ghost","magma","quake","buddha","buda","love","creation",
     "spider","sound",
+    "💡","🪀","👻","🌋","🌊","🧘","❤️","🎨","🕷️","🔊",
     // ── Legendary ─────────────────────────────────────────────────────────
     "phoenix","portal","rumble","lightning","pain","blizzard","gravity",
     "mammoth","trex","t-rex","dough","shadow","venom",
+    "🐦‍🔥","🔮","⚡","🌩️","💀","❄️","🌍","🦣","🦖","🍩","🌑","☠️",
     // ── Mythical ──────────────────────────────────────────────────────────
     "gas","spirit","tiger","yeti","kitsune","control","dragon","leopard",
+    "🫧","💫","🐯","🏔️","🦊","🎮","🐉","🐆",
     // ── Gamepasses / perks ────────────────────────────────────────────────
     "2x money","2x mastery","2x boss drops","dark blade","yoru",
     "fast boats","fruit notifier","werewolf",
+    "💰","⚔️","👑","🗡️","🗡️","⛵","🔔","🐺",
     // ── Cosmetics / skins / auras / chromatics ────────────────────────────
     "empyrean","fiendyetimutation","fiend yeti mutation",
     "werewolftigermutation","werewolf tiger mutation",
@@ -4598,6 +4604,16 @@ const FRUITS = [
     "greenlightningskin","green lightning skin",
     "redlightningskin","red lightning skin",
     "yellowlightningskin","yellow lightning skin",
+    // ── Cosmetic emoji versions ───────────────────────────────────────────
+    "✨",                // empyrean
+    "🦣❄️","🐺🐯",      // fiend yeti mutation, werewolf tiger mutation
+    "🔵🔮","✨🔮",       // blue portal skin, divine portal skin
+    "🟣⚡","🌑🐉","🔥🐉", // purple lightning / eclipse draco / ember dragon skins
+    "⬜","🔴","🩵",      // snow white aura, pure red aura, winter sky aura
+    "🌈💣","🌈💎","🌈💀","🌈🔮","🌈✨","🌈🦅","🌈⚡","🌈🐉", // chromatics
+    "☢️💣","🔥💣","🔵💣","🎉💣", // nuclear / thermite / azura / celebration bomb skins
+    "😈💀","💫💀","😤💀","😢💀","🌟💀", // pain skins (torment/super spirit/frustration/sadness/celestial)
+    "💚⚡","🔴⚡","💛⚡", // green / red / yellow lightning skins
 ];
 const FRUIT_ALIASES = {
     "rmble":"rumble","rmbl":"rumble","ruble":"rumble","rumbl":"rumble",
