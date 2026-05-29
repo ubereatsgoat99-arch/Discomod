@@ -25,6 +25,7 @@ read -p "Anthropic API Key: " ANTHROPIC_API_KEY
 read -p "Wolfram API: " WOLFRAM_APPID
 read -p "Groq API Key: " GROQ_API_KEY
 read -p "Client ID: " CLIENT_ID
+read -p "OpenAI Key: " OPENAI_API_KEY
 
 # Optional inputs
 echo ""
