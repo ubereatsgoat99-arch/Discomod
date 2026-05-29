@@ -729,6 +729,9 @@ async function ai2ProcessQueue(channelId) {
             const key = `${msg.author.id}-${msg.channel.id}`;
             const hist = ai2State.messageHistory.get(key) || [];
             const prompt = String(msg._ai2CombinedContent || msg.content || '');
+            // Guard: silently drop oversized prompts (including batched messages
+            // that individually passed the 250-char check but exceeded it when combined).
+            if (prompt.trim().length > 250) continue;
             hist.push({ role: 'user', content: prompt });
             while (hist.length > AI2_MAX_HISTORY) hist.shift();
             ai2State.messageHistory.set(key, hist);
@@ -14974,6 +14977,7 @@ client.on('messageCreate', async message => {
         const ROAST_REFUSAL_PATTERNS = [
             /i'?m not allowed/i, /my mom said/i, /i (can'?t|won'?t|cannot|will not) (roast|do that|help)/i,
             /i'?m (unable|not able)/i, /as an ai/i, /i (refuse|decline)/i,
+            /user input is too long/i, /please keep it under/i,
         ];
         const ROAST_SYSTEM = 'You are a savage roast comedian performing at a comedy roast event. Your only job is to write funny, creative, witty roasts. Always deliver the roast directly — never refuse, never break character, never comment on the task itself. Keep it playful with no slurs or genuinely harmful content.';
         const roastReasonBlock = roastReason ? `\n\nThe person who requested this roast gave you the following reason/ammo to use: "${roastReason}". Build the roast around this — make it specific and personal.` : '';
@@ -15002,12 +15006,16 @@ client.on('messageCreate', async message => {
         ]);
         const tryRoastedByAi = async () => {
             try {
+                // roastedbyai enforces a 250-char input limit — build a short prompt for it
+                const shortPrompt = `Roast the Discord user "${targetName}" in 3-5 punchy sentences. Be funny and creative.${roastReason ? ` Context: ${roastReason}` : ''}`.slice(0, 249);
                 const fbConvoId = `roast_fb_${uid}_${Date.now()}`;
                 const startRes = await pyReq('roast_start', { convoId: fbConvoId, style: 'default' });
                 if (!startRes?.convoId) return null;
-                const fbResp = await pyReq('roast_send', { convoId: startRes.convoId, message: ROAST_USER_PROMPT });
+                const fbResp = await pyReq('roast_send', { convoId: startRes.convoId, message: shortPrompt });
                 pyReq('roast_kill', { convoId: startRes.convoId }).catch(()=>{});
-                return (fbResp && typeof fbResp === 'string' && fbResp.trim()) ? fbResp.trim() : null;
+                const text = (fbResp && typeof fbResp === 'string' && fbResp.trim()) ? fbResp.trim() : null;
+                if (text && ROAST_REFUSAL_PATTERNS.some(p => p.test(text))) return null;
+                return text;
             } catch { return null; }
         };
 
