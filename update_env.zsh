@@ -216,10 +216,10 @@ if [[ "${_DLREPOS:l}" == "y" ]]; then
         typeset -A _REPOS
         _REPOS=(
             precision  "https://github.com/fredrik-johansson/arb"          # [GH]     arb
-            algebra    "https://www.ginac.de/cln.git"                       # [non-GH] CLN
-            symbolic   "https://github.com/fricas/fricas"                   # [GH]     FriCAS
-            geometry   "https://www.ginac.de/ginac.git"                     # [non-GH] GiNaC
-            integers   "https://gmplib.org/repo/gmp.git"                    # [non-GH] GMP
+            algebra    "https://codeberg.org/ginac/cln"                     # [Codeberg] CLN (moved from ginac.de)
+            symbolic   "https://github.com/fricas/fricas"                   # [GH]       FriCAS
+            geometry   "https://codeberg.org/ginac/ginac"                   # [Codeberg] GiNaC (moved from ginac.de)
+            integers   "https://github.com/asheplyakov/gmp"                 # [GH mirror] GMP (upstream is Mercurial)
             matrices   "https://github.com/linbox-team/linbox"              # [GH]     LinBox
             floats     "https://gitlab.inria.fr/mpfr/mpfr.git"              # [non-GH] MPFR (GitLab)
             analysis   "https://github.com/mpmath/mpmath"                   # [GH]     mpmath
