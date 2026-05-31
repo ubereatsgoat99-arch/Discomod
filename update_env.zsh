@@ -192,3 +192,78 @@ rm -f "$LOCKFILE"
 SUCCESS=1
 
 print -P "\n%F{green}%B✅ All done — fully upgraded + dependency-safe.%b%f"
+
+# ── 13. Post-host: Math Library Source Repository Sync ───────────────────────
+print -P "\n%F{cyan}%B📦  Download math library source repos into math_modules?%b%f"
+print -P "   Each repo is shallow-cloned, then stripped of .git / .gitignore / README files."
+print -P "   %F{yellow}⚠️  Some repos are large (sage ~1 GB, numpy, scipy) — may take several minutes.%f"
+print -P "   %F{white}  precision → arb      algebra  → cln      symbolic → fricas%f"
+print -P "   %F{white}  geometry  → ginac    integers → gmp      matrices → linbox%f"
+print -P "   %F{white}  floats    → mpfr     analysis → mpmath   arrays   → numpy%f"
+print -P "   %F{white}  theory    → pari     advanced → sage     scientific → scipy%f"
+print -P "   %F{white}  gaypy     → sympy%f"
+print -n "\n   Clone now? [y/N] → "
+read -r _DLREPOS </dev/tty
+
+if [[ "${_DLREPOS:l}" == "y" ]]; then
+
+    if ! command -v git &>/dev/null; then
+        warn "git not found — install it first: sudo apt-get install git"
+    else
+        # ── Repo map: local dirname → clone URL ─────────────────────────────
+        # Entries marked [non-GH] live outside GitHub (self-hosted git / GitLab).
+        # Update any URL below if a clone fails.
+        typeset -A _REPOS
+        _REPOS=(
+            precision  "https://github.com/fredrik-johansson/arb"          # [GH]     arb
+            algebra    "https://www.ginac.de/cln.git"                       # [non-GH] CLN
+            symbolic   "https://github.com/fricas/fricas"                   # [GH]     FriCAS
+            geometry   "https://www.ginac.de/ginac.git"                     # [non-GH] GiNaC
+            integers   "https://gmplib.org/repo/gmp.git"                    # [non-GH] GMP
+            matrices   "https://github.com/linbox-team/linbox"              # [GH]     LinBox
+            floats     "https://gitlab.inria.fr/mpfr/mpfr.git"              # [non-GH] MPFR (GitLab)
+            analysis   "https://github.com/mpmath/mpmath"                   # [GH]     mpmath
+            arrays     "https://github.com/numpy/numpy"                     # [GH]     NumPy
+            theory     "https://pari.math.u-bordeaux.fr/git/pari.git"       # [non-GH] PARI/GP
+            advanced   "https://github.com/sagemath/sage"                   # [GH]     SageMath
+            scientific "https://github.com/scipy/scipy"                     # [GH]     SciPy
+            gaypy      "https://github.com/sympy/sympy"                      # [GH]     SymPy
+        )
+
+        _CLONE_OK=0
+        _CLONE_FAIL=0
+
+        for _name _url in "${(@kv)_REPOS}"; do
+            _dest="$MATH_MODULES_DIR/$_name"
+
+            if [[ -d "$_dest" ]]; then
+                warn "$_name already exists at $_dest — skipping (remove dir to re-clone)"
+                continue
+            fi
+
+            print -P "   %F{white}↓  %B$_name%b  %F{cyan}$_url%f"
+
+            if git clone --depth=1 --single-branch -q "$_url" "$_dest" 2>/dev/null; then
+                # Strip VCS artefacts ─────────────────────────────────────────
+                rm -rf "$_dest/.git"
+
+                # All .gitignore files, any depth
+                find "$_dest" -type f -name ".gitignore" -delete 2>/dev/null || true
+
+                # All README files — any extension, any case (README.md / .rst / .txt / bare / etc.)
+                find "$_dest" -type f -iname "readme*" -delete 2>/dev/null || true
+
+                _CLONE_OK=$(( _CLONE_OK + 1 ))
+                success "$_name  →  $MATH_MODULES_DIR/$_name"
+            else
+                rm -rf "$_dest" 2>/dev/null || true     # discard partial clone
+                warn "Failed: $_name  ($_url)"
+                _CLONE_FAIL=$(( _CLONE_FAIL + 1 ))
+            fi
+        done
+
+        print ""
+        [[ $_CLONE_OK   -gt 0 ]] && success "$_CLONE_OK repo(s) cloned and cleaned successfully"
+        [[ $_CLONE_FAIL -gt 0 ]] && warn    "$_CLONE_FAIL repo(s) failed — update URLs in section 13 and re-run"
+    fi
+fi
