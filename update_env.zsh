@@ -267,3 +267,64 @@ if [[ "${_DLREPOS:l}" == "y" ]]; then
         [[ $_CLONE_FAIL -gt 0 ]] && warn    "$_CLONE_FAIL repo(s) failed — update URLs in section 13 and re-run"
     fi
 fi
+
+# ── 14. Post-host: AI Library Source Repository Sync ─────────────────────────
+AI_MODULES_DIR="$MATH_MODULES_DIR/../ai_modules/core"
+# Resolve to an absolute path so all messages are unambiguous
+AI_MODULES_DIR="${AI_MODULES_DIR:A}"
+
+print -P "\n%F{cyan}%B📦  Download AI library source repos into ai_modules?%b%f"
+print -P "   Each repo is shallow-cloned, then stripped of .git / .gitignore / README files."
+print -P "   %F{white}  core     → openai-python      oracle  → anthropic-sdk-python%f"
+print -P "   %F{white}  stinger  → roastedbyai         velocity → groq-python%f"
+print -P "   %F{white}  wolfram  → WolframClientForPython%f"
+print -n "\n   Clone now? [y/N] → "
+read -r _DLAI </dev/tty
+
+if [[ "${_DLAI:l}" == "y" ]]; then
+
+    mkdir -p "$AI_MODULES_DIR"
+
+    if ! command -v git &>/dev/null; then
+        warn "git not found — install it first: sudo apt-get install git"
+    else
+        typeset -A _AI_REPOS
+        _AI_REPOS=(
+            core     "https://github.com/openai/openai-python"                    # [GH] OpenAI Python SDK
+            oracle   "https://github.com/anthropics/anthropic-sdk-python"         # [GH] Anthropic Python SDK
+            stinger  "https://github.com/jvherck/roastedbyai"                     # [GH] roastedbyai
+            velocity "https://github.com/groq/groq-python"                        # [GH] Groq Python SDK
+            wolfram  "https://github.com/WolframResearch/WolframClientForPython"  # [GH] Wolfram Client for Python
+        )
+
+        _AI_CLONE_OK=0
+        _AI_CLONE_FAIL=0
+
+        for _name _url in "${(@kv)_AI_REPOS}"; do
+            _dest="$AI_MODULES_DIR/$_name"
+
+            if [[ -d "$_dest" ]]; then
+                print -P "   %F{yellow}   ↺  $_name already exists — removing and re-cloning...%f"
+                rm -rf "$_dest"
+            fi
+
+            print -P "   %F{white}↓  %B$_name%b  %F{cyan}$_url%f"
+
+            if git clone --depth=1 --single-branch -q "$_url" "$_dest" 2>/dev/null; then
+                rm -rf "$_dest/.git"
+                find "$_dest" -type f -name ".gitignore" -delete 2>/dev/null || true
+                find "$_dest" -type f -iname "readme*" -delete 2>/dev/null || true
+                _AI_CLONE_OK=$(( _AI_CLONE_OK + 1 ))
+                success "$_name  →  $AI_MODULES_DIR/$_name"
+            else
+                rm -rf "$_dest" 2>/dev/null || true
+                warn "Failed: $_name  ($_url)"
+                _AI_CLONE_FAIL=$(( _AI_CLONE_FAIL + 1 ))
+            fi
+        done
+
+        print ""
+        [[ $_AI_CLONE_OK   -gt 0 ]] && success "$_AI_CLONE_OK repo(s) cloned and cleaned successfully"
+        [[ $_AI_CLONE_FAIL -gt 0 ]] && warn    "$_AI_CLONE_FAIL repo(s) failed — update URLs in section 14 and re-run"
+    fi
+fi
