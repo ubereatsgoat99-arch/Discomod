@@ -237,8 +237,8 @@ if [[ "${_DLREPOS:l}" == "y" ]]; then
             _dest="$MATH_MODULES_DIR/$_name"
 
             if [[ -d "$_dest" ]]; then
-                warn "$_name already exists at $_dest — skipping (remove dir to re-clone)"
-                continue
+                print -P "   %F{yellow}   ↺  $_name already exists — removing and re-cloning...%f"
+                rm -rf "$_dest"
             fi
 
             print -P "   %F{white}↓  %B$_name%b  %F{cyan}$_url%f"
