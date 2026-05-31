@@ -3257,6 +3257,10 @@ function detectScamByMode(gs, contentClean, rawText) {
 function normalizeObfuscatedDomainText(raw) {
     return String(raw || '')
         .toLowerCase()
+        // Strip Discord/Markdown [display text](url) links BEFORE scanning — the display
+        // text is NOT an attempt to obfuscate a domain (e.g. "[www.roblox](https://...)"
+        // would otherwise match "www.roblox" as a false positive).
+        .replace(/\[[^\]]*\]\([^)]*\)/g, ' ')
         .replace(/\(dot\)|\[dot\]|\{dot\}|\sdot\s/g, '.')
         .replace(/\(\.\)|\[\.\]|\{\.\}/g, '.')
         .replace(/\(com\)|\[com\]|\{com\}|\scom\b/g, '.com')
@@ -3271,6 +3275,11 @@ function detectObfuscatedDomains(rawText, extraAllowed) {
     const combined = [...COMMON_ALLOWED_DOMAINS, ...(extraAllowed || [])];
     const suspicious = hits.filter(h => {
         const cleaned = h.replace(/\s+/g, '').toLowerCase();
+        const normalized = normalizeDomain(cleaned);
+        // After normalization (which strips a leading "www.") a real domain still has a
+        // dot in it.  If there is no dot left the regex only captured a bare hostname
+        // fragment (e.g. "roblox" from "www.roblox") — not a complete domain, skip it.
+        if (!normalized.includes('.')) return false;
         return !domainInList(cleaned, combined);
     });
     return suspicious.slice(0, 5);
