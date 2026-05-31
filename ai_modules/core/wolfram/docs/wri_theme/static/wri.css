@@ -1,0 +1,439 @@
+/* Default theme css */
+@import url("mma.css");
+@import url("default.css");
+
+div.viewcode-block:target {
+    background-color: #e8e5d8;
+    border-top: 1px solid #d2cdba;
+    border-bottom: 1px solid #d2cdba;
+}
+
+div.body {
+    min-height: 600px;
+    padding-left: 50px;
+}
+
+body {
+    background-color: #efefef;
+}
+
+a {
+    color: #005c94;    
+}
+
+div.bodywrapper {
+    -webkit-overflow-scrolling: touch;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    margin-left: 250px;
+    height: 100%;
+    left: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    position: absolute;
+    right: 0;
+}
+
+
+header.main-header {
+    height: 80px;
+    top: 0;
+    padding-top: 15px;
+    padding-left: 50px;
+    padding-right: 50px;
+    padding-bottom: 0px;
+    border-bottom: 4px solid #005c94;
+}
+
+header div.right {
+    float: right;
+    padding-top: 20px;
+    line-height: inherit;
+}
+header div.left {
+    float: left;
+}
+
+header.navigation {
+    height: 30px;
+    background-color: #424242;
+}
+
+div.related a {
+    font-size: .9em;
+    color:#005c94;
+}
+
+div.related.header.right ul li {
+    height: 32px;
+}
+div.related.header.right ul li span {
+    vertical-align: middle;
+}
+
+.vertical-align {
+    vertical-align: middle
+}
+
+span.header {
+    color: #005c94;
+    font-weight: 700;
+}
+a.header {
+    text-decoration: none;
+}
+
+div.header > h1 {
+    margin:0;
+    line-height: 1.1em
+}
+
+span.darkgrey {
+    color: #3c3c3c;
+}
+span.lightgrey {
+    color: #767676;
+}
+
+span.header.right.navigation {
+    margin-left : 5px;
+    margin-right: 5px;
+}
+
+span.reldelimiter {
+    color: #a5a5a5;
+}
+
+footer.copyright {
+    margin-top: 10px;
+    padding-left: 10px;
+    font-size: .8em; 
+    color: #777;
+}
+
+div.sphinxsidebar {
+    -webkit-overflow-scrolling: touch;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    bottom: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    position: absolute;
+    top: 0;
+    width: 250px;
+    margin : 0;
+}
+
+
+div.sphinxsidebar input {
+    border: 1px solid #5d5d5d;
+}
+
+div.sphinxsidebar a {
+    color: #f9c155;
+}
+
+div.sphinxsidebar h3, div.sphinxsidebar h4 {
+    font-family: 'Source Sans Pro',Arial, sans-serif;
+    color: #bfbfbf;
+    text-transform: uppercase;
+    font-size: .9em;
+    padding-top: 10px;
+}
+div.sphinxsidebar h3 a {
+    color: #bfbfbf;
+}
+
+div.document {
+    background:linear-gradient(to right, #fff 0%,#fff 150px,#efefef 250px,#ffffff 250px,#ffffff 100%)  #eeeeee;
+    bottom: 0;
+    left: 0;
+    min-width: 320px;
+    position: absolute;
+    right: 0;
+    top:99px;
+}
+
+div.related {
+    background-color:inherit;
+    width: inherit;
+}
+div.sphinxsidebar ul {
+    color: #bdbdbd;
+    margin:0;
+}
+div.sphinxsidebar a {
+    color: #005c94;
+    line-height: 1.35em;
+    display:block;
+}
+div.sphinxsidebar a:hover {
+    color: #1c90d6;
+    text-decoration:none;
+}
+div.sphinxsidebar h3, div.sphinxsidebar h4 {
+    color: #8a8a8a;
+    margin-left: 10px;
+}
+div.sphinxsidebar h3 a, div.sphinxsidebar h4 a {
+    color: #8a8a8a;
+    margin-left: 10px;
+}
+div.sphinxsidebar form {
+    margin-left: 0px;
+    margin-right: 10px;
+}
+.searchformwrapper {
+    margin-left: 10px;
+}
+div.sphinxsidebar input {
+    border: 1px solid #a7a7a7;
+}
+input[type="submit"] {
+    color: #005c94;
+    background: #f1f1f1;
+}
+div.sphinxsidebar h3 a, div.sphinxsidebar h4 a {
+    margin-left: 0px;
+}
+
+ul ul ul ul li, ul ul ul li {
+    margin-top: 0px;
+}
+
+ul ul li {
+    margin-top: 10px;
+}
+
+a.headerlink {
+    color: #b9b9b9;
+}
+a.headerlink:hover {
+    background-color: #ffffff;
+    color: #6b6b6b;
+}
+
+div.section ul.simple li {
+    padding-bottom: 5px;
+}
+
+.highlight {
+    background: #eeffcc;
+    margin: auto auto 20px 15px;
+}
+
+.highlight-wl > .highlight {
+    background:rgb(252, 252, 252);
+}
+
+.highlight-wl > .highlight > pre {
+    font-family: "Source Code Pro", Courier, monospace;
+    background: rgb(252, 252, 252);
+}
+code.wlcode {
+    font-family: "Source Code Pro", Courier, monospace;
+    background: white;
+    font-size: 16px;
+}
+
+div.note code {
+    background: transparent;
+}
+div.note a.wl {
+    background: transparent;
+}
+
+.wl {
+    font-family: "Source Code Pro", Courier, monospace;
+    background-color: #ecf0f3;
+}
+
+pre {
+    padding: 9px 13px;
+    background-color: #faf8f1;
+    color: #333333;
+    border: 1px solid #dad4b9;
+    border-left: 1px solid #dad4b9;
+    border-right: 1px solid #dad4b9;
+    line-height: 1.35em;
+}
+
+body {
+    font-family: "Source Sans Pro","Arial",sans-serif;
+}
+
+div.body h1, div.body h2, div.body h3, div.body h4, div.body h5, div.body h6 {
+    font-family: "Source Sans Pro","Arial",sans-serif;
+}
+
+div.body h1 {
+    font-size: 2.5rem;
+    font-weight: normal;
+    background: none;
+    color: #383838;
+    border-bottom: none;
+    margin: 0px -20px 10px 15px;
+    padding: 45px 0 3px 0px;
+    /* border-top: 1px solid #ccc; */
+    letter-spacing: -.02rem;
+}
+
+div.body h2 {
+    font-size:2rem;
+    font-weight: normal;
+    background:none;
+    color: #383838;
+    border-bottom: none;
+    margin: 49px -20px 10px 15px;
+    padding: 10px 0 3px 0px;
+    border-top: 1px solid #ccc;
+}
+
+div.body h3 {
+    font-size:1.5rem;
+    font-weight: normal;
+    background:none;
+    color: #2c6aa2;
+    border: none;
+    margin: 20px -20px 10px 15px;
+    padding: 10px 0 3px 0px;
+}
+
+div.body h4 {
+    font-size:1.1rem;
+    font-weight: bold;
+    background:none;
+    color: #333;
+    border: none;
+    margin: 10px -20px -4px 15px;
+    padding: 10px 0 3px 0px;
+}
+
+body code {
+    font-size: .9em;
+    font-family: "Source Code Pro", Consolas,Inconsolta,monospace;
+}
+pre, xmp, plaintext, listing {
+    display: block;
+    font-family: "Source Code Pro", Consolas,Inconsolta,monospace;
+    white-space: pre;
+    margin: 1em 0px;
+}
+
+pre {
+    font-family: "Source Code Pro", Consolas,Inconsolta,monospace;
+    font-size: .8rem;
+    font-weight: 600;
+}
+
+div.body p, div.body dd, div.body li, div.body blockquote {
+    margin-left: 15px;
+}
+
+div.note {
+    background-color: #fff0b6;
+    border: 1px solid #f3d58e;
+    margin: auto auto 20px 15px;
+    font-size: .9rem;
+    padding: 9px 14px;
+}
+
+div.body p.admonition-title {
+    display: inline;
+    padding: 0px;
+    margin: 0px;
+}
+
+div.admonition p.admonition-title + p {
+    display: inline;
+    padding: 0px;
+    margin: 0px;
+}
+
+div.admonition ul, div.admonition ol {
+    margin-bottom: 5px;
+    margin-top: 5px;
+}
+
+code.descclassname {
+    background-color: transparent;
+    font-weight: 700;
+    font-weight: bold;
+    font-size: 1rem;
+    margin-left: 27px;
+}
+code.descname {
+    background-color: transparent;
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+dl {
+    margin-top: 25px;
+}
+
+dt {
+    color: green;
+}
+
+div.body p, div.body dd, div.body li, div.body blockquote {
+    color: #555;
+}
+
+div.sphinxsidebarwrapper {
+    padding: 10px 0 0 0;
+}
+
+
+.highlight-default .highlight pre {
+    font-family: Courier, monospace, sans-serif;
+    font-weight: normal;
+}
+
+.toctree-l1 {
+    list-style: none;
+    margin-top:15px;
+}
+
+div.sphinxsidebar ul ul {
+    padding-left: 10px;
+}
+
+.toctree-l1 a.reference.internal {
+    font-weight: 600;
+    padding-left: 10px;
+}
+
+.toctree-l2 a.reference.internal {
+   font-weight: 400;
+   padding-left: 0;
+}
+
+
+div.sphinxsidebarwrapper a.reference.internal.current {
+    font-weight : 700;
+    background-color: #005c94;
+    color: white;
+}
+
+.toctree-l2 {
+    margin-top : 3px;
+    margin-bottom : 3px;
+}
+
+th {
+    background-color: rgb(236, 240, 243);
+}
+
+.display-table-cell {
+    display: table-cell;
+}
+
+/* Make Python command line interpreter code block
+copy pastable: >>> and ... span become unselectable */
+.gp {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
