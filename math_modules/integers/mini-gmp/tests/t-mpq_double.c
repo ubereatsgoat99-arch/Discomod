@@ -19,7 +19,6 @@ the GNU MP Library test suite.  If not, see https://www.gnu.org/licenses/.  */
 
 #include <math.h>
 #include <float.h>
-#include <limits.h>
 
 #include "testutils.h"
 #include "../mini-mpq.h"
@@ -58,7 +57,13 @@ mpz_get_d_exact_p (const mpz_t z)
 int
 mpq_get_d_exact_p (const mpq_t q)
 {
-  return mpq_mantissasizeinbits (q) <= DBL_MANT_DIG;
+  /* return mpq_mantissasizeinbits (q) <= DBL_MANT_DIG; */
+  return
+    (mpz_sizeinbase (mpq_denref (q), 2) -
+     mpz_scan1 (mpq_denref (q), 0) == 1) &&
+    (mpz_sizeinbase (mpq_numref (q), 2) -
+     mpz_scan1 (mpq_numref (q), 0) <= DBL_MANT_DIG);
+  /* mpz_sizeinbase (zero, 2) - mpz_scan1 (zero, 0) == 2 */
 }
 #define HAVE_EXACT_P 1
 #endif
@@ -82,7 +87,7 @@ check_random (void)
       unsigned long m;
       int e, c;
 
-      mini_rrandomb (x, CHAR_BIT * sizeof (unsigned long));
+      mini_rrandomb (x, 8 * sizeof (unsigned long));
       m = mpz_get_ui (x);
       mini_urandomb (x, 8);
       e = mpz_get_ui (x) - 128;
@@ -114,16 +119,13 @@ check_random (void)
 	  abort ();
 	}
 
-      mini_rrandomb (x, CHAR_BIT * sizeof (unsigned long));
+      mini_rrandomb (x, 8 * sizeof (unsigned long));
       m = mpz_get_ui (x);
       mini_urandomb (x, 8);
       e = mpz_get_ui (x) - 128;
 
       d = ldexp ((double) m, e);
       mpq_set_d (y, d);
-
-      if (i == 0)
-	mpq_neg (z, y);
 
       mpq_add (y, y, z);
       mpq_set_d (z, mpq_get_d (y));

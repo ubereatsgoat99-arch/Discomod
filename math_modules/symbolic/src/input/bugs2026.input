@@ -74,4 +74,48 @@ testcase "iroot in POLYROOT"
 
 testEquals("rootSimp((64*x^12)^(1/12))", "x*sqrt(2)")
 
+testcase "acsch and asech in EFUPXS"
+
+R ==> Expression(Integer)
+PULS ==> UnivariateLaurentSeries(R, x, 1)
+PUPS ==> UnivariatePuiseuxSeries(R, x, 1)
+PUTS ==> UnivariateTaylorSeries(R, x, 1)
+P := EFUPXS(R, PULS, PUPS, EFULS(R, PUTS, PULS))
+
+y := puiseux('x, x=1)
+
+testEquals("0", "approximate(acsch(y) - acsch(y)$P, 5)")
+testEquals("0", "approximate(asech(y) - asech(y)$P, 5)")
+
+testcase "order in DihedralGroup"
+
+testEquals("1", "order(1$DihedralGroup(5, 'a, 'b))")
+
+testcase "parsing unmatched quote at the end of line"
+
+s := "1 _""
+testEquals("#destruct(parse(s)$InputForm)", "2")
+
+testcase "^ in Interval"
+
+x := interval(-2.0, -1.0)$Interval Float
+y := x^(2/1)
+testTrue("0.9 < inf y and sup y < 4.1")
+
+testcase "prime? in UFD"
+
+x := 0$SUP INT
+y := (1 + monomial(1,1)$SUP INT)^2
+testEquals("prime?(x)", "false")
+testEquals("prime?(y)", "false")
+
+testcase "principalIdeal in EuclideanDomain"
+
+x := first(principalIdeal([2/3]).coef)
+testEquals("x", "3/2")
+
+testcase "powmod in Integer"
+
+testEquals("1", "powmod(0, 0, 3)")
+
 statistics()

@@ -329,7 +329,7 @@ FlxX_deriv(GEN z, ulong p)
 }
 
 GEN
-FlxX_translate1(GEN P, long p, long n)
+FlxX_translate1(GEN P, ulong p, long n)
 {
   GEN Q;
   long i, l, ws, lP = lgpol(P);
@@ -342,7 +342,7 @@ FlxX_translate1(GEN P, long p, long n)
 }
 
 GEN
-zlxX_translate1(GEN P, long p, long e, long n)
+zlxX_translate1(GEN P, ulong p, long e, long n)
 {
   GEN Q;
   long i, l, ws, lP = lgpol(P);
@@ -807,12 +807,14 @@ struct _FlxqXQ {
   ulong p, pi;
 };
 
-static GEN _FlxqX_mul(void *data,GEN a,GEN b)
+static GEN
+_FlxqX_mul(void *data,GEN a,GEN b)
 {
   struct _FlxqXQ *d=(struct _FlxqXQ*)data;
   return FlxqX_mul_pre(a,b,d->T,d->p,d->pi);
 }
-static GEN _FlxqX_sqr(void *data,GEN a)
+static GEN
+_FlxqX_sqr(void *data,GEN a)
 {
   struct _FlxqXQ *d=(struct _FlxqXQ*)data;
   return FlxqX_sqr_pre(a,d->T,d->p,d->pi);
@@ -1123,7 +1125,7 @@ FlxqX_divrem_Barrett(GEN x, GEN mg, GEN S, GEN T, ulong p, ulong pi, GEN *pr)
 }
 
 GEN
-FlxqX_divrem_pre(GEN x, GEN S, GEN T, ulong p, long pi, GEN *pr)
+FlxqX_divrem_pre(GEN x, GEN S, GEN T, ulong p, ulong pi, GEN *pr)
 {
   GEN B, y;
   long dy, dx, d;

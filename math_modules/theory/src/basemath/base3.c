@@ -1735,8 +1735,10 @@ static GEN
 zk_embed(GEN M, GEN x, long k)
 {
   long i, l = lg(x);
-  GEN z = gel(x,1); /* times M[k,1], which is 1 */
-  for (i = 2; i < l; i++) z = mpadd(z, mpmul(gcoeff(M,k,i), gel(x,i)));
+  GEN z; /* times M[k,1], which is 1 */
+  if (l == 2) return gel(x,1); /* K = Q */
+  z = addir(gel(x,1), mulri(gcoeff(M,k,2), gel(x,2)));
+  for (i = 3; i < l; i++) z = addrr(z, mulri(gcoeff(M,k,i), gel(x,i)));
   return z;
 }
 

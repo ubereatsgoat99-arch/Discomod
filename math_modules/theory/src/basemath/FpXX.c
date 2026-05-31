@@ -131,6 +131,20 @@ FpXX_neg(GEN x, GEN p)
 }
 
 GEN
+FpXX_Fp_sub(GEN x, GEN y, GEN p)
+{
+  long i, l = lg(x);
+  GEN z, a;
+  if (signe(x)==0) return scalarpol(Fp_red(y, p),varn(x));
+  z = cgetg(l,t_POL); z[1] = x[1];
+  a = gel(x,2);
+  gel(z, 2) = typ(a)==t_INT? Fp_sub(a, y, p): FpX_Fp_sub(a, y, p);
+  for (i = 3; i < l; i++)
+    gel(z,i) = gcopy(gel(x,i));
+  return z;
+}
+
+GEN
 FpXX_Fp_mul(GEN P, GEN u, GEN p)
 {
   long i, lP;
@@ -1375,13 +1389,15 @@ struct _FpXQXQ {
   GEN p;
 };
 
-static GEN _FpXQX_mul(void *data, GEN a,GEN b)
+static GEN
+_FpXQX_mul(void *data, GEN a,GEN b)
 {
   struct _FpXQXQ *d=(struct _FpXQXQ*)data;
   return FpXQX_mul(a,b,d->T,d->p);
 }
 
-static GEN _FpXQX_sqr(void *data, GEN a)
+static GEN
+_FpXQX_sqr(void *data, GEN a)
 {
   struct _FpXQXQ *d=(struct _FpXQXQ*)data;
   return FpXQX_sqr(a, d->T, d->p);

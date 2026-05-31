@@ -1414,9 +1414,11 @@ ZqX_ZqXQ_liftroot(GEN f, GEN a, GEN P, GEN T, GEN p, long e)
 
 /* Canonical lift of polynomial */
 
-static GEN _can_invl(void *E, GEN V) {(void) E; return V; }
+static GEN
+_can_invl(void *E, GEN V) {(void) E; return V; }
 
-static GEN _can_lin(void *E, GEN F, GEN V, GEN q)
+static GEN
+_can_lin(void *E, GEN F, GEN V, GEN q)
 {
   GEN v = RgX_splitting(V, 3);
   (void) E;
@@ -1455,9 +1457,11 @@ static GEN
 F3x_frobeniuslift(GEN P, long n)
 { return gen_ZpX_Newton(Flx_to_ZX(P),utoi(3), n, NULL, _can_iter, _can_invd); }
 
-static GEN _can5_invl(void *E, GEN V) {(void) E; return V; }
+static GEN
+_can5_invl(void *E, GEN V) {(void) E; return V; }
 
-static GEN _can5_lin(void *E, GEN F, GEN V, GEN q)
+static GEN
+_can5_lin(void *E, GEN F, GEN V, GEN q)
 {
   ulong p = *(ulong*)E;
   GEN v = RgX_splitting(V, p);
@@ -1501,9 +1505,7 @@ _can5_mul(void *E, GEN A, GEN B)
 
 static GEN
 _can5_sqr(void *E, GEN A)
-{
-  return _can5_mul(E,A,A);
-}
+{ return _can5_mul(E,A,A); }
 
 static GEN
 _can5_iter(void *E, GEN f, GEN q)
@@ -1535,11 +1537,75 @@ _can5_invd(void *E, GEN H, GEN v, GEN qM, long M)
   return gen_ZpX_Dixon(gel(v,2), H, qM, utoipos(p), M, E, _can5_lin, _can5_invl);
 }
 
+struct _canlarge
+{
+  ulong p, pi;
+  GEN sqx, Tp;
+};
+
+static GEN
+_canlarge_invl(void *E, GEN x)
+{
+  struct _canlarge *D = (struct _canlarge *) E;
+  GEN T = D->Tp;
+  ulong p = D->p, pi = D->pi;
+  GEN xp = ZX_to_Flx(x, p);
+  return Flx_to_ZX(
+    D->sqx ? Flxq_lroot_fast_pre(xp, D->sqx, T, p, pi)
+           : Flxq_lroot_pre(xp, T, p, pi));
+}
+
+static GEN
+_canlarge_lin(void *E, GEN F, GEN H, GEN q)
+{
+  pari_sp av = avma;
+  struct _canlarge * D = (struct _canlarge *) E;
+  ulong p = D->p;
+  GEN Q = gel(F,2), P = gel(F,3);
+  GEN Hp = FpX_FpXQ_eval(H, FpXQ_powu(pol_x(varn(H)), p, P, q), P, q);
+  GEN lin = FpX_sub(Hp, FpXQ_mul(H,Q,P,q), q);
+  return gc_upto(av, lin);
+}
+
+static GEN
+_canlarge_iter(void *E, GEN P, GEN q)
+{
+  struct _canlarge * D = (struct _canlarge *) E;
+  ulong p = D->p;
+  GEN R, Q = FpX_divrem(RgX_inflate(P, p), P, q, &R);
+  return mkvec3(R,Q,P);
+}
+
+static GEN
+_canlarge_invd(void *E, GEN H, GEN v, GEN qM, long M)
+{
+  struct _canlarge * D = (struct _canlarge *) E;
+  ulong p = D->p;
+  return gen_ZpX_Dixon(v, H, qM, utoipos(p), M, E, _canlarge_lin, _canlarge_invl);
+}
+
+static GEN
+Flx_Teichmuller_large(GEN T, ulong p, long n)
+{
+  struct _canlarge D;
+  ulong pi = get_Fl_red(p);
+  D.p = p; D.pi = pi; D.Tp = get_Flx_mod(T);
+  if (degpol(D.Tp) > p)
+  {
+    GEN lr = Flxq_lroot_pre(polx_Flx(D.Tp[1]), T, p, pi);
+    D.sqx = Flxq_powers_pre(lr, p-1, T, p, pi);
+  } else D.sqx = NULL;
+  return gen_ZpX_Newton(Flx_to_ZX(D.Tp),utoipos(p), n, &D, _canlarge_iter, _canlarge_invd);
+}
+
 GEN
 Flx_Teichmuller(GEN P, ulong p, long n)
 {
+  long d = degpol(P);
   return p==3 ? F3x_frobeniuslift(P,n):
-         gen_ZpX_Newton(Flx_to_ZX(P),utoipos(p), n, &p, _can5_iter, _can5_invd);
+         (p==5 && d>=104) || (p==7 && d>=388) ?
+         gen_ZpX_Newton(Flx_to_ZX(P),utoipos(p), n, &p, _can5_iter, _can5_invd)
+         : Flx_Teichmuller_large(P,p,n);
 }
 
 GEN
@@ -1552,5 +1618,107 @@ polteichmuller(GEN P, ulong p, long n)
   if (n <= 0)
     pari_err_DOMAIN("polteichmuller", "precision", "<=",gen_0,stoi(n));
   return gc_upto(av, p==2 ? F2x_Teichmuller(RgX_to_F2x(P), n)
-                               : Flx_Teichmuller(RgX_to_Flx(P, p), p, n));
+                          : Flx_Teichmuller(RgX_to_Flx(P, p), p, n));
+}
+
+GEN
+gen_ZpXX_Newton(GEN x, GEN p, long n, void *E,
+                      GEN eval(void *E, GEN f, GEN q),
+                      GEN invd(void *E, GEN V, GEN v, GEN q, long M))
+{
+  pari_sp ltop = avma, av;
+  long N = 1, N2, M;
+  long mask;
+  GEN q = p;
+  if (n == 1) return gcopy(x);
+  mask = quadratic_prec_mask(n);
+  av = avma;
+  while (mask > 1)
+  {
+    GEN qM, q2, v, V;
+    N2 = N; N <<= 1;
+    q2 = q;
+    if (mask&1UL) { /* can never happen when q2 = p */
+      N--; M = N2-1;
+      qM = diviiexact(q2,p); /* > 1 */
+      q = mulii(qM,q2);
+    } else {
+      M = N2;
+      qM = q2;
+      q = sqri(q2);
+    }
+    /* q2 = p^N2, qM = p^M, q = p^N = q2 * qM */
+    mask >>= 1;
+    v = eval(E, x, q);
+    V = ZXX_Z_divexact(gel(v,1), q2);
+    x = FpXX_sub(x, ZXX_Z_mul(invd(E, V, v, qM, M), q2), q);
+    if (gc_needed(av, 1))
+    {
+      if(DEBUGMEM>1) pari_warn(warnmem,"gen_ZpX_Newton");
+      (void)gc_all(av, 2, &x, &q);
+    }
+  }
+  return gc_upto(ltop, x);
+}
+
+struct _ZpXQXQ_inv
+{
+  GEN S, T, a, p, n;
+};
+
+static GEN
+_ZpXQXQ_inv_invd(void *E, GEN V, GEN v, GEN q, long M/*unused*/)
+{
+  struct _ZpXQXQ_inv *d = (struct _ZpXQXQ_inv *) E;
+  GEN Tq = FpXT_red(d->T, q);
+  GEN Sq = FpXQXT_red(d->S, Tq, q);
+  (void)M;
+  return FpXQXQ_mul(V, gel(v,2), Sq, Tq, q);
+}
+
+GEN FpXX_Fp_sub(GEN x, GEN y, GEN p);
+
+static GEN
+_ZpXQXQ_inv_eval(void *E, GEN x, GEN q)
+{
+  struct _ZpXQXQ_inv *d = (struct _ZpXQXQ_inv *) E;
+  GEN Tq = FpXT_red(d->T, q);
+  GEN Sq = FpXQXT_red(d->S, Tq, q);
+  GEN f = FpXX_Fp_sub(FpXQXQ_mul(x, FpXX_red(d->a, q), Sq, Tq, q), gen_1, q);
+  return mkvec2(f, x);
+}
+
+GEN
+ZpXQXQ_invlift(GEN a, GEN x, GEN S, GEN T, GEN p, long e)
+{
+  struct _ZpXQXQ_inv d;
+  d.a = a; d.S = S; d.T = T; d.p = p;
+  return gen_ZpXX_Newton(x, p, e, &d, _ZpXQXQ_inv_eval, _ZpXQXQ_inv_invd);
+}
+
+GEN
+ZpXQXQ_inv(GEN a, GEN S, GEN T, GEN p, long e)
+{
+  pari_sp av=avma;
+  GEN ai;
+  if (lgefint(p)==3)
+  {
+    ulong pp = p[2];
+    GEN Tp = ZXT_to_FlxT(T, pp);
+    long v = get_FpX_var(Tp);
+    GEN Sp = ZXXT_to_FlxXT(S, pp, v);
+    ai = FlxX_to_ZXX(FlxqXQ_inv(ZXX_to_FlxX(a, pp, v), Sp, Tp, pp));
+  } else
+  {
+    GEN Tp = FpXT_red(T, p);
+    GEN Sp = FpXQXT_red(S, Tp, p);
+    ai = FpXQXQ_inv(FpXX_red(a,p), Sp, Tp, p);
+  }
+  return gc_upto(av, ZpXQXQ_invlift(a, ai, S, T, p, e));
+}
+
+GEN
+ZpXQXQ_div(GEN a, GEN b, GEN S, GEN T, GEN q, GEN p, long e)
+{
+  return FpXQXQ_mul(a, ZpXQXQ_inv(b, S, T, p, e), S, T, q);
 }

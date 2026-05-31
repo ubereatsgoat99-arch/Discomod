@@ -78,7 +78,7 @@ spinner_signal (int signum)
 void
 spinner_init (void)
 {
-  spinner_wanted = isatty (STDOUT_FILENO);
+  spinner_wanted = isatty (fileno (stdout));
   if (spinner_wanted == -1)
     abort ();
 

@@ -300,8 +300,8 @@ hash_destroy(hashtable *h)
   pari_free(h->table); pari_free(h);
 }
 
-static
-int strequal(void *a, void *b) { return !strcmp((char*)a,(char*)b); }
+static int
+strequal(void *a, void *b) { return !strcmp((char*)a,(char*)b); }
 hashtable *
 hash_create_str(ulong s, long stack)
 { return hash_create(s, (ulong (*)(void *))&hash_str, strequal, stack); }

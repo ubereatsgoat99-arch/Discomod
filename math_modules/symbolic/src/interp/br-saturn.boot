@@ -38,43 +38,18 @@ $atLeastOneUnexposed := false
 page() == $curPage
 
 --=======================================================================
---            Functions that affect $saturnPage
---=======================================================================
-
---------------------> OLD DEFINITION (override in br-util.boot)
-htSay(x) ==
-    bcHt(x)
-
-htSayStandard(x) ==  --do AT MOST for $standard
-    bcHt(x)
-
-htSayStandardList(lx) ==
-    htSayList(lx)
-
-htSayList(lx) ==
-  for x in lx repeat bcHt(x)
-
---------------------> NEW DEFINITION (override in ht-util.boot)
-bcHt line ==
-  $newPage =>  --this path affects both saturn and old lines
-    text :=
-      PAIRP line => [['text, :line]]
-      STRINGP line => line
-      [['text, line]]
-    htpAddToPageDescription($curPage, text)
-  PAIRP line =>
-    $htLineList := NCONC(nreverse mapStringize COPY_-LIST line, $htLineList)
-  $htLineList := [basicStringize line, :$htLineList]
-
---=======================================================================
 --                        New issueHT
 --=======================================================================
+
+ht_add_string(page, str) == bcHt(str)
 
 --------------------> NEW DEFINITION (see ht-util.boot)
 htShowPage() ==
 -- show the page which has been computed
   htSayStandard '"\endscroll"
   htShowPageNoScroll()
+
+htShowPage1(page) == htShowPage()
 
 htShowPageNoScroll() ==
 -- show the page which has been computed
@@ -89,10 +64,6 @@ htShowPageNoScroll() ==
 
 DEFCONSTANT($SendLine, 98)
 DEFCONSTANT($EndOfPage, 99)
-DEFCONSTANT($SpadError, 90)
-
-sendHTErrorSignal() ==
-    sockSendInt($MenuServer, $SpadError)
 
 issueHTStandard line == --called by htMakePageNoScroll and htMakeErrorPage
     sockSendInt($MenuServer, $SendLine)
@@ -117,6 +88,8 @@ htMakePage itemList ==
   if $newPage then
      htpAddToPageDescription($curPage, itemList)
   htMakePage1 itemList
+
+ht_add_to_page(page, items) == htMakePage(items)
 
 --------------------> NEW DEFINITION (override in ht-util.boot)
 htMakePage1 itemList ==
@@ -162,17 +135,6 @@ htpSetLabelInputString(htPage, label, val) ==
   props := LASSOC(label, htpInputAreaAlist htPage)
   props => SETELT(props, 0, STRINGIMAGE val)
   nil
-
---------------------> NEW DEFINITION (override in ht-util.boot)
-htDoneButton(func, htPage, :optionalArgs) ==
-------> Handle argument values passed from page if present
-  if optionalArgs then
-    htpSetInputAreaAlist(htPage, first optionalArgs)
-  typeCheckInputAreas htPage =>
-    htMakeErrorPage htPage
-  NULL FBOUNDP func =>
-    systemError ['"unknown function", func]
-  FUNCALL(SYMBOL_-FUNCTION func, htPage)
 
 --------------------> NEW DEFINITION (override in ht-util.boot)
 htBcLinks(links) ==
@@ -838,3 +800,32 @@ satTypeDownLink(s,code) ==
 
 mkButtonBox n == STRCONC('"\buttonbox{", STRINGIMAGE n, '"}")
 
+form2Fence form ==
+  -- body of dbMkEvalable
+  [op, :.] := form
+  kind := get_database(op, 'CONSTRUCTORKIND)
+  kind = 'category => form2Fence1 form
+  form2Fence1 mkEvalable form
+
+form2Fence1 x ==
+  x is [op,:argl] =>
+    op = 'QUOTE => ['"(QUOTE ",:form2FenceQuote first argl,'")"]
+    ['"(", FORMAT(NIL, '"|~a|", op),:"append"/[form2Fence1 y for y in argl],'")"]
+  x = "%" => ["%"]
+  IDENTP x => [FORMAT(NIL, '"|~a|", x)]
+  ['"  ", x]
+
+form2FenceQuote x ==
+  NUMBERP x => [STRINGIMAGE x]
+  SYMBOLP x => [FORMAT(NIL, '"|~a|", x)]
+  atom    x => ['"??"]
+  ['"(",:form2FenceQuote first x,:form2FenceQuoteTail rest x]
+
+form2FenceQuoteTail x ==
+  null x => ['")"]
+  atom x => ['" . ",:form2FenceQuote x,'")"]
+  ['" ",:form2FenceQuote first x,:form2FenceQuoteTail rest x]
+
+form2StringList u ==
+  atom (r := form2String u) => [r]
+  r

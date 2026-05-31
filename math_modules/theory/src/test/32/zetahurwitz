@@ -1,5 +1,5 @@
 -39
--39
+-oo
 -oo
 -oo
 -38
@@ -69,6 +69,7 @@ x^14 - 15.999999999999999936177684699023112054*x^15 + O(x^16)
 71774*I
 -0.0012500000000000000000000000000000000000 - 0.0499791562313333323211842510
 48648972025*I
+1.8836186042287165218879589505430686402 E-79
   ***   at top-level: zetahurwitz(1,Pi)
   ***                 ^-----------------
   *** zetahurwitz: domain error in zetahurwitz: s = 1
@@ -85,4 +86,4 @@ x^14 - 15.999999999999999936177684699023112054*x^15 + O(x^16)
   ***   at top-level: zetahurwitz([],[])
   ***                 ^------------------
   *** zetahurwitz: incorrect type in zetahurwitz (t_VEC).
-Total time spent: 37
+Total time spent: 49

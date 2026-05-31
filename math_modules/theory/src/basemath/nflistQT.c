@@ -37,13 +37,16 @@ mkZVn(long n, ...)
 
 static GEN /* -t */
 pol_mx(long v) { return deg1pol_shallow(gen_m1, gen_0, v); }
-static GEN QT4(long k, long v)
+static GEN
+QT4(long k, long v)
 { switch(k) {
   case 1: return mkpoln(5, gen_1, pol_x(v), stoi(-6), pol_mx(v), gen_1);
   case 2: return mkpoln(5, gen_1, gen_0, pol_x(v), gen_0, gen_1);
   case 3: return mkpoln(5, gen_1, pol_x(v), gen_0, pol_x(v), gen_1);
-  default: return NULL; }}
-static GEN QT5(long k, long v)
+  default: return NULL; }
+}
+static GEN
+QT5(long k, long v)
 { GEN a3, a2, a1, a0;
   switch(k) {
   case 1:
@@ -60,8 +63,10 @@ static GEN QT5(long k, long v)
   a2 = deg1pol_shallow(stoi(5), gen_0, v);
   a0 = deg2pol_shallow(gen_1, gen_m1, stoi(16), v);
   return mkpoln(6, gen_1, gen_0, stoi(10), a2, stoi(-15), a0);
-  default: return NULL; }}
-static GEN QT6(long k, long v)
+  default: return NULL; }
+}
+static GEN
+QT6(long k, long v)
 { GEN a5, a4, a3, a2, a1, a0;
   switch(k) {
   case 1:
@@ -113,8 +118,10 @@ static GEN QT6(long k, long v)
   return mkpoln(7, gen_1,gen_m2,gen_1,gen_0,gen_0,gen_0,pol_mx(v));
   case 14:
   return mkpoln(7, gen_1,stoi(4),stoi(20),gen_0,gen_0,pol_mx(v),pol_x(v));
-  default: return NULL; }}
-static GEN QT7(long k, long v)
+  default: return NULL; }
+}
+static GEN
+QT7(long k, long v)
 { GEN a6, a5, a4, a3, a2, a1, a0;
   switch(k) {
   case 1:
@@ -155,7 +162,8 @@ static GEN QT7(long k, long v)
   a1 = deg1pol_shallow(stoi(28), stoi(-117649), v);
   a0 = deg1pol_shallow(stoi(-9), gen_0, v);
   return mkpoln(8, gen_1,gen_0,stoi(-147),pol_mx(v),a3,a2,a1,a0);
-  default: return NULL; }}
+  default: return NULL; }
+}
 
 static GEN
 nflistQTfile(long n, long t)

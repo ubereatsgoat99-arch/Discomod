@@ -36,7 +36,9 @@ see https://www.gnu.org/licenses/.  */
    speed_foo() wants an "r" parameter.
 
    The routines don't have help messages or descriptions, but most have
-   suggestive names.  See the source code for full details. */
+   suggestive names.  See the source code for full details.
+
+*/
 
 #include "config.h"
 
@@ -1379,7 +1381,7 @@ main (int argc, char *argv[])
           perror ("getrusage");
         else
           printf ("getrusage(): utime %ld.%06ld data %ld stack %ld maxresident %ld\n",
-                  (long) r.ru_utime.tv_sec, (long) r.ru_utime.tv_usec,
+                  r.ru_utime.tv_sec, r.ru_utime.tv_usec,
                   r.ru_idrss, r.ru_isrss, r.ru_ixrss);
       }
 #else

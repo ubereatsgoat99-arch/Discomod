@@ -266,15 +266,7 @@ F2v_dotproduct(GEN x, GEN y)
   if (lx <= 2) return 0;
   c = uel(x,2) & uel(y,2);
   for (i=3; i<lx; i++) c ^= uel(x,i) & uel(y,i);
-#ifdef LONG_IS_64BIT
-  c ^= c >> 32;
-#endif
-  c ^= c >> 16;
-  c ^= c >>  8;
-  c ^= c >>  4;
-  c ^= c >>  2;
-  c ^= c >>  1;
-  return c & 1;
+  return thuemorseu(c);
 }
 
 ulong

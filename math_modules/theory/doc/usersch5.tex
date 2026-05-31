@@ -5668,6 +5668,9 @@ $\kbd{l} = \kbd{lg(x)}$, in place.
 
 \fun{GEN}{FpXX_sub}{GEN x, GEN y, GEN p} returns $\kbd{x}-\kbd{y}$.
 
+\fun{GEN}{FpXX_Fp_sub}{GEN x, GEN y, GEN p} substracts the \kbd{FpXX}~\kbd{x}
+by the \kbd{Fp}~\kbd{y}.
+
 \fun{GEN}{FpXX_neg}{GEN x, GEN p} returns $-\kbd{x}$.
 
 \fun{GEN}{FpXX_Fp_mul}{GEN x, GEN y, GEN p} multiplies the \kbd{FpXX}~\kbd{x}
@@ -8246,6 +8249,23 @@ $\Z_p[X,Y]/(S(X,Y),T(X))$.
 \fun{GEN}{ZqX_liftroot}{GEN f, GEN a, GEN T, GEN p, long e}
 
 \fun{GEN}{ZqX_ZqXQ_liftroot}{GEN f, GEN a, GEN P, GEN T, GEN p, long e}
+
+\subsec{\kbd{ZpXQXQ}}
+
+\fun{GEN}{ZpXQXQ_invlift}{GEN b, GEN a, GEN S, GEN T, GEN p, long e} let
+$p$ be a prime \typ{INT}, $a$ be a \kbd{FpXQXQ} (modulo $(S, T, p)$) and
+$b$ a \kbd{ZpXQXQ} such that $a\*b \equiv 1 \mod (S, T, p)$.
+Returns an \kbd{ZpXQXQ} $A$ such that $A \equiv a \pmod{p}$ and
+$A\*b \equiv 1 \mod (p^e, T)$.
+
+\fun{GEN}{ZpXQ_inv}{GEN b, GEN S, GEN T, GEN p, long e} let
+$p$ be a prime \typ{INT} and $b$ be a \kbd{ZpXQXQ} (modulo $S, T, p^e$).
+Returns an \kbd{ZpXQXQ} $A$ such that $A\*b \equiv 1 \mod (S, T, p^e)$.
+
+\fun{GEN}{ZpXQ_div}{GEN a, GEN b, GEN S, GEN T, GEN q, GEN p, long e} let
+$p$ be a prime \typ{INT} and $a$ and $b$ be a \kbd{ZpXQXQ} (modulo $S, T, p^e$).
+Returns an \kbd{ZpXQXQ} $c$ such that $c\*b \equiv a \mod (S, T, p^e)$.
+The parameter $q$ must be equal to $p^e$.
 
 \subsec{Other $p$-adic functions}
 
@@ -11850,6 +11870,12 @@ involves the use of the function \kbd{gen\_ZpX\_Dixon}.
                           GEN eval(void *E, GEN a, GEN q),
                           GEN invd(void *E, GEN b, GEN v, GEN q, long N)}
 as above, with polynomials replaced by matrices.
+
+\fun{GEN}{gen_ZpXX_Newton}{GEN x, GEN p, long n, void *E,
+                          GEN eval(void *E, GEN a, GEN q),
+                          GEN invd(void *E, GEN b, GEN v, GEN q, long N)}
+as above, with \kbd{ZpX} replaced by \kbd{ZpXX}.
+
 
 \newpage
 \chapter{Operations on general PARI objects}

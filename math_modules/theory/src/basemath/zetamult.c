@@ -811,14 +811,14 @@ polylogmult(GEN a, GEN z, long prec)
  * w=0{1}_{b-1}v{0}_{a-1}1 with v empty or admissible.
  * Input: binary vector evec */
 static void
-findabv(GEN w, long *pa, long *pb, long *pminit, long *pmmid, long *pmfin)
+findabv(GEN w, long *pa, long *pb, long *pmini, long *pmmid, long *pmfin)
 {
   long le = lg(w) - 2;
   if (le == 0)
   {
     *pa = 1;
     *pb = 1;
-    *pminit = 2;
+    *pmini = 2;
     *pmfin = 2;
     *pmmid = 1;
   }
@@ -835,91 +835,100 @@ findabv(GEN w, long *pa, long *pb, long *pminit, long *pmmid, long *pmfin)
     if (lv > 0)
     {
       long v = fd(w, b + 1, le - a + 2), u = v + (1 << (lv-1));
-      *pminit = (((1 << b) - 1) << (lv - 1)) + (v/2) + 2;
+      *pmini = (((1 << b) - 1) << (lv - 1)) + (v/2) + 2;
       *pmfin = (u << (a - 1)) + 2;
       *pmmid = (u >> 1) + 2;
     }
     else
     {
-      *pminit = (1 << (b - 1)) + 1;
+      *pmini = (1 << (b - 1)) + 1;
       *pmfin = (a == 1) ? 2 : (1 << (a - 2)) + 2;
       *pmmid = 1;
     }
   }
 }
 
-/* Returns L:
-* L[1] contains zeta(emptyset)_{n-1,n-1},
-* L[2] contains zeta({0})_{n-1,n-1}=zeta({1})_{n-1,n-1} for n >= 2,
-* L[m+2][n] : 1 <= m < 2^{k-2}, 1 <= n <= N + 1
-* contains zeta(w)_{n-1,n-1}, w corresponding to m,n
-* L[m+2] : 2^{k-2} <= m < 2^{k-1} contains zeta(w), w corresponding to m
-(code: w=0y1 iff m=1y). */
 static GEN
-fillL(long k, long bitprec)
+veccgetr(long l, long prec)
+{
+  GEN v = cgetg(l, t_VEC);
+  long i;
+  for (i = 1; i < l; i++) gel(v, i) = cgetr(prec);
+  return v;
+}
+static GEN
+_addrr(GEN x, GEN y) { return x? addrr(x,y): y; }
+
+/* Returns L: we use the code w=0y1 <--> m=1y
+* L[1] = zeta(emptyset)_{n-1,n-1},
+* L[2] = zeta({0})_{n-1,n-1} = zeta({1})_{n-1,n-1} for n >= 2,
+* L[m+2][n] = zeta(w)_{n-1,n-1}, w <--> m,n; 1 <= m < 2^{k-2}, 1 <= n <= N+1
+* L[m+2] = zeta(w), w <--> m; 2^{k-2} <= m < 2^{k-1}.
+* All entries are t_REAL */
+static GEN
+fillL(long k, GEN *pdual, long bitprec)
 {
   long N = 1 + bitprec/2, prec = nbits2prec(bitprec);
-  long s, j, n, m, K = 1 << (k - 1), K2 = K/2;
-  GEN p1, p2, pab = get_pab(N, k), L = cgetg(K + 2, t_VEC);
+  long s, m, K = 1 << (k - 1), K2 = K/2;
+  GEN dual = zero_zv(K), pab = get_pab(N, k), L = cgetg(K + 2, t_VEC);
 
   get_ibin(&gel(L,1), &gel(L,2), N, prec);
-  for (m = 1; m < K2; m++)
-  {
-    gel(L, m+2) = p1 = cgetg(N+1, t_VEC);
-    for (n = 1; n < N; n++) gel(p1, n) = cgetr(prec);
-    gel(p1, n) = gen_0;
-  }
-  for (m = K2; m < K; m++) gel(L, m+2) = utor(0, prec);
   for (s = 2; s <= k; s++)
   { /* Assume length evec < s filled */
     /* If evec = 0e_2...e_{s-1}1 then m = (1e_2...e_{s-1})_2 */
     GEN w = cgetg(s, t_VECSMALL);
     long M = 1 << (s - 2);
-    pari_sp av = avma;
     for (m = M; m < 2*M; m++)
     {
-      GEN pinit, pfin, pmid;
-      long comp, a, b, mbar, minit, mfin, mmid, mc;
-      p1 = gel(L, m + 2);
+      GEN p1, pini, pfin, pmid;
+      long n, j, a, b, mbar, mini, mfin, mmid, mc;
+      pari_sp av;
       for (j = s - 1, mc = m, mbar = 1; j >= 2; j--, mc >>= 1)
       {
         w[j] = mc & 1;
         mbar = (1 - w[j]) | (mbar << 1);
       }
-      /* m, mbar are dual; handle smallest, copy the other */
-      comp = mbar - m; if (comp < 0) continue; /* m > mbar */
-      if (comp)
-      {
-        p2 = gel(L, mbar + 2);
-        setisclone(p2); /* flag as dual */
-      }
-      else
-        p2 = NULL; /* no copy needed if m = mbar */
-      findabv(w, &a,&b,&minit,&mmid,&mfin);
-      pinit= gel(L, minit);
+      if (mbar < m) /* m, mbar are dual; handle smallest, copy the other */
+      { gel(L, m + 2) = gel(L, mbar + 2); dual[m] = mbar; continue; }
+
+      gel(L, m + 2) = p1 = m < K2 ? veccgetr(N, prec): utor(0, prec);
+      av = avma;
+      findabv(w, &a,&b,&mini,&mmid,&mfin);
+      pini = gel(L, mini);
       pfin = gel(L, mfin);
       pmid = gel(L, mmid);
-      for (n = N-1; n > 1; n--, set_avma(av))
+      { /* n = N-1 */
+        GEN S = NULL;
+        if (mini < 3) S = _addrr(S, mulri(gel(pini, N), gmael(pab, N-1, b)));
+        if (mfin < 3) S = _addrr(S, mulri(gel(pfin, N), gmael(pab, N-1, a)));
+        if (mmid < 3) S = _addrr(S, gel(pmid, N));
+        if (S) S = divri(S, gmael(pab, N-1, a+b));
+        if (s == k)
+          affrr(_addrr(S, p1), p1);
+        else
+        {
+          if (!S) S = gen_0;
+          affgr(S, gel(p1, N-1));
+        }
+      }
+      for (n = N-2; n > 1; n--, set_avma(av))
       {
-        GEN t = mpmul(gel(pinit,n+1), gmael(pab, n, b));
-        GEN u = mpmul(gel(pfin, n+1), gmael(pab, n, a));
+        GEN t = mulri(gel(pini, n+1), gmael(pab, n, b));
+        GEN u = mulri(gel(pfin, n+1), gmael(pab, n, a));
         GEN v = gel(pmid, n+1), S = s < k ? gel(p1, n+1): p1;
-        S = mpadd(S, mpdiv(mpadd(mpadd(t, u), v), gmael(pab, n, a+b)));
-        affgr(S, s < k ? gel(p1, n) : p1);
-        if (p2 && s < k) affgr(S, gel(p2, n));
+        S = addrr(S, divri(addrr(addrr(t, u), v), gmael(pab, n, a+b)));
+        affrr(S, s < k ? gel(p1, n) : p1);
       }
       { /* n = 1: same formula simplifies */
-        GEN t = gel(pinit,2), u = gel(pfin,2), v = gel(pmid,2);
+        GEN t = gel(pini,2), u = gel(pfin,2), v = gel(pmid,2);
         GEN S = s < k ? gel(p1,2): p1;
-        S = mpadd(S, mpadd(mpadd(t, u), v));
-        affgr(S, s < k ? gel(p1,1) : p1);
-        if (p2 && s < k) affgr(S, gel(p2, 1));
-        set_avma(av);
+        S = addrr(S, addrr(addrr(t, u), v));
+        affrr(S, s < k ? gel(p1,1) : p1);
       }
-      if (p2 && s == k) affgr(p1, p2);
+      set_avma(av);
     }
   }
-  return L;
+  *pdual = dual; return L;
 }
 
 /* bit 1 of flag unset: full, otherwise up to duality (~ half)
@@ -929,37 +938,32 @@ fillL(long k, long bitprec)
 static GEN
 zetamultall_i(long k, long flag, long prec)
 {
-  GEN res, ind, L = fillL(k, prec2nbits(prec) + 32);
-  long m, K2 = 1 << (k-2), n = lg(L) - 1, m0 = (flag & 4L) ? K2 : 1;
+  GEN res, ind, dual, L = fillL(k, &dual, prec2nbits(prec) + 32);
+  long c, m, K2 = 1 << (k-2), n = lg(L) - 1, m0 = (flag & 4L) ? K2 : 1;
 
   if (!(flag & 2L))
   {
     res = cgetg(n - m0, t_VEC);
     ind = cgetg(n - m0, t_VECSMALL);
-    for (m = m0; m < n - 1; m++)
+    for (m = m0, c = 1; m < n - 1; m++)
     {
       GEN z = gel(L,m+2);
-      gel(res, m - m0 + 1) = m < K2 ? gel(z,1): z;
-      ind[m - m0 + 1] = m;
+      gel(res, c) = m < K2 ? gel(z,1): z;
+      ind[c] = m; c++;
     }
   }
   else
   { /* up to duality */
-    long nres, c;
-    if (k == 2) nres = 1;
-    else if (!(flag & 2L))
-      nres = (1 << (k - 2)) + (1 << ((k/2) - 1)) - 1;
-    else
-      nres = (1 << (k - 1));
-    res = cgetg(nres + 1, t_VEC);
-    ind = cgetg(nres + 1, t_VECSMALL);
+    long c, N = k == 2? 1: (1 << (k - 1));
+    res = cgetg(N + 1, t_VEC);
+    ind = cgetg(N + 1, t_VECSMALL);
     for (m = m0, c = 1; m < n - 1; m++)
-    {
-      GEN z = gel(L,m+2);
-      if (isclone(z)) continue; /* dual */
-      gel(res, c) = m < K2 ? gel(z,1): z;
-      ind[c] = m; c++;
-    }
+      if (!dual[m])
+      {
+        GEN z = gel(L,m+2);
+        gel(res, c) = m < K2 ? gel(z,1): z;
+        ind[c] = m; c++;
+      }
     setlg(res, c);
     setlg(ind, c);
   }

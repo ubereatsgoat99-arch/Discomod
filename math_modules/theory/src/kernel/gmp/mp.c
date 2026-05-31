@@ -44,13 +44,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA. */
 /*We need PARI invmod renamed to invmod_pari*/
 #define INVMOD_PARI
 
-static void *pari_gmp_realloc(void *ptr, size_t old_size, size_t new_size) {
-  (void)old_size; return (void *) pari_realloc(ptr,new_size);
-}
+static void *
+pari_gmp_realloc(void *ptr, size_t old_size, size_t new_size)
+{ (void)old_size; return (void *) pari_realloc(ptr,new_size); }
 
-static void pari_gmp_free(void *ptr, size_t old_size){
-  (void)old_size; pari_free(ptr);
-}
+static void
+pari_gmp_free(void *ptr, size_t old_size)
+{ (void)old_size; pari_free(ptr); }
 
 static void *(*old_gmp_malloc)(size_t new_size);
 static void *(*old_gmp_realloc)(void *ptr, size_t old_size, size_t new_size);

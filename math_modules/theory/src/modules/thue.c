@@ -300,7 +300,8 @@ other_roots(long iroot, long *i1, long *i2)
   }
 }
 /* low precision */
-static GEN abslog(GEN x) { return gabs(glog(gtofp(x,DEFAULTPREC),0), 0); }
+static GEN
+abslog(GEN x) { return gabs(glog(gtofp(x,DEFAULTPREC),0), 0); }
 
 /* Compute Baker's bound c9 and B_0, the bound for the b_i's. See Thm 2.3.1 */
 static GEN
@@ -577,23 +578,23 @@ TrySol(GEN *pS, GEN B0, long i1, GEN Delta2, GEN Lambda, GEN ro,
   return 1;
 }
 
-/* find q1,q2,q3 st q1 b + q2 c + q3 ~ 0 */
+/* b and c t_REAL; find q1,q2,q3 st q1 b + q2 c + q3 ~ 0 */
 static GEN
 GuessQi(GEN b, GEN c, GEN *eps)
 {
   const long shift = 65;
-  GEN Q, Lat;
+  GEN Q, L;
 
-  Lat = matid(3);
-  gcoeff(Lat,3,1) = ground(gmul2n(b, shift));
-  gcoeff(Lat,3,2) = ground(gmul2n(c, shift));
-  gcoeff(Lat,3,3) = int2n(shift);
+  L = matid(3);
+  gcoeff(L,3,1) = roundr(shiftr(b, shift));
+  gcoeff(L,3,2) = roundr(shiftr(c, shift));
+  gcoeff(L,3,3) = int2n(shift);
 
-  Q = gel(lllint(Lat),1);
-  if (gequal0(gel(Q,2))) return NULL; /* FAIL */
+  Q = gel(lllint(L),1);
+  if (!signe(gel(Q,2))) return NULL; /* FAIL */
 
-  *eps = mpadd(mpadd(gel(Q,3), mpmul(gel(Q,1),b)), mpmul(gel(Q,2),c));
-  *eps = mpabs_shallow(*eps); return Q;
+  *eps = addrr(addir(gel(Q,3), mulir(gel(Q,1),b)), mulir(gel(Q,2),c));
+  setabssign(*eps); return Q;
 }
 
 /* x a t_REAL */

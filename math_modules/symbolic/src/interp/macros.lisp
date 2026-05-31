@@ -68,6 +68,17 @@
 
 ; End of moved fragment
 
+(setq |$Newline| #\Newline)
+
+;; Common lisp control variables
+(setq *print-array* nil)
+(setq *print-pretty* t)
+(setq *print-circle* nil)
+(setq *print-escape* nil) ;; so stringimage doesn't escape idents
+;;; FIXME: do we need this?
+#+(and :GCL :IEEE-FLOATING-POINT)
+  (setq system:*print-nans* T)
+
 ; 5 PROGRAM STRUCTURE
 
 ; 5.3.2 Declaring Global Variables and Named Constants
@@ -233,8 +244,6 @@
 ; 24.2 Specialized Error-Signalling Forms and Macros
 
 (defun MOAN (&rest x) (|sayBrightly| `(|%l| "===> " ,@X |%l|)))
-
-(DEFUN FAIL () (|systemError| '"Antique error (FAIL ENTERED)"))
 
 ; 25 MISCELLANEOUS FEATURES
 
@@ -440,15 +449,6 @@ This function respects intermediate #\Newline characters and drops
     (make-array (length initialvalue)
       :element-type (list 'mod (1+ n))
       :initial-contents initialvalue)))
-
-(defun |knownEqualPred| (dom)
-  (let ((fun (|compiledLookup| '= '((|Boolean|) % %) dom)))
-    (if fun (get (bpiname (car fun)) '|SPADreplace|)
-      nil)))
-
-(defun |hashable| (dom)
-  (memq (|knownEqualPred| dom)
-        '(EQ EQL EQUAL)))
 
 (defun MAKEPROP (sym ind val) (setf (get sym ind) val))
 

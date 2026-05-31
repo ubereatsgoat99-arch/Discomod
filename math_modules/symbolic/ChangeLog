@@ -1,3 +1,251 @@
+2026-05-31  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/hypertex.spad: Add a function
+
+2026-05-31  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/fauto.spad: Allow single wildcard as a pattern
+
+2026-05-30  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/br-con.boot: Move part of code to
+	src/interp/br-data.boot
+
+2026-05-30  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/htsetvar.boot: Simplify, explicitely pass
+	page to functions
+
+2026-05-30  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/integer.spad, src/algebra/si.spad:
+	Fix 'powmod' in Integer
+
+2026-05-30  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/format.boot: Move 5 functions to
+	src/interp/br-saturn.boot
+
+2026-05-30  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/hypertex.spad: Catch empty string
+
+2026-05-29  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/ht-util.boot: Use '\fbox' instead of '\box'
+
+2026-05-29  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/htsetvar.boot: Add hunk missed in previous
+	cleanup
+
+2026-05-28  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/manip.spad: Fix rootFactor
+
+2026-05-28  Waldek Hebisch  <cas@fricas.org>
+
+	Add new pattern matching code
+	* src/algebra/fauto.spad: New file
+	src/algebra/alql.spad, src/algebra/hypertex.spad: Use
+	new code
+
+2026-05-28  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/apply.boot, src/interp/br-con.boot,
+	src/interp/c-util.boot, src/interp/g-util.boot,
+	src/interp/i-intern.boot: Minor cleanups and fixes.
+
+2026-05-28  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/view2D.spad: Simplify
+
+2026-05-27  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/match.boot: Move 2 functions to
+	src/interp/g-util.boot
+
+2026-05-27  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/i-syscmd.boot: Fix a typo
+
+2026-05-22  Qian Yun <oldk1331@gmail.com>
+
+	* src/lisp/fricas-package.lisp, src/lisp/primitives.lisp,
+	src/boot/initial-env.lisp, src/interp/vmlisp.lisp:
+	Remove duplicated 'HPUT' 'HKEYS' from package 'BOOTTRAN'
+
+2026-05-22  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/catdef.spad:
+	Fix 'principalIdeal' in EuclideanDomain
+
+2026-05-20  Qian Yun <oldk1331@gmail.com>
+
+	* Makefile.in, src/etc/Makefile.in, src/etc/credits,
+	src/interp/i-syscmd.boot, src/interp/setq.boot:
+	Move credits into a separate file
+
+2026-05-19  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/catdef.spad: Fix 'prime?' in UFD
+
+2026-05-18  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/ht-util.boot: Add fix missed in previous
+	commit
+
+2026-05-18  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/br-util.boot: Fix breakage due move of code
+
+2026-05-17  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/fops.spad, src/interp/br-data.boot,
+	src/interp/br-search.boot, src/interp/c-doc.boot,
+	src/interp/g-boot.boot, src/interp/htcheck.boot,
+	src/interp/htsetvar.boot, src/interp/i-resolv.boot,
+	src/interp/i-syscmd.boot, src/interp/interop.boot,
+	src/interp/m_util.boot, src/interp/macex.boot,
+	src/interp/macros.lisp, src/interp/msgdb.boot,
+	src/interp/vmlisp.lisp: Misc cleanups
+
+2026-05-17  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/br-util.boot: Move some code from here
+	src/interp/br-con.boot, src/interp/br-data.boot,
+	src/interp/g-util.boot, src/interp/ht-util.boot:
+	To here
+
+2026-05-17  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/setq.boot, src/interp/i-syscmd.boot:
+	Fix ')credits' broken in previous commit
+
+2026-05-17  Waldek Hebisch  <cas@fricas.org>
+
+	Convert setq.lisp to Boot
+	* src/interp/setq.lisp: Remove
+	src/interp/macros.lisp, src/interp/setq.boot: Move
+	code here
+
+2026-05-16  Qian Yun <oldk1331@gmail.com>
+
+	* src/graph/include/view2D.h, src/graph/viewman/fun2D.c,
+	src/graph/viewman/fun3D.c, src/graph/viewman/globalsM.h,
+	src/graph/viewman.c: Fixup closing viewport from GUI
+	introduced by 81a9c52d
+
+2026-05-16  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/br-data.boot: Do not use global '$usersTb'
+	and '$depTb'
+
+2026-05-16  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/view2D.spad, src/algebra/view3D.spad:
+	Simplify and cleanup
+
+2026-05-16  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/bc-matrix.boot, src/interp/bc-misc.boot,
+	src/interp/bc-solve.boot, src/interp/br-saturn.boot,
+	src/interp/br-util.boot, src/interp/br_sup.boot:
+	Explicitely pass page to Hyperdoc functions
+
+2026-05-16  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/br-search.boot, src/interp/br-util.boot,
+	src/interp/ht-util.boot: Fix recent Hyperdoc breakage
+
+2026-05-15  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/setvars.boot: Handle missing cases
+
+2026-05-15  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/format.boot: Restore erroneusly removed part
+
+2026-05-15  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/string.spad, src/interp/as.boot,
+	src/interp/format.boot, src/interp/i-funsel.boot,
+	src/interp/i-map.boot, src/interp/i-syscmd.boot,
+	src/interp/incl.boot, src/interp/match.boot,
+	src/interp/s_supp.lisp, src/interp/scan.boot,
+	src/interp/trace.boot, src/interp/vmlisp.lisp:
+	Minor cleanup
+
+2026-05-15  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/i-syscmd.boot: Fix a typo
+
+2026-05-14  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/hypertex.spad: Improve HyperdocUtilities
+
+2026-05-14  Qian Yun <oldk1331@gmail.com>
+
+	* src/interp/g-timer.boot:
+	Minor fix logic on memory recycled by GC
+
+2026-05-14  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/interval.spad: Improve '^' in Interval
+
+2026-05-14  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/scan.boot: Fix scanS
+
+2026-05-14  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/view2D.spad, src/algebra/view3D.spad,
+	src/graph/viewman/viewman.c, src/hyper/htinp.c,
+	src/interp/util.lisp: Make 'close' on viewport synchronous
+
+2026-05-13  Qian Yun <oldk1331@gmail.com>
+
+	* src/interp/util.lisp:
+	Do not handle SIGPIPE at Lisp level for SBCL in pipe
+
+2026-05-13  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/hypertex.spad: Add HyperdocUtilities
+	src/algebra/alql.spad: Use HyperdocUtilities
+	src/algebra/Makefile.in: Adjust
+
+2026-05-12  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/ht-util.boot: Add hunk missed in previous
+	commit
+
+2026-05-12  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/br-saturn.boot, src/interp/ht-util.boot,
+	src/interp/server.boot: Move code between files
+
+2026-05-12  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/ht-util.boot, src/interp/nlib.lisp:
+	Minor cleanups
+
+2026-05-12  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/compiler.boot, src/interp/g-error.boot,
+	src/interp/i-syscmd.boot, src/interp/setvars.boot,
+	src/interp/trace.boot:  More case sensitive command
+	handling
+
+2026-05-11  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/discrgrp.spad:
+	Fix 'order' in DihedralGroup
+
+2026-05-09  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/efupxs.spad:
+	Fix 'acsch' and 'asech' in EFUPXS
+
 2026-05-03  Qian Yun <oldk1331@gmail.com>
 
 	* src/interp/g-timer.boot, src/interp/macros.lisp:

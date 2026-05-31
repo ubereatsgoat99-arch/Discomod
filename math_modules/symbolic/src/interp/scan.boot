@@ -489,16 +489,14 @@ scanString()==
             lfstring scanS ()
 
 scanS()==
-   if $n>=$sz
-   then
-     ncSoftError(cons($linepos, lnExtraBlanks($linepos + $n)),
+    if $n >= $sz then
+        ncSoftError(cons($linepos, lnExtraBlanks($linepos) + $n),
                  '"Quote added at end of line.", [])
-     '""
-   else
+        '""
+    else
            n:=$n
-           strsym :=STRPOS ('"_"",$ln,$n,nil) or $sz
-           escsym:=STRPOS ('"__"
-                          ,$ln,$n,nil)  or $sz
+           strsym := search_str('"_"", $ln, $n) or $sz
+           escsym := search_str('"__", $ln, $n) or $sz
            mn:=MIN(strsym,escsym)
            if mn=$sz
            then
@@ -665,7 +663,7 @@ scanExponent(a,w)==
         else lffloat(a,w,'"0")
 
 rdigit? x==
-   STRPOS(x,'"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",0,nil)
+    search_str(x, '"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", 0)
 
 scanError()==
       n:=$n

@@ -3054,9 +3054,11 @@ Flxq_div(GEN x, GEN y, GEN T, ulong p)
 GEN
 Flxq_powers_pre(GEN x, long l, GEN T, ulong p, ulong pi)
 {
-  int use_sqr = 2*degpol(x) >= get_Flx_degree(T);
-  struct _Flxq D; set_Flxq_pre(&D, T, p, pi);
-  return gen_powers(x, l, use_sqr, (void*)&D, &_Flxq_sqr, &_Flxq_mul, &_Flxq_one);
+  struct _Flxq D;
+  long d = degpol(x), dT = get_Flx_degree(T);
+  if (d >= dT) { x = Flx_rem_pre(x, T, p, pi); d = degpol(x); }
+  set_Flxq_pre(&D, T, p, pi);
+  return gen_powers(x, l, 2*d>=dT, (void*)&D, &_Flxq_sqr, &_Flxq_mul, &_Flxq_one);
 }
 GEN
 Flxq_powers(GEN x, long l, GEN T, ulong p)
@@ -3804,27 +3806,27 @@ Flxq_is2npower(GEN x, long n, GEN T, ulong p)
 }
 
 GEN
-Flxq_lroot_fast_pre(GEN a, GEN sqx, GEN T, long p, ulong pi)
+Flxq_lroot_fast_pre(GEN a, GEN sqx, GEN T, ulong p, ulong pi)
 {
   pari_sp av=avma;
   GEN A = Flx_splitting(a,p);
   return gc_leaf(av, FlxqV_dotproduct_pre(A,sqx,T,p,pi));
 }
 GEN
-Flxq_lroot_fast(GEN a, GEN sqx, GEN T, long p)
+Flxq_lroot_fast(GEN a, GEN sqx, GEN T, ulong p)
 { return Flxq_lroot_fast_pre(a, sqx, T, p, SMALL_ULONG(p)? 0: get_Fl_red(p)); }
 
 GEN
-Flxq_lroot_pre(GEN a, GEN T, long p, ulong pi)
+Flxq_lroot_pre(GEN a, GEN T, ulong p, ulong pi)
 {
   pari_sp av=avma;
   long n = get_Flx_degree(T), d = degpol(a);
   GEN sqx, V;
-  if (n==1) return leafcopy(a);
+  if (n==1 || d==-1) return leafcopy(a);
   if (n==2) return Flxq_powu_pre(a, p, T, p, pi);
   sqx = Flxq_autpow_pre(Flx_Frobenius_pre(T, p, pi), n-1, T, p, pi);
   if (d==1 && a[2]==0 && a[3]==1) return gc_leaf(av, sqx);
-  if (d>=p)
+  if ((ulong) d>=p)
   {
     V = Flxq_powers_pre(sqx,p-1,T,p,pi);
     return gc_leaf(av, Flxq_lroot_fast_pre(a,V,T,p,pi));
@@ -3832,7 +3834,7 @@ Flxq_lroot_pre(GEN a, GEN T, long p, ulong pi)
     return gc_leaf(av, Flx_Flxq_eval_pre(a,sqx,T,p,pi));
 }
 GEN
-Flxq_lroot(GEN a, GEN T, long p)
+Flxq_lroot(GEN a, GEN T, ulong p)
 { return Flxq_lroot_pre(a, T, p, SMALL_ULONG(p)? 0: get_Fl_red(p)); }
 
 ulong

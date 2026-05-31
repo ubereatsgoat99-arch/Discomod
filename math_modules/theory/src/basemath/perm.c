@@ -593,7 +593,6 @@ perm_to_Z_inplace(GEN v)
   for (i = 1; i < l; i++)
   {
     long vi = v[i];
-    if (vi <= 0) return NULL;
     x = i==1 ? utoi(vi-1): addiu(muliu(x,l-i), vi-1);
     for (r = i+1; r < l; r++)
       if (v[r] > vi) v[r]--;

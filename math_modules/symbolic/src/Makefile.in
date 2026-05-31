@@ -38,6 +38,7 @@ all-lib:
 	$(mkinstalldirs) $(fricas_target_libdir)
 	@cd lib && ${MAKE}
 all-lisp: all-lib
+	$(mkinstalldirs) $(fricas_target_bindir)
 	cd lisp && $(MAKE) all-lisp
 all-boot: all-lisp
 	@cd boot && ${MAKE}
@@ -60,6 +61,7 @@ all-input: all-fricassys
 all-etc: all-algebra
 	cd etc && ${MAKE}
 all-graph: all-lib
+	$(mkinstalldirs) $(fricas_target_bindir)
 	cd graph && ${MAKE}
 
 all-aldor: all-fricassys all-algebra

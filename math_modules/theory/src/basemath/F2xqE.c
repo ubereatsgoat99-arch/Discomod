@@ -566,11 +566,13 @@ gen_Z2X_Dixon(GEN F, GEN V, long N, void *E,
 
 /* H -> H mod 2*/
 
-static GEN _can_invls(void *E, GEN V) {(void) E; return V; }
+static GEN
+_can_invls(void *E, GEN V) {(void) E; return V; }
 
 /* H -> H-(f0*H0-f1*H1) */
 
-static GEN _can_lin(void *E, GEN F, GEN V, long N)
+static GEN
+_can_lin(void *E, GEN F, GEN V, long N)
 {
   pari_sp av=avma;
   GEN d0, d1, z;
@@ -580,7 +582,8 @@ static GEN _can_lin(void *E, GEN F, GEN V, long N)
   return gc_upto(av, ZX_remi2n(z, N));
 }
 
-static GEN _can_lins(void *E, GEN F, GEN V, long N)
+static GEN
+_can_lins(void *E, GEN F, GEN V, long N)
 {
   GEN D=Flx_splitting(V, 2), z;
   ulong q = 1UL<<N;
@@ -638,7 +641,8 @@ struct _frob_lift
 
 /* H -> S^-1(H) mod 2 */
 
-static GEN _frob_invls(void *E, GEN V)
+static GEN
+_frob_invls(void *E, GEN V)
 {
   struct _frob_lift *F = (struct _frob_lift*) E;
   GEN sqx = F->sqx;
@@ -647,7 +651,8 @@ static GEN _frob_invls(void *E, GEN V)
 
 /* H -> f1*S(H) + f2*H */
 
-static GEN _frob_lin(void *E, GEN F, GEN x2, long N)
+static GEN
+_frob_lin(void *E, GEN F, GEN x2, long N)
 {
   GEN T = gel(F,3);
   GEN q = int2n(N);
@@ -657,7 +662,8 @@ static GEN _frob_lin(void *E, GEN F, GEN x2, long N)
   return FpX_rem(ZX_remi2n(lin, N), T, q);
 }
 
-static GEN _frob_lins(void *E, GEN F, GEN x2, long N)
+static GEN
+_frob_lins(void *E, GEN F, GEN x2, long N)
 {
   GEN T = gel(F,3);
   ulong q = 1UL<<N;

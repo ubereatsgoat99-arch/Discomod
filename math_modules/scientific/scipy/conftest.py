@@ -651,7 +651,6 @@ if HAVE_SCPDT:
                     yield
                 else:
                     warnings.simplefilter('error', Warning)
-                    warnings.filterwarnings('ignore', ".*odr.*", DeprecationWarning)
                     yield
 
     dt_config.user_context_mgr = warnings_errors_and_rng  # pyrefly:ignore[unbound-name]
@@ -677,6 +676,9 @@ if HAVE_SCPDT:
         'scipy.interpolate.approximate_taylor_polynomial',
         'scipy.interpolate.pade',
         'scipy.spatial.tsearch',
+        'scipy.spatial.minkowski_distance_p',
+        'scipy.spatial.minkowski_distance',
+        'scipy.spatial.distance_matrix',
     ])
 
     # help pytest collection a bit: these names are either private

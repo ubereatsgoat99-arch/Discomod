@@ -1577,7 +1577,8 @@ selmerbasis(GEN nf, GEN ek, GEN sqrtLS2, GEN factLS2,
   return basis(nf, sqrtzc, crt, pol);
 }
 
-static long randu(void) { return random_Fl(127) - 63; }
+static long
+randu(void) { return random_Fl(127) - 63; }
 static GEN
 randS(GEN b)
 {

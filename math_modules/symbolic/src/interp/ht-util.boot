@@ -43,6 +43,29 @@ $curPage := nil
 -- List of currently active window named
 $activePageList := nil
 
+htSay(x) ==
+    bcHt(x)
+
+htSayStandard(x) ==  --do AT MOST for $standard
+    bcHt(x)
+
+htSayStandardList(lx) ==
+    htSayList(lx)
+
+htSayList(lx) ==
+  for x in lx repeat bcHt(x)
+
+bcHt line ==
+  $newPage =>  --this path affects both saturn and old lines
+    text :=
+      PAIRP line => [['text, :line]]
+      STRINGP line => line
+      [['text, line]]
+    htpAddToPageDescription($curPage, text)
+  PAIRP line =>
+    $htLineList := NCONC(nreverse mapStringize COPY_-LIST line, $htLineList)
+  $htLineList := [basicStringize line, :$htLineList]
+
 htpDestroyPage(pageName) ==
   pageName in $activePageList =>
     SET(pageName, nil)
@@ -353,7 +376,7 @@ htMakeDoneButton(message, func) ==
   if message = '"Continue" then
     bchtMakeButton('"\lispdownlink", "\ContinueBitmap", func)
   else
-    bchtMakeButton('"\lispdownlink",CONCAT('"\box{", message, '"}"), func)
+    bchtMakeButton('"\lispdownlink",CONCAT('"\fbox{", message, '"}"), func)
   bcHt '"} "
 
 htProcessDoneButton [label , func] ==
@@ -364,7 +387,7 @@ htProcessDoneButton [label , func] ==
   else if label = '"Push to enter names" then
     htMakeButton('"\lispdownlink",'"\ControlBitmap{ClickToSet}", func)
   else
-    htMakeButton('"\lispdownlink", CONCAT('"\box{", label, '"}"), func)
+    htMakeButton('"\lispdownlink", CONCAT('"\fbox{", label, '"}"), func)
 
   iht '"} "
 
@@ -383,7 +406,7 @@ bchtMakeButton(htCommand, message, func) ==
 htProcessDoitButton [label, command, func] ==
   fun := mkCurryFun(func, [command])
   iht '"\newline\vspace{1}\centerline{"
-  htMakeButton('"\lispcommand", CONCAT('"\box{", label, '"}"), fun)
+  htMakeButton('"\lispcommand", CONCAT('"\fbox{", label, '"}"), fun)
   iht '"} "
   iht '"\vspace{2}{Select \  \UpButton{} \  to go back one page.}"
   iht '"\newline{Select \  \ExitButton{QuitPage} \  to remove this window.}"
@@ -393,7 +416,7 @@ htMakeDoitButton(label, command) ==
   if label = '"Do It" then
     bcHt '"\newline\vspace{1}\centerline{\lispcommand{\DoItBitmap}{(|doDoitButton| "
   else
-    bcHt ['"\newline\vspace{1}\centerline{\lispcommand{\box{", label,
+    bcHt ['"\newline\vspace{1}\centerline{\lispcommand{\fbox{", label,
        '"}}{(|doDoitButton| "]
   bcHt htpName $curPage
   bcHt ['" _"", htEscapeString command, '"_""]
@@ -414,14 +437,21 @@ executeInterpreterCommand command ==
   princPrompt()
   FORCE_-OUTPUT()
 
+htDoneButton(func, htPage, :optionalArgs) ==
+------> Handle argument values passed from page if present
+  if optionalArgs then
+    htpSetInputAreaAlist(htPage, first optionalArgs)
+  typeCheckInputAreas htPage =>
+    htMakeErrorPage htPage
+  NULL FBOUNDP func =>
+    systemError ['"unknown function", func]
+  FUNCALL(SYMBOL_-FUNCTION func, htPage)
+
 typeCheckInputAreas htPage ==
   -- This needs to be severely beefed up
   errorCondition := false
   for entry in htpInputAreaAlist htPage
    | entry is [stringName, ., ., ., 'string, ., spadType, filter] repeat
-    condList :=
-      LASSOC(LASSOC(spadType,htpDomainPvarSubstList htPage),
-             htpDomainVariableAlist htPage)
     string := htpLabelFilteredInputString(htPage, stringName)
     null(ncParseFromString(string)) =>
         -- FIXME: this effectively ignores errors, but otherwise
@@ -430,11 +460,6 @@ typeCheckInputAreas htPage ==
         htpSetLabelErrorMsg(htPage, '"Syntax Error", '"Syntax Error")
     nil
   errorCondition
-
-condErrorMsg type ==
-  typeString := form2String type
-  if PAIRP typeString then typeString := concatenateStringList(typeString)
-  CONCAT('"Error: Could not make your input into a ", typeString)
 
 -- predefined filter strings
 
@@ -456,3 +481,64 @@ unescapeStringsInForm form ==
     unescapeStringsInForm rest form
     form
   form
+
+bcBlankLine(page) ==
+    ht_add_string(page, '"\vspace{1}\newline ")
+
+errorPage(htPage,[heading,kind,:info]) ==
+  kind = 'invalidType => kInvalidTypePage first info
+  if heading = 'error then page := htInitPage('"Error",nil) else
+                           page := htInitPage(heading,nil)
+  bcBlankLine(page)
+  for x in info repeat htSay x
+  htShowPage()
+
+ -- from bc-util
+
+bcFinish(name,arg,:args) == bcGen bcMkFunction(name,arg,args)
+
+bcMkFunction(name,arg,args) ==
+  args := [x for x in args | x]
+  STRCONC(name,'"(",arg,"STRCONC"/[STRCONC('",", x) for x in args],'")")
+
+bcFindString(s,i,n,char) ==  or/[j for j in i..n | s.j = char]
+
+bcGen command ==
+  page := htInitPage('"Basic Command",nil)
+  string :=
+    #command < 50 => STRCONC('"{\centerline{\tt ",command,'" }}")
+    STRCONC('"{\tt ",command,'" }")
+  ht_add_to_page(page, [
+     '(text
+        "{Here is the FriCAS command you could have issued to compute this result:}"
+            "\vspace{2}\newline "),
+      ['text,:string]])
+  htMakeDoitButton('"Do It", command)
+  htShowPage1(page)
+
+bcString2WordList s == fn(s,0,MAXINDEX s) where
+  fn(s,i,n) ==
+    i > n => nil
+    k := or/[j for j in i..n | s.j ~= char '_  ]
+    null INTEGERP k => nil
+    l := bcFindString(s,k + 1,n,char '_  )
+    null INTEGERP l => [SUBSTRING(s,k,nil)]
+    [SUBSTRING(s,k,l-k),:fn(s,l + 1,n)]
+
+bcwords2liststring u ==
+  null u => nil
+  STRCONC('"[",first u,fn rest u) where
+    fn(u) ==
+      null u => '"]"
+      STRCONC('", ",first u,fn rest u)
+
+bcVectorGen vec == bcwords2liststring vec
+
+bcError string ==
+  sayBrightlyNT '"NOTE: "
+  sayBrightly string
+
+htStringPad(n,w) ==
+  s := STRINGIMAGE n
+  ws := #s
+  STRCONC('"\space{",STRINGIMAGE (w - ws + 1),'"}",s)

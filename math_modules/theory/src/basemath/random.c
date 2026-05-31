@@ -77,7 +77,8 @@ init_xor4096i(u64 v)
   for (xorgen_i = r-1, k = 4*r; k > 0; k--) (void)block();
 }
 
-void pari_init_rand(void) { init_xor4096i(1UL); }
+void
+pari_init_rand(void) { init_xor4096i(1UL); }
 
 static u64
 rand64(void)

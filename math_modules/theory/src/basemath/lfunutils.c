@@ -2444,9 +2444,12 @@ galois_get_conj(GEN G)
   return NULL;/*LCOV_EXCL_LINE*/
 }
 
-static GEN  cyclotoi(GEN v) { return simplify_shallow(lift_shallow(v)); }
-static long cyclotos(GEN v) { return gtos(cyclotoi(v)); }
-static long char_dim(GEN ch) { return cyclotos(gel(ch,1)); }
+static GEN
+cyclotoi(GEN v) { return simplify_shallow(lift_shallow(v)); }
+static long
+cyclotos(GEN v) { return gtos(cyclotoi(v)); }
+static long
+char_dim(GEN ch) { return cyclotos(gel(ch,1)); }
 
 static GEN
 artin_gamma(GEN N, GEN G, GEN ch)

@@ -2047,9 +2047,16 @@ Babai(pari_sp av, long kappa, GEN *pG, GEN *pB, GEN *pU, GEN mu, GEN r, GEN s,
     {
       pari_sp btop = avma;
       GEN g = gmael(G,kappa,j);
-      for (k = zeros+1; k < j; k++)
-        g = mpsub(g, mulrr(gmael(mu,j,k), gmael(r,kappa,k)));
-      affgr(g, gmael(r,kappa,j));
+      k = zeros + 1;
+      if (k >= j)
+        affir(g, gmael(r,kappa,j));
+      else
+      {
+        g = subir(g, mulrr(gmael(mu,j,k), gmael(r,kappa,k)));
+        for (k++; k < j; k++)
+          g = subrr(g, mulrr(gmael(mu,j,k), gmael(r,kappa,k)));
+        affrr(g, gmael(r,kappa,j));
+      }
       affrr(divrr(gmael(r,kappa,j), gmael(r,j,j)), gmael(mu,kappa,j));
       emaxmu = maxss(emaxmu, expo(gmael(mu,kappa,j)));
       set_avma(btop);

@@ -11,6 +11,7 @@
 #include <xsf/beta.h>
 #include <xsf/binom.h>
 #include <xsf/digamma.h>
+#include <xsf/digammainv.h>
 #include <xsf/ellip.h>
 #include <xsf/erf.h>
 #include <xsf/exp.h>
@@ -46,11 +47,13 @@
 // This allows the build process to generate a corresponding entry for scipy.special.cython_special.
 
 extern const char *_cospi_doc;
+extern const char *_bivariate_normal_cdf_doc;
 extern const char *_sinpi_doc;
 extern const char *_gen_harmonic_doc;
 extern const char *_log1mexp_doc;
 extern const char *_log1pmx_doc;
 extern const char *_normalized_gen_harmonic_doc;
+extern const char *_von_mises_cdf_doc;
 extern const char *airy_doc;
 extern const char *airye_doc;
 extern const char *bei_doc;
@@ -66,6 +69,7 @@ extern const char *cosdg_doc;
 extern const char *cosm1_doc;
 extern const char *cotdg_doc;
 extern const char *dawsn_doc;
+extern const char *digammainv_doc;
 extern const char *ellipe_doc;
 extern const char *ellipeinc_doc;
 extern const char *ellipj_doc;
@@ -211,11 +215,24 @@ static PyMethodDef _methods[] = {
 };
 
 
+static float
+bivariate_normal_cdf_float(float dh, float dk, float r)
+{
+    return static_cast<float>(xsf::bivariate_normal_cdf(dh, dk, r));
+}
+
+
 static int
 _special_ufuncs_module_exec(PyObject *module)
 {
     if (_import_array() < 0) { return -1; }
     if (_import_umath() < 0) { return -1; }
+
+    PyObject *_bivariate_normal_cdf = xsf::numpy::ufunc(
+        {static_cast<xsf::numpy::fff_f>(bivariate_normal_cdf_float),
+         static_cast<xsf::numpy::ddd_d>(xsf::bivariate_normal_cdf)},
+        "_bivariate_normal_cdf", _bivariate_normal_cdf_doc);
+    PyModule_AddObjectRef(module, "_bivariate_normal_cdf", _bivariate_normal_cdf);
 
     PyObject *_cospi =
         xsf::numpy::ufunc({static_cast<xsf::numpy::f_f>(xsf::cospi), static_cast<xsf::numpy::d_d>(xsf::cospi),
@@ -246,6 +263,11 @@ _special_ufuncs_module_exec(PyObject *module)
 	{static_cast<xsf::numpy::f_f>(xsf::scaled_exp1), static_cast<xsf::numpy::d_d>(xsf::scaled_exp1)},
         "_scaled_exp1", scaled_exp1_doc);
     PyModule_AddObjectRef(module, "_scaled_exp1", _scaled_exp1);
+
+    PyObject *_von_mises_cdf = xsf::numpy::ufunc(
+        {static_cast<xsf::numpy::ff_f>(xsf::von_mises_cdf), static_cast<xsf::numpy::dd_d>(xsf::von_mises_cdf)},
+        "_von_mises_cdf", _von_mises_cdf_doc);
+    PyModule_AddObjectRef(module, "_von_mises_cdf", _von_mises_cdf);
 
     PyObject *_sinpi =
         xsf::numpy::ufunc({static_cast<xsf::numpy::f_f>(xsf::sinpi), static_cast<xsf::numpy::d_d>(xsf::sinpi),
@@ -967,6 +989,11 @@ _special_ufuncs_module_exec(PyObject *module)
                            static_cast<xsf::numpy::F_F>(xsf::digamma), static_cast<xsf::numpy::D_D>(xsf::digamma)},
                           "psi", psi_doc);
     PyModule_AddObjectRef(module, "psi", psi);
+
+    PyObject *digammainv = xsf::numpy::ufunc(
+        {static_cast<xsf::numpy::f_f>(xsf::digammainv), static_cast<xsf::numpy::d_d>(xsf::digammainv)},
+        "digammainv", digammainv_doc);
+    PyModule_AddObjectRef(module, "digammainv", digammainv);
 
     PyObject *radian =
         xsf::numpy::ufunc({static_cast<xsf::numpy::fff_f>(xsf::radian), static_cast<xsf::numpy::ddd_d>(xsf::radian)},

@@ -331,3 +331,9 @@ sqrt(a)*x
 [a forr b in c]
 
 )cl compt
+
+)what categories eAggr
+
+)help foo
+
+)abbrev package Foo

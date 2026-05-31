@@ -2,9 +2,9 @@ Function: hyperellchangepointinv
 Section: elliptic_curves
 C-Name: hyperellchangepointinv
 Prototype: GGG
-Help: hyperellchangepointinv(C,P,m): C being a hyperelliptic curve given by a
+Help: hyperellchangepointinv(C,p,m): C being a hyperelliptic curve given by a
  Weierstrass equation, apply the reverse of the change of coordinates given by m
- to the point P. C can be given either by a squarefree polynomial P such that
+ to the point p. C can be given either by a squarefree polynomial P such that
  C:y^2=P(x) or by a vector [P,Q] such that C:y^2+Q(x)*y=P(x) and Q^2+4P is
  squarefree.
 Doc:
@@ -16,7 +16,13 @@ Doc:
  $C: y^{2} = P(x)$ or by a vector $[P,Q]$ such that
  $C: y^{2} + Q(x)\*y = P(x)$ and $Q^{2}+4\*P$ is squarefree.
 
- $p$ can be given either in weighted projective coordinate, \kbd{[x,y,z]} standing for $[x:y:z]$,
- where $[x:y:z] = [\lambda\*x:\lambda^{g+1}\*y:\lambda\*z]$ for any $\lambda$,
- or in affine coordinate, where \kbd{[x,y]} stands for $[x:y:1]$ and \kbd{[y]} stands for $[1,y,0]$.
- This function preserves the choice of the system of coordinate.
+ The point $p$ can be given either
+
+ \item in weighted projective coordinates: \kbd{[x,y,z]} stands for $[x:y:z]$,
+ where $[x:y:z] = [\lambda\*x:\lambda^{g+1}\*y:\lambda\*z]$ for any non-zero
+ $\lambda$,
+
+ \item or in affine coordinates: \kbd{[x,y]} stands for $[x:y:1]$ and
+ \kbd{[y]} stands for $[1:y:0]$.
+
+ This function returns a point in the same system of coordinates as $p$.

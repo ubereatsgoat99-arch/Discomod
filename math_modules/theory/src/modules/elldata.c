@@ -136,7 +136,8 @@ ellcondfile(long n)
 }
 
 /* return the vector of all curves of conductor f */
-static int cmpi1(GEN x, GEN v) { return cmpii(x, gel(v,1)); }
+static int
+cmpi1(GEN x, GEN v) { return cmpii(x, gel(v,1)); }
 static GEN
 ellcondlist(long f)
 {

@@ -1979,7 +1979,8 @@ parfor0(GEN a, GEN b, GEN code, GEN code2)
   parfor(a, b, code, (void*)code2, code2 ? gp_evalvoid2: NULL);
 }
 
-static int negcmp(GEN x, GEN y) { return gcmp(y,x); }
+static int
+negcmp(GEN x, GEN y) { return gcmp(y,x); }
 
 void
 parforstep(GEN a, GEN b, GEN s, GEN code, void *E, long call(void*, GEN, GEN))

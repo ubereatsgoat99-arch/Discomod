@@ -2191,16 +2191,17 @@ GEN
 FpXQ_powers(GEN x, long l, GEN T, GEN p)
 {
   struct _FpXQ D;
-  int use_sqr;
   if (l>2 && lgefint(p) == 3) {
     pari_sp av = avma;
     ulong pp = to_Flxq(&x, &T, p);
     GEN z = FlxV_to_ZXV(Flxq_powers(x, l, T, pp));
     return gc_upto(av, z);
+  } else {
+    long d = degpol(x), dT = get_Flx_degree(T);
+    D.T = FpX_get_red(T,p); D.p = p;
+    if (d >= dT) { x = FpXQ_red(x, T, p); d = degpol(x); }
+    return gen_powers(x, l, 2*d>=dT, (void*)&D, &_FpXQ_sqr, &_FpXQ_mul,&_FpXQ_one);
   }
-  use_sqr = 2*degpol(x)>=get_FpX_degree(T);
-  D.T = FpX_get_red(T,p); D.p = p;
-  return gen_powers(x, l, use_sqr, (void*)&D, &_FpXQ_sqr, &_FpXQ_mul,&_FpXQ_one);
 }
 
 GEN

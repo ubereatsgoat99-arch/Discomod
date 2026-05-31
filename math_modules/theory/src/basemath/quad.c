@@ -572,9 +572,11 @@ quadregulator(GEN x, long prec)
 int
 qfb_equal1(GEN f) { return equali1(gel(f,1)); }
 
-static GEN qfi_pow(void *E, GEN f, GEN n)
+static GEN
+qfi_pow(void *E, GEN f, GEN n)
 { return E? nupow(f,n,(GEN)E): qfbpow_i(f,n); }
-static GEN qfi_comp(void *E, GEN f, GEN g)
+static GEN
+qfi_comp(void *E, GEN f, GEN g)
 { return E? nucomp(f,g,(GEN)E): qfbcomp_i(f,g); }
 static const struct bb_group qfi_group={ qfi_comp,qfi_pow,NULL,hash_GEN,
                                          gidentical,qfb_equal1,NULL};

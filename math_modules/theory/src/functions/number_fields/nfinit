@@ -28,7 +28,7 @@ Doc: \var{pol} being a nonconstant irreducible polynomial in $\Q[X]$,
 
  $\var{nf}[1]$ contains the polynomial \var{pol} (\kbd{\var{nf}.pol}).
 
- $\var{nf}[2]$ contains $[r1,r2]$ (\kbd{\var{nf}.sign}, \kbd{\var{nf}.r1},
+ $\var{nf}[2]$ contains $[r_1,r_2]$ (\kbd{\var{nf}.sign}, \kbd{\var{nf}.r1},
  \kbd{\var{nf}.r2}), the number of real and complex places of $K$.
 
  $\var{nf}[3]$ contains the discriminant $d(K)$ (\kbd{\var{nf}.disc}) of $K$.
@@ -39,7 +39,7 @@ Doc: \var{pol} being a nonconstant irreducible polynomial in $\Q[X]$,
  $\var{nf}[5]$ is a vector containing 7 matrices $M$, $G$, \var{roundG}, $T$,
  \var{MD}, \var{TI}, \var{MDI} and a vector \var{vP} defined as follows:
 
- \quad\item $M$ is the $(r1+r2)\times n$ matrix whose columns represent
+ \quad\item $M$ is the $(r_1+r_2)\times n$ matrix whose columns represent
  the numerical values of the conjugates of the elements of the integral
  basis.
 
@@ -71,10 +71,10 @@ Doc: \var{pol} being a nonconstant irreducible polynomial in $\Q[X]$,
  i.e, the ramified primes (\kbd{\var{nf}.p}); \kbd{nfdiscfactors(nf)} is the
  preferred way to access that information.
 
- $\var{nf}[6]$ is the vector containing the $r1+r2$ roots
- (\kbd{\var{nf}.roots}) of $\var{nf}[1]$ corresponding to the $r1+r2$
- embeddings of the number field into $\C$ (the first $r1$ components are real,
- the next $r2$ have positive imaginary part).
+ $\var{nf}[6]$ is the vector containing the $r_1+r_2$ roots
+ (\kbd{\var{nf}.roots}) of $\var{nf}[1]$ corresponding to the $r_1+r_2$
+ embeddings of the number field into $\C$ (the first $r_1$ components are real,
+ the next $r_2$ have positive imaginary part).
 
  $\var{nf}[7]$ is a $\Z$-basis for $d\Z_{K}$, where $d = [\Z_{K}:\Z(\theta)]$,
  expressed on the powers of $\theta$. The multiplication by

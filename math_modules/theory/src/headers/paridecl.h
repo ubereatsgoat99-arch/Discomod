@@ -515,10 +515,10 @@ GEN     Flxq_invsafe_pre(GEN x, GEN T, ulong p, ulong pi);
 int     Flxq_issquare(GEN x, GEN T, ulong p);
 int     Flxq_is2npower(GEN x, long n, GEN T, ulong p);
 GEN     Flxq_log(GEN a, GEN g, GEN ord, GEN T, ulong p);
-GEN     Flxq_lroot(GEN a, GEN T, long p);
-GEN     Flxq_lroot_pre(GEN a, GEN T, long p, ulong pi);
-GEN     Flxq_lroot_fast(GEN a, GEN sqx, GEN T, long p);
-GEN     Flxq_lroot_fast_pre(GEN a, GEN sqx, GEN T, long p, ulong pi);
+GEN     Flxq_lroot(GEN a, GEN T, ulong p);
+GEN     Flxq_lroot_pre(GEN a, GEN T, ulong p, ulong pi);
+GEN     Flxq_lroot_fast(GEN a, GEN sqx, GEN T, ulong p);
+GEN     Flxq_lroot_fast_pre(GEN a, GEN sqx, GEN T, ulong p, ulong pi);
 GEN     Flxq_matrix_pow(GEN y, long n, long m, GEN P, ulong l);
 GEN     Flxq_matrix_pow_pre(GEN y, long n, long m, GEN P, ulong l, ulong li);
 GEN     Flxq_minpoly(GEN x, GEN T, ulong p);
@@ -593,7 +593,7 @@ GEN     FlxX_to_Flm(GEN v, long n);
 GEN     FlxX_to_Flx(GEN f);
 GEN     FlxX_to_FlxC(GEN x, long N, long sv);
 GEN     FlxX_to_ZXX(GEN B);
-GEN     FlxX_translate1(GEN P, long p, long n);
+GEN     FlxX_translate1(GEN P, ulong p, long n);
 GEN     FlxX_triple(GEN x, ulong p);
 GEN     FlxXC_sub(GEN x, GEN y, ulong p);
 GEN     FlxXC_to_ZXXC(GEN B);
@@ -654,7 +654,7 @@ GEN     FlxqX_disc(GEN x, GEN T, ulong p);
 GEN     FlxqX_div_by_X_x(GEN a, GEN x, GEN T, ulong p, GEN *r);
 GEN     FlxqX_div_by_X_x_pre(GEN a, GEN x, GEN T, ulong p, ulong pi, GEN *r);
 GEN     FlxqX_divrem(GEN x, GEN y, GEN T, ulong p, GEN *pr);
-GEN     FlxqX_divrem_pre(GEN x, GEN S, GEN T, ulong p, long pi, GEN *pr);
+GEN     FlxqX_divrem_pre(GEN x, GEN S, GEN T, ulong p, ulong pi, GEN *pr);
 GEN     FlxqX_dotproduct(GEN x, GEN y, GEN T, ulong p);
 GEN     FlxqX_eval(GEN x, GEN y, GEN T, ulong p);
 GEN     FlxqX_extgcd(GEN a, GEN b, GEN T, ulong p, GEN *ptu, GEN *ptv);
@@ -706,7 +706,7 @@ const struct bb_algebra * get_FlxqXQ_algebra(void **E, GEN S, GEN T, ulong p);
 GEN     pol1_FlxX(long v, long sv);
 GEN     polx_FlxX(long v, long sv);
 GEN     random_FlxqX(long d1, long v, GEN T, ulong p);
-GEN     zlxX_translate1(GEN P, long p, long e, long n);
+GEN     zlxX_translate1(GEN P, ulong p, long e, long n);
 GEN     zxX_to_FlxX(GEN B, ulong p);
 GEN     zxX_to_Kronecker(GEN P, GEN Q);
 
@@ -1089,6 +1089,7 @@ GEN     FpXX_mulu(GEN P, ulong u, GEN p);
 GEN     FpXX_neg(GEN x, GEN p);
 GEN     FpXX_red(GEN z, GEN p);
 GEN     FpXX_sub(GEN x, GEN y, GEN p);
+GEN     FpXX_Fp_sub(GEN x, GEN y, GEN p);
 GEN     FpXY_FpXQ_evalx(GEN P, GEN x, GEN T, GEN p);
 GEN     FpXY_FpXQV_evalx(GEN P, GEN x, GEN T, GEN p);
 GEN     FpXY_eval(GEN Q, GEN y, GEN x, GEN p);
@@ -1237,6 +1238,9 @@ GEN     ZpXQX_liftroot_vald(GEN f, GEN a, long v, GEN T, GEN p, long e);
 GEN     ZpXQX_liftroots(GEN f, GEN S, GEN T, GEN p, long e);
 GEN     ZpXQX_roots(GEN F, GEN T, GEN p, long e);
 GEN     ZpXQX_ZpXQXQ_liftroot(GEN P, GEN S, GEN Q, GEN T, GEN p, long e);
+GEN     ZpXQXQ_div(GEN a, GEN b, GEN S, GEN T, GEN q, GEN p, long e);
+GEN     ZpXQXQ_inv(GEN a, GEN S, GEN T, GEN p, long e);
+GEN     ZpXQXQ_invlift(GEN a, GEN x, GEN S, GEN T, GEN p, long e);
 GEN     Zq_sqrtnlift(GEN a, GEN n, GEN x, GEN T, GEN p, long e);
 GEN     ZqX_ZqXQ_liftroot(GEN f, GEN a, GEN S, GEN T, GEN p, long e);
 GEN     ZqX_liftfact(GEN pol, GEN Q, GEN T, GEN pe, GEN p, long e);
@@ -1254,6 +1258,10 @@ GEN     gen_ZpX_Dixon(GEN F, GEN V, GEN q, GEN p, long N, void *E,
 GEN     gen_ZpX_Newton(GEN x, GEN p, long n, void *E,
                               GEN eval(void *E, GEN f, GEN q),
                               GEN invd(void *E, GEN V, GEN v, GEN q, long M));
+GEN     gen_ZpXX_Newton(GEN x, GEN p, long n, void *E,
+                               GEN eval(void *E, GEN f, GEN q),
+                               GEN invd(void *E, GEN V, GEN v, GEN q, long M));
+
 GEN     polteichmuller(GEN P, ulong p, long n);
 GEN     polhensellift(GEN pol, GEN fct, GEN p, long exp);
 ulong   quadratic_prec_mask(long n);

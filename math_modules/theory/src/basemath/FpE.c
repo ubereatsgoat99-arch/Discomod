@@ -1948,7 +1948,7 @@ FpXQ_ellj(GEN a4, GEN a6, GEN T, GEN p)
     GEN a62 = FpXQ_sqr(a6,T,p);
     GEN num = FpX_mulu(a43,6912,p);
     GEN den = FpX_add(FpX_mulu(a43,4,p),FpX_mulu(a62,27,p),p);
-    return gc_leaf(av, FpXQ_div(num, den, T, p));
+    return gc_upto(av, FpXQ_div(num, den, T, p));
   }
 }
 

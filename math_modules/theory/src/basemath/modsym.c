@@ -4354,8 +4354,10 @@ path_vec_mul(GEN V, long x, long y, GEN g)
   }
 }
 
-static long prev(GEN V, long i) { return (i == 1)? lg(V)-1: i-1; }
-static long next(GEN V, long i) { return (i == lg(V)-1)? 1: i+1; }
+static long
+prev(GEN V, long i) { return (i == 1)? lg(V)-1: i-1; }
+static long
+next(GEN V, long i) { return (i == lg(V)-1)? 1: i+1; }
 static GEN
 ZM_det2(GEN u, GEN v)
 {

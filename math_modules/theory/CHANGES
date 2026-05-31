@@ -63,6 +63,8 @@ BA  52- parvector(-10,i,i) -> SEGV
 BA  54- lfun(1/3+I*10^19) -> overflow in expo()
 BA  55- fflog(a, b, o) was very slow for small o but large fields [#2676]
 LGr 56- psi(1+O(x^5)) -> wrong result [#2677]
+    57- zetahurwitz(large s, |x| > 1) is inaccurate (correct absolute accuracy
+        but zeta(s,x) is small and relative error is large) [#2673]
 
   Added
      1- [libpari] prodprimes, prodprimeslim
@@ -146,6 +148,8 @@ BA  73- new GP functions hyperellisisom, hyperellauto
 BA  74- [libpari] nfV_idealhnf
 BA  75- [libpari] RgM_flatten_RgC, RgM_flatten_RgV
 BA  76- new GP function idealfromgens
+BA  77- [libpari] FpXX_Fp_sub
+BA  78- [libpari] ZpXQXQ_div ZpXQXQ_inv ZpXQXQ_invlift gen_ZpXX_Newton
 
   Changed
      1- subst: use fast RgX_affine function to compute P(a*x+b) + RgX_deflate

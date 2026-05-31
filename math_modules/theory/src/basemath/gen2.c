@@ -691,7 +691,8 @@ roughtype(GEN x)
 }
 
 static int lexcmpsg(long x, GEN y);
-static int lexcmpgs(GEN x, long y) { return -lexcmpsg(y,x); }
+static int
+lexcmpgs(GEN x, long y) { return -lexcmpsg(y,x); }
 /* lexcmp(stoi(x),y), y t_VEC/t_COL/t_MAT */
 static int
 lexcmp_s_matvec(long x, GEN y)

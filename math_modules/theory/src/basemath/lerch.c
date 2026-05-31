@@ -262,7 +262,7 @@ zetahurwitz(GEN s, GEN x, long der, long bitprec)
     GEN C, ix = imag_i(x0);
     double c = (typ(s) == t_INT)? 1: 20 * log((double)bitprec);
     double rs = gtodouble(ra) + 1;
-    long k0;
+    long k0, bit;
     if (fli) a = gadd(a, ghalf); /* hack */
     if (rs > 0)
     {
@@ -276,21 +276,33 @@ zetahurwitz(GEN s, GEN x, long der, long bitprec)
     k0 = itos(gceil(gadd(ra, ghalf))) + 1;
     k = maxss(k0, k);
     if (odd(k)) k++;
-    /* R_k < 2 |binom(a,k+1) B_{k+2}/(k+2)| */
+    /* R_k < 2 |binom(a,k+1) B_{k+2}/(k+2)| * |N + x - 1|^(ra - k - 1)*/
     C = binomial(a, k+1); C = polcoef_i(C, 0, -1);
     C = gmul(C, gdivgu(bernfrac(k+2), k+2));
-    C = gmul2n(gabs(C,LOWDEFAULTPREC), bitprec + 1);
+    bit = bitprec;
+    /* if a < 0 and |x| >> 1, |zeta(s,x)| ~ |x|^ra is small: compensate for
+     * correct relative accuracy  */
+    if (rs < 0)
+    {
+      double dx = dbllog2(x0);
+      if (dx > 0) bit -= dx * gtodouble(ra);
+    }
+    /* + 1 i from the factor 2 in RHS above */
+    C = gmul2n(gabs(C,LOWDEFAULTPREC), bit + 1);
     C = gpow(C, ginv(gsubsg(k+1, ra)), LOWDEFAULTPREC);
-    /* need |N + x - 1|^2 > C^2 */
+    /* need |N + x - 1|^2 > C^2 to have R_k < 2^(-bit) */
     if (!gequal0(ix))
     {
       GEN tmp = gsub(gsqr(C), gsqr(ix));
-      if (gsigne(tmp) >= 0) C = gsqrt(tmp, LOWDEFAULTPREC);
+      C = (gsigne(tmp) <= 0)? NULL: gsqrt(tmp, LOWDEFAULTPREC);
     }
-    /* need |N + re(x) - 1| > C */
-    C = gceil(gadd(C, gsubsg(1, rx)));
-    if (typ(C) != t_INT) pari_err_TYPE("zetahurwitz",s);
-    N = signe(C) > 0? itos(C) : 1;
+    N = 1;
+    if (C)
+    { /* now need |N + re(x) - 1| > C */
+      C = gadd(C, gsubsg(1, rx));
+      if (!is_real_t(typ(C))) pari_err_TYPE("zetahurwitz",s);
+      if (gsigne(C) > 0) N = itos(gceil(C));
+    }
     if (N == 1 && signe(a) > 0)
     { /* May reduce k if 2Pix > a */
       /* Need 2 |x^(-K) (B_K/K) binom(a, K-1)| < 2^-bit |x|^-rs |zeta(s,x)|

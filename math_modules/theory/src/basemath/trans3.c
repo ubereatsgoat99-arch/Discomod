@@ -175,11 +175,16 @@ static long
 bessel_get_lim(double B, double L)
 { return maxss(2, L * exp(dbllambertW0(B))); }
 
-static GEN vjbesselh(void* E, GEN z, long prec){return jbesselh((GEN)E,z,prec);}
-static GEN vjbessel(void* E, GEN z, long prec) {return jbessel((GEN)E,z,prec);}
-static GEN vibessel(void* E, GEN z, long prec) {return ibessel((GEN)E,z,prec);}
-static GEN vnbessel(void* E, GEN z, long prec) {return ybessel((GEN)E,z,prec);}
-static GEN vkbessel(void* E, GEN z, long prec) {return kbessel((GEN)E,z,prec);}
+static GEN
+vjbesselh(void* E, GEN z, long prec){return jbesselh((GEN)E,z,prec);}
+static GEN
+vjbessel(void* E, GEN z, long prec) {return jbessel((GEN)E,z,prec);}
+static GEN
+vibessel(void* E, GEN z, long prec) {return ibessel((GEN)E,z,prec);}
+static GEN
+vnbessel(void* E, GEN z, long prec) {return ybessel((GEN)E,z,prec);}
+static GEN
+vkbessel(void* E, GEN z, long prec) {return kbessel((GEN)E,z,prec);}
 
 /* if J != 0 BesselJ, else BesselI. */
 static GEN

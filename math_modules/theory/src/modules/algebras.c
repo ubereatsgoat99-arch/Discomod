@@ -92,7 +92,9 @@ checklat_i(GEN al, GEN lat)
     }
   return 1;
 }
-void checklat(GEN al, GEN lat)
+
+void
+checklat(GEN al, GEN lat)
 { if (!checklat_i(al,lat)) pari_err_TYPE("checklat [please apply alglathnf()]", lat); }
 
 /**  ACCESSORS  **/
@@ -374,7 +376,8 @@ algmodpr_get_T(GEN data) { return gel(data,2)[2]==1 ? NULL : gel(data,7); }
 /** ADDITIONAL **/
 
 /* is N=smooth*prime? */
-static int Z_easyfactor(GEN N, ulong lim)
+static int
+Z_easyfactor(GEN N, ulong lim)
 {
   GEN fa;
   if (lgefint(N) <= 3) return 1;
@@ -2989,7 +2992,8 @@ algdivl_i2(GEN al, GEN x, GEN y)
   return algdivl_i(al,x,y,tx,ty);
 }
 
-GEN algdivl(GEN al, GEN x, GEN y)
+GEN
+algdivl(GEN al, GEN x, GEN y)
 {
   GEN z;
   z = algdivl_i2(al,x,y);
@@ -3103,8 +3107,10 @@ algisinv(GEN al, GEN x, GEN* ptix)
 GEN
 algdivr(GEN al, GEN x, GEN y) { return algmul(al, x, alginv(al, y)); }
 
-static GEN _mul(void* data, GEN x, GEN y) { return algmul((GEN)data,x,y); }
-static GEN _sqr(void* data, GEN x) { return algsqr((GEN)data,x); }
+static GEN
+_mul(void* data, GEN x, GEN y) { return algmul((GEN)data,x,y); }
+static GEN
+_sqr(void* data, GEN x) { return algsqr((GEN)data,x); }
 
 static GEN
 algmatid(GEN al, long N)
@@ -5126,7 +5132,8 @@ algnatmultable(GEN al, long D)
   return res;
 }
 
-static int normfact_is_partial(GEN nf, GEN x, GEN fax)
+static int
+normfact_is_partial(GEN nf, GEN x, GEN fax)
 {
   long i;
   GEN nfx;

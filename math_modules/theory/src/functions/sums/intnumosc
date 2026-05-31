@@ -170,8 +170,8 @@ Doc: numerical integration from $a$ to $\infty$ of oscillating
  %8 = -13  \\ g() is not consistent
  ? exponent(H - H2)
  %9 = -128  \\ not a proof, but h() looks good
- @eprog\noindent Finally, here is an exemple where all methods fail, even
- when splitting the integral, except Sumpos:
+ @eprog\noindent Finally, here is an example where only Sumpos succeeds
+ (other methods fail, even when splitting the integral):
  \bprog
  ? \p38
  ? f(x)=besselj(0,x)^4*log(x+1);

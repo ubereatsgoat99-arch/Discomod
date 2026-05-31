@@ -100,7 +100,7 @@ Doc: numerical integration
  %2 = 0.50000000000000000000000000000000000000
  ? intnum(x=0, [+oo, 10], exp(-2*x)) \\@com wrong exponent $\Rightarrow$ disaster
  %3 = 0.49999999999952372962457451698256707393
- @eprog\noindent As the last exemple shows, the exponential decrease rate
+ @eprog\noindent As the last example shows, the exponential decrease rate
  \emph{must} be indicated to avoid overflow, but the method is robust enough
  for a rough guess to be acceptable.
 

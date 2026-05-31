@@ -1716,8 +1716,8 @@ make_G(nffp_t *F)
       if (typ(r) == t_COMPLEX)
       {
         GEN a = gel(r,1), b = gel(r,2);
-        gel(g,k++) = mpadd(a, b);
-        gel(g,k++) = mpsub(a, b);
+        gel(g,k++) = addrr(a, b);
+        gel(g,k++) = subrr(a, b);
       }
       else
       {

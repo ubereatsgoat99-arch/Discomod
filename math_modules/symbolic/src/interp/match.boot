@@ -33,34 +33,16 @@
 
 DEFPARAMETER($wildCard, char "*")
 
-substring?(part, whole, startpos) ==
---This function should be replaced by STRING<
-  np := SIZE part
-  nw := SIZE whole
-  np > nw - startpos => false
-  and/[CHAR_-EQUAL(ELT(part, ip), ELT(whole, iw))
-      for ip in 0..np-1 for iw in startpos.. ]
-
 anySubstring?(part,whole,startpos) ==
   np := SIZE part
   nw := SIZE whole
   or/[((k := i) and and/[CHAR_-EQUAL(ELT(part, ip),ELT(whole, iw))
        for ip in 0..np - 1 for iw in i..]) for i in startpos..nw - np] => k
 
-charPosition(c,t,startpos) ==
-  n := SIZE t
-  startpos < 0 or startpos > n => n
-  k:= startpos
-  for i in startpos .. n-1 repeat
-    c = ELT(t,i) => return nil
-    k := k+1
-  k
-
 stringPosition(s,t,startpos) ==
   n := SIZE t
   if startpos < 0 or startpos > n then error '"index out of range"
-  if SIZE s = 0 then return startpos -- bug in STRPOS
-  r := STRPOS(s,t,startpos,NIL)
+  r := search_str(s, t, startpos)
   if EQ(r,NIL) then n else r
 
 superMatch?(opattern,subject) ==  --subject assumed to be DOWNCASEd

@@ -772,7 +772,8 @@ replaceGrepStar s ==
 
 standardizeSignature(s) == underscoreDollars
   s.0 = char '_( => s
-  k := STRPOS('"->",s,0,nil) or return s --will fail except perhaps on constants
+  --will fail except perhaps on constants
+  k := search_str('"->", s, 0) or return s
   s.(k - 1) = char '_) => STRCONC(char '_(,s)
   STRCONC(char '_(,SUBSTRING(s,0,k),char '_),SUBSTRING(s,k,nil))
 
@@ -791,7 +792,7 @@ getTempPath kind == mkGrepFile kind
 dbWriteLines(s, pathname) ==
   $outStream : local := MAKE_OUTSTREAM(pathname)
   for x in s repeat writedb x
-  SHUT $outStream
+  CLOSE($outStream)
   pathname
 
 dbReadLines target == --AIX only--called by grepFile

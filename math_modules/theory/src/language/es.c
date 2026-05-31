@@ -50,10 +50,10 @@ static void bruti_sign(GEN g, pariout_t *T, pari_str *S, int addsign);
 static void matbruti(GEN g, pariout_t *T, pari_str *S);
 static void texi_sign(GEN g, pariout_t *T, pari_str *S, int addsign);
 
-static void bruti(GEN g, pariout_t *T, pari_str *S)
-{ bruti_sign(g,T,S,1); }
-static void texi(GEN g, pariout_t *T, pari_str *S)
-{ texi_sign(g,T,S,1); }
+static void
+bruti(GEN g, pariout_t *T, pari_str *S) { bruti_sign(g,T,S,1); }
+static void
+texi(GEN g, pariout_t *T, pari_str *S) { texi_sign(g,T,S,1); }
 
 void
 pari_ask_confirm(const char *s)
@@ -4507,8 +4507,10 @@ Str_fun(GEN g, long flag) {
   GEN z = strtoGENstr(t);
   pari_free(t); return z;
 }
-GEN Str(GEN g)    { return Str_fun(g, f_RAW); }
-GEN strtex(GEN g) { return Str_fun(g, f_TEX); }
+GEN
+Str(GEN g)    { return Str_fun(g, f_RAW); }
+GEN
+strtex(GEN g) { return Str_fun(g, f_TEX); }
 GEN
 strexpand(GEN g) {
   char *s = RgV_to_str(g, f_RAW), *t = path_expand(s);
@@ -4671,10 +4673,14 @@ pari_fprintf(FILE *file, const char *fmt, ...)
   pari_vfprintf(file, fmt, ap); va_end(ap);
 }
 
-void print   (GEN g) { printfl_0(g, f_RAW); pari_flush(); }
-void printp  (GEN g) { printfl_0(g, f_PRETTYMAT); pari_flush(); }
-void printtex(GEN g) { printfl_0(g, f_TEX); pari_flush(); }
-void print1  (GEN g) { printfl_1(g, f_RAW); pari_flush(); }
+void
+print   (GEN g) { printfl_0(g, f_RAW); pari_flush(); }
+void
+printp  (GEN g) { printfl_0(g, f_PRETTYMAT); pari_flush(); }
+void
+printtex(GEN g) { printfl_0(g, f_TEX); pari_flush(); }
+void
+print1  (GEN g) { printfl_1(g, f_RAW); pari_flush(); }
 
 void
 error0(GEN g)
@@ -4683,7 +4689,8 @@ error0(GEN g)
   else pari_err(e_USER, g);
 }
 
-void warning0(GEN g) { pari_warn(warnuser, g); }
+void
+warning0(GEN g) { pari_warn(warnuser, g); }
 
 static void
 wr_check(const char *t) {
@@ -4710,10 +4717,14 @@ wr(const char *s, GEN g, long flag, int addnl)
   if (fclose(out)) pari_warn(warnfile, "close", t);
   pari_free(t);
 }
-void write0  (const char *s, GEN g) { wr(s, g, f_RAW, 1); }
-void writetex(const char *s, GEN g) { wr(s, g, f_TEX, 1); }
-void write1  (const char *s, GEN g) { wr(s, g, f_RAW, 0); }
-void gpwritebin(const char *s, GEN x)
+void
+write0  (const char *s, GEN g) { wr(s, g, f_RAW, 1); }
+void
+writetex(const char *s, GEN g) { wr(s, g, f_TEX, 1); }
+void
+write1  (const char *s, GEN g) { wr(s, g, f_RAW, 0); }
+void
+gpwritebin(const char *s, GEN x)
 {
   char *t = path_expand(s);
   wr_check(t); writebin(t, x); pari_free(t);

@@ -753,7 +753,8 @@ intnsing(void *E, GEN (*eval)(void*, GEN), GEN a, GEN b, GEN tab)
   return gc_upto(ltop, gmul(gmul(S, TABh(tab)), ea));
 }
 
-static GEN id(GEN x) { return x; }
+static GEN
+id(GEN x) { return x; }
 
 /* compute  \int_a^oo f(t)dt if si>0 or \int_{-oo}^a f(t)dt if si<0$.
  * Use exp(2sinh(t)) for slowly decreasing functions, exp(1+t-exp(-t)) for

@@ -31,6 +31,7 @@ zetahurwitz(-1,1)
 zetahurwitz(-2,I)
 zetahurwitz(1/2+100000*I,1/2)
 zetahurwitz(2,20*I)
+zetahurwitz(165,3) \\ #2673
 
 \\ ERRORS
 zetahurwitz(1,Pi)

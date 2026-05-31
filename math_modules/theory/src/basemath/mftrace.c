@@ -786,7 +786,8 @@ GEN mf_get_gk(GEN F) { return gmael3(F,1,2,2); }
 /* k - 1/2, assume k in 1/2 + Z */
 long mf_get_r(GEN F) { return itou(gel(mf_get_gk(F),1)) >> 1; }
 long mf_get_N(GEN F) { return itou(mf_get_gN(F)); }
-long mf_get_k(GEN F)
+long
+mf_get_k(GEN F)
 {
   GEN gk = mf_get_gk(F);
   if (typ(gk)!=t_INT) pari_err_IMPL("half-integral weight");

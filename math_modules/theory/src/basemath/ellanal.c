@@ -554,20 +554,19 @@ heegner_psi(GEN E, GEN N, GEN points, long bitprec)
 static GEN
 lambda1(GEN E, GEN nv, GEN p, long prec)
 {
-  pari_sp av;
   GEN res, lp;
   long kod = itos(gel(nv, 2));
-  if (kod==2 || kod ==-2) return cgetg(1,t_VEC);
-  av = avma; lp = glog(p, prec);
+  if (kod == 2 || kod == -2) return NULL;
+  lp = glog(p, prec);
   if (kod > 4)
-  {
+  { /* I_m */
     long n = Z_pval(ell_get_disc(E), p);
     long j, m = kod - 4, nl = 1 + (m >> 1L);
     res = cgetg(nl, t_VEC);
-    for (j = 1; j < nl; j++)
-      gel(res, j) = gmul(lp, gsubgs(gdivgu(sqru(j), n), j)); /* j^2/n - j */
+    for (j = 1; j < nl; j++) /* log(p) (j/n) (j - n) */
+      gel(res, j) = divru(mulri(lp, mulss(j, j-n)), n);
   }
-  else if (kod < -4)
+  else if (kod < -4) /* I^*_m */
     res = mkvec2(negr(lp), shiftr(mulrs(lp, kod), -2));
   else
   {
@@ -575,39 +574,41 @@ lambda1(GEN E, GEN nv, GEN p, long prec)
     long m = -lam[kod+4];
     res = mkvec(divru(mulrs(lp, m), 6));
   }
-  return gc_GEN(av, res);
+  return res;
 }
 
+/* lambda[1] = gen_0, other components are t_REAL */
 static GEN
 lambdalist(GEN E, long prec)
 {
   pari_sp ltop = avma;
-  GEN glob = ellglobalred(E), plist = gmael(glob,4,1), L = gel(glob,5);
+  GEN glob = ellglobalred(E), P = gmael(glob,4,1), L = gel(glob,5);
   GEN res, v, D = ell_get_disc(E);
-  long i, j, k, l, m, n, np = lg(plist), lr = 1;
-  v = cgetg(np, t_VEC);
-  for (j = 1, i = 1 ; j < np; ++j)
+  long i, j, k, l, m, n, lv = lg(P), lr = 1;
+  v = cgetg(lv, t_VEC);
+  for (j = 1, i = 1 ; j < lv; j++)
   {
-    GEN p = gel(plist, j);
+    GEN p = gel(P, j);
     if (dvdii(D, sqri(p)))
     {
       GEN la = lambda1(E, gel(L,j), p, prec);
-      gel(v, i++) = la;
-      lr *= lg(la);
+      if (la) { gel(v, i++) = la; lr *= lg(la); }
     }
   }
-  np = i;
-  res = cgetg(lr+1, t_VEC);
-  gel(res, 1) = gen_0; n = 1; m = 1;
-  for (j = 1; j < np; ++j)
+  lv = i;
+  res = cgetg(lr+1, t_VEC); gel(res, 1) = gen_0;
+  for (j = n = 1; j < lv; j++)
   {
-    GEN w = gel(v, j);
+    GEN w = gel(v, j); /* vector of t_REAL */
     long lw = lg(w);
-    for (k = 1; k <= n; k++)
+    /* k = 1 */
+    for (l = 1, m = n; l < lw; l++, m+=n)
+      gel(res, 1 + m) = gel(w, l);
+    for (k = 2; k <= n; k++)
     {
       GEN t = gel(res, k);
       for (l = 1, m = n; l < lw; l++, m+=n)
-        gel(res, k + m) = mpadd(t, gel(w, l));
+        gel(res, k + m) = addrr(t, gel(w, l));
     }
     n = m;
   }
@@ -949,16 +950,6 @@ etnf_to_basis(GEN et, GEN x)
   return shallowconcat1(V);
 }
 
-static GEN
-etnf_get_M(GEN et)
-{
-  long i, l = lg(et);
-  GEN V = cgetg(l, t_VEC);
-  for (i = 1; i < l; i++)
-    gel(V,i)=nf_get_M(gel(et,i));
-  return shallowmatconcat(diagonal(V));
-}
-
 static long
 etnf_get_varn(GEN et)
 {
@@ -970,52 +961,55 @@ heegner_descent_try_point(GEN nfA, GEN z, GEN den, long prec)
 {
   pari_sp av = avma;
   GEN etal = gel(nfA,1), A = gel(nfA,2), cb = gel(nfA,3);
-  GEN al = gel(nfA,4), th = gel(nfA, 5);
-  GEN et = gel(etal,1), zk = gel(etal, 2), T = gel(etal,3);
-  GEN M = etnf_get_M(et);
+  GEN u2 = gsqr(gel(cb,1)), r = gel(cb,2), zz = gdiv(gsub(z,r), u2);
+  GEN al = gel(nfA,4), th = gel(nfA, 5), M = gel(nfA,6);
+  GEN zk = gel(etal, 2), T = gel(etal,3), den2 = sqri(den);
   long i, j, n = lg(th)-1, l = lg(al);
-  GEN u2 = gsqr(gel(cb,1)), r = gel(cb,2);
-  GEN zz = gdiv(gsub(z,r), u2);
   GEN be = cgetg(n+1, t_COL);
+
   for (j = 1; j < l; j++)
   {
     GEN aj = gel(al, j), Aj = gel(A,j);
     for (i = 1; i <= n; i++)
-      gel(be,i) = gsqrt(gmul(gsub(zz, gel(th,i)), gel(aj,i)), prec);
-    for (i = 0; i <= (1<<(n-1))-1; i++)
     {
+      GEN b = gsqrt(gmul(gsub(zz, gel(th,i)), gel(aj,i)), prec);
+      gel(be,i) = gmul(b, den);
+    }
+    for (i = 0; i < (1<<(n-1)); i++)
+    { /* n <= 3, by altering be[1] and be[2] we try all sign choices */
+      GEN V, S = RgM_solve_realimag(M, be);
       long eps;
-      GEN s = gmul(den, RgM_solve_realimag(M, be));
-      GEN S = grndtoi(s, &eps), V, S2;
       gel(be,1+odd(i)) = gneg(gel(be,1+odd(i)));
-      if (eps > -7) continue;
-      S2 = QXQ_sqr(RgV_RgC_mul(zk, S), T);
-      V = gdiv(QXQ_mul(S2, Aj, T), sqri(den));
+      S = grndtoi(S, &eps); if (eps > -7) continue;
+      V = QXQ_mul(Aj, QXQ_sqr(RgV_RgC_mul(zk, S), T), T);
       if (typ(V) != t_POL || degpol(V) != 1) continue;
-      if (gequalm1(gel(V,3)))
-        return gc_upto(av,gadd(gmul(gel(V,2),u2),r));
+      if (gequal0(gadd(gel(V,3), den2)))
+      {
+        GEN x = gdiv(gel(V,2), den2);
+        return gc_upto(av, gadd(gmul(x, u2), r));
+      }
     }
   }
   return gc_NULL(av);
 }
 
+/* lambdas[1] = gen_0, the others are t_REAL */
 static GEN
 heegner_try_point(GEN E, GEN nfA, GEN lambdas, GEN ht, GEN z, long prec)
 {
-  long l = lg(lambdas);
-  long i, eps;
+  long l = lg(lambdas), i, eps;
   GEN P = real_i(pointell(E, z, prec)), x = gel(P,1);
   GEN rh = subrr(ht, shiftr(ellheightoo(E, P, prec),1));
   for (i = 1; i < l; ++i)
   {
-    GEN logd = shiftr(gsub(rh, gel(lambdas, i)), -1);
-    GEN d, approxd = gexp(logd, prec);
-    d = grndtoi(approxd, &eps);
-    if (signe(d) > 0 && eps<-10)
+    GEN logd = shiftr(i == 1? rh: subrr(rh, gel(lambdas, i)), -1);
+    GEN approxd = gexp(logd, prec), d = grndtoi(approxd, &eps);
+    if (signe(d) > 0 && eps < -10)
     {
       GEN X, ylist;
       if (DEBUGLEVEL > 2)
-        err_printf("\nTrying lambda number %ld, logd=%Ps, approxd=%Ps\n", i, logd, approxd);
+        err_printf("\nTrying lambda number %ld, logd=%Ps, approxd=%Ps\n",
+                   i, logd, approxd);
       X = heegner_descent_try_point(nfA, x, d, prec);
       if (X)
       {
@@ -1024,7 +1018,8 @@ heegner_try_point(GEN E, GEN nfA, GEN lambdas, GEN ht, GEN z, long prec)
         {
           GEN P = mkvec2(X, gel(ylist, 1));
           GEN hp = ellheight(E,P,prec);
-          if (signe(hp) && cmprr(hp, shiftr(ht,1)) < 0 && cmprr(hp, shiftr(ht,-1)) > 0)
+          if (signe(hp) && cmprr(hp, shiftr(ht,1)) < 0
+                        && cmprr(hp, shiftr(ht,-1)) > 0)
             return P;
           if (DEBUGLEVEL)
             err_printf("found non-Heegner point %Ps\n", P);
@@ -1343,14 +1338,22 @@ vec_etnf_to_basis(GEN et, GEN x)
 { pari_APPLY_same(etnf_to_basis(et,gel(x,i))) }
 
 static GEN
+etnf_M(GEN et)
+{
+  long i, l = lg(et);
+  GEN V = cgetg(l, t_VEC);
+  for (i = 1; i < l; i++) gel(V,i) = nf_get_M(gel(et,i));
+  return shallowmatconcat(diagonal_shallow(V));
+}
+
+static GEN
 makenfA(GEN sel, GEN A, GEN cb)
 {
   GEN etal = gel(sel,1), T = gel(etal,3);
-  GEN et = gel(etal,1), M = etnf_get_M(et);
-  long v = etnf_get_varn(et);
+  GEN et = gel(etal,1), M = etnf_M(et);
   GEN al = vecelnfembed(A, M, et);
-  GEN th = gmul(M, etnf_to_basis(et, pol_x(v)));
-  return mkvec5(etal,QXQV_inv(A, T),cb,al,th);
+  GEN th = gmul(M, etnf_to_basis(et, pol_x(etnf_get_varn(et))));
+  return mkvec6(etal,QXQV_inv(A, T),cb,al,th,M);
 }
 
 GEN

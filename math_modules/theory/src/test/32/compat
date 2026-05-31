@@ -2506,8 +2506,8 @@ New syntax: localred(e) ===> elllocalred(e)
 
 elllocalred(E,{p}): E being an elliptic curve, returns [f,kod,[u,r,s,t],c], 
 where f is the conductor's exponent, kod is the Kodaira type for E at p, 
-[u,r,s,t] is the change of variable needed to make E minimal at p, and c is the 
-local Tamagawa number c_p.
+[u,r,s,t] is the change of variables needed to make E minimal at p, and c is 
+the local Tamagawa number c_p.
 
 
   ***   at top-level: logagm()
@@ -4499,4 +4499,4 @@ New syntax: texprint(x) ===> printtex(x)
 printtex({str}*): outputs its string arguments in TeX format.
 
 
-Total time spent: 11
+Total time spent: 4

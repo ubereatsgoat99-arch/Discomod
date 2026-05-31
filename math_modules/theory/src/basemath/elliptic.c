@@ -2823,7 +2823,6 @@ localred_23(GEN e, long p)
     e = min_to_ell(&M, e);
   }
   /* model is minimal */
-  nuD = Z_lval(ell_get_disc(e), (ulong)p);
   if (!nuD) return localred_result(0, 1, 1, v); /* I0 */
   if (p == 2) { p2 = 4; p3 = 8;  p4 = 16; p5 = 32; }
   else        { p2 = 9; p3 = 27; p4 = 81; p5 =243; }

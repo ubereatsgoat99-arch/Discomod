@@ -434,7 +434,7 @@ quite easy to compute a solution numerically, to arbitrary precision:
 @end example
 
 Notice how the final result above differs slightly from zero by about
-@math{6*10^(-58)}.  This is because with 50 decimal digits precision the
+@math{6*10^{-58}}.  This is because with 50 decimal digits precision the
 root cannot be represented more accurately than @code{X}.  Such
 inaccuracies are to be expected when computing with finite floating
 point values.

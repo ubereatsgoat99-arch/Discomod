@@ -351,14 +351,7 @@ augProplist(proplist,prop,val) ==
 
 augProplistOf(var,prop,val,e) ==
   proplist:= getProplist(var,e)
-  semchkProplist(var, proplist, prop)
   augProplist(proplist,prop,val)
-
-semchkProplist(x, proplist, prop) ==
-  prop="isLiteral" =>
-    LASSOC("value",proplist) or LASSOC("mode",proplist) => warnLiteral x
-  MEMQ(prop,'(mode value)) =>
-    LASSOC("isLiteral",proplist) => warnLiteral x
 
 DEFPARAMETER($envHashTable, nil)
 
@@ -620,3 +613,27 @@ SUBLISLIS(newl, oldl, form) ==
 BLANKS(n, str) ==
     for i in 1..n repeat
         PRINC('" ", str)
+
+mySort(u) == listSort(function GLESSEQP, u)
+
+string2Integer(s) ==
+    and/[char_to_digit(s.i) for i in 0..MAXINDEX(s)] => PARSE_-INTEGER(s)
+    nil
+
+substring?(part, whole, startpos) ==
+--This function should be replaced by STRING<
+  np := SIZE part
+  nw := SIZE whole
+  np > nw - startpos => false
+  and/[CHAR_-EQUAL(ELT(part, ip), ELT(whole, iw))
+      for ip in 0..np-1 for iw in startpos.. ]
+
+charPosition(c,t,startpos) ==
+  n := SIZE t
+  startpos < 0 or startpos > n => n
+  k:= startpos
+  for i in startpos .. n-1 repeat
+    c = ELT(t,i) => return nil
+    k := k+1
+  k
+

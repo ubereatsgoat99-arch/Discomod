@@ -393,7 +393,8 @@ untilpari(GEN a, GEN b)
   set_avma(av);
 }
 
-static int negcmp(GEN x, GEN y) { return gcmp(y,x); }
+static int
+negcmp(GEN x, GEN y) { return gcmp(y,x); }
 
 void
 forstep(GEN a, GEN b, GEN s, GEN code)
@@ -1368,25 +1369,25 @@ sumpos(void *E, GEN (*eval)(void *, GEN), GEN a, long prec)
   GEN s, az, c, d, S;
 
   if (typ(a) != t_INT) pari_err_TYPE("sumpos",a);
-  a = subiu(a,1);
-  N = sumalt_N(prec);
+  a = subiu(a, 1);
+  N = sumalt_N(prec); /* > 0 */
   if (odd(N)) N++; /* extra precision for free */
   d = powru(addsr(3, sqrtr(utor(8,prec))), N);
-  d = shiftr(addrr(d, invr(d)),-1);
+  d = shiftr(addrr(d, invr(d)), -1);
   az = gen_m1; c = d;
 
   S = sumpos_init(E, eval, a, N, prec);
-  s = gen_0;
-  for (k=0; k<N; k++)
+  s = NULL;
+  for (k = 0; k < N; k++)
   {
     GEN t;
-    c = addir(az,c);
-    t = mulrr(gel(S,k+1), c);
-    s = odd(k)? mpsub(s, t): mpadd(s, t);
+    c = addir(az, c);
+    t = mulrr(gel(S, k+1), c);
+    s = k == 0? t: odd(k)? subrr(s, t): addrr(s, t);
     if (k == N-1) break;
-    az = diviuuexact(muluui((N-k)<<1,N+k,az), k+1, (k<<1)+1);
+    az = diviuuexact(muluui((N-k)<<1, N+k, az), k+1, (k<<1)+1);
   }
-  return gc_upto(av, gdiv(s,d));
+  return gc_leaf(av, divrr(s,d));
 }
 
 GEN
@@ -1398,18 +1399,18 @@ sumpos2(void *E, GEN (*eval)(void *, GEN), GEN a, long prec)
 
   if (typ(a) != t_INT) pari_err_TYPE("sumpos2",a);
   a = subiu(a,1);
-  N = (ulong)(0.31*(prec + 5));
+  N = (ulong)(0.31*(prec + 5)); /* > 0 */
 
   if (odd(N)) N++; /* extra precision for free */
   S = sumpos_init(E, eval, a, N, prec);
   pol = ZX_div_by_X_1(polzag1(N,N>>1), &dn);
-  s = gen_0;
-  for (k=0; k<N; k++)
+  s = NULL;
+  for (k = 0; k < N; k++)
   {
     GEN t = mulri(gel(S,k+1), gel(pol,k+2));
-    s = odd(k)? mpsub(s,t): mpadd(s,t);
+    s = k == 0? t: odd(k)? subrr(s,t): addrr(s,t);
   }
-  return gc_upto(av, gdiv(s,dn));
+  return gc_leaf(av, divri(s,dn));
 }
 
 GEN
@@ -1637,7 +1638,8 @@ struct deriv_data
   GEN def;
 };
 
-static GEN deriv_eval(void *E, GEN x, long prec)
+static GEN
+deriv_eval(void *E, GEN x, long prec)
 {
  struct deriv_data *data=(struct deriv_data *)E;
  gel(data->args,1)=x;
@@ -2175,7 +2177,8 @@ limitnum(void *E, GEN (*f)(void *, GEN, long), GEN alpha, long prec)
   return gc_GEN(av, limitnum_i(&L, u, prec));
 }
 typedef GEN (*LIMIT_FUN)(void*,GEN,long);
-static LIMIT_FUN get_fun(GEN u, const char *s)
+static LIMIT_FUN
+get_fun(GEN u, const char *s)
 {
   switch(typ(u))
   {

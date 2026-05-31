@@ -85,7 +85,7 @@ $systemCommands := [
    ['fin,           :'development], ['frame,         :'interpreter], _
    ['help,          :'interpreter], ['history,       :'interpreter], _
    ['lisp,          :'development], ['library,       :'interpreter], _
-   ['load,          :'interpreter], ['ltrace,        :'interpreter], _
+   ['ltrace,        :'interpreter], _
    ['nopiles,       :'interpreter], ['piles,         :'interpreter], _
    ['pquit,         :'interpreter], ['quit,          :'interpreter], _
    ['read,          :'interpreter], ['set,           :'interpreter], _
@@ -98,11 +98,11 @@ $systemCommands := [
 $SYSCOMMANDS := [first x for x in $systemCommands]
 
 $noParseCommands := ['boot, 'copyright, 'credits, 'fin, 'lisp, 'piles,
-    'pquit, 'quit, 'suspend, 'synonym, 'system, 'version]
+    'pquit, 'quit, 'synonym, 'system, 'version]
 
 $tokenCommands := ['abbreviations, 'cd, 'clear, 'close, 'compile,
-    'depends, 'display, 'edit, 'frame, 'frame, 'help, 'history, 'input, _
-    'library, 'load, 'ltrace, 'nopiles, 'read, 'set, 'spool, 'undo, _
+    'depends, 'display, 'edit, 'frame, 'help, 'history, 'input, _
+    'library, 'ltrace, 'nopiles, 'read, 'set, 'spool, 'undo, _
     'what, 'with]
 
 --% Top level system command
@@ -110,7 +110,7 @@ $tokenCommands := ['abbreviations, 'cd, 'clear, 'close, 'compile,
 systemCommand [[op,:argl],:options] ==
   $options: local:= options
   $e:local := $CategoryFrame
-  fun := selectOptionLC(op,$SYSCOMMANDS,'commandError)
+  fun := selectOption(op, $SYSCOMMANDS, 'commandError)
   argl and (argl.0 = '_?) and fun ~= 'synonym =>
     helpSpad2Cmd [fun]
   fun := selectOption(fun,commandsForUserLevel $systemCommands,
@@ -130,8 +130,8 @@ synonymsForUserLevel l ==
   nl := NIL
   for syn in reverse l repeat
     cmd := STRING2ID_N(rest(syn), 1)
-    null selectOptionLC(cmd,commandsForUserLevel
-      $systemCommands,NIL) => nil
+    null(selectOption(cmd, commandsForUserLevel($systemCommands), nil)) =>
+        nil
     nl := [syn,:nl]
   nl
 
@@ -143,7 +143,7 @@ satisfiesUserLevel x ==
   true
 
 unAbbreviateKeyword x ==
-  x' :=selectOptionLC(x,$SYSCOMMANDS,'commandErrorIfAmbiguous)
+  x' := selectOption(x, $SYSCOMMANDS, 'commandErrorIfAmbiguous)
   if not x' then
     x' := 'system
     SETQ(LINE, CONCAT('")system ", SUBSTRING(LINE, 1, #LINE-1)))
@@ -158,10 +158,8 @@ hasOption(al,opt) ==
     stringPrefix?(PNAME first pair, optPname) => found := pair
   found
 
-selectOptionLC(x,l,errorFunction) ==
-  selectOption(DOWNCASE object2Identifier x,l,errorFunction)
-
-selectOption(x,l,errorFunction) ==
+selectOption(x, l, errorFunction) ==
+  x := object2Identifier(x)
   member(x,l) => x                   --exact spellings are always OK
   null IDENTP x =>
     errorFunction => FUNCALL(errorFunction,x,u)
@@ -225,19 +223,19 @@ abbreviationsSpad2Cmd l ==
 
   quiet := nil
   for [opt] in $options repeat
-    opt := selectOptionLC(opt,'(quiet),'optionError)
+    opt := selectOption(opt, '(quiet), 'optionError)
     opt = 'quiet => quiet := true
 
   l is [opt,:al] =>
     key := opOf first al
-    type := selectOptionLC(opt,abopts,'optionError)
+    type := selectOption(opt, abopts, 'optionError)
     type is 'query =>
       null al => listConstructorAbbreviations()
       constructor := abbreviation?(key) => abbQuery(constructor)
       abbQuery(key)
     type is 'remove =>
       DELDATABASE(key,'ABBREVIATION)
-    ODDP(#al) => say_m0sg("S2IZ0002", CONCAT(
+    ODDP(#al) => say_msg("S2IZ0002", CONCAT(
             '"%1b must be followed by an alternating list of abbreviation(s)",
             '" and name(s). Issue %b )abbrev ? %d for more information."),
             [type])
@@ -294,12 +292,12 @@ clearSpad2Cmd l ==
   -- new version which changes the environment and updates history
   $clearExcept: local := nil
   if $options then $clearExcept :=
-    "and"/[selectOptionLC(opt,'(except),'optionError) =
+    "and"/[selectOption(opt, '(except), 'optionError) =
              'except for [opt,:.] in $options]
   null l =>
     optList:= "append"/[['%l,'"       ",x] for x in $clearOptions]
     say_clear_msg([optList])
-  arg := selectOptionLC(first l,'(all completely scaches),NIL)
+  arg := selectOption(first(l), '(all completely scaches), nil)
   arg = 'all          => clearCmdAll()
   arg = 'completely   => clearCmdCompletely()
   arg = 'scaches      => clear_sorted_caches()
@@ -352,7 +350,7 @@ clearCmdExcept(l is [opt,:vl]) ==
 clearCmdParts(l is [opt,:vl]) ==
   -- clears the bindings indicated by opt of all variables in vl
 
-  option:= selectOptionLC(opt,$clearOptions,'optionError)
+  option:= selectOption(opt, $clearOptions, 'optionError)
   option:= INTERN PNAME option
 
   -- the option can be plural but the key in the alist is sometimes
@@ -417,7 +415,7 @@ close args ==
     sockSendInt($SessionManager, $currentFrameNum)
     closeInterpreterFrame(NIL)
   for [opt,:.] in $options repeat
-    fullopt := selectOptionLC(opt, '(quiet), 'optionError)
+    fullopt := selectOption(opt, '(quiet), 'optionError)
     fullopt = 'quiet   =>
            quiet:=true
   quiet =>
@@ -450,7 +448,7 @@ compile args ==
     haveOld := nil
     for opt in $options while not (haveNew and haveOld) repeat
         [optname,:optargs] := opt
-        fullopt := selectOptionLC(optname,optlist,nil)
+        fullopt := selectOption(optname, optlist, nil)
         fullopt = 'new => haveNew := true
         fullopt = 'constructor => haveOld := true
         fullopt = 'old => haveOld := true
@@ -565,7 +563,7 @@ compileAsharpCmd1 args ==
 
     for opt in $options repeat
         [optname,:optargs] := opt
-        fullopt := selectOptionLC(optname,optList,nil)
+        fullopt := selectOption(optname, optList, nil)
 
         fullopt = 'new       => nil
         fullopt = 'old  => error '"Internal error: compileAsharpCmd got )old"
@@ -585,7 +583,7 @@ compileAsharpCmd1 args ==
     tempArgs :=
         path_ext = '"ao" =>
             -- want to strip out -Fao
-            (p := STRPOS('"-Fao", $asharpCmdlineFlags, 0, NIL)) =>
+            (p := search_str('"-Fao", $asharpCmdlineFlags, 0)) =>
                 p = 0 => SUBSTRING($asharpCmdlineFlags, 5, NIL)
                 STRCONC(SUBSTRING($asharpCmdlineFlags, 0, p), '" ",
                     SUBSTRING($asharpCmdlineFlags, p+5, NIL))
@@ -704,7 +702,7 @@ compileAsharpLispCmd args ==
 
     for opt in $options repeat
         [optname,:optargs] := opt
-        fullopt := selectOptionLC(optname,optList,nil)
+        fullopt := selectOption(optname, optList, nil)
 
         fullopt = 'quiet     => beQuiet := true
         fullopt = 'noquiet   => beQuiet := false
@@ -741,7 +739,7 @@ compileSpadLispCmd args ==
 
     for opt in $options repeat
         [optname,:optargs] := opt
-        fullopt := selectOptionLC(optname,optList,nil)
+        fullopt := selectOption(optname, optList, nil)
 
         fullopt = 'quiet     => beQuiet := true
         fullopt = 'noquiet   => beQuiet := false
@@ -773,10 +771,7 @@ copyright() == print_text_file STRCONC($spadroot, '"/lib/copyright")
 
 --% )credits -- display credit list
 
-credits() ==
- for i in CREDITS repeat
-  PRINC(i)
-  TERPRI()
+credits() == print_text_file STRCONC($spadroot, '"/lib/credits")
 
 --% )display
 
@@ -787,7 +782,7 @@ display l ==
 displaySpad2Cmd l ==
   $e: local := $EmptyEnvironment
   l is [opt,:vl] and opt ~= "?" =>
-    option := selectOptionLC(opt,$displayOptions,'optionError) =>
+    option := selectOption(opt, $displayOptions, 'optionError) =>
 
       -- the option may be given in the plural but the property in
       -- the alist is sometimes singular
@@ -1126,7 +1121,7 @@ newHelpSpad2Cmd args ==
   if sarg = '"?" then args := ['nullargs]
   else if sarg = '"%" then args := ['history]
        else if sarg = '"%%" then args := ['history]
-  arg := selectOptionLC(first args,$SYSCOMMANDS,nil)
+  arg := selectOption(first(args), $SYSCOMMANDS, nil)
   if null arg then arg := first args
 
   -- see if new help file exists
@@ -1173,7 +1168,7 @@ frameSpad2Cmd args ==
   $options => throw_msg("S2IZ0016",
         '"The )frame system command takes arguments but no options.", [])
   null(args) => helpSpad2Cmd ['frame]
-  arg  := selectOptionLC(first args,frameArgs,'optionError)
+  arg  := selectOption(first(args), frameArgs, 'optionError)
   args := rest args
   if args is [a] then args := a
   if ATOM args then args := object2Identifier args
@@ -1448,7 +1443,7 @@ historySpad2Cmd() ==
   -- and changeHistListLen, and restore last session
   histOptions:=
     '(on off yes no change reset restore write save show file memory)
-  opts:= [ [selectOptionLC(opt,histOptions,'optionError),:optargs]
+  opts := [[selectOption(opt, histOptions, 'optionError), :optargs]
     for [opt,:optargs] in $options]
   for [opt,:optargs] in opts repeat
     opt in '(on yes) =>
@@ -1564,7 +1559,7 @@ writeInputLines(fn,initial) ==
   if fn ~= 'redo then
       say_msg("S2IH0014", '"Edit %b %1 %d to see the saved input lines.",
               [file])
-  SHUT inp
+  CLOSE(inp)
   NIL
 
 
@@ -1806,7 +1801,7 @@ showHistory(arg) ==
       IFCDR arg => arg1 := CADR arg
       arg1 := NIL
     arg1 =>
-      arg2 := selectOptionLC(arg1,'(input both),nil)
+      arg2 := selectOption(arg1, '(input both), nil)
       if arg2
         then ((showInputOrBoth := arg2) = 'both) and (null nset) => n:= 5
         else sayMSG
@@ -2038,7 +2033,7 @@ readSpad2Cmd l ==
   quiet := nil
   ifthere := nil
   for [opt,:.] in $options repeat
-    fullopt := selectOptionLC(opt,'(quiet test ifthere),'optionError)
+    fullopt := selectOption(opt, '(quiet test ifthere), 'optionError)
     fullopt = 'ifthere => ifthere  := true
     fullopt = 'quiet   => quiet := true
 
@@ -2058,10 +2053,9 @@ readSpad2Cmd l ==
     ifthere => return nil    -- be quiet about it
     throw_msg("S2IL0003", '"The file %1b is needed but does not exist.", [l])
   ft := file_extention(ll)
-  downft := DOWNCASE(ft)
-  not(member(downft, fileTypes)) =>
+  not(member(ft, fileTypes)) =>
       fs := l
-      member(downft, devFTs) => throw_msg("S2IZ0033", CONCAT(
+      member(ft, devFTs) => throw_msg("S2IZ0033", CONCAT(
             '"You cannot %b )read %d the file %1b because your user-level",
             '" is not high enough.  For more information about your",
             '" user-level, issue %b )set userlevel %d ."), [fs])
@@ -2223,7 +2217,7 @@ reportOpsFromUnitDirectly1 D ==
   $sayBrightlyStream : fluid := MAKE_OUTSTREAM(showFile)
   sayShowWarning()
   reportOpsFromUnitDirectly D
-  SHUT $sayBrightlyStream
+  CLOSE($sayBrightlyStream)
   editFile showFile
   delete_file(showFile)
 
@@ -2247,7 +2241,7 @@ reportOpsFromLisplib1(unitForm,u)  ==
   $sayBrightlyStream : fluid := MAKE_OUTSTREAM(showFile)
   sayShowWarning()
   reportOpsFromLisplib(unitForm,u)
-  SHUT $sayBrightlyStream
+  CLOSE($sayBrightlyStream)
   editFile showFile
   delete_file(showFile)
 
@@ -2297,7 +2291,7 @@ reportOpsFromUnitDirectly unitForm ==
       '"exposed in this frame."]
 
   for [opt] in $options repeat
-      opt := selectOptionLC(opt, $showOptions, 'optionError)
+      opt := selectOption(opt, $showOptions, 'optionError)
       not(opt = 'operations) => "iterate"
       if isRecordOrUnion then
           constructorFunction := get_oplist_maker(top) or
@@ -2345,7 +2339,7 @@ reportOpsFromLisplib(op,u) ==
     '"exposed in this frame."]
 
   for [opt] in $options repeat
-    opt := selectOptionLC(opt,$showOptions,'optionError)
+    opt := selectOption(opt, $showOptions, 'optionError)
     opt = 'operations => displayOperationsFromLisplib functorForm
     nil
 
@@ -2603,7 +2597,7 @@ whatSpad2Cmd l ==
   $e:local := $EmptyEnvironment
   null l => reportWhatOptions()
   [key0,:args] := l
-  key := selectOptionLC(key0,$whatOptions,nil)
+  key := selectOption(key0, $whatOptions, nil)
   null key => say_msg("S2IZ0043", CONCAT(
         '"Your argument is not valid for the %b )what %d system command.",
         '"  %l %l Use the %b )show %d system command to display the",
@@ -2611,10 +2605,7 @@ whatSpad2Cmd l ==
         '" %d system command to see information about an operation.  These",
         '" may be abbreviated to %b )sh %d and %b )d op %d , respectively."),
         [])
-  args := [fixpat p for p in args] where
-    fixpat x ==
-      x is [x',:.] => DOWNCASE x'
-      DOWNCASE x
+  args := [DOWNCASE(STRINGIMAGE(p)) for p in args]
   key = 'things =>
     for opt in $whatOptions repeat
       not MEMQ(opt,'(things)) => whatSpad2Cmd [opt,:args]
@@ -2760,7 +2751,7 @@ satisfiesRegularExpressions(name,patterns) ==
 
 --------------------> NEW DEFINITION (override in util.lisp)
 processSynonyms() ==
-  p := STRPOS('")",LINE,0,NIL)
+  p := search_str('")", LINE, 0)
   fill := '""
   if p then
       line := SUBSTRING(LINE,p,NIL)
@@ -2768,12 +2759,12 @@ processSynonyms() ==
   else
       p := 0
       line := LINE
-  to := STRPOS ('" ", line, 1, nil)
+  to := search_str('" ", line, 1)
   if to then to := to - 1
   synstr := SUBSTRING (line, 1, to)
   syn := STRING2ID_N (synstr, 1)
   null (fun := LASSOC (syn, $CommandSynonymAlist)) => NIL
-  to := STRPOS('")",fun,1,NIL)
+  to := search_str('")", fun, 1)
   if to and to ~= #fun - 1 then
     opt := STRCONC('" ",SUBSTRING(fun,to,NIL))
     fun := SUBSTRING(fun,0,to-1)

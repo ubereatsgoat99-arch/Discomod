@@ -80,7 +80,4 @@ main (int argc, char **argv)
 
   mpz_clear (a);
   mpz_clear (b);
-
-  tests_end ();
-  return 0;
 }

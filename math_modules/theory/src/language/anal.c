@@ -951,8 +951,10 @@ pari_var_init(void)
   nvar = 10;
   min_priority = -MAXVARN;
 }
-long pari_var_next(void) { return nvar; }
-long pari_var_next_temp(void) { return max_avail; }
+long
+pari_var_next(void) { return nvar; }
+long
+pari_var_next_temp(void) { return max_avail; }
 long
 pari_var_create(entree *ep)
 {
@@ -1230,16 +1232,28 @@ orpari(GEN a, GEN b/*closure*/)
   return gequal0(g)?gen_0:gen_1;
 }
 
-GEN gmule(GEN *x, GEN y) { *x = gmul(*x,y); return *x; }
-GEN gdive(GEN *x, GEN y) { *x = gdiv(*x,y); return *x; }
-GEN gdivente(GEN *x, GEN y) { *x = gdivent(*x,y); return *x; }
-GEN gdivrounde(GEN *x, GEN y) { *x = gdivround(*x,y); return *x; }
-GEN gmode(GEN *x, GEN y) { *x = gmod(*x,y); return *x; }
-GEN gshiftle(GEN *x, long n) { *x = gshift(*x,n); return *x; }
-GEN gshiftre(GEN *x, long n) { *x = gshift(*x,-n); return *x; }
-GEN gadde(GEN *x, GEN y) { *x = gadd(*x,y); return *x; }
-GEN gadd1e(GEN *x) { *x = typ(*x)==t_INT?addiu(*x,1):gaddgs(*x,1); return *x; }
-GEN gsube(GEN *x, GEN y) { *x = gsub(*x,y); return *x; }
-GEN gsub1e(GEN *x) { *x = typ(*x)==t_INT?subiu(*x,1):gsubgs(*x,1); return *x; }
+GEN
+gmule(GEN *x, GEN y) { *x = gmul(*x,y); return *x; }
+GEN
+gdive(GEN *x, GEN y) { *x = gdiv(*x,y); return *x; }
+GEN
+gdivente(GEN *x, GEN y) { *x = gdivent(*x,y); return *x; }
+GEN
+gdivrounde(GEN *x, GEN y) { *x = gdivround(*x,y); return *x; }
+GEN
+gmode(GEN *x, GEN y) { *x = gmod(*x,y); return *x; }
+GEN
+gshiftle(GEN *x, long n) { *x = gshift(*x,n); return *x; }
+GEN
+gshiftre(GEN *x, long n) { *x = gshift(*x,-n); return *x; }
+GEN
+gadde(GEN *x, GEN y) { *x = gadd(*x,y); return *x; }
+GEN
+gadd1e(GEN *x) { *x = typ(*x)==t_INT?addiu(*x,1):gaddgs(*x,1); return *x; }
+GEN
+gsube(GEN *x, GEN y) { *x = gsub(*x,y); return *x; }
+GEN
+gsub1e(GEN *x) { *x = typ(*x)==t_INT?subiu(*x,1):gsubgs(*x,1); return *x; }
 
-GEN gshift_right(GEN x, long n) { return gshift(x,-n); }
+GEN
+gshift_right(GEN x, long n) { return gshift(x,-n); }

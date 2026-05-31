@@ -932,32 +932,41 @@ add_newdoc(
     """)
 
 add_newdoc("boxcox",
-    """
+    r"""
     boxcox(x, lmbda, out=None)
 
     Compute the Box-Cox transformation.
 
-    The Box-Cox transformation is::
+    The Box-Cox transformation is
 
-        y = (x**lmbda - 1) / lmbda  if lmbda != 0
-            log(x)                  if lmbda == 0
+    .. math::
 
-    Returns `nan` if ``x < 0``.
-    Returns `-inf` if ``x == 0`` and ``lmbda < 0``.
+        y = \begin{cases}
+            (x^\lambda - 1) / \lambda & \text{if } \lambda \neq 0 \\
+            \log(x) & \text{if } \lambda = 0
+        \end{cases}
+
+    Returns ``nan`` if :math:`x < 0`.
+    Returns ``-inf`` if :math:`x = 0` and :math:`\lambda \leq 0`.
 
     Parameters
     ----------
     x : array_like
         Data to be transformed.
     lmbda : array_like
-        Power parameter of the Box-Cox transform.
+        Power parameter :math:`\lambda` of the Box-Cox transform.
     out : ndarray, optional
-        Optional output array for the function values
+        Optional output array for the function values.
 
     Returns
     -------
     y : scalar or ndarray
         Transformed data.
+
+    See Also
+    --------
+    boxcox1p : Box-Cox transformation of ``1 + x``.
+    inv_boxcox : Inverse of the Box-Cox transformation.
 
     Notes
     -----
@@ -974,32 +983,41 @@ add_newdoc("boxcox",
     """)
 
 add_newdoc("boxcox1p",
-    """
+    r"""
     boxcox1p(x, lmbda, out=None)
 
-    Compute the Box-Cox transformation of 1 + `x`.
+    Compute the Box-Cox transformation of :math:`1 + x`.
 
-    The Box-Cox transformation computed by `boxcox1p` is::
+    The Box-Cox transformation computed by `boxcox1p` is
 
-        y = ((1+x)**lmbda - 1) / lmbda  if lmbda != 0
-            log(1+x)                    if lmbda == 0
+    .. math::
 
-    Returns `nan` if ``x < -1``.
-    Returns `-inf` if ``x == -1`` and ``lmbda < 0``.
+        y = \begin{cases}
+            ((1+x)^\lambda - 1) / \lambda & \text{if } \lambda \neq 0 \\
+            \log(1+x) & \text{if } \lambda = 0
+        \end{cases}
+
+    Returns ``nan`` if :math:`x < -1`.
+    Returns ``-inf`` if :math:`x = -1` and :math:`\lambda \leq 0`.
 
     Parameters
     ----------
     x : array_like
         Data to be transformed.
     lmbda : array_like
-        Power parameter of the Box-Cox transform.
+        Power parameter :math:`\lambda` of the Box-Cox transform.
     out : ndarray, optional
-        Optional output array for the function values
+        Optional output array for the function values.
 
     Returns
     -------
     y : scalar or ndarray
         Transformed data.
+
+    See Also
+    --------
+    boxcox : Box-Cox transformation.
+    inv_boxcox1p : Inverse of the Box-Cox transformation of ``1 + x``.
 
     Notes
     -----
@@ -1016,29 +1034,38 @@ add_newdoc("boxcox1p",
     """)
 
 add_newdoc("inv_boxcox",
-    """
+    r"""
     inv_boxcox(y, lmbda, out=None)
 
     Compute the inverse of the Box-Cox transformation.
 
-    Find ``x`` such that::
+    Find :math:`x` such that
 
-        y = (x**lmbda - 1) / lmbda  if lmbda != 0
-            log(x)                  if lmbda == 0
+    .. math::
+
+        y = \begin{cases}
+            (x^\lambda - 1) / \lambda & \text{if } \lambda \neq 0 \\
+            \log(x) & \text{if } \lambda = 0
+        \end{cases}
 
     Parameters
     ----------
     y : array_like
-        Data to be transformed.
+        Transformed data (input to the inverse transform).
     lmbda : array_like
-        Power parameter of the Box-Cox transform.
+        Power parameter :math:`\lambda` of the Box-Cox transform.
     out : ndarray, optional
-        Optional output array for the function values
+        Optional output array for the function values.
 
     Returns
     -------
     x : scalar or ndarray
-        Transformed data.
+        Original data (inverse Box-Cox transform of `y`).
+
+    See Also
+    --------
+    boxcox : Box-Cox transformation.
+    inv_boxcox1p : Inverse of the Box-Cox transformation of ``1 + x``.
 
     Notes
     -----
@@ -1054,29 +1081,38 @@ add_newdoc("inv_boxcox",
     """)
 
 add_newdoc("inv_boxcox1p",
-    """
+    r"""
     inv_boxcox1p(y, lmbda, out=None)
 
-    Compute the inverse of the Box-Cox transformation.
+    Compute the inverse of the Box-Cox transformation of :math:`1 + x`.
 
-    Find ``x`` such that::
+    Find :math:`x` such that
 
-        y = ((1+x)**lmbda - 1) / lmbda  if lmbda != 0
-            log(1+x)                    if lmbda == 0
+    .. math::
+
+        y = \begin{cases}
+            ((1+x)^\lambda - 1) / \lambda & \text{if } \lambda \neq 0 \\
+            \log(1+x) & \text{if } \lambda = 0
+        \end{cases}
 
     Parameters
     ----------
     y : array_like
-        Data to be transformed.
+        Transformed data (input to the inverse transform).
     lmbda : array_like
-        Power parameter of the Box-Cox transform.
+        Power parameter :math:`\lambda` of the Box-Cox transform.
     out : ndarray, optional
-        Optional output array for the function values
+        Optional output array for the function values.
 
     Returns
     -------
     x : scalar or ndarray
-        Transformed data.
+        Original data (inverse Box-Cox transform of `y`).
+
+    See Also
+    --------
+    boxcox1p : Box-Cox transformation of ``1 + x``.
+    inv_boxcox : Inverse of the Box-Cox transformation.
 
     Notes
     -----
@@ -5665,6 +5701,16 @@ add_newdoc("ncfdtrinc",
     ncfdtridfd : Inverse of `ncfdtr` with respect to `dfd`.
     ncfdtridfn : Inverse of `ncfdtr` with respect to `dfn`.
 
+    Notes
+    -----
+    This function calculates the non-centrality parameter of the
+    non-central F distribution given a probability, quantile, and degrees
+    of freedom using the Boost Math C++ library [1]_.
+
+    References
+    ----------
+    .. [1] The Boost Developers. "Boost C++ Libraries". https://www.boost.org/.
+
     Examples
     --------
     >>> from scipy.special import ncfdtr, ncfdtrinc
@@ -5826,6 +5872,16 @@ add_newdoc("nctdtrinc",
     nctdtr :  CDF of the non-central `t` distribution.
     nctdtrit : Inverse CDF (iCDF) of the non-central t distribution.
     nctdtridf : Calculate degrees of freedom, given CDF and iCDF values.
+
+    Notes
+    -----
+    This function calculates the non-centrality parameter of the
+    non-central t distribution given a probability, quantile and
+    degrees of freedom using the Boost Math C++ library [1]_.
+
+    References
+    ----------
+    .. [1] The Boost Developers. "Boost C++ Libraries". https://www.boost.org/.
 
     Examples
     --------

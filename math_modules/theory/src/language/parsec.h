@@ -25,7 +25,8 @@ static THREAD long pari_discarded;
 static THREAD const char *pari_lex_start;
 static THREAD GEN pari_lasterror;
 
-static void pari_error(PARI_LTYPE *yylloc, char **lex, const char *s)
+static void
+pari_error(PARI_LTYPE *yylloc, char **lex, const char *s)
 {
   (void) yylloc; (void) lex;
   if (pari_lasterror) cgiv(pari_lasterror);

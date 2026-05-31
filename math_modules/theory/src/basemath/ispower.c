@@ -523,8 +523,10 @@ issquare(GEN x)
   pari_err_TYPE("issquare",x);
   return 0; /* LCOV_EXCL_LINE */
 }
-GEN gissquare(GEN x) { return issquare(x)? gen_1: gen_0; }
-GEN gissquareall(GEN x, GEN *pt) { return issquareall(x,pt)? gen_1: gen_0; }
+GEN
+gissquare(GEN x) { return issquare(x)? gen_1: gen_0; }
+GEN
+gissquareall(GEN x, GEN *pt) { return issquareall(x,pt)? gen_1: gen_0; }
 
 long
 ispolygonal(GEN x, GEN S, GEN *N)
