@@ -2018,7 +2018,8 @@ function extractDomains(text) {
         }
     }
     // Second pass: bare domains (e.g. "discord.gg/abc" without https)
-    const bare = (text.match(/(?:^|[^a-z0-9\/])([a-z0-9][a-z0-9\-]{0,60}\.[a-z]{2,})(?![a-z0-9])/gi) || [])
+    // Captures full multi-part domains like sub.cdn.example.com, not just 2-part fragments
+    const bare = (text.match(/(?:^|[^a-z0-9\/])((?:[a-z0-9][a-z0-9\-]{0,60}\.)+[a-z]{2,})(?![a-z0-9])/gi) || [])
         .map(m => m.replace(/^[^a-z0-9]+/i, '').toLowerCase());
     for (const b of bare) {
         // Skip if TLD is a media/file extension — it's a filename, not a domain
@@ -3268,7 +3269,7 @@ function normalizeObfuscatedDomainText(raw) {
 
 function detectObfuscatedDomains(rawText, extraAllowed) {
     const t = normalizeObfuscatedDomainText(rawText);
-    const hits = (t.match(/(?<![a-z0-9])[a-z0-9][a-z0-9\-]{0,60}\s*(?:\.|\s+dot\s+)\s*[a-z]{2,}(?![a-z0-9])/gi) || []);
+    const hits = (t.match(/(?<![a-z0-9])(?:[a-z0-9][a-z0-9\-]{0,60}\s*(?:\.|\s+dot\s+)\s*)+[a-z]{2,}(?![a-z0-9])/gi) || []);
     if (!hits.length) return [];
     // Filter out any match that is already a known-safe domain
     const combined = [...COMMON_ALLOWED_DOMAINS, ...(extraAllowed || [])];
