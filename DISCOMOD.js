@@ -7729,6 +7729,7 @@ const COMMON_ALLOWED_DOMAINS = [
     'discordcdn.com',
     'cdn.discordapp.com',
     'media.discordapp.net',
+    'media.discordapp.com', // FIX: bare/partial form that obfuscation regex can match
     'images-ext-1.discordapp.net',
     'images-ext-2.discordapp.net',
     'images-ext-3.discordapp.net',
@@ -7738,6 +7739,20 @@ const COMMON_ALLOWED_DOMAINS = [
     'cdn2.discordapp.com',
     'cdn3.discordapp.com',
     'cdn4.discordapp.com',
+    // FIX: partial/truncated forms that the obfuscation regex can produce when
+    // a Discord CDN URL appears without a full https:// prefix in chat.
+    // e.g. "media.discordapp" (no TLD) would slip past domainInList otherwise.
+    'media.discordapp',
+    'cdn.discordapp',
+    'attachments.discordapp',
+    'images-ext-1.discordapp',
+    'images-ext-2.discordapp',
+    'images-ext-3.discordapp',
+    'images-ext-4.discordapp',
+    'cdn1.discordapp',
+    'cdn2.discordapp',
+    'cdn3.discordapp',
+    'cdn4.discordapp',
     // ── Tenor (GIF platform) ───────────────────────────────────────────────────
     'tenor.com',
     'media.tenor.com',
@@ -8466,6 +8481,112 @@ const COMMON_ALLOWED_DOMAINS = [
 'cdn.optimizely.com',
 'cdn.amplitude.com',
 'cdn.split.io',
+
+// ════════════════════════════════════════════════════════════════════════════
+// FIX: bare/partial subdomain forms for every subdomain entry in this list.
+// The detectObfuscatedDomains regex matches "x.y" without a TLD when a URL
+// appears in chat without https:// (e.g. "media.tenor" instead of
+// "media.tenor.com"). domainInList only matches exact strings or suffix
+// (endsWith), so "media.tenor" does NOT match parent "tenor.com".
+// These entries close that gap for every subdomain in the list above.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Tenor
+'media.tenor','c.tenor','g.tenor',
+'media1.tenor','media2.tenor','media3.tenor',
+// Giphy
+'media.giphy','media0.giphy','media1.giphy','media2.giphy',
+'media3.giphy','media4.giphy','i.giphy',
+// Imgur
+'i.imgur','m.imgur',
+// Gyazo
+'i.gyazo',
+// Gfycat
+'thumbs.gfycat','giant.gfycat',
+// Roblox CDN
+'cdn.roblox','assetgame.roblox','thumbnails.roblox',
+'images.rbxcdn','t1.rbxcdn','t2.rbxcdn','t3.rbxcdn','setup.rbxcdn',
+'create.roblox','devforum.roblox',
+'bloxfruits.fandom','blox-fruits.fandom',
+'static.wikia',
+// YouTube
+'i.ytimg','img.youtube','music.youtube',
+// Twitter/X
+'pbs.twimg','abs.twimg',
+// Reddit
+'i.redd','v.redd','preview.redd','old.reddit','external-preview.redd',
+// GitHub
+'gist.github','raw.githubusercontent',
+// Twitch / clips
+'clips.twitch','clips2.twitch','vod.twitch','static-cdn.jtvnw',
+// Medal
+'cdn.medal',
+// Postimg / Catbox / Cloudinary
+'i.postimg','litter.catbox','files.catbox','res.cloudinary',
+// Wikimedia
+'upload.wikimedia',
+// Google subdomains (all the ones explicitly listed above)
+'fonts.googleapis','fonts.gstatic',
+'drive.google','docs.google','sheets.google','slides.google',
+'forms.google','maps.google','photos.google','mail.google',
+'accounts.google','play.google','classroom.google',
+'firebase.google','images.google','search.google',
+'lens.google','chrome.google','gemini.google',
+// Microsoft subdomains
+'officeapps.live','onedrive.live','teams.microsoft','microsoftedge.microsoft',
+// Apple
+'itunes.apple','apps.apple','developer.apple',
+// Amazon / AWS
+'s3.amazonaws','aws.amazon',
+// Cloudflare
+'cdnjs.cloudflare',
+// Facebook / Meta CDN
+'scontent.fbcdn',
+// Riot
+'cdn.riotgames',
+// Genshin / HoYoverse
+'genshin.hoyoverse',
+// Spotify
+'open.spotify',
+// imgbb / ibb
+'i.ibb',
+// KnowYourMeme CDN
+'i.kym-cdn',
+// BetterTTV / FrankerFaceZ / 7TV
+'cdn.betterttv','cdn.frankerfacez','cdn.7tv',
+// Google photos short link
+'photos.app.goo',
+// Dropbox
+'dl.dropboxusercontent',
+// iCloud share
+'share.icloud',
+// JW Player
+'cdn.jwplayer',
+// Vimeo
+'player.vimeo',
+// imgbox
+'thumbs.imgbox',
+// GameFAQs
+'gamefaqs.gamespot',
+// KhanAcademy regional subdomains
+'en.khanacademy','pt.khanacademy','es.khanacademy','fr.khanacademy',
+// Desmos subdomains
+'calculator.desmos','teacher.desmos','geometry.desmos','www.desmos',
+// Tracker subdomains
+'cod.tracker','apex.tracker','r6.tracker','rocketleague.tracker',
+// web.archive
+'web.archive',
+// CDN analytics (already have .com but adding bare form)
+'cdn.segment','cdn.optimizely','cdn.amplitude','cdn.split',
+// Segment / split (bare)
+'cdn.jsdelivr','cdn.jwplayer',
+// Flickr static
+'staticflickr.com',
+// Unsplash / Pexels image CDNs (already root domains; no subdomain entries needed)
+// images.unsplash already in list — add bare:
+'images.unsplash',
+// images.genius
+'images.genius',
 
 // ── Misc extra link shorteners (reputable) ───────────────────────────────────
 'cutt.ly',
