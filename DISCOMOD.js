@@ -12,7 +12,6 @@ const slashSessions = new Map();
 // ║  slash commands · setup wizard · immunity management · logging               ║
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 
-'use strict';
 require('dotenv').config();
 
 // ══════════════════════════════════════════════════════════
@@ -485,7 +484,14 @@ function ai2SplitResponse(response, maxLen = 1900) {
     return chunks;
 }
 function ai2AntiAgeBan(text) {
-    return String(text || '').replace(/(?<!\d)([0-9]|1[0-2])(?!\d)|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/gi, '\u200b');
+    // Protect game terms containing digits before substitution so "v4", "1v1",
+    // "3rd sea", "v2", "v3" etc. are not mangled by the age-ban digit scrubber.
+    return String(text || '')
+        .replace(/\b(v[\s_]*[234])\b/gi, '\x02$1\x02')   // v2 v3 v4
+        .replace(/\b([123]v[123])\b/gi, '\x02$1\x02')     // 1v1 2v2 3v3
+        .replace(/\b([123]rd|[12]nd|1st)\b/gi, '\x02$1\x02') // 1st 2nd 3rd
+        .replace(/(?<!\d)([0-9]|1[0-2])(?!\d)|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/gi, '\u200b')
+        .replace(/\x02([^\x02]*)\x02/g, '$1'); // restore protected tokens
 }
 function ai2EscapeRegex(s) {
     return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1190,13 +1196,18 @@ async function superqalcOnefile(expression) {
         const p = spawn('./superqalc_onefile', [String(expression || '')], { stdio: ['ignore', 'pipe', 'pipe'] });
         let out = '';
         let err = '';
+        const timer = setTimeout(() => {
+            try { p.kill('SIGKILL'); } catch {}
+            resolve('Error: superqalc_onefile timed out after 30s.');
+        }, 30000);
         p.stdout.on('data', (d) => (out += d.toString('utf8')));
         p.stderr.on('data', (d) => (err += d.toString('utf8')));
         p.on('close', (code) => {
+            clearTimeout(timer);
             if (code === 0) return resolve(out.trim() || '(No output)');
             resolve((err || out || 'Error running superqalc_onefile.').trim());
         });
-        p.on('error', (e) => resolve(`Error: ${e.message}`));
+        p.on('error', (e) => { clearTimeout(timer); resolve(`Error: ${e.message}`); });
     });
 }
 
@@ -1205,13 +1216,18 @@ async function superqalcTower(expression) {
         const p = spawn('./superqalc_tower', [], { stdio: ['pipe', 'pipe', 'pipe'] });
         let out = '';
         let err = '';
+        const timer = setTimeout(() => {
+            try { p.kill('SIGKILL'); } catch {}
+            resolve('Error: superqalc_tower timed out after 30s.');
+        }, 30000);
         p.stdout.on('data', (d) => (out += d.toString('utf8')));
         p.stderr.on('data', (d) => (err += d.toString('utf8')));
         p.on('close', (code) => {
+            clearTimeout(timer);
             if (code === 0) return resolve(out.trim() || '(No output)');
             resolve((err || out || 'Error running superqalc_tower.').trim());
         });
-        p.on('error', (e) => resolve(`Error: ${e.message}`));
+        p.on('error', (e) => { clearTimeout(timer); resolve(`Error: ${e.message}`); });
         try { p.stdin.write(String(expression || '')); } catch {}
         try { p.stdin.end(); } catch {}
     });
@@ -2018,8 +2034,7 @@ function extractDomains(text) {
         }
     }
     // Second pass: bare domains (e.g. "discord.gg/abc" without https)
-    // Captures full multi-part domains like sub.cdn.example.com, not just 2-part fragments
-    const bare = (text.match(/(?:^|[^a-z0-9\/])((?:[a-z0-9][a-z0-9\-]{0,60}\.)+[a-z]{2,})(?![a-z0-9])/gi) || [])
+    const bare = (text.match(/(?:^|[^a-z0-9\/])([a-z0-9][a-z0-9\-]{0,60}\.[a-z]{2,})(?![a-z0-9])/gi) || [])
         .map(m => m.replace(/^[^a-z0-9]+/i, '').toLowerCase());
     for (const b of bare) {
         // Skip if TLD is a media/file extension — it's a filename, not a domain
@@ -7607,11 +7622,18 @@ function checkSpam(userId, content, gs, guildId) {
     const emojiCount = (content.match(/(<a?:[a-zA-Z0-9_]+:\d+>|[\u{1F300}-\u{1FFFF}])/gu) || []).length;
     if (emojiCount >= SPAM_EMOJI_LIMIT) return { spam: true, reason: 'emoji spam' };
     if (gs?.capsSpamEnabled) {
+        const capsMaxPct  = (gs.capsMaxPercent  != null ? Math.max(30, Math.min(100, gs.capsMaxPercent))  : 85) / 100;
+        const capsMinLen  =  gs.capsMinLetters  != null ? Math.max(8,  Math.min(80,  gs.capsMinLetters))  : 8;
+        const capsMaxRun  =  gs.capsMaxRun      != null ? Math.max(10, Math.min(120, gs.capsMaxRun))      : 0;
         const letters = content.replace(/[^a-zA-Z]/g,'').length;
-        const capsRatio = content.replace(/\s/g,'').length > 5 && letters > 0
+        const capsRatio = content.replace(/\s/g,'').length > 5 && letters >= capsMinLen
             ? (content.replace(/[^A-Z]/g,'').length / letters)
             : 0;
-        if (capsRatio > 0.85 && content.length > 20) return { spam: true, reason: 'all caps spam' };
+        if (capsRatio > capsMaxPct && content.length > 20) return { spam: true, reason: 'all caps spam' };
+        if (capsMaxRun > 0) {
+            const { maxRun } = countUppercaseMetrics(content);
+            if (maxRun >= capsMaxRun) return { spam: true, reason: 'all caps spam' };
+        }
     }
     const linkCount = (content.match(/https?:\/\/\S+/g) || []).length;
     if (linkCount >= 4) return { spam: true, reason: 'link spam' };
