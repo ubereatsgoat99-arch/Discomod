@@ -8642,7 +8642,370 @@ const COMMON_ALLOWED_DOMAINS = [
 'bbci.co',
 'photos.app',
 
-// ── Misc random but commonly linked ──────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// FIX (round 3): additional full domains + bare forms for platforms commonly
+// shared in Discord gaming/trading servers that weren't covered yet.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── YouTube / Google image CDN ────────────────────────────────────────────
+'yt3.ggpht.com','yt4.ggpht.com',
+'yt3.ggpht','yt4.ggpht',
+
+// ── TikTok CDN ────────────────────────────────────────────────────────────
+'v19.tiktokcdn.com','p16.tiktokcdn.com',
+'v16.tiktokcdn.com','p19.tiktokcdn.com',
+'v19.tiktokcdn','p16.tiktokcdn','v16.tiktokcdn','p19.tiktokcdn',
+
+// ── Snapchat CDN ──────────────────────────────────────────────────────────
+'cf-st.sc-cdn.net','cf-st.sc-cdn',
+
+// ── LinkedIn CDN ──────────────────────────────────────────────────────────
+'media.licdn.com','static.licdn.com',
+'media.licdn','static.licdn',
+
+// ── Pinterest CDN ─────────────────────────────────────────────────────────
+'i.pinimg.com','i.pinimg',
+
+// ── Tumblr CDN ────────────────────────────────────────────────────────────
+'assets.tumblr.com',
+'64.media.tumblr.com','66.media.tumblr.com',
+'68.media.tumblr.com',
+'assets.tumblr','64.media.tumblr','66.media.tumblr','68.media.tumblr',
+
+// ── Spotify CDN ───────────────────────────────────────────────────────────
+'i.scdn.co','mosaic.scdn.co','lineup-images.scdn.co',
+'i.scdn','mosaic.scdn','lineup-images.scdn',
+
+// ── SoundCloud CDN ────────────────────────────────────────────────────────
+'i1.sndcdn.com','i2.sndcdn.com',
+'i1.sndcdn','i2.sndcdn',
+
+// ── Steam CDN ─────────────────────────────────────────────────────────────
+'store.steampowered.com',
+'cdn.akamai.steamstatic.com','cdn.cloudflare.steamstatic.com',
+'steamcdn-a.akamaihd.net',
+'store.steampowered',
+'cdn.akamai.steamstatic','cdn.cloudflare.steamstatic','steamcdn-a.akamaihd',
+
+// ── Epic Games CDN ────────────────────────────────────────────────────────
+'cdn1.epicgames.com','cdn2.epicgames.com',
+'cdn1.epicgames','cdn2.epicgames',
+
+// ── Twitch extras ─────────────────────────────────────────────────────────
+'assets.twitch.tv','static.twitchsvc.net',
+'assets.twitch','static.twitchsvc',
+
+// ── Medal CDN extras ──────────────────────────────────────────────────────
+'cdn2.medal.tv','cdn2.medal',
+
+// ── Streamable CDN ────────────────────────────────────────────────────────
+'cdn-cf.streamable.com','cdn-cf.streamable',
+
+// ── Outplayed CDN ─────────────────────────────────────────────────────────
+'cdn.outplayed.tv','cdn.outplayed',
+
+// ── Imgur extras ──────────────────────────────────────────────────────────
+'i.stack.imgur.com','i.stack.imgur',
+
+// ── Flickr CDN ────────────────────────────────────────────────────────────
+'live.staticflickr.com',
+'farm1.staticflickr.com','farm2.staticflickr.com',
+'farm3.staticflickr.com','farm4.staticflickr.com',
+'farm5.staticflickr.com','farm6.staticflickr.com',
+'live.staticflickr',
+'farm1.staticflickr','farm2.staticflickr','farm3.staticflickr',
+'farm4.staticflickr','farm5.staticflickr','farm6.staticflickr',
+
+// ── Wikipedia regional subdomains ─────────────────────────────────────────
+'en.wikipedia.org','fr.wikipedia.org','de.wikipedia.org',
+'es.wikipedia.org','pt.wikipedia.org','ru.wikipedia.org',
+'ja.wikipedia.org','nl.wikipedia.org','it.wikipedia.org',
+'pl.wikipedia.org','zh.wikipedia.org','ko.wikipedia.org',
+'en.wikipedia','fr.wikipedia','de.wikipedia','es.wikipedia',
+'pt.wikipedia','ru.wikipedia','ja.wikipedia','nl.wikipedia',
+'it.wikipedia','pl.wikipedia','zh.wikipedia','ko.wikipedia',
+
+// ── Fandom / Wikia CDN ────────────────────────────────────────────────────
+'vignette.wikia.nocookie.net','vignette.wikia.com',
+'images.wikia.com','static.wikia.com',
+'vignette.wikia.nocookie','vignette.wikia','images.wikia','static.wikia',
+
+// ── Reddit media CDN ──────────────────────────────────────────────────────
+'styles.redditmedia.com','www.redditmedia.com',
+'a.thumbs.redditmedia.com','b.thumbs.redditmedia.com',
+'styles.redditmedia','www.redditmedia',
+'a.thumbs.redditmedia','b.thumbs.redditmedia',
+
+// ── Twitter/X extras ──────────────────────────────────────────────────────
+'video.twimg.com','ton.twimg.com',
+'video.twimg','ton.twimg',
+
+// ── Blizzard CDN ──────────────────────────────────────────────────────────
+'blzddist1-a.akamaihd.net','bnetcmsus-a.akamaihd.net',
+'blzddist1-a.akamaihd','bnetcmsus-a.akamaihd',
+
+// ── Riot / League CDN ─────────────────────────────────────────────────────
+'ddragon.leagueoflegends.com','universe-meeps.leagueoflegends.com',
+'ddragon.leagueoflegends','universe-meeps.leagueoflegends',
+
+// ── Minecraft / Mojang CDN ────────────────────────────────────────────────
+'launcher.mojang.com','resources.download.minecraft.net',
+'launcher.mojang','resources.download.minecraft',
+
+// ── Roblox extras ─────────────────────────────────────────────────────────
+'apis.roblox.com','corp.roblox.com',
+'apis.roblox','corp.roblox',
+
+// ── GitHub extras ─────────────────────────────────────────────────────────
+'codeload.github.com',
+'objects.githubusercontent.com','user-images.githubusercontent.com',
+'codeload.github','objects.githubusercontent','user-images.githubusercontent',
+
+// ── jsDelivr CDN ─────────────────────────────────────────────────────────
+'cdn.jsdelivr.net','cdn.jsdelivr',
+
+// ── Contentful CDN (used by many game/media sites) ────────────────────────
+'images.ctfassets.net','assets.ctfassets.net','downloads.ctfassets.net',
+'images.ctfassets','assets.ctfassets','downloads.ctfassets',
+
+// ── Anime/manga CDNs ─────────────────────────────────────────────────────
+'cdn.myanimelist.net','s4.anilist.co','s3.anilist.co',
+'cdn.myanimelist','s4.anilist','s3.anilist',
+
+// ── Curseforge / Forge CDN ────────────────────────────────────────────────
+'media.forgecdn.net','media.forgecdn',
+
+// ── DeviantArt ───────────────────────────────────────────────────────────
+'st.deviantart.net','st.deviantart',
+
+// ── ArtStation CDN ───────────────────────────────────────────────────────
+'cdna.artstation.com','cdnb.artstation.com',
+'cdna.artstation','cdnb.artstation',
+
+// ── Patreon CDN ──────────────────────────────────────────────────────────
+'c10.patreonusercontent.com','c10.patreonusercontent',
+
+// ── Ko-fi CDN ────────────────────────────────────────────────────────────
+'storage.ko-fi.com','storage.ko-fi',
+
+// ── Discord extras ───────────────────────────────────────────────────────
+'ptb.discord.com','canary.discord.com',
+'ptb.discord','canary.discord',
+'images-ext-1.discordapp.com','images-ext-2.discordapp.com',
+'images-ext-1.discordapp','images-ext-2.discordapp',
+
+// ── Tenor extras ─────────────────────────────────────────────────────────
+'media4.tenor.com','media4.tenor',
+
+// ── Misc proxy / go module CDN ───────────────────────────────────────────
+'proxy.golang.org','proxy.golang',
+
+// ════════════════════════════════════════════════════════════════════════════
+// FIX (round 4): new full domains + bare forms for platforms not yet covered
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Minecraft / modding community ────────────────────────────────────────────
+'hypixel.net','hypixel.io',
+'cdn.hypixel.net','assets.hypixel.net',
+'cdn.hypixel','assets.hypixel',
+'badlion.net','cdn.badlion.net','cdn.badlion',
+'lunarclient.com','cdn.lunarclient.com','cdn.lunarclient',
+'feathermc.com',
+'mc-heads.net','crafatar.com','minotar.net','cravatar.eu',
+'cdn.modrinth.com','launcher.modrinth.com',
+'cdn.modrinth','launcher.modrinth',
+'www.curseforge.com','www.curseforge',
+'edge.forgecdn.net','edge.forgecdn',
+'content.rbxcdn.com','tr.rbxcdn.com','versioncompat.rbxcdn.com',
+'content.rbxcdn','tr.rbxcdn','versioncompat.rbxcdn',
+'apis.roblox.com','corp.roblox.com',   // already have bare from round 3
+
+// ── Roblox more ───────────────────────────────────────────────────────────────
+
+// ── Streaming / content creation tools ───────────────────────────────────────
+'streamlabs.com','cdn.streamlabs.com','cdn.streamlabs',
+'obsproject.com','cdn-fastly.obsproject.com','cdn-fastly.obsproject',
+'clips.kick.com','img.kick.com','clips.kick','img.kick',
+'gql.twitch.tv','img.twitch.tv','usher.twitchapps.com',
+'gql.twitch','img.twitch','usher.twitchapps',
+'studio.youtube.com','youtubekids.com','youtubeeducation.com',
+'studio.youtube',
+
+// ── Overwolf ──────────────────────────────────────────────────────────────────
+'content.overwolf.com','img.overwolf.com',
+'content.overwolf','img.overwolf',
+
+// ── Google extra subdomains ───────────────────────────────────────────────────
+'support.google.com','cloud.google.com','developers.google.com',
+'news.google.com','books.google.com','earth.google.com',
+'ads.google.com','meet.google.com','chat.google.com',
+'keep.google.com','calendar.google.com',
+'support.google','cloud.google','developers.google',
+'news.google','books.google','earth.google',
+'ads.google','meet.google','chat.google',
+'keep.google','calendar.google',
+
+// ── Google user content CDN ───────────────────────────────────────────────────
+'lh3.googleusercontent.com','lh4.googleusercontent.com',
+'lh5.googleusercontent.com','lh6.googleusercontent.com',
+'uc.googleusercontent.com',
+'lh3.googleusercontent','lh4.googleusercontent',
+'lh5.googleusercontent','lh6.googleusercontent',
+'uc.googleusercontent',
+
+// ── Microsoft extra subdomains ────────────────────────────────────────────────
+'support.microsoft.com','learn.microsoft.com','docs.microsoft.com',
+'dev.azure.com','portal.azure.com','aka.ms',
+'support.microsoft','learn.microsoft','docs.microsoft',
+'dev.azure','portal.azure',
+'copilot.microsoft.com','copilot.microsoft',
+
+// ── GitHub extra subdomains ───────────────────────────────────────────────────
+'docs.github.com','skills.github.com',
+'education.github.com','pages.github.com',
+'docs.github','skills.github','education.github','pages.github',
+'codeload.github.com','codeload.github',
+'objects.githubusercontent.com','user-images.githubusercontent.com',
+'objects.githubusercontent','user-images.githubusercontent',
+
+// ── npm extras ────────────────────────────────────────────────────────────────
+'registry.npmjs.org','www.npmjs.com',
+'registry.npmjs','www.npmjs',
+
+// ── Cloudflare extra subdomains ───────────────────────────────────────────────
+'dash.cloudflare.com','blog.cloudflare.com',
+'dash.cloudflare','blog.cloudflare',
+
+// ── Stripe ────────────────────────────────────────────────────────────────────
+'dashboard.stripe.com','js.stripe.com',
+'dashboard.stripe','js.stripe',
+
+// ── PayPal ────────────────────────────────────────────────────────────────────
+'www.paypal.com','www.paypal',
+
+// ── Atlassian extra subdomains ────────────────────────────────────────────────
+'www.atlassian.com','id.atlassian.com',
+'www.atlassian','id.atlassian',
+
+// ── Slack CDN ─────────────────────────────────────────────────────────────────
+'files.slack.com','a.slack-edge.com','b.slack-edge.com',
+'files.slack','a.slack-edge','b.slack-edge',
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+'www.zoom.us','www.zoom',
+
+// ── Notion / Canva / Figma ────────────────────────────────────────────────────
+'www.notion.so','www.notion',
+'www.canva.com','media.canva.com','www.canva','media.canva',
+'www.figma.com','static.figma.com','www.figma','static.figma',
+
+// ── Reddit extra subdomains ───────────────────────────────────────────────────
+'new.reddit.com','sh.reddit.com','out.reddit.com',
+'new.reddit','sh.reddit','out.reddit',
+
+// ── Facebook / Instagram extra subdomains ─────────────────────────────────────
+'www.facebook.com','l.facebook.com','m.facebook.com',
+'www.facebook','l.facebook','m.facebook',
+'www.instagram.com','l.instagram.com',
+'www.instagram','l.instagram',
+
+// ── Twitter / X extra subdomains ─────────────────────────────────────────────
+'mobile.twitter.com','mobile.x.com',
+'mobile.twitter','mobile.x',
+
+// ── Bilibili CDN ──────────────────────────────────────────────────────────────
+'i0.hdslb.com','i1.hdslb.com','i2.hdslb.com',
+'s1.hdslb.com','s2.hdslb.com',
+'i0.hdslb','i1.hdslb','i2.hdslb','s1.hdslb','s2.hdslb',
+
+// ── Weibo CDN ─────────────────────────────────────────────────────────────────
+'wx1.sinaimg.cn','wx2.sinaimg.cn','wx3.sinaimg.cn',
+'wx1.sinaimg','wx2.sinaimg','wx3.sinaimg',
+
+// ── HoYoverse / Genshin extras ────────────────────────────────────────────────
+'webstatic.mihoyo.com','bbs.mihoyo.com',
+'webstatic.mihoyo','bbs.mihoyo',
+'www.hoyolab.com','act.hoyolab.com','sg-public-api.hoyolab.com',
+'www.hoyolab','act.hoyolab','sg-public-api.hoyolab',
+
+// ── Fandom / Wikia CDN extras ─────────────────────────────────────────────────
+'images.fandom.com','vignette.fandom.com','www.fandom.com',
+'images.fandom','vignette.fandom','www.fandom',
+
+// ── Discord extras ────────────────────────────────────────────────────────────
+'discordapp.io',
+'www.discordbotlist.com','www.disboard.org',
+'www.discordbotlist','www.disboard',
+
+// ── Pixiv ─────────────────────────────────────────────────────────────────────
+'pixiv.net','www.pixiv.net','www.pixiv',
+'i.pximg.net','s.pximg.net','i.pximg','s.pximg',
+
+// ── DeviantArt / ArtStation extras ───────────────────────────────────────────
+'www.deviantart.com','www.deviantart',
+'www.artstation.com','www.artstation',
+
+// ── Hugging Face CDN ──────────────────────────────────────────────────────────
+'cdn-lfs.huggingface.co','cdn-lfs.huggingface',
+
+// ── Coding platforms ─────────────────────────────────────────────────────────
+'leetcode.com','assets.leetcode.com','assets.leetcode',
+'codeforces.com','espresso.codeforces.com','espresso.codeforces',
+'hackerrank.com','hrcdn.net','codewars.com',
+
+// ── File sharing extras ───────────────────────────────────────────────────────
+'gofile.io','store1.gofile.io','store1.gofile',
+'pastes.io','rentry.org','uguu.se','pomf.cat',
+'www.mediafire.com','www.mediafire',
+'mega.co.nz','www.mega.nz','www.mega',
+'www.pixeldrain.com','www.pixeldrain',
+'www.sendgb.com','www.sendgb',
+'paper.dropbox.com','paper.dropbox',
+'dl.boxcloud.com','app.box.com','dl.boxcloud','app.box',
+
+// ── BunnyCDN ─────────────────────────────────────────────────────────────────
+'b-cdn.net','cdn.bunny.net','storage.bunnycdn.com',
+'cdn.bunny','storage.bunnycdn',
+
+// ── Backblaze B2 ─────────────────────────────────────────────────────────────
+'f000.backblazeb2.com','f001.backblazeb2.com','f002.backblazeb2.com',
+'f003.backblazeb2.com','f004.backblazeb2.com',
+'f000.backblazeb2','f001.backblazeb2','f002.backblazeb2',
+'f003.backblazeb2','f004.backblazeb2',
+
+// ── Wasabi cloud storage ──────────────────────────────────────────────────────
+'s3.wasabisys.com','s3.wasabisys',
+
+// ── Gyazo extras ─────────────────────────────────────────────────────────────
+'thumb.gyazo.com','cache.gyazo.com',
+'thumb.gyazo','cache.gyazo',
+
+// ── Archive.org extras ───────────────────────────────────────────────────────
+'ia800.archive.org','ia801.archive.org',
+'ia800.archive','ia801.archive',
+
+// ── NASA / xkcd / misc educational ───────────────────────────────────────────
+'nasa.gov','apod.nasa.gov','apod.nasa',
+'xkcd.com','imgs.xkcd.com','imgs.xkcd',
+
+// ── Meme / social content sites ──────────────────────────────────────────────
+'9gag.com','img-9gag-fun.9cache.com','img-9gag-fun.9cache',
+'ifunny.co','cheezburger.com',
+
+// ── Wolframalpha extras ───────────────────────────────────────────────────────
+'www.wolframalpha.com','api.wolframalpha.com',
+'www.wolframalpha','api.wolframalpha',
+'products.wolframalpha.com','products.wolframalpha',
+
+// ── Miscellaneous Fediverse / community ───────────────────────────────────────
+'fosstodon.org','infosec.exchange','tech.lgbt',
+'bin.disroot.org','bin.disroot',
+
+// ── Val.town / repl.co ────────────────────────────────────────────────────────
+'val.town','repl.co','vercel.com','app.vercel.com','app.vercel',
+'app.netlify.com','app.netlify',
+
+// ── Misc random but commonly linked ──────────────────────────────────────────────
 'paste.rs',
 'envs.sh',
 '0x0.st',
