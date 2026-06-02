@@ -8609,6 +8609,39 @@ const COMMON_ALLOWED_DOMAINS = [
 'pathofexile.com',
 'runescape.com',
 
+// ════════════════════════════════════════════════════════════════════════════
+// FIX (round 2): remaining bare/partial subdomain forms not yet covered.
+// Same root cause as round 1 — obfuscation regex truncates TLD off subdomains.
+// ════════════════════════════════════════════════════════════════════════════
+'abcnews.go',
+'addons.mozilla','addons.opera',
+'api.symbolab','www.symbolab',
+'app.grammarly',
+'appinventor.mit','scratch.mit',
+'assignments.google','scholar.google','translate.google',
+'badge.fury',
+'canvas.instructure',
+'cfu.curse',
+'chat.openai',
+'classic.geogebra','www.geogebra',
+'confluence.atlassian','jira.atlassian',
+'copilot.microsoft',
+'cve.mitre','nvd.nist',
+'firebasestorage.googleapis','storage.googleapis',
+'ghostwriter.replit','up.railway',
+'meta.quest',
+'phet.colorado','phet-dev.colorado',
+'products.wolframalpha',
+'safelinks.protection.outlook',
+'sky.shiiyu',
+'socialclub.rockstargames',
+'static.wikia.nocookie','wikia.nocookie',
+'studio.code',
+'support.discord',
+'www.reddit','www.roblox',
+'bbci.co',
+'photos.app',
+
 // ── Misc random but commonly linked ──────────────────────────────────────────
 'paste.rs',
 'envs.sh',
