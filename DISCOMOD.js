@@ -5597,6 +5597,8 @@ const SEA_EVENTS = [
     "sea beast spawn","seabeast spawn",
     "rip indra","ripindra",
     "cursed ship","cursedship",
+    // ── Hydra ─────────────────────────────────────────────────────────────
+    "hydra","hydra island","hydraisland","hydra event",
 ];
 const SEA_EVENT_ALIASES = {
     "sb":"sea beast","seabst":"sea beast","sebeast":"sea beast",
@@ -5621,6 +5623,7 @@ const SEA_EVENT_ALIASES = {
     "preh":"prehistoric island","prehi":"prehistoric island","prehisland":"prehistoric island",
     "ki":"kitsune island","kitsuneisle":"kitsune island","kitsunisl":"kitsune island",
     "kitsuneisl":"kitsune island","kitisland":"kitsune island",
+    "hy":"hydra","hydr":"hydra","hydraid":"hydra island","hydraisld":"hydra island","hydroisland":"hydra island",
 };
 
 // ══════════════════════════════════════════════════════════
@@ -16446,9 +16449,9 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
         // AND nospace form (for emoji names like :needmagma: that have no separator at all).
         // Also scan raw emoji slugs individually so a Nitro/external emoji named
         // e.g. "need_hosting_magma" gets caught even if fullClean folds it unexpectedly.
-        const hasNeedHostingClean  = /\b(need|needing|hosting|wanna|want\s+to|hunt|hunting|wanna\s+do|wanna\s+join|anyone\s+wanna)\b/i.test(contentClean);
-        const hasNeedHostingNospace= /need|needing|hosting|wanna|wantto|hunt|hunting/i.test(contentNospace);
-        const hasNeedHostingEmoji  = emojiNames.some(n => /need|needing|hosting|wanna|hunt|hunting/i.test(n));
+        const hasNeedHostingClean  = /\b(need|needing|hosting|wanna|want\s+to|hunt|hunting|wanna\s+do|wanna\s+join|anyone\s+wanna|lf|looking\s+for|l00king\s+for|lookin\s+for|who\s+(?:is\s+)?(?:hosting|doing|running|down\s+for)|who\s+(?:wanna?|wants?\s+to))\b/i.test(contentClean);
+        const hasNeedHostingNospace= /need|needing|hosting|wanna|wantto|hunt|hunting|lookingfor|lookinfor|l00kingfor|\blf\b/i.test(contentNospace);
+        const hasNeedHostingEmoji  = emojiNames.some(n => /need|needing|hosting|wanna|hunt|hunting|lf|lookingfor|who/i.test(n));
         const hasNeedHosting = hasNeedHostingClean || hasNeedHostingNospace || hasNeedHostingEmoji;
         if (hasNeedHosting) {
             const hasBossOrSeaEv =
