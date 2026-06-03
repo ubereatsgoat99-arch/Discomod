@@ -1128,19 +1128,22 @@ for line in sys.stdin:
     // PATCH: added timeoutMs param (default 60 s). Requests that exceed the
     // timeout are rejected and the worker is killed + auto-restarted so no
     // future command ever hangs permanently.
-    request(method, params, timeoutMs = 60000) {
+    request(method, params, timeoutMs = null) {
+        // null → read from saved config each time so /crashtimeout changes take effect immediately.
+        // 0 → no timeout (infinite). Callers can still pass an explicit value to override.
+        if (timeoutMs === null) timeoutMs = getCrashTimeoutMs(loadData());
         this.start();
         const id = this.nextId++;
         const payload = { id, method, params: params || {} };
         return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
+            const timer = timeoutMs > 0 ? setTimeout(() => {
                 if (!this.pending.has(id)) return;
                 this.pending.delete(id);
                 console.error(`[PyWorker] request "${method}" id=${id} timed out after ${timeoutMs}ms — killing worker`);
                 reject(new Error(`PyWorker request "${method}" timed out`));
                 // Kill the hung process — the exit handler will auto-restart it
                 try { if (this.proc) { this.proc.kill('SIGKILL'); } } catch {}
-            }, timeoutMs);
+            }, timeoutMs) : null;
             this.pending.set(id, { resolve, reject, timer });
             try {
                 this.proc.stdin.write(JSON.stringify(payload) + '\n');
@@ -1192,14 +1195,15 @@ async function sendLongToInteraction(interaction, text) {
 }
 
 async function superqalcOnefile(expression) {
+    const timeoutMs = getCrashTimeoutMs(loadData());
     return new Promise((resolve) => {
         const p = spawn('./superqalc_onefile', [String(expression || '')], { stdio: ['ignore', 'pipe', 'pipe'] });
         let out = '';
         let err = '';
-        const timer = setTimeout(() => {
+        const timer = timeoutMs > 0 ? setTimeout(() => {
             try { p.kill('SIGKILL'); } catch {}
-            resolve('Error: superqalc_onefile timed out after 30s.');
-        }, 30000);
+            resolve(`Error: superqalc_onefile timed out after ${timeoutMs / 1000}s.`);
+        }, timeoutMs) : null;
         p.stdout.on('data', (d) => (out += d.toString('utf8')));
         p.stderr.on('data', (d) => (err += d.toString('utf8')));
         p.on('close', (code) => {
@@ -1212,14 +1216,15 @@ async function superqalcOnefile(expression) {
 }
 
 async function superqalcTower(expression) {
+    const timeoutMs = getCrashTimeoutMs(loadData());
     return new Promise((resolve) => {
         const p = spawn('./superqalc_tower', [], { stdio: ['pipe', 'pipe', 'pipe'] });
         let out = '';
         let err = '';
-        const timer = setTimeout(() => {
+        const timer = timeoutMs > 0 ? setTimeout(() => {
             try { p.kill('SIGKILL'); } catch {}
-            resolve('Error: superqalc_tower timed out after 30s.');
-        }, 30000);
+            resolve(`Error: superqalc_tower timed out after ${timeoutMs / 1000}s.`);
+        }, timeoutMs) : null;
         p.stdout.on('data', (d) => (out += d.toString('utf8')));
         p.stderr.on('data', (d) => (err += d.toString('utf8')));
         p.on('close', (code) => {
@@ -1236,15 +1241,31 @@ async function superqalcTower(expression) {
 const WOLFRAM_APPID = process.env.WOLFRAM_APPID || '';
 const QALCULATE_PATH = process.env.QALCULATE_PATH || path.join(__dirname, 'math_modules', 'qalc');
 
+// ── Process crash/kill timeout ─────────────────────────────────────────────
+// Applies to superqalcOnefile, superqalcTower, qalcEval, and PyWorker.
+// 0 = no timeout (infinite). Configurable via /set crashtimeout.
+// Stored in data.botConfig.crashTimeoutMs. Default: 30 000 ms.
+const DEFAULT_CRASH_TIMEOUT_MS = 30000;
+function getCrashTimeoutMs(data) {
+    const v = data?.botConfig?.crashTimeoutMs;
+    if (v === 0) return 0;
+    return (typeof v === 'number' && v > 0) ? v : DEFAULT_CRASH_TIMEOUT_MS;
+}
+
 async function qalcEval(expression) {
+    const timeoutMs = getCrashTimeoutMs(loadData());
     return new Promise((resolve) => {
         const p = spawn(QALCULATE_PATH, ['-e', String(expression || '')], { stdio: ['ignore', 'pipe', 'pipe'] });
         let out = '';
         let err = '';
+        const timer = timeoutMs > 0 ? setTimeout(() => {
+            try { p.kill('SIGKILL'); } catch {}
+            resolve(`Error: qalc timed out after ${timeoutMs / 1000}s.`);
+        }, timeoutMs) : null;
         p.stdout.on('data', (d) => (out += d.toString('utf8')));
         p.stderr.on('data', (d) => (err += d.toString('utf8')));
-        p.on('close', () => resolve((out.trim() || err.trim() || '(No output)')));
-        p.on('error', (e) => resolve(`Error running qalc: ${e.message}`));
+        p.on('close', () => { if (timer) clearTimeout(timer); resolve((out.trim() || err.trim() || '(No output)')); });
+        p.on('error', (e) => { if (timer) clearTimeout(timer); resolve(`Error running qalc: ${e.message}`); });
     });
 }
 
@@ -9691,6 +9712,15 @@ const slashCommands = [
         .addIntegerOption(o => o.setName('level').setDescription('1-10').setRequired(true)),
 
     new SlashCommandBuilder()
+        .setName('crashtimeout')
+        .setDescription('Set the kill timeout for hung math processes (qalc, superqalc, PyWorker). 0 = no timeout.')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addStringOption(o => o
+            .setName('duration')
+            .setDescription('e.g. 30s, 1m, 2h — or 0 to disable the timeout entirely')
+            .setRequired(true)),
+
+    new SlashCommandBuilder()
         .setName('case')
         .setDescription('Case management')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
@@ -12005,6 +12035,75 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({ content: `✅ Strictness updated: **${before}** -> **${gs.regexStrictness}**`, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Strictness Updated', [
                 `regexStrictness: **${before}** -> **${gs.regexStrictness}**`,
+            ]);
+            break;
+        }
+
+        case 'crashtimeout': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            const raw = (interaction.options.getString('duration') || '').trim();
+
+            // Allow bare "0" to mean "disable"
+            let newMs;
+            if (raw === '0') {
+                newMs = 0;
+            } else {
+                // parseDuration returns minutes; multiply back to ms.
+                // But we also want to support sub-minute values (seconds), so
+                // check if the input is purely seconds first.
+                const secMatch = raw.match(/^(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)$/i);
+                if (secMatch) {
+                    newMs = Math.round(parseFloat(secMatch[1]) * 1000);
+                } else {
+                    const mins = parseDuration(raw);
+                    if (mins === null) {
+                        await interaction.reply({ content: '❌ Invalid duration. Use e.g. `30s`, `2m`, `1h`, or `0` to disable.', flags: MessageFlags.Ephemeral });
+                        return;
+                    }
+                    newMs = mins * 60 * 1000;
+                }
+                // Clamp to a sane range: minimum 1 s, maximum 24 h
+                if (newMs < 1000) {
+                    await interaction.reply({ content: '❌ Minimum timeout is **1s**. Use `0` to disable entirely.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                if (newMs > 86400000) {
+                    await interaction.reply({ content: '❌ Maximum timeout is **24h**.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+            }
+
+            const prevMs = getCrashTimeoutMs(data);
+            const prevLabel = prevMs === 0 ? '∞ (disabled)' : `${prevMs / 1000}s`;
+            const newLabel  = newMs  === 0 ? '∞ (disabled)' : `${newMs  / 1000}s`;
+
+            data.botConfig = data.botConfig || {};
+            data.botConfig.crashTimeoutMs = newMs;
+            saveData(data);
+
+            const warningLine = newMs === 0
+                ? '\n\n⚠️ **Warning:** Timeout is now **disabled**. A hung qalc/superqalc/Python process will block that command forever and pile up zombie processes until the bot is restarted.'
+                : '';
+
+            await interaction.reply({
+                embeds: [new EmbedBuilder()
+                    .setTitle('⏱️ Process Crash Timeout Updated')
+                    .setColor(newMs === 0 ? 0xFF8800 : 0x00CC66)
+                    .addFields(
+                        { name: 'Previous', value: prevLabel, inline: true },
+                        { name: 'New',      value: newLabel,  inline: true },
+                        { name: 'Affects',  value: '`qalc` · `superqalc_onefile` · `superqalc_tower` · `PyWorker` (Python/SymPy/mpmath)', inline: false },
+                    )
+                    .setDescription(newMs === 0
+                        ? '⚠️ **Timeout disabled.** Hung processes will run forever until you restart the bot. Only do this if you know what you\'re doing.'
+                        : `✅ Hung math processes will be killed after **${newLabel}**.`)
+                    .setTimestamp()],
+                flags: MessageFlags.Ephemeral,
+            });
+
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '⏱️ Crash Timeout Updated', [
+                `crashTimeoutMs: **${prevLabel}** -> **${newLabel}**`,
+                newMs === 0 ? '⚠️ Timeout disabled — processes run unchecked' : null,
             ]);
             break;
         }
