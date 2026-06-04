@@ -2035,10 +2035,39 @@ const SCAM_OR_EXPLOIT_PHRASES_EXTRA2 = [
 
 // Extensions that are media file types, not TLDs — never treat these as domain extensions
 const MEDIA_FILE_EXTENSIONS = new Set([
-    'gif','png','jpg','jpeg','webp','mp4','mov','avi','mkv','webm','mp3',
-    'wav','ogg','flac','aac','m4a','pdf','zip','rar','7z','tar','gz',
+    // Images
+    'gif','png','jpg','jpeg','webp','bmp','tiff','tif','svg','ico','heic','heif',
+    'avif','jfif','pjpeg','pjp','apng','cur','dib','jpe','jxl','raw','cr2','nef',
+    'orf','arw','dng','rw2','pef','srw','x3f','raf','3fr','mef','erf','kdc',
+    // Video
+    'mp4','mov','avi','mkv','webm','flv','wmv','m4v','3gp','3g2','ogv','ts',
+    'mts','m2ts','vob','divx','xvid','rmvb','rm','asf','mpg','mpeg','m2v',
+    'mxf','f4v','f4p','f4a','f4b','ogm','qt','yuv','roq','nsv','amv','svi',
+    // Audio
+    'mp3','wav','ogg','flac','aac','m4a','wma','opus','aiff','aif','aifc',
+    'mid','midi','mka','mpc','ape','wv','tta','spx','caf','ra','ram','au',
+    'voc','dss','msv','aa','aax','act','ivs','gsm','dvf','m4b','m4p','mmf',
+    // Documents / Archives
+    'pdf','zip','rar','7z','tar','gz','bz2','xz','lz','lzma','zst','br',
+    'tgz','tbz2','txz','cab','iso','dmg','pkg','deb','rpm','apk','ipa',
+    'jar','war','ear','nupkg','vsix','crx','xpi',
+    // Text / Code / Data
     'txt','json','xml','csv','html','htm','css','js','ts','py','java',
-    'rb','go','rs','cpp','c','h','cs','php','sh','bat','md','log',
+    'rb','go','rs','cpp','c','h','cs','php','sh','bat','md','log','ini',
+    'cfg','conf','yaml','yml','toml','env','sql','db','sqlite','sqlite3',
+    'lock','sum','mod','jsx','tsx','vue','svelte','scss','sass','less',
+    'graphql','gql','proto','wasm','wat',
+    // Executables / System
+    'exe','msi','dll','so','dylib','lib','bin','elf','out','app','com',
+    'scr','sys','drv','ocx',
+    // Office
+    'doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp','rtf',
+    'pages','numbers','key','pub','vsd','vsdx',
+    // Fonts
+    'ttf','otf','woff','woff2','eot','fon','fnt',
+    // Subtitles / Playlists / Misc
+    'srt','ass','ssa','vtt','sbv','lrc','pls','m3u','m3u8','xspf',
+    'torrent','nfo','sfv','md5','sha1','sha256','cue',
 ]);
 
 function extractDomains(text) {
@@ -2050,6 +2079,9 @@ function extractDomains(text) {
         const m = u.match(/^https?:\/\/([^\/\s?#:]+)(?::\d+)?/i);
         if (m && m[1]) {
             const d = m[1].toLowerCase().replace(/^www\./, '');
+            // Skip if the "hostname" is actually a filename (e.g. TikTok CDN: v123abc.mov)
+            const tld = d.split('.').pop();
+            if (tld && MEDIA_FILE_EXTENSIONS.has(tld)) continue;
             domains.push(d);
             urlDomains.add(d);
         }
@@ -3316,6 +3348,10 @@ function detectObfuscatedDomains(rawText, extraAllowed) {
         // dot in it.  If there is no dot left the regex only captured a bare hostname
         // fragment (e.g. "roblox" from "www.roblox") — not a complete domain, skip it.
         if (!normalized.includes('.')) return false;
+        // Skip if the TLD is a known media/file extension — it's a filename, not a domain
+        // e.g. "v17044gh0000co8u9pfog65ng3cdtq40.mov" is a TikTok CDN video filename
+        const tld = normalized.split('.').pop();
+        if (tld && MEDIA_FILE_EXTENSIONS.has(tld)) return false;
         return !domainInList(cleaned, combined);
     });
     return suspicious.slice(0, 5);
