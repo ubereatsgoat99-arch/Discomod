@@ -17733,6 +17733,21 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                 .setDescription(`<@${rawId}> (${rawId}) — **${count}/${threshold}** violations`)
                 .addFields({ name: `Recent warnings (${history.length} total)`, value: histLines.length ? histLines.join('\n') : 'No warning history.', inline: false })
                 .setTimestamp();
+            // Admin warn-removal dropdown (user not in server — can't self-remove)
+            if (isAdmin && history.length > 0) {
+                const options = history.slice(-25).map((h, i) => {
+                    const ts    = h.timestamp ? new Date(h.timestamp).toLocaleDateString('en-GB') : '?';
+                    const label = `#${history.length - (history.slice(-25).length - 1 - i)} — ${String(h.reason).slice(0, 80)}`.slice(0, 100);
+                    const desc  = `[${h.category || 'unknown'}] ${ts}`.slice(0, 100);
+                    const val   = h.warnId || `idx_${i}`;
+                    return new StringSelectMenuOptionBuilder().setLabel(label).setDescription(desc).setValue(val);
+                });
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId(`rmwarn_${message.guildId}_${rawId}`)
+                    .setPlaceholder('🗑️ Select a warn to remove (admin only)')
+                    .addOptions(options);
+                return message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+            }
             return message.channel.send({ embeds: [embed] });
         }
         const count   = getViolationCount(data, target.id);
@@ -17746,10 +17761,44 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const embed = new EmbedBuilder()
             .setTitle('📊 Violation History')
             .setColor(count >= threshold ? 0xFF4444 : (count > 0 ? 0xFFAA00 : 0x00FF88))
+            .setThumbnail(target.user?.displayAvatarURL() || null)
             .setDescription(`${target} — **${count}/${threshold}** violations`)
             .addFields({ name: `Recent warnings (${history.length} total)`, value: histLines.length ? histLines.join('\n') : 'No warning history.', inline: false })
             .setTimestamp();
-        await message.channel.send({ embeds: [embed] });
+
+        // Admin-only: warn-removal dropdown + appeal button (mirrors /violations behaviour)
+        const canRemove = isAdmin && target.id !== message.author.id && history.length > 0;
+        const components = [];
+        if (canRemove) {
+            const options = history.slice(-25).map((h, i) => {
+                const ts    = h.timestamp ? new Date(h.timestamp).toLocaleDateString('en-GB') : '?';
+                const label = `#${history.length - (history.slice(-25).length - 1 - i)} — ${String(h.reason).slice(0, 80)}`.slice(0, 100);
+                const desc  = `[${h.category || 'unknown'}] ${ts}`.slice(0, 100);
+                const val   = h.warnId || `idx_${i}`;
+                return new StringSelectMenuOptionBuilder().setLabel(label).setDescription(desc).setValue(val);
+            });
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId(`rmwarn_${message.guildId}_${target.id}`)
+                .setPlaceholder('🗑️ Select a warn to remove (admin only)')
+                .addOptions(options);
+            components.push(new ActionRowBuilder().addComponents(menu));
+        }
+
+        // Appeal button — visible to admins & mods; sends appeal modal to the target user via DM
+        // Re-uses the existing open_warn_appeal flow so the target gets the modal in their DMs
+        if (history.length > 0 && (isAdmin || isMod)) {
+            const lastWarnId = getLastWarnId(data, target.id);
+            if (lastWarnId) {
+                const appealBtn = new ButtonBuilder()
+                    .setCustomId(`open_warn_appeal_${message.guildId}_${lastWarnId}`)
+                    .setLabel('📩 Appeal Latest Warning')
+                    .setStyle(ButtonStyle.Primary);
+                // Put appeal button in its own row (or alongside if row 1 is taken by dropdown)
+                components.push(new ActionRowBuilder().addComponents(appealBtn));
+            }
+        }
+
+        await message.channel.send({ embeds: [embed], components });
     }
 
     // !clearviolations [mention | id]
