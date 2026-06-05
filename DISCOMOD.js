@@ -3322,6 +3322,60 @@ function detectScamByMode(gs, contentClean, rawText) {
     return { hit: false };
 }
 
+// ── Real TLD allowlist ────────────────────────────────────────────────────────
+// detectObfuscatedDomains MUST require the "TLD" portion of every hit to be a
+// real registered TLD.  Without this, ordinary sentence punctuation like
+// "more. feel" collapses to "more.feel" and gets flagged — "feel" is not a TLD.
+//
+// This covers: all legacy gTLDs, all ccTLDs commonly seen in scam links,
+// every TLD already in SUSPICIOUS_TLDS, and the most common new gTLDs.
+// It intentionally omits random dictionary words that have never been TLDs.
+const REAL_TLDS = new Set([
+    // Legacy gTLDs
+    'com','net','org','edu','gov','mil','int','biz','info','name','mobi','aero','coop','museum','tel','travel','jobs','pro',
+    // New gTLDs (common / scam-relevant)
+    'io','co','ai','app','dev','cloud','online','site','store','shop','tech','digital','media','news','blog','studio',
+    'agency','design','marketing','email','finance','money','bank','insurance','legal','law','health','care',
+    'world','global','international','social','network','community','live','stream','video','tv','radio',
+    'space','fun','games','game','play','win','today','club','vip','pro','expert','solutions','services',
+    'support','help','center','click','link','page','web','host','server','systems','software','solutions',
+    'academy','university','institute','foundation','org','ngo','church','charity',
+    'art','gallery','photography','photo','music','band','theater','events',
+    'shop','market','trade','deals','discount','sale','promo','gift','rewards',
+    'id','me','us','uk','ca','au','nz','de','fr','es','it','nl','be','ch','at','se','no','dk','fi','pl','cz','hu',
+    'ru','ua','by','kz','tr','sa','ae','il','in','cn','jp','kr','sg','hk','tw','th','my','id','ph','vn',
+    'br','mx','ar','cl','co','pe','ve','ec','uy','py','bo',
+    'za','ng','ke','gh','eg','ma','tz','ug','et','sn',
+    'xyz','top','tk','gq','cf','ml','ga','icu','pw','work','zip','mov','lol','life',
+    'party','security','verify','verification','download','monster',
+    // ccTLDs that appear in real domains
+    'ac','ad','af','ag','ai','al','am','an','ao','aq','ar','as','at','au','aw','ax','az',
+    'ba','bb','bd','be','bf','bg','bh','bi','bj','bm','bn','bo','br','bs','bt','bv','bw','by','bz',
+    'cc','cd','cf','cg','ch','ci','ck','cl','cm','cn','cr','cu','cv','cw','cx','cy','cz',
+    'de','dj','dk','dm','do','dz',
+    'ec','ee','eg','er','es','et','eu',
+    'fi','fj','fk','fm','fo','fr',
+    'ga','gb','gd','ge','gf','gg','gh','gi','gl','gm','gn','gp','gq','gr','gs','gt','gu','gw','gy',
+    'hk','hm','hn','hr','ht','hu',
+    'id','ie','il','im','in','io','iq','ir','is','it',
+    'je','jm','jo','jp',
+    'ke','kg','kh','ki','km','kn','kp','kr','kw','ky','kz',
+    'la','lb','lc','li','lk','lr','ls','lt','lu','lv','ly',
+    'ma','mc','md','me','mg','mh','mk','ml','mm','mn','mo','mp','mq','mr','ms','mt','mu','mv','mw','mx','my','mz',
+    'na','nc','ne','nf','ng','ni','nl','no','np','nr','nu','nz',
+    'om',
+    'pa','pe','pf','pg','ph','pk','pl','pm','pn','pr','ps','pt','pw','py',
+    'qa',
+    're','ro','rs','ru','rw',
+    'sa','sb','sc','sd','se','sg','sh','si','sj','sk','sl','sm','sn','so','sr','ss','st','su','sv','sx','sy','sz',
+    'tc','td','tf','tg','th','tj','tk','tl','tm','tn','to','tr','tt','tv','tw','tz',
+    'ua','ug','uk','us','uy','uz',
+    'va','vc','ve','vg','vi','vn','vu',
+    'wf','ws',
+    'ye','yt',
+    'za','zm','zw',
+]);
+
 function normalizeObfuscatedDomainText(raw) {
     return String(raw || '')
         .toLowerCase()
@@ -3341,6 +3395,8 @@ function detectObfuscatedDomains(rawText, extraAllowed) {
     if (!hits.length) return [];
     // Filter out any match that is already a known-safe domain
     const combined = [...COMMON_ALLOWED_DOMAINS, ...(extraAllowed || [])];
+    // Build a lowercased version of the raw text for sentence-boundary checks.
+    const rawLower = String(rawText || '').toLowerCase();
     const suspicious = hits.filter(h => {
         const cleaned = h.replace(/\s+/g, '').toLowerCase();
         const normalized = normalizeDomain(cleaned);
@@ -3352,6 +3408,34 @@ function detectObfuscatedDomains(rawText, extraAllowed) {
         // e.g. "v17044gh0000co8u9pfog65ng3cdtq40.mov" is a TikTok CDN video filename
         const tld = normalized.split('.').pop();
         if (tld && MEDIA_FILE_EXTENSIONS.has(tld)) return false;
+        // Reject if the "TLD" is not a real registered TLD — catches sentence-boundary
+        // false positives like "more. feel" → "more.feel" where "feel" isn't a TLD.
+        if (!REAL_TLDS.has(tld)) return false;
+        // ── Sentence-boundary guard ───────────────────────────────────────────
+        // Even if "word.tld" passes the TLD check (e.g. "today.it", "pretty.me"),
+        // verify that in the ORIGINAL raw text the dot is actually attached to the
+        // word before it (no whitespace on the left side of the dot).  Sentence
+        // punctuation always looks like "word. Next" — there's a space AFTER the
+        // dot.  A real obfuscated domain either has no space ("discord.gg") or has
+        // symmetric spaces used for obfuscation ("discord . gg"), which the regex
+        // captures as a spaced hit.  We reject any hit where the raw text shows
+        // "<word>. <word>" — i.e. the dot is followed by a space in the original.
+        //
+        // Strategy: extract the two boundary words from `cleaned` (the part before
+        // and after the last dot) and look for the pattern "<left>. <right>" in the
+        // raw text.  If found, it's a sentence — not a domain.
+        const dotIdx = cleaned.lastIndexOf('.');
+        if (dotIdx > 0) {
+            const leftWord  = cleaned.slice(0, dotIdx);   // e.g. "today"
+            const rightWord = cleaned.slice(dotIdx + 1);  // e.g. "it"
+            // If the raw text contains "<leftWord>. <rightWord>" (dot + space) it's
+            // a sentence boundary.  Use a word-boundary aware check.
+            const sentencePattern = new RegExp(
+                leftWord.replace(/[-]/g, '\\-') + '\\.\\s+' + rightWord.replace(/[-]/g, '\\-'),
+                'i'
+            );
+            if (sentencePattern.test(rawLower)) return false;
+        }
         return !domainInList(cleaned, combined);
     });
     return suspicious.slice(0, 5);
