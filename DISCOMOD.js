@@ -2070,6 +2070,31 @@ const MEDIA_FILE_EXTENSIONS = new Set([
     'torrent','nfo','sfv','md5','sha1','sha256','cue',
 ]);
 
+// Allowlist of real/known TLDs for bare-domain detection.
+// The bare-domain pass ONLY fires if the suffix after the dot is in this set.
+// Anything else (bro, cap, god, love, lmao, etc.) is ignored as plain text.
+// This is strictly safer than a blocklist of "fake TLDs" which would always be incomplete.
+const KNOWN_REAL_TLDS = new Set([
+    // Generic
+    'com','net','org','edu','gov','mil','int',
+    // Country codes commonly abused in scam links
+    'io','co','cc','me','tv','fm','am','gg','to','ag','ai','bz','cx','hn','ms','nf','nr','nu',
+    'pn','sc','sh','sr','st','su','tk','tl','tm','vc','vg','ws',
+    // Common new gTLDs used by scammers (must be here so the bare-domain pass
+    // evaluates them — SUSPICIOUS_TLDS then flags them at the next step)
+    'xyz','top','gq','cf','ml','ga','icu','click','link','pw','work','zip','mov','lol','fun',
+    'live','life','support','help','center','claim','gift','rewards','win','winner','promo',
+    'giveaway','free','vip','site','online','store','shop','cloud','app','website','space',
+    'today','world','digital','team','pro','best','monster','stream','download','party',
+    'security','verify','verification',
+    // Other real gTLDs occasionally seen in scam links
+    'info','biz','name','mobi','tel',
+    // Common country codes
+    'ru','uk','de','fr','jp','cn','br','au','ca','it','es','nl','pl','se','no','fi','dk',
+    'be','ch','at','nz','za','mx','ar','cl','pe','id','ph','vn','th','sg','hk','tw','kr',
+    'in','pk','bd','lk','np','mm','kh','la','my',
+]);
+
 function extractDomains(text) {
     const domains = [];
     // First pass: extract full domains from https?:// URLs — these are authoritative
@@ -2090,9 +2115,11 @@ function extractDomains(text) {
     const bare = (text.match(/(?:^|[^a-z0-9\/])([a-z0-9][a-z0-9\-]{0,60}\.[a-z]{2,})(?![a-z0-9])/gi) || [])
         .map(m => m.replace(/^[^a-z0-9]+/i, '').toLowerCase());
     for (const b of bare) {
-        // Skip if TLD is a media/file extension — it's a filename, not a domain
         const tld = b.split('.').pop();
+        // Skip if TLD is a media/file extension — it's a filename, not a domain
         if (MEDIA_FILE_EXTENSIONS.has(tld)) continue;
+        // Skip if TLD is not a real/known TLD — catches "fr.bro", "no.cap", "i.love", etc.
+        if (!KNOWN_REAL_TLDS.has(tld)) continue;
         // Skip if this bare match is just a partial sub-string of a URL domain already captured
         // e.g. "cdn.discordapp" is already covered by "cdn.discordapp.com"
         const isPartialOfUrlDomain = [...urlDomains].some(ud => ud === b || ud.endsWith('.' + b));
