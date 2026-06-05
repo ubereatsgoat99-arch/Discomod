@@ -16661,14 +16661,19 @@ async function checkServicesViolation(message, contentClean, contentNospace, emo
                 hasBossRegex ||
                 Object.keys(BOSS_ALIASES).some(alias => {
                     const a = alias.toLowerCase();
-                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a)
-                        // Also check raw emoji names in case the boss name appears only in a slug
-                        || emojiNames.some(n => n.includes(a)));
+                    // Require 4+ chars for alias matching — short aliases (bob, saw, wa, ma, se...)
+                    // are too generic and collide with common English words like "bobbing", "wanna", "saw"
+                    if (a.length < 4) return false;
+                    const wbMatch = new RegExp(`(?<![a-z])${a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?![a-z])`, 'i').test(contentClean);
+                    const nsMatch = contentNospace.includes(a);
+                    return wbMatch || nsMatch || emojiNames.some(n => n.includes(a));
                 }) ||
                 Object.keys(SEA_EVENT_ALIASES).some(alias => {
                     const a = alias.toLowerCase();
-                    return a.length >= 2 && (contentClean.includes(a) || contentNospace.includes(a)
-                        || emojiNames.some(n => n.includes(a)));
+                    if (a.length < 4) return false;
+                    const wbMatch = new RegExp(`(?<![a-z])${a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?![a-z])`, 'i').test(contentClean);
+                    const nsMatch = contentNospace.includes(a);
+                    return wbMatch || nsMatch || emojiNames.some(n => n.includes(a));
                 }) ||
                 // Also catch boss/sea-event names appearing directly inside emoji slugs
                 // (e.g. a Nitro emoji :magma_boss: or :harbinger_hosting:)
