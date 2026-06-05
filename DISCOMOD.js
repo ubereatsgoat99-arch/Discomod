@@ -1800,7 +1800,7 @@ const INTENT_PHRASE_EXTRA2 = [
     "underpay","under pay","under-pay","up","up for","i underpay","up offers",
     "value check","valuecheck","wfl","l","w","fair trade","fair offer","unfair trade",
     "trade value","fruit value","perm value","gp value","gamepass value",
-    "dm me","dms","dm","pm","msg","message me",
+    // "dm me","dms","dm","pm","msg","message me" — removed: too broad, fires on normal promo posts
     "no scam","not scam","legit trade","trusted trade","mm","middleman","use mm","use middleman",
     "trade in dms","trading in dms","dm trade","pm trade",
     "quick trade","fast trade","instant trade","now trade","trade now",
