@@ -2102,6 +2102,50 @@ function extractDomains(text) {
     return [...new Set(domains)];
 }
 
+// ── DM-solicitation + freebie combos ──────────────────────────────────────────
+// Catches: "dm me for free fruits", "dm me for free perms", "dm for free gp", etc.
+// These are the "no link needed" scam vectors where someone baits users into DMs.
+const SCAM_DM_FREEBIE_PHRASES = [
+    // free fruits via DM
+    'dm me for free fruit','dm me for free fruits','dm for free fruit','dm for free fruits',
+    'pm me for free fruit','pm me for free fruits','pm for free fruit','pm for free fruits',
+    'message me for free fruit','message me for free fruits','msg me for free fruit','msg me for free fruits',
+    'hmu for free fruit','hmu for free fruits',
+    'slide in dms for free fruit','slide in dm for free fruit','dms for free fruit','dm for free fruits',
+
+    // free perms via DM
+    'dm me for free perm','dm me for free perms','dm for free perm','dm for free perms',
+    'pm me for free perm','pm me for free perms','pm for free perm','pm for free perms',
+    'message me for free perm','message me for free perms','msg me for free perm','msg me for free perms',
+    'hmu for free perm','hmu for free perms',
+    'slide in dms for free perm','slide in dms for free perms','dms for free perm','dms for free perms',
+
+    // free gamepass / gp via DM
+    'dm me for free gamepass','dm me for free gp','dm for free gamepass','dm for free gp',
+    'pm me for free gamepass','pm me for free gp','pm for free gamepass','pm for free gp',
+    'message me for free gamepass','message me for free gp','hmu for free gamepass','hmu for free gp',
+
+    // free items / stuff via DM (generic)
+    'dm me for free items','dm me for free stuff','dm for free items','dm for free stuff',
+    'pm me for free items','pm me for free stuff','hmu for free items','hmu for free stuff',
+
+    // giving away free perms/fruits in DMs
+    'giving free perms in dms','giving free perm in dms','giving free perms in dm','giving free perm in dm',
+    'giving free fruits in dms','giving free fruit in dms','giving free fruits in dm','giving free fruit in dm',
+    'giving away free perms dm','giving away free perm dm','giving away free fruits dm','giving away free fruit dm',
+    'dropping free perms in dms','dropping free perm in dms','dropping free fruits in dms',
+
+    // "free perms if you dm" / "free fruits if you dm"
+    'free perms if you dm','free perm if you dm','free perms if u dm','free perm if u dm',
+    'free fruits if you dm','free fruit if you dm','free fruits if u dm','free fruit if u dm',
+    'free gp if you dm','free gamepass if you dm','free gp if u dm','free gamepass if u dm',
+
+    // "free perms in dms" / "free fruits in dms"
+    'free perms in dms','free perm in dms','free perms in dm','free perm in dm',
+    'free fruits in dms','free fruit in dms','free fruits in dm','free fruit in dm',
+    'free gp in dms','free gamepass in dms',
+];
+
 function detectScamOrExploit(cleanText, rawText, guildAllowlist) {
     const t = cleanText;
     const ns = t.replace(/[\s_]/g,'');
@@ -2132,6 +2176,14 @@ function detectScamOrExploit(cleanText, rawText, guildAllowlist) {
         const pc = p.replace(/[\s_]/g,'');
         if (pc.length >= 6 && ns.includes(pc)) return { hit: true, reason: `Matched phrase: ${phrase}` };
         if (t.includes(p)) return { hit: true, reason: `Matched phrase: ${phrase}` };
+    }
+
+    for (const phrase of SCAM_DM_FREEBIE_PHRASES) {
+        const p = phrase.toLowerCase();
+        if (p.length < 4) continue;
+        const pc = p.replace(/[\s_]/g,'');
+        if (pc.length >= 6 && ns.includes(pc)) return { hit: true, reason: `DM freebie solicitation: ${phrase}` };
+        if (t.includes(p)) return { hit: true, reason: `DM freebie solicitation: ${phrase}` };
     }
 
     const domains = extractDomains(rawText || t);
