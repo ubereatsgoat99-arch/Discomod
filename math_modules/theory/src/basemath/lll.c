@@ -147,15 +147,6 @@ condition_bound(GEN U, int lower)
   return gc_long(av, gexpo(U) + e);
 }
 
-static long
-gsisinv(GEN M)
-{
-  long i, l = lg(M);
-  for (i = 1; i < l; ++i)
-    if (! signe(gmael(M, i, i))) return 0;
-  return 1;
-}
-
 INLINE long
 nbits2prec64(long n)
 {
@@ -225,7 +216,7 @@ gramschmidt_dynprec(GEN M)
   {
     GEN B, Q, L;
     long prec = nbits2prec64(bitprec), mbitprec;
-    if (!QR_init(RgM_gtofp(M, prec), &B, &Q, &L, prec) || !gsisinv(L))
+    if (!QR_init(RgM_gtofp(M, prec), &B, &Q, &L, prec))
     {
       bitprec *= 2;
       set_avma(ltop);
@@ -2375,23 +2366,41 @@ static GEN
 get_gramschmidt(GEN M, long rank)
 {
   GEN B, Q, L;
-  long r = lg(M)-1, bitprec = 3*r + 30;
-  long prec = nbits2prec64(bitprec);
+  long r = lg(M)-1, prec = nbits2prec64(3*r + 30);
   if (rank < r) M = vconcat(gshift(M,1), matid(r));
-  if (!QR_init(RgM_gtofp(M, prec), &B, &Q, &L, prec) || !gsisinv(L)) return NULL;
+  if (!QR_init(RgM_gtofp(M, prec), &B, &Q, &L, prec)) return NULL;
   return L;
 }
 
 static GEN
-get_gaussred(GEN M, long rank)
+get_cholesky(GEN M, long rank)
 {
-  pari_sp ltop = avma;
-  long r = lg(M)-1, bitprec = 3*r + 30, prec = nbits2prec64(bitprec);
-  GEN R;
+  long r = lg(M)-1, prec = nbits2prec64(3*r + 30);
   if (rank < r) M = RgM_Rg_add(gshift(M, 1), gen_1);
-  R = RgM_Cholesky(RgM_gtofp(M, prec), prec);
-  if (!R) return NULL;
-  return gc_GEN(ltop, R);
+  return RgM_Cholesky(RgM_gtofp(M, prec), prec);
+}
+
+static long
+thsn(long n)
+{
+  long T[]={23280,30486,50077,44136,78724,15690,1801,1611,
+            981,1359,978,1042,815,866,788,775,726,712,
+            626,613,548,564,474,481,504,447,453,508,
+            705,794,1008,946,767,898,886,763,842,757,
+            725,774,639,655,705,627,635,704,511,613,
+            583,595,568,640,541,640,567,540,577,584,
+            546,509,526,572,637,746,772,743,743,742,800,708,832,768,707,692,692,768,696,635,709,694,768,719,655,569,590,644,685,623,627,720,633,636,602,635,575,631,642,647,632,656,573,511,688,640,528,616,511,559,601,620,635,688,608,768,658,582,644,704,555,673,600,601,641,661,601,670};
+  return T[minss(n-3,numberof(T)-1)];
+}
+static long
+thre(long n)
+{
+  long T[]={31783,34393,20894,22525,13533,1928,672,671,
+            422,506,315,313,222,205,167,154,139,138,
+            110,120,98,94,81,75,74,64,74,74,
+            79,96,112,111,105,104,96,86,84,78,75,70,66,62,62,57,56,47,45,52,50,44,48,42,36,35,35,34,40,33,34,32,36,31,
+            38,38,40,38,38,37,35,31,34,36,34,32,34,32,28,27,25,31,25,27,28,26,25,21,21,25,25,22,21,24,24,22,21,23,22,22,22,22,21,24,21,22,19,20,19,20,19,19,19,18,19,18,18,20,19,20,18,19,18,21,18,20,18,18};
+   return T[minss(n-3,numberof(T)-1)];
 }
 
 /* Assume x a ZM, if pN != NULL, set it to Gram-Schmidt (squared) norms
@@ -2407,21 +2416,9 @@ ZM_lll_norms(GEN x, double DELTA, long flag, GEN *pN)
   pari_sp av = avma;
   const double ETA = 0.51;
   const long keepfirst = flag & LLL_KEEP_FIRST;
-  long p, zeros = -1, n = lg(x)-1, is_upper, is_lower, useflatter = 0, rank;
+  long p, zeros = -1, n = lg(x)-1, is_upper, is_lower, useflatter, rank;
   GEN G, B, U, L = NULL;
   pari_timer T;
-  long thre[]={31783,34393,20894,22525,13533,1928,672,671,
-                422,506,315,313,222,205,167,154,139,138,
-                110,120,98,94,81,75,74,64,74,74,
-                79,96,112,111,105,104,96,86,84,78,75,70,66,62,62,57,56,47,45,52,50,44,48,42,36,35,35,34,40,33,34,32,36,31,
-                38,38,40,38,38,37,35,31,34,36,34,32,34,32,28,27,25,31,25,27,28,26,25,21,21,25,25,22,21,24,24,22,21,23,22,22,22,22,21,24,21,22,19,20,19,20,19,19,19,18,19,18,18,20,19,20,18,19,18,21,18,20,18,18};
-  long thsn[]={23280,30486,50077,44136,78724,15690,1801,1611,
-               981,1359,978,1042,815,866,788,775,726,712,
-               626,613,548,564,474,481,504,447,453,508,
-               705,794,1008,946,767,898,886,763,842,757,
-               725,774,639,655,705,627,635,704,511,613,
-               583,595,568,640,541,640,567,540,577,584,
-               546,509,526,572,637,746,772,743,743,742,800,708,832,768,707,692,692,768,696,635,709,694,768,719,655,569,590,644,685,623,627,720,633,636,602,635,575,631,642,647,632,656,573,511,688,640,528,616,511,559,601,620,635,688,608,768,658,582,644,704,555,673,600,601,641,661,601,670};
   if (n <= 1) return lll_trivial(x, flag);
   if (nbrows(x)==0)
   {
@@ -2443,26 +2440,31 @@ ZM_lll_norms(GEN x, double DELTA, long flag, GEN *pN)
     is_lower = !B || is_upper || keepfirst ? 0: ZM_is_lower(B);
     if (is_lower) L = RgM_flip(B);
   }
-  rank = (flag&LLL_NOFLATTER) ? 0: ZM_rank(x);
+  rank = useflatter = 0;
   if (n > 2 && !(flag&LLL_NOFLATTER))
   {
-    GEN R = B ? (is_upper ? B : (is_lower ? L : get_gramschmidt(B, rank)))
-              : get_gaussred(G, rank);
+    pari_sp av2 = avma;
+    GEN R;
+    rank = ZM_rank(x);
+    R = B ? (is_upper ? B : (is_lower ? L : get_gramschmidt(B, rank)))
+          : get_cholesky(G, rank);
     if (R)
     {
-      long spr = spread(R), sz = mpexpo(gsupnorm(R, DEFAULTPREC)), thr;
-      if (DEBUGLEVEL>=5) err_printf("LLL: dim %ld, size %ld, spread %ld\n",n, sz, spr);
+      long spr = spread(R), sz = gexpo(R), thr;
+      if (DEBUGLEVEL>=5)
+        err_printf("LLL: dim %ld, size %ld, spread %ld\n",n, sz, spr);
       if ((is_upper && ZM_is_knapsack(B)) || (is_lower && ZM_is_knapsack(L)))
-        thr = thsn[minss(n-3,numberof(thsn)-1)];
+        thr = thsn(n);
       else
       {
-        thr = thre[minss(n-3,numberof(thre)-1)];
-        if (n>=10) sz = spr;
+        thr = thre(n);
+        if (n >= 10) sz = spr;
       }
       useflatter = sz >= thr;
     } else
       useflatter = 1;
-  } else useflatter = 0;
+    set_avma(av2);
+  }
   if(DEBUGLEVEL>=4) timer_start(&T);
   if (useflatter)
   {

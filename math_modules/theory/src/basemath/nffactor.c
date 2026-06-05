@@ -1300,7 +1300,7 @@ bestlift_bound(GEN C, long d, double alpha, GEN p, long f)
 /* M invertible ZM (would also work with a mix of t_INT/t_REAL entries).
  * Return upper triangular matrix R from QR decomposition of
  * M and set B = squared lengths of orthogonalized vectors.
- * R and B have t_INT/t_REAL coefs; in fact B[i] t_REAL for i > 1 */
+ * R and B have t_INT/t_REAL coefs */
 static GEN
 get_R(GEN M, GEN *pB)
 {
@@ -1353,9 +1353,9 @@ max_radius(GEN PRK)
   S = RgM_inv_upper( get_R(PRK, &B) ); if (!S) pari_err_PREC("max_radius");
   for (i=1; i<=d; i++) /* S[i,i] = gen_1 */
   {
-    GEN s = ginv(gel(B,i)); /* possibly t_INT/t_FRAC if i = 1; else t_REAL */
-    for (j = i+1; j <= d; j++) /* mpdiv OK: B[j] t_REAL for j > 1 */
-      s = gadd(s, mpdiv(mpsqr(gcoeff(S,i,j)), gel(B,j))); /* add t_REAL to s */
+    GEN s = ginv(gel(B,i)); /* t_INT, t_FRAC or t_REAL */
+    for (j = i+1; j <= d; j++) /* s += a t_INT, t_FRAC or t_REAL */
+      s = gadd(s, gdiv(mpsqr(gcoeff(S,i,j)), gel(B,j)));
     if (gcmp(s, smax) > 0) smax = s;
   }
   return gc_upto(av, ginv(gmul2n(smax, 2)));

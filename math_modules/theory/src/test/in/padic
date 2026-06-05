@@ -108,7 +108,6 @@ fa=factorpadic(T,2,15); [poldegree(P) | P <- fa[,1]]
 T=polsubcyclo(271,9);
 factorpadic(T,3,7)[4,1]
 
-polteichmuller(0*x^0,5,10)
 polteichmuller(2*x^0,5,10)
 polteichmuller(3*x-2,5,10)
 checkfrob(P,p,e)=
@@ -116,7 +115,7 @@ checkfrob(P,p,e)=
   my(Q=polteichmuller(P,p,e));
   if(valuation(content(minpoly(Mod(x,Q)^p)-Q),p)<e,error([P,p,e]));
 }
-checkfrob(x^7+x+3,5,10)
+checkfrob(x^7+x+4,5,10)
 checkfrob(ffinit(2,8),2,10)
 
 \\ #2352
@@ -124,6 +123,7 @@ liftall(factorpadic(4*x^4+1,3,10))
 liftall(factorpadic(36*x^4+1,3,10))
 
 \\ ERRORS, keep at end
+polteichmuller(0*x^0,5,10)
 padicappr(x^2+1+O(3), Mod(-1+O(5^10),y^2-2))
 padicappr(x^2+1+O(3), -1+O(5^10))
 padicappr(x^2+1, 1/3+O(3))

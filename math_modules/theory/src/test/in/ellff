@@ -68,6 +68,14 @@ R=elladd(E,P,Q);
 elladd(E,ellsub(E,R,P),ellneg(E,Q))
 ellmul(E,P,N)
 
+a=ffgen([53,36],'a); E=ellinit([a,a]);
+N=ellcard(E); C=ellcharpoly(E)
+if(subst(C,x,1)!=N, error("charpoly:",E));
+P=random(E);Q=random(E);
+R=elladd(E,P,Q);
+elladd(E,ellsub(E,R,P),ellneg(E,Q))
+ellmul(E,P,N)
+
 checkorder(E, N)=
 {
   for(i=1,4,

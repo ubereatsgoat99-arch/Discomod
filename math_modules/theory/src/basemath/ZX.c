@@ -1123,7 +1123,7 @@ GEN
 FqM_mul_Kronecker(GEN x, GEN y, GEN T, GEN p)
 {
   pari_sp av = avma;
-  long ex = ZXM_expi(x), ey = ZXM_expi(y), d= degpol(T), n = lg(x)-1;
+  long ex = ZXM_expi(x), ey = ZXM_expi(y), d = get_FpX_degree(T), n = lg(x)-1;
   long e = ex + ey + expu(d) + expu(n) + 4;
   long N = divsBIL(e)+1;
   GEN  z = ZM_mul(ZXM_eval2BIL(x,N), ZXM_eval2BIL(y,N));

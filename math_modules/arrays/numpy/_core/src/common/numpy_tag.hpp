@@ -1,5 +1,5 @@
-#ifndef NUMPY_CORE_SRC_COMMON_NUMPY_TAG_H_
-#define NUMPY_CORE_SRC_COMMON_NUMPY_TAG_H_
+#ifndef NUMPY_CORE_SRC_COMMON_NUMPY_TAG_HPP_
+#define NUMPY_CORE_SRC_COMMON_NUMPY_TAG_HPP_
 
 #include "numpy/ndarraytypes.h"
 #include "numpy/npy_common.h"
@@ -146,16 +146,16 @@ struct complex_type : complex_tag {
     {
         const auto ra = creal(a), rb = creal(b);
         const auto ia = cimag(a), ib = cimag(b);
-        if (ra > rb || (ra == ra && rb != rb)) {
+        if (ra > rb) {
             return ia == ia || ib != ib;
         }
-        if (ra < rb || (ra != ra && rb == rb)) {
+        if (ra < rb) {
             return ib != ib && ia == ia;
         }
         if (ra == rb || (ra != ra && rb != rb)) {
             return ia > ib || (ib != ib && ia == ia);
         }
-        return ra != ra;
+        return rb != rb;
     }
 };
 
@@ -267,4 +267,4 @@ constexpr int cmp(Args... args)
 
 }  // namespace npy
 
-#endif  // NUMPY_CORE_SRC_COMMON_NUMPY_TAG_H_
+#endif  // NUMPY_CORE_SRC_COMMON_NUMPY_TAG_HPP_

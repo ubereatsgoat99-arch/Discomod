@@ -3,9 +3,10 @@ Section: polynomials
 C-Name: polteichmuller
 Prototype: GUL
 Help: polteichmuller(T,p,r): return the polynomial whose roots (resp. leading
- coef) are the Teichmuller lift of the roots (resp. leading coef) of T, to
- p-adic precision r.
-Doc: given $T \in \F_{p}[X]$ return the polynomial $P\in \Z_{p}[X]$ whose roots
+ coef) are the Teichmuller lift of the roots (resp. leading coef) of the
+ irreducible polynomial T in Fp[X], to p-adic precision r.
+Doc: given an irreducible polynomial $T \in \F_{p}[X]$,
+ return the polynomial $P\in \Z_{p}[X]$ whose roots
  (resp.~leading coefficient) are the Teichmuller lifts of the roots
  (resp.~leading coefficient) of $T$, to $p$-adic precision $r$. If $T$ is
  monic, $P$ is the reduction modulo $p^{r}$ of the unique monic polynomial

@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: aiohttp
-Version: 3.13.5
+Version: 3.14.0
 Summary: Async http client/server framework (asyncio)
 Maintainer-email: aiohttp team <team@aiohttp.org>
 License: Apache-2.0 AND MIT
@@ -21,14 +21,13 @@ Classifier: Operating System :: MacOS :: MacOS X
 Classifier: Operating System :: Microsoft :: Windows
 Classifier: Programming Language :: Python
 Classifier: Programming Language :: Python :: 3
-Classifier: Programming Language :: Python :: 3.9
 Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
 Classifier: Programming Language :: Python :: 3.13
 Classifier: Programming Language :: Python :: 3.14
 Classifier: Topic :: Internet :: WWW/HTTP
-Requires-Python: >=3.9
+Requires-Python: >=3.10
 Description-Content-Type: text/x-rst
 License-File: LICENSE.txt
 License-File: vendor/llhttp/LICENSE
@@ -39,12 +38,13 @@ Requires-Dist: attrs>=17.3.0
 Requires-Dist: frozenlist>=1.1.1
 Requires-Dist: multidict<7.0,>=4.5
 Requires-Dist: propcache>=0.2.0
+Requires-Dist: typing_extensions>=4.4; python_version < "3.13"
 Requires-Dist: yarl<2.0,>=1.17.0
 Provides-Extra: speedups
-Requires-Dist: aiodns>=3.3.0; extra == "speedups"
-Requires-Dist: Brotli>=1.2; platform_python_implementation == "CPython" and extra == "speedups"
+Requires-Dist: aiodns>=3.3.0; (sys_platform != "android" and sys_platform != "ios") and extra == "speedups"
+Requires-Dist: Brotli>=1.2; (platform_python_implementation == "CPython" and sys_platform != "android" and sys_platform != "ios") and extra == "speedups"
 Requires-Dist: brotlicffi>=1.2; platform_python_implementation != "CPython" and extra == "speedups"
-Requires-Dist: backports.zstd; (platform_python_implementation == "CPython" and python_version < "3.14") and extra == "speedups"
+Requires-Dist: backports.zstd; (platform_python_implementation == "CPython" and python_version < "3.14" and sys_platform != "android" and sys_platform != "ios") and extra == "speedups"
 Dynamic: license-file
 
 ==================================
@@ -219,11 +219,6 @@ Optionally you may install the aiodns_ library (highly recommended for sake of s
 .. _frozenlist: https://pypi.org/project/frozenlist/
 .. _yarl: https://pypi.python.org/pypi/yarl
 .. _async-timeout: https://pypi.python.org/pypi/async_timeout
-
-License
-=======
-
-``aiohttp`` is offered under the Apache 2 license.
 
 
 Keepsafe

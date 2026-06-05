@@ -259,7 +259,7 @@ Rg_to_Fp(GEN x, GEN p)
 GEN
 Rg_to_FpXQ(GEN x, GEN T, GEN p)
 {
-  long ta, tx = typ(x), v = get_FpX_var(T);
+  long ta, tx = typ(x), v = get_FpX_var(T), d = get_FpX_degree(T);
   GEN a, b;
   if (is_const_t(tx))
   {
@@ -269,7 +269,7 @@ Rg_to_FpXQ(GEN x, GEN T, GEN p)
       setvarn(z, v);
       return z;
     }
-    return scalar_ZX(degpol(T)? Rg_to_Fp(x, p): gen_0, v);
+    return scalar_ZX(d ? Rg_to_Fp(x, p): gen_0, v);
   }
   switch(tx)
   {
@@ -277,7 +277,7 @@ Rg_to_FpXQ(GEN x, GEN T, GEN p)
       b = gel(x,1);
       a = gel(x,2); ta = typ(a);
       if (is_const_t(ta))
-        return scalar_ZX(degpol(T)? Rg_to_Fp(a, p): gen_0, v);
+        return scalar_ZX(d ? Rg_to_Fp(a, p): gen_0, v);
       b = RgX_to_FpX(b, p); if (varn(b) != v) break;
       a = RgX_to_FpX(a, p);
       if (ZX_equal(b,get_FpX_mod(T)) || signe(FpX_rem(b,T,p))==0)
@@ -933,7 +933,7 @@ FqX_Fq_translate(GEN x, GEN y, GEN T, GEN p)
   if (typ(y)==t_INT)
   {
     pari_sp av = avma;
-    y = scalarpol_shallow(y,varn(T));
+    y = scalarpol_shallow(y, get_FpX_var(T));
     return gc_upto(av, FpXQX_FpXQ_translate(x,y,T,p));
   }
   return FpXQX_FpXQ_translate(x,y,T,p);

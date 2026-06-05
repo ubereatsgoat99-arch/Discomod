@@ -1544,13 +1544,22 @@ struct _canlarge
 };
 
 static GEN
+FpXQ_inflate(GEN P, ulong p, GEN P2, GEN q)
+{
+  long n = degpol(P);
+  return p >= 4*usqrt(n)
+         ? FpX_FpXQ_eval(P, FpXQ_powu(pol_x(varn(P)), p, P2, q), P2, q)
+         : FpX_rem(RgX_inflate(P, p), P2, q);
+}
+
+static GEN
 _canlarge_invl(void *E, GEN x)
 {
   struct _canlarge *D = (struct _canlarge *) E;
   GEN T = D->Tp;
   ulong p = D->p, pi = D->pi;
   GEN xp = ZX_to_Flx(x, p);
-  return Flx_to_ZX(
+  return Flx_to_ZX_inplace(
     D->sqx ? Flxq_lroot_fast_pre(xp, D->sqx, T, p, pi)
            : Flxq_lroot_pre(xp, T, p, pi));
 }
@@ -1562,7 +1571,7 @@ _canlarge_lin(void *E, GEN F, GEN H, GEN q)
   struct _canlarge * D = (struct _canlarge *) E;
   ulong p = D->p;
   GEN Q = gel(F,2), P = gel(F,3);
-  GEN Hp = FpX_FpXQ_eval(H, FpXQ_powu(pol_x(varn(H)), p, P, q), P, q);
+  GEN Hp = FpXQ_inflate(H, p, P, q);
   GEN lin = FpX_sub(Hp, FpXQ_mul(H,Q,P,q), q);
   return gc_upto(av, lin);
 }
@@ -1570,10 +1579,13 @@ _canlarge_lin(void *E, GEN F, GEN H, GEN q)
 static GEN
 _canlarge_iter(void *E, GEN P, GEN q)
 {
+  pari_sp av = avma;
   struct _canlarge * D = (struct _canlarge *) E;
   ulong p = D->p;
-  GEN R, Q = FpX_divrem(RgX_inflate(P, p), P, q, &R);
-  return mkvec3(R,Q,P);
+  GEN R2 = FpXQ_inflate(P, p, FpX_sqr(P, q), q);
+  GEN Pq = FpX_get_red(P, q);
+  GEN R, Q = FpX_divrem(R2, Pq, q, &R);
+  return gc_GEN(av, mkvec3(R, FpX_rem(Q, Pq, q), Pq));
 }
 
 static GEN
@@ -1590,7 +1602,7 @@ Flx_Teichmuller_large(GEN T, ulong p, long n)
   struct _canlarge D;
   ulong pi = get_Fl_red(p);
   D.p = p; D.pi = pi; D.Tp = get_Flx_mod(T);
-  if (degpol(D.Tp) > p)
+  if ((ulong)degpol(D.Tp) > p)
   {
     GEN lr = Flxq_lroot_pre(polx_Flx(D.Tp[1]), T, p, pi);
     D.sqx = Flxq_powers_pre(lr, p-1, T, p, pi);
@@ -1603,7 +1615,7 @@ Flx_Teichmuller(GEN P, ulong p, long n)
 {
   long d = degpol(P);
   return p==3 ? F3x_frobeniuslift(P,n):
-         (p==5 && d>=104) || (p==7 && d>=388) ?
+         (p==5 && d>=311) ?
          gen_ZpX_Newton(Flx_to_ZX(P),utoipos(p), n, &p, _can5_iter, _can5_invd)
          : Flx_Teichmuller_large(P,p,n);
 }
@@ -1617,6 +1629,7 @@ polteichmuller(GEN P, ulong p, long n)
   if (q && !equaliu(q,p)) pari_err_MODULUS("polteichmuller",q,utoi(p));
   if (n <= 0)
     pari_err_DOMAIN("polteichmuller", "precision", "<=",gen_0,stoi(n));
+  if (signe(P)==0) pari_err_ROOTS0("polteichmuller");
   return gc_upto(av, p==2 ? F2x_Teichmuller(RgX_to_F2x(P), n)
                           : Flx_Teichmuller(RgX_to_Flx(P, p), p, n));
 }

@@ -1289,6 +1289,8 @@ Flxq_ellcard_Satoh(GEN a4, GEN a6, GEN j, GEN T, ulong p)
   }
 }
 
+#if 0
+/* Not used, slower than alternative, can be simulated by hyperellcharpoly */
 static GEN
 Flxq_ellcard_Kedlaya(GEN a4, GEN a6, GEN T, ulong p)
 {
@@ -1303,6 +1305,7 @@ Flxq_ellcard_Kedlaya(GEN a4, GEN a6, GEN T, ulong p)
   GEN t = Fp_center_i(typ(tp)==t_INT ? tp: leading_coeff(tp), q, shifti(q,-1));
   return gc_upto(av, subii(addiu(powuu(p, n), 1), t));
 }
+#endif
 
 GEN
 Flxq_ellj(GEN a4, GEN a6, GEN T, ulong p)
@@ -1474,10 +1477,13 @@ Flxq_ellcard_i(GEN a4, GEN a6, GEN T, ulong p)
     return Flxq_ellcard_Satoh(a4, a6, J, T, p);
   if (cmpis(q,100)<0)
     return utoi(Flxq_ellcard_naive(a4, a6, T, p));
-  if (p == 13 || (7*p <= (ulong)10*n && (BITS_IN_LONG==64 || p <= 103)))
+  if (p == 13 || ((double) 6*p <= n*log(p)*log(p) && (BITS_IN_LONG==64 || p <= 103)))
     return Flxq_ellcard_Satoh(a4, a6, J, T, p);
-  if (p <= (ulong)2*n)
+#if 0
+  /* No good case ? */
+  if (...)
     return Flxq_ellcard_Kedlaya(a4, a6, T, p);
+#endif
   if (expi(q)<=62)
     return Flxq_ellcard_Shanks(a4, a6, q, T, p);
   else

@@ -213,10 +213,10 @@ listSort(pred,list,:optional) ==
    NOT functionp key => error '"listSort: last arg must be a function"
    mergeSort(pred,key,list,LENGTH list)
 
--- non-destructive merge sort using NOT GGREATERP as predicate
+-- non-destructive merge sort using GLESSEQP as predicate
 MSORT list == listSort(function GLESSEQP, COPY_-LIST list)
 
--- destructive merge sort using NOT GGREATERP as predicate
+-- destructive merge sort using GLESSEQP as predicate
 NMSORT list == listSort(function GLESSEQP, list)
 
 -- non-destructive merge sort using lt_sexp as predicate
@@ -345,8 +345,8 @@ augProplist(proplist,prop,val) ==
   while (proplist is [[ =prop,:.],:proplist']) repeat proplist:= proplist'
   val=(u:= LASSOC(prop,proplist)) => proplist
   null val =>
-    null u => proplist
-    DELLASOS(prop,proplist)
+        null(u) => proplist
+        assoc_del(prop, proplist)
   [[prop,:val],:proplist]
 
 augProplistOf(var,prop,val,e) ==

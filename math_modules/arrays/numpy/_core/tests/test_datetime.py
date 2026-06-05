@@ -2375,7 +2375,11 @@ class TestDateTime:
             dtype="m8",
         )
         assert_equal(a.dtype, np.dtype('m8[s]'))
-        assert_equal(a, np.timedelta64(0, 's') + np.arange(3, 10, 2))
+        with pytest.warns(
+            DeprecationWarning,
+            match=self.generic_unit_deprecation_message
+        ):
+            assert_equal(a, np.timedelta64(0, 's') + np.arange(3, 10, 2))
 
         # Step of 0 is disallowed
         assert_raises(ValueError, np.arange, np.timedelta64(0, 's'),
@@ -3166,6 +3170,14 @@ class TestDateTime:
         b = np.array([3, 4], dtype="m8[s]")
         with pytest.raises(AssertionError):
             np.testing.assert_allclose(a, b, atol=atol)
+
+    def test_forbid_ones_for_generic_datetime(self):
+        # gh-30903
+        with pytest.raises(
+            ValueError,
+            match="Converting an integer to a NumPy datetime requires a specified unit",
+        ):
+            np.ones(3, dtype="M8")
 
 class TestDateTimeData:
 

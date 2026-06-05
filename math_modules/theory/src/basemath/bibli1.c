@@ -61,11 +61,14 @@ FindApplyQ(GEN x, GEN L, GEN B, long k, GEN Q, long prec)
     gel(Q,k) = mkvec2(invr(beta), v); /* [t_REAL, vector of t_INT/t_REALs] */
 
     togglesign(Nx);
-    gcoeff(L,k,k) = Nx; /* t_REAL */
+    gcoeff(L,k,k) = Nx; /* nonzero t_REAL */
   }
   else /* k = nx */
-    gcoeff(L,k,k) = gel(x,k); /* t_INT or t_REAL */
-  gel(B,k) = x2;
+  {
+    gcoeff(L,k,k) = x1; /* t_INT or t_REAL */
+    if (!signe(x1)) return 0;
+  }
+  gel(B,k) = x2; /* t_INT or t_REAL */
   for (i=1; i<k; i++) gcoeff(L,k,i) = gel(x,i); /* t_INT or t_REAL */
   return no_prec_pb(x2);
 }
@@ -178,8 +181,8 @@ matqr(GEN x, long flag, long prec)
 }
 
 /* compute B = squared length of orthogonalized vectors x[k]^*,
- * Q = Householder transforms and L = mu_{i,j}. B[k] a t_REAL for k > 1,
- * t_INT/t_REAL for k = 1; L[j,j] a t_REAL for j < #x */
+ * Q = Householder transforms and L = mu_{i,j}. B[k] t_INT/t_REAL;
+ * L[j,j] a t_REAL for j < #x */
 int
 QR_init(GEN x, GEN *pB, GEN *pQ, GEN *pL, long prec)
 {
@@ -208,7 +211,7 @@ gaussred_from_QR(GEN x, long prec)
     gel(m,j) = gel(B,j);
     for (i=j+1; i<=k; i++) gel(m,i) = mpmul(invNx, gel(m,i));
   }
-  gcoeff(L,j,j) = gel(B,j); /* t_REAL for j > 1, t_INT or t_REAL for j = 1 */
+  gcoeff(L,j,j) = gel(B,j); /* t_INT or t_REAL */
   return shallowtrans(L);
 }
 GEN

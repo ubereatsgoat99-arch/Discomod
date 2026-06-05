@@ -65,6 +65,7 @@ BA  55- fflog(a, b, o) was very slow for small o but large fields [#2676]
 LGr 56- psi(1+O(x^5)) -> wrong result [#2677]
     57- zetahurwitz(large s, |x| > 1) is inaccurate (correct absolute accuracy
         but zeta(s,x) is small and relative error is large) [#2673]
+BA  58- ellcard(ellinit([ffgen([53,36]),1])) -> wrong result
 
   Added
      1- [libpari] prodprimes, prodprimeslim
@@ -185,6 +186,7 @@ BA  18- default 'new_galois_format' now default to 1.
 BA  19- default 'simplify' now default to 0.
 BA  20- vecsum, vecprod now accept t_LIST
 BA  21- [libpari] RgX_homogenous_evalpow now requires the homogenous degree
+BA  22- polteichmuller now requires T to be irreducible
 
   Removed
      1- obsolete functions gerepileall, gerepilemany: use gc_all
