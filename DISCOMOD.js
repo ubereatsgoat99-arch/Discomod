@@ -487,9 +487,9 @@ function ai2AntiAgeBan(text) {
     // Protect game terms containing digits before substitution so "v4", "1v1",
     // "3rd sea", "v2", "v3" etc. are not mangled by the age-ban digit scrubber.
     return String(text || '')
-        .replace(/\b(v[\s_]*[234])\b/gi, '\x02$1\x02')   // v2 v3 v4
+        .replace(/\b(v[\s_]*[1234])\b/gi, '\x02$1\x02')   // v1 v2 v3 v4
         .replace(/\b([123]v[123])\b/gi, '\x02$1\x02')     // 1v1 2v2 3v3
-        .replace(/\b([123]rd|[12]nd|1st)\b/gi, '\x02$1\x02') // 1st 2nd 3rd
+        .replace(/\b([123456789]th|[123]rd|[12]nd|1st)\b/gi, '\x02$1\x02') // 1st-9th
         .replace(/(?<!\d)([0-9]|1[0-2])(?!\d)|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/gi, '\u200b')
         .replace(/\x02([^\x02]*)\x02/g, '$1'); // restore protected tokens
 }
@@ -1398,68 +1398,188 @@ function buildCommandListEmbeds(title, items, gs) {
 }
 
 const MESSAGE_COMMANDS_LIST = [
-    { name: '!botinfo', desc: 'Show bot ownership / credits.' },
-    { name: '!botstatus', desc: 'Show current server configuration (admin).'},
-    { name: '!uptime', desc: 'Show bot uptime information.' },
-    { name: '!messagecommandslist', desc: 'List all message commands.' },
-    { name: '!slashcommandslist', desc: 'List all slash commands.' },
-    { name: '!diagnose', desc: 'Run a diagnostic check of bot permissions/config (admin).'},
-    { name: '!config', desc: 'Config export/import/backup/restore (admin).'},
-    { name: '!case', desc: 'Case system: view/list/note/void (mods/admin).'},
-    { name: '!policypreset', desc: 'Apply a policy preset strict|balanced|soft|monitor (admin).'},
-    { name: '!dashboard', desc: 'Open the admin dashboard (admin).'},
-    { name: '!appeal', desc: 'Appeal system: submit (users), review via buttons (mods/admin).'},
-    { name: '!policymode', desc: 'Set policy mode enforce/monitor (admin).'},
-    { name: '!policyset', desc: 'Set per-category policy action (admin).'},
-    { name: '!policystatus', desc: 'Show policy configuration (admin).'},
-    { name: '!setowner', desc: 'Set bot owner shown in botinfo (admin).'},
-    { name: '!clearowner', desc: 'Clear bot owner shown in botinfo (admin).'},
-    { name: '!setfooter', desc: 'Set embed footer text (admin).'},
-    { name: '!clearfooter', desc: 'Clear embed footer text (admin).'},
-    { name: '!botinfopublic', desc: 'Set whether /botinfo is public or ephemeral (admin).'},
-    { name: '!linkmode', desc: 'Set link intelligence mode strict/medium/off (admin).'},
-    { name: '!linkaction', desc: 'Set action for scam/link detections (admin).'},
-    { name: '!verifygate', desc: 'Enable/disable & config verify gate (admin).'},
-    { name: '!timeoutconfig', desc: 'Enable/disable & set timeout minutes (admin).'},
-    // ── Math & Calculation ──────────────────────────────────────────────────
-    { name: '!calc', desc: 'Calc CLI expression evaluator (multi-line: keep sending; type Evaluate to run).' },
-    { name: '!wolf', desc: 'Online math / science query (multi-line supported).' },
+    // ── Info & Status ──────────────────────────────────────────────────────────
+    { name: '!botinfo',              desc: 'Show bot ownership / credits.' },
+    { name: '!botstatus',            desc: 'Show current server configuration (admin).' },
+    { name: '!uptime',               desc: 'Show bot uptime information.' },
+    { name: '!messagecommandslist',  desc: 'List all ! message commands.' },
+    { name: '!slashcommandslist',    desc: 'List all / slash commands.' },
+    { name: '!diagnose',             desc: 'Run a permission & config diagnostic (admin).' },
+    { name: '!automodstats',         desc: 'Show automod detection statistics (mods/admin).' },
+    { name: '!immunestatus',         desc: 'Show immunity assignments for all categories (mods/admin).' },
+    { name: '!linkstatus',           desc: 'Show link mode, action, and domain lists (mods/admin).' },
+    { name: '!raidstatus',           desc: 'Show raid mode status (mods/admin).' },
+    // ── Config & Dashboard ─────────────────────────────────────────────────────
+    { name: '!config',               desc: 'Config export/import/backup/restore (admin).' },
+    { name: '!dashboard',            desc: 'Open the admin dashboard (admin).' },
+    { name: '!policypreset <preset>',desc: 'Apply preset: strict|balanced|soft|monitor (admin).' },
+    { name: '!policymode <mode>',    desc: 'Set enforcement mode: enforce|monitor (admin).' },
+    { name: '!policyset <cat> <act>',desc: 'Set per-category policy action (admin).' },
+    { name: '!policystatus',         desc: 'Show policy configuration (admin).' },
+    { name: '!setowner <id>',        desc: 'Set bot owner shown in !botinfo (superuser).' },
+    { name: '!clearowner',           desc: 'Clear bot owner shown in !botinfo (superuser).' },
+    { name: '!setfooter <text>',     desc: 'Set embed footer text (admin).' },
+    { name: '!clearfooter',          desc: 'Clear embed footer text (admin).' },
+    { name: '!botinfopublic <on|off>',desc: 'Toggle /botinfo public/ephemeral (admin).' },
+    // ── Moderation Actions ─────────────────────────────────────────────────────
+    { name: '!warn <@user> [reason]',          desc: 'Manually warn a user — auto-exiles at threshold (mods/admin).' },
+    { name: '!unwarn <@user>',                  desc: 'Remove one violation entry from a user (mods/admin).' },
+    { name: '!clearviolations <@user>',         desc: 'Clear all violation entries for a user (admin).' },
+    { name: '!violations <@user>',              desc: 'View violation history and count for a user (mods/admin).' },
+    { name: '!exile <@user> [mins] [reason]',   desc: 'Exile a member for a specified duration (admin).' },
+    { name: '!unexile <@user>',                 desc: 'Remove exile from a member (admin).' },
+    { name: '!exilelist',                       desc: 'List all currently exiled members (mods/admin).' },
+    { name: '!purge <count>',                   desc: 'Bulk-delete N messages in this channel (mods/admin).' },
+    { name: '!purge user <@user> [count]',      desc: 'Bulk-delete up to [count] messages from a user (mods/admin).' },
+    { name: '!lock [#channel] [reason]',        desc: 'Lock a channel — blocks @everyone from sending (admin).' },
+    { name: '!unlock [#channel] [reason]',      desc: 'Unlock a channel (admin).' },
+    { name: '!unlockdown',                      desc: 'Remove all active channel lockdowns (admin).' },
+    { name: '!case view <id>',                  desc: 'View a case by ID (mods/admin).' },
+    { name: '!case list [<@user>]',             desc: 'List all cases or cases for a user (mods/admin).' },
+    { name: '!case note <id> <text>',           desc: 'Add a note to a case (mods/admin).' },
+    { name: '!case void <id>',                  desc: 'Void a case (admin).' },
+    { name: '!appeal',                          desc: 'Submit or review ban appeals (all/mods/admin).' },
+    { name: '!testscan <text>',                 desc: 'Run text through ALL detection layers — full results (mods/admin).' },
+    // ── Channel & Threshold Config ─────────────────────────────────────────────
+    { name: '!setgameshub <#ch>',       desc: 'Set the games hub channel (admin).' },
+    { name: '!setthreshold <1-10>',     desc: 'Set the violation threshold before exile (admin).' },
+    { name: '!setexileduration <mins>', desc: 'Set the default exile duration in minutes (admin).' },
+    { name: '!channelconfig',           desc: 'Assign channels to moderation categories (admin).' },
+    { name: '!timeoutconfig',           desc: 'Configure timeout enable/disable and duration (admin).' },
+    { name: '!verifygate',              desc: 'Enable/disable and configure verify gate (admin).' },
+    // ── Detection Toggles & Redirects ─────────────────────────────────────────
+    { name: '!disablecheck <cat>',       desc: 'Disable a detection category (admin).' },
+    { name: '!enablecheck <cat>',        desc: 'Re-enable a detection category (admin).' },
+    { name: '!togglescam',               desc: 'Toggle scam/exploit detection on/off (admin).' },
+    { name: '!togglescanedits',          desc: 'Toggle scanning of edited messages (admin).' },
+    { name: '!noaffiliation [on|off]',   desc: 'Toggle no-affiliation mode (blocks service ads) (admin). Alias: !noaffliation' },
+    { name: '!raidmode [on|off]',        desc: 'Activate/deactivate raid lockdown mode (admin).' },
+    { name: '!raidconfig',               desc: 'Configure raid detection thresholds and windows (admin).' },
+    { name: '!commandredirect [on|off]', desc: 'Redirect wrong-channel commands to correct channel (admin).' },
+    { name: '!serviceredirect [on|off]', desc: 'Redirect service ads to the services channel (admin).' },
+    { name: '!traderedirect [on|off]',   desc: 'Redirect trades to the trade channel (admin).' },
+    { name: '!spamwarn [on|off]',        desc: 'Set warn-on-spam action (admin).' },
+    { name: '!begwarn [on|off]',         desc: 'Set warn-on-begging action (admin).' },
+    { name: '!scamwarn [on|off]',        desc: 'Set warn-on-scam action (admin).' },
+    { name: '!acctradewarn [on|off]',    desc: 'Set warn-on-account-trading action (admin).' },
+    { name: '!linkpolicy <mode>',        desc: 'Set link policy: strict|medium|off (admin).' },
+    { name: '!linkmode <mode>',          desc: 'Set link intelligence mode (admin).' },
+    { name: '!linkaction <action>',      desc: 'Set action for link detections (admin).' },
+    { name: '!linkstatus',               desc: 'Show link mode and domain lists (admin).' },
+    // ── Spam Config ────────────────────────────────────────────────────────────
+    { name: '!capsconfig [thr] [min]',   desc: 'Configure caps spam detection (admin).' },
+    { name: '!emojiconfig [thr] [min]',  desc: 'Configure emoji spam detection (admin).' },
+    { name: '!zalgoconfig [on|off]',     desc: 'Toggle Zalgo text detection (admin).' },
+    { name: '!stretchconfig [on|off]',   desc: 'Configure stretched-letter detection (admin).' },
+    { name: '!dupeconfig [on|off]',      desc: 'Configure duplicate message detection (admin).' },
+    { name: '!mentionlimit <count>',     desc: 'Set maximum unique mentions per message (admin).' },
+    { name: '!invitepolicy <mode>',      desc: 'Set invite-link policy: allow|warn|delete|exile (admin).' },
+    { name: '!invitechannel [#ch]',      desc: 'Set the allowed invite channel (admin).' },
+    { name: '!attachmentpolicy <mode>',  desc: 'Set attachment policy (admin).' },
+    { name: '!attachmentext [add|rm]',   desc: 'Manage blocked attachment extensions (admin).' },
+    // ── Domain Management ──────────────────────────────────────────────────────
+    { name: '!allowdomain <domain>',  desc: 'Add domain to server safe-list (admin).' },
+    { name: '!denydomain <domain>',   desc: 'Add domain to server block-list (admin).' },
+    { name: '!domainremove <domain>', desc: 'Remove domain from safe/block-list (admin).' },
+    { name: '!listdomains',           desc: 'List all server-level allowed/denied domains (mods/admin).' },
+    // ── AI Detection ───────────────────────────────────────────────────────────
+    { name: '!aienable',  desc: 'Enable AI-assisted detection (admin).' },
+    { name: '!aidisable', desc: 'Disable AI-assisted detection (admin).' },
+    // ── Math & Calculation ─────────────────────────────────────────────────────
+    { name: '!calc',      desc: 'Calc CLI expression evaluator (multi-line: keep sending; type Evaluate to run).' },
+    { name: '!wolf',      desc: 'Online math / science query (multi-line supported).' },
     { name: '!supercalc', desc: 'Run superqalc_onefile expression engine (multi-line supported).' },
-    { name: '!supertower', desc: 'Run superqalc_tower expression engine (multi-line supported).' },
-    { name: '!gaypy', desc: 'Execute Python code — mpmath 1.4.1 pre-imported as `mpmath`, sympy available (multi-line supported).' },
+    { name: '!supertower',desc: 'Run superqalc_tower expression engine (multi-line supported).' },
+    { name: '!gaypy',     desc: 'Execute Python code — mpmath 1.4.1 pre-imported as mpmath, sympy available (multi-line supported).' },
 ];
 
 const SLASH_COMMANDS_LIST = [
-    { name: '/botinfo', desc: 'Show bot ownership / credits.' },
-    { name: '/botstatus', desc: 'Show current server configuration (admin).'},
-    { name: '/uptime', desc: 'Show bot uptime information.' },
-    { name: '/messagecommandslist', desc: 'List all message commands.' },
-    { name: '/slashcommandslist', desc: 'List all slash commands.' },
-    { name: '/diagnose', desc: 'Run a diagnostic check of bot permissions/config (admin).'},
-    { name: '/config', desc: 'Config export/import/backup/restore (admin).'},
-    { name: '/case', desc: 'Case system: view/list/note/void (mods/admin).'},
-    { name: '/policypreset', desc: 'Apply a policy preset strict|balanced|soft|monitor (admin).'},
-    { name: '/dashboard', desc: 'Open the admin dashboard (admin).'},
-    { name: '/appeal', desc: 'Submit an appeal (users) or review (mods/admin).'},
-    { name: '/policymode', desc: 'Set policy mode enforce/monitor (admin).'},
-    { name: '/policyset', desc: 'Set per-category policy action (admin).'},
-    { name: '/policystatus', desc: 'Show policy configuration (admin).'},
-    { name: '/setowner', desc: 'Set bot owner shown in botinfo (admin).'},
-    { name: '/clearowner', desc: 'Clear bot owner shown in botinfo (admin).'},
-    { name: '/setfooter', desc: 'Set embed footer text (admin).'},
-    { name: '/clearfooter', desc: 'Clear embed footer text (admin).'},
-    { name: '/botinfopublic', desc: 'Set whether /botinfo is public or ephemeral (admin).'},
-    { name: '/linkmode', desc: 'Set link intelligence mode strict/medium/off (admin).'},
-    { name: '/linkaction', desc: 'Set action for scam/link detections (admin).'},
-    { name: '/verifygate', desc: 'Enable/disable & config verify gate (admin).'},
-    { name: '/timeoutconfig', desc: 'Enable/disable & set timeout minutes (admin).'},
-    // ── Math & Calculation ──────────────────────────────────────────────────
-    { name: '/calc', desc: 'Calc CLI expression evaluator (multi-line: keep sending; type Evaluate to run).' },
-    { name: '/wolf', desc: 'Online math / science query (multi-line supported).' },
+    // ── Info & Status ──────────────────────────────────────────────────────────
+    { name: '/botinfo',              desc: 'Show bot ownership / credits.' },
+    { name: '/botinfopublic',        desc: 'Toggle /botinfo public vs ephemeral (admin).' },
+    { name: '/botstatus',            desc: 'Show full server configuration (admin).' },
+    { name: '/uptime',               desc: 'Show bot uptime information.' },
+    { name: '/messagecommandslist',  desc: 'List all ! message commands.' },
+    { name: '/slashcommandslist',    desc: 'List all / slash commands.' },
+    { name: '/diagnose',             desc: 'Run a permission & config diagnostic (admin).' },
+    // ── Config & Dashboard ─────────────────────────────────────────────────────
+    { name: '/dashboard',            desc: 'Open the interactive admin dashboard (admin).' },
+    { name: '/config',               desc: 'Export/import/backup/restore guild config (admin).' },
+    { name: '/policypreset <preset>',desc: 'Apply preset: strict|balanced|soft|monitor (admin).' },
+    { name: '/policymode <mode>',    desc: 'Set enforcement mode: enforce|monitor (admin).' },
+    { name: '/policyset <cat> <act>',desc: 'Set per-category policy action (admin).' },
+    { name: '/policystatus',         desc: 'Show policy configuration summary (admin).' },
+    { name: '/setowner <id>',        desc: 'Set bot owner shown in /botinfo (superuser).' },
+    { name: '/clearowner',           desc: 'Clear bot owner shown in /botinfo (superuser).' },
+    { name: '/setfooter <text>',     desc: 'Set embed footer text (admin).' },
+    { name: '/clearfooter',          desc: 'Clear embed footer text (admin).' },
+    { name: '/strictness <1-10>',    desc: 'Set detection strictness level (admin).' },
+    { name: '/crashtimeout duration <ms>', desc: 'Set process kill timeout for math workers (admin).' },
+    // ── Moderation Actions ─────────────────────────────────────────────────────
+    { name: '/warn user reason',              desc: 'Manually warn a user — auto-exiles at threshold (mods/admin).' },
+    { name: '/unwarn user [reason]',          desc: 'Remove one violation entry from a user (mods/admin).' },
+    { name: '/clearviolations user',          desc: 'Clear all violation entries for a user (admin).' },
+    { name: '/violations user',               desc: 'View violation history and count for a user (mods/admin).' },
+    { name: '/exile user [duration] [reason]',desc: 'Exile a member for a specified duration (admin).' },
+    { name: '/unexile user',                  desc: 'Lift exile from a member (admin).' },
+    { name: '/exilelist',                     desc: 'List all currently exiled members (mods/admin).' },
+    { name: '/exileduration set duration <m>',desc: 'Set default exile duration in minutes (admin).' },
+    { name: '/purge count amount',            desc: 'Bulk-delete N messages in this channel (mods/admin).' },
+    { name: '/purge user user [amount]',      desc: 'Bulk-delete messages from a specific user (mods/admin).' },
+    { name: '/lock [reason]',                 desc: 'Lock the current channel (admin).' },
+    { name: '/unlock [reason]',               desc: 'Unlock the current channel (admin).' },
+    { name: '/case view|list|note|void',      desc: 'Manage moderation cases (mods/admin).' },
+    { name: '/appeal',                        desc: 'Submit or review ban appeals (all/mods/admin).' },
+    { name: '/testscan text',                 desc: 'Run text through ALL detection layers (mods/admin).' },
+    // ── Manual Punishment ─────────────────────────────────────────────────────
+    { name: '/timeout user mins [reason]',  desc: 'Apply a Discord timeout (admin/manager).' },
+    { name: '/untimeout user [reason]',     desc: 'Remove a Discord timeout (admin/manager).' },
+    { name: '/kick user [reason]',          desc: 'Kick a member (admin/manager).' },
+    { name: '/ban user [reason]',           desc: 'Ban a member (admin/manager).' },
+    { name: '/unban user [reason]',         desc: 'Unban a user (admin/manager).' },
+    { name: '/hardban user [reason]',       desc: 'Ban + delete 7 days of messages (admin/manager).' },
+    { name: '/softban user [reason]',       desc: 'Kick while deleting recent messages (admin/manager).' },
+    // ── Channel & Threshold Config ─────────────────────────────────────────────
+    { name: '/setgameshub channel',     desc: 'Set the games hub channel (admin).' },
+    { name: '/setthreshold count',      desc: 'Set the violation threshold before exile (admin).' },
+    { name: '/channelconfig',           desc: 'Assign channels to moderation categories (admin).' },
+    { name: '/timeoutconfig',           desc: 'Configure timeout enable/disable and duration (admin).' },
+    { name: '/verifygate',              desc: 'Enable/disable and configure verify gate (admin).' },
+    // ── Detection Toggles ─────────────────────────────────────────────────────
+    { name: '/togglescam',              desc: 'Toggle scam/exploit detection on/off (admin).' },
+    { name: '/noaffiliation',           desc: 'Toggle no-affiliation mode (admin).' },
+    { name: '/aienable model|on|off',   desc: 'Enable/disable AI-assisted detection (admin).' },
+    { name: '/aimodel provider',        desc: 'Switch the AI detection model (admin).' },
+    { name: '/bloxmode',                desc: 'Toggle Blox Fruits detection mode (admin).' },
+    { name: '/regex mode',              desc: 'Set regex detection mode (admin).' },
+    { name: '/bloxfruits redirect|trade|service|command|warn', desc: 'Configure per-category BF behavior (admin).' },
+    { name: '/raid',                    desc: 'Configure raid detection and lockdown (admin).' },
+    // ── Immunity ──────────────────────────────────────────────────────────────
+    { name: '/immunity role|add|remove',       desc: 'Manage global detection immunity (admin).' },
+    { name: '/commandimmunity add|remove',     desc: 'Immunity from command-redirect checks (admin).' },
+    { name: '/serviceimmunity add|remove',     desc: 'Immunity from service-ad detection (admin).' },
+    { name: '/tradeimmunity add|remove',       desc: 'Immunity from trade detection (admin).' },
+    { name: '/spamimmunity add|remove',        desc: 'Immunity from spam detection (admin).' },
+    { name: '/begimmunity add|remove',         desc: 'Immunity from begging detection (admin).' },
+    { name: '/scamimmunity add|remove',        desc: 'Immunity from scam detection (admin).' },
+    { name: '/acctradeimmunity add|remove',    desc: 'Immunity from account-trade detection (admin).' },
+    // ── Spam Config ───────────────────────────────────────────────────────────
+    { name: '/stretchconfig',       desc: 'Configure stretched-letter spam detection (admin).' },
+    { name: '/dupeconfig',          desc: 'Configure duplicate message detection (admin).' },
+    { name: '/attachmentpolicy',    desc: 'Set attachment policy mode (admin).' },
+    { name: '/attachmentext add|remove|list', desc: 'Manage blocked file extensions (admin).' },
+    // ── Domain & Link Config ──────────────────────────────────────────────────
+    { name: '/linkmode mode',    desc: 'Set link intelligence mode: strict|medium|off (admin).' },
+    { name: '/linkaction action',desc: 'Set link detection action (admin).' },
+    // ── Bot Manager ───────────────────────────────────────────────────────────
+    { name: '/manager addrole|removerole|adduser|removeuser|list', desc: 'Manage bot manager roles and users (admin).' },
+    // ── Math & Calculation ────────────────────────────────────────────────────
+    { name: '/calc',      desc: 'Calc CLI expression evaluator (multi-line supported).' },
+    { name: '/wolf',      desc: 'Online math / science query (multi-line supported).' },
     { name: '/supercalc', desc: 'Run superqalc_onefile expression engine (multi-line supported).' },
-    { name: '/supertower', desc: 'Run superqalc_tower expression engine (multi-line supported).' },
-    { name: '/gaypy', desc: 'Execute Python code — mpmath 1.4.1 pre-imported as `mpmath`, sympy available (multi-line supported).' },
-    { name: '/mpmath', desc: 'Evaluate an mpmath 1.4.1 expression with arbitrary precision (unlimited dps). e.g. mpmath.sqrt(2) with precision=100.' },
+    { name: '/supertower',desc: 'Run superqalc_tower expression engine (multi-line supported).' },
+    { name: '/gaypy',     desc: 'Execute Python code — mpmath 1.4.1 pre-imported as mpmath (multi-line supported).' },
+    { name: '/mpmath',    desc: 'Evaluate an mpmath expression with arbitrary precision.' },
 ];
 
 function getCategoryPolicy(gs, category) {
@@ -1618,20 +1738,20 @@ function loadData() {
 
 const LINK_SHORTENERS = new Set([
     'bit.ly','tinyurl.com','t.co','goo.gl','rebrand.ly','ow.ly','buff.ly','cutt.ly','shorturl.at',
-    'is.gd','v.gd','soo.gd','adf.ly','shorte.st','bc.vc','qr.ae','rb.gy','soo.gd',
+    'is.gd','v.gd','soo.gd','adf.ly','shorte.st','bc.vc','qr.ae','rb.gy',
     't.ly','lnkd.in','cli.re','s.id','tiny.cc','trib.al','bl.ink','fur.ly','cutt.us',
     'kutt.it','po.st','snip.ly','yourls.org','vzturl.com','tiny.one','1url.com','2u.pw',
-    '4url.cc','7.ly','acortaurl.com','bc.vc','bit.do','bitly.com','budurl.com','chilp.it',
+    '4url.cc','7.ly','acortaurl.com','bit.do','bitly.com','budurl.com','chilp.it',
     'clck.ru','da.gd','dwarfurl.com','easyurl.net','fwdurl.net','go2l.ink','href.li',
     'iplogger.org','iplogger.com','grabify.link','leancoding.co','stopify.co','freegiftcards.co',
-    'linktr.ee','bio.link','campsite.bio','beacons.ai','solo.to',
+    
 ]);
 
 const LINK_SHORTENERS_EXTRA = new Set([
     'short.gy','short.io','short.cm','t2m.io','shrtco.de','shrtco','shrtfly','flylink','fly.link',
-    'clk.sh','clk.ink','clk.im','clk.re','clk.to','clk.wtf','clik.cc','clik.pw','clik.pw',
+    'clk.sh','clk.ink','clk.im','clk.re','clk.to','clk.wtf','clik.cc','clik.pw',
     'surl.li','surl.im','surl.me','surl.lt','surl.mx','surl.tv','surl.nu','surl.ch',
-    'rb.gy','rebrand.ly','rb.gy','rb.gy',
+    'rebrand.ly',
     'tiny.one','tinyurl.is','tinyurl.cc','tiny-url.info','tinyurl.link','tinyurl.co',
     'bitly.is','bitly.link','bitly.cx','bitly.ws','bitly.rs','bitly.tl',
     'lnk.to','lnk.page','lnk.bio','lnk.fi','lnk.at','lnk.sk','lnk.click','lnk.do','lnk.ee','lnk.in',
@@ -1640,10 +1760,8 @@ const LINK_SHORTENERS_EXTRA = new Set([
     'u.to','u.pw','u.nu','u.cx','u.rs','u.tf','u.do','u.gd',
     'zpr.io','zipurl.io','zipurl.co','zipurl.cc','zipurl.me','zipurl.link',
     'go2l.ink','go2l.co','go2l.link','go2l.site','go2l.app',
-    'tr.ee','tr.ee','tr.ee',
-    'safelinks.protection.outlook.com','aka.ms',
-    'discord.gg','discord.com/invite','discordapp.com/invite',
-]);
+    'tr.ee',
+    ]);
 
 const SUSPICIOUS_TLDS = new Set([
     'xyz','top','tk','gq','cf','ml','ga','icu','click','link','pw','work','zip','mov','lol','fun','live','life',
@@ -1719,40 +1837,28 @@ const SCAM_DOMAIN_BLACKLIST = new Set([
 
 const SCAM_OR_EXPLOIT_PHRASES = [
     'free perm','free perms','free gamepass','free gp','free fruit notifier','free dark blade','free yoru',
-    'free robux','free rbx','free roblox','robux generator','robux gen','rbx gen','free vip','free ps',
-    'free private server','free priv server','free script','free exploit','free hacks','free hack',
-    'claim reward','claim rewards','claim prize','claim your prize','claim your reward','you won',
-    'giveaway winner','congratulations you won','congrats you won','limited time reward','limited time offer',
+    'free robux','free rbx','free roblox','robux generator','robux gen','rbx gen','free vip','free private server','free priv server','free script','free exploit','free hacks','free hack',
+    'claim reward','claim rewards','claim prize','claim your prize','claim your reward','congratulations you won','congrats you won','limited time reward','limited time offer',
     'verify to claim','verify to get','verify for reward','verification required','complete verification',
-    'click this link','click the link','tap this link','open this link','check this link','use this link',
-    'join for reward','join for robux','join to claim','join to get',
+    'click this link','click the link','tap this link','open this link','join for reward','join for robux','join to claim','join to get',
     'dm me for link','dm for link','message me for link','pm for link','send me for link',
     'cheap perms','cheap perm','cheap gamepass','cheap gp','cheap fruit','cheap fruits',
     'sell perms cheap','selling perms cheap','selling perm cheap','perms for cheap','perm for cheap',
     'discount perms','discount perm','discount gamepass','discount gp','discount fruit notifier',
     'trusted middleman','mm service','middleman service','use my middleman','i am middleman',
-    'dupe','duplication','duplicating','dupe method','dup method','fruit dupe','item dupe','dupe glitch',
+    'dupe method','dup method','fruit dupe','item dupe','dupe glitch',
     'exploit','expl0it','exploits','executor','executer','injector',
-    'script','scr1pt','scripts','auto farm','autofarm','auto-farm','auto click','autoclick','auto-click',
+    'scr1pt','auto farm','autofarm','auto-farm','auto click','autoclick','auto-click',
     'mod menu','modmenu','modded','aimbot',
-    'synapse','scriptware','krnl','fluxus','delta executor','evon','hydrogen','electron','codex',
-    'pastebin.com','paste.ee','hastebin.com','rentry.co','rentry','git.io','raw.githubusercontent.com',
-    'download now','download here','download link','install this','install now','update required',
-    'security update','account compromised','your account is hacked','reset password here',
-    'steam gift card','gift card','nitro gift','free nitro','discord nitro','nitro giveaway',
-    'verify your account','verify account','verify now','verification bot',
-    'trade scam','scam alert','not a scam','100% legit','legit trade','trusted middleman',
-    'click to verify','click verify','verify by clicking','click to claim',
-    'free cash','free money','cashapp','paypal','venmo','crypto','bitcoin','btc','eth','ethereum',
-    'no middleman needed',
-    'chargeback','insurance','insured trade',
-    'account verification','age verification','human verification','captcha verification',
-    'roblox support','roblox admin','roblox staff','discord staff','discord admin',
-    'report to roblox','ban wave','banwave','ban wave incoming',
+    'synapse','scriptware','krnl','fluxus','delta executor','evon','hydrogen executor','hydrogen exploit','electron executor','electron exploit','codex executor',
+    'pastebin.com','paste.ee','hastebin.com','rentry.co','rentry','git.io','steam gift card','nitro gift','free nitro','discord nitro','nitro giveaway',
+    'verify your account','trade scam','scam alert','trusted middleman',
+    'click to verify','click verify','verify by clicking','no middleman needed',
+    'insured trade',
+    'captcha verification',
     'free whitelist','key system','get key',
     'key link','keysite','linkvertise','linkvertise.com','loot-links','lootlinks',
     'work.ink','workink','adshrink','shrinkme','shrinkearn','ouo.io','ouo.press',
-    'safelink','safe link','safelinks','safe-links','short link','shortlink',
     'give me your cookie','roblosecurity','roblo security','rbx cookie','cookie logger',
     'cookie log','cookie grab','cookie grabber','token grab','token grabber',
     'ip grab','ip grabber','grab ip','ddos','dox','doxx','doxxing',
@@ -1760,15 +1866,10 @@ const SCAM_OR_EXPLOIT_PHRASES = [
     'steamcommunity.com/gift','discord.gift','discordapp.gift','nitro.gift',
     'bloxfruits script','blox fruits script','bloxfruits exploit','blox fruits exploit',
     'bloxfruits hack','blox fruits hack','bloxfruits cheats','blox fruits cheats',
-    'free awakened','free awakening','awaken for free','awakened for free',
-    'free carry for payment','pay first for carry','send payment first',
+    'pay first for carry','send payment first',
     'free perm if you click','perm giveaway link','gamepass giveaway link',
     'verification link','verify link','verification website','verify website',
-    'official giveaway','official reward','official prize',
-    'limited reward','limited prize','limited giveaway',
-    'check my bio for link','link in bio','bio link',
-    'follow this link','open the website','open website','visit this site','visit site',
-];
+    ];
 
 const INTENT_PHRASE_EXTRA2 = [
     "wtt","wtb","wts","w2t","trade","trading","swap","swapping","sell","selling","buy","buying",
@@ -1849,7 +1950,6 @@ const INTENT_PHRASE_EXTRA2 = [
 const SCAM_OR_EXPLOIT_PHRASES_EXTRA = [
     'free perms in bio','perm in bio','perms in bio','link in bio for perms','bio has perms','bio has link',
     'check profile for link','check my profile for link','profile link','profile has link',
-    'use code for free','redeem code for free','redeem this code','claim code','claim promo code',
     'claim your robux','claim your rbx','claim your nitro','claim your gift','claim your prize now',
     'limited redeem','limited redemption','redeem now','redeem quickly','redeem fast',
     'free perm generator','perm generator','gamepass generator','gift generator','nitro generator',
@@ -1858,12 +1958,7 @@ const SCAM_OR_EXPLOIT_PHRASES_EXTRA = [
     'verification page','verification portal','verify portal','verification site',
     'support ticket link','contact support link','appeal ban link','unban link',
     'login to claim','log in to claim','sign in to claim','sign-in to claim','signin to claim',
-    'login required','log in required','sign in required','signin required','authentication required',
-    '2fa required','two factor required','two-factor required',
     'enter your password','enter password','reset password','password reset','reset your password',
-    'session expired','session has expired','session timeout','account locked',
-    'your account will be banned','account will be banned','ban incoming','ban soon',
-    'appeal here','appeal link','appeal using link','appeal on website',
     'discord staff here','discord admin here','official discord staff',
     'roblox staff here','official roblox staff',
     'private message me for link','dm me the word','dm me "link"','dm me "free"','dm me "perm"',
@@ -1884,28 +1979,17 @@ const SCAM_OR_EXPLOIT_PHRASES_EXTRA = [
     'nitro gift link','nitro gift links','nitro links','discord gift link',
     'discord nitro link','discord nitro links',
     'steam gift link','steam gift links',
-    'rate my profile link','rate my server link',
-    'new update required click','new update click link','update your discord',
-    'update your roblox','update roblox now','roblox update required',
-    'blox fruits update required','bloxfruits update required',
     'free perm giveaway link','free perms giveaway link',
     'free gamepass giveaway link','free gp giveaway link',
     'free fruit notifier giveaway link',
-    'fake vouch','vouch me','vouch for me','vouch thread','vouching',
-    'trusted seller','trusted buyer','trusted trade','trusted trader','trusted service',
-    'no scam','not scam','not a scam legit','legit no scam',
-    'proof in link','proof link','proof video link',
-    'screenshots in link','screenshot link','video in link','clip in link',
     'limited time only click','limited time only link',
-    'account verification link','age verification link','human verification link',
-    'captcha verification link','complete captcha to claim',
+    'complete captcha to claim',
     'complete captcha to verify','complete captcha now',
     'enter username and password','enter user and pass','enter login details',
     'enter roblosecurity','enter .roblosecurity','paste your cookie',
     'send your cookie','send cookie','send token','send your token',
     'token logger','discord token logger','roblox cookie logger',
     'ip logger','ip grabber link','grabify link','ipgrabber link',
-    'shortened link','shorten link','short link',
     'free perm link','free perms link','free robux link','free nitro link',
     'claim link','verify link','redeem link',
     'blox fruits private script','blox fruits paid script','blox fruits script download',
@@ -1916,8 +2000,6 @@ const SCAM_OR_EXPLOIT_PHRASES_EXTRA = [
     'pastebin script','rentry script','hastebin script','github raw script',
     'free admin','admin panel','admin access','staff access',
     'give me your login','give me your password','send password',
-    'log in here','login here','sign in here','signin here',
-    'roblox login here','discord login here',
     'verify your discord','verify your roblox',
     'bypass verification','verification bypass','bypass captcha',
     'free perm if you complete','free perm after verification',
@@ -1927,17 +2009,9 @@ const SCAM_OR_EXPLOIT_PHRASES_EXTRA = [
     'click to get free','click to get reward','click to receive reward',
     'tap to get free','tap to claim reward',
     'visit to get free','visit to claim',
-    'trusted link','safe link',
-    'new official site','official mirror','mirror site',
-    'mirror link','backup link','alt link',
-    'join to win','join to get free',
-    'invite reward','invite rewards','invite to claim',
-    'referral reward','referral rewards','referral link',
-    'refer friends to get','refer to get reward',
     'free perm for invite','free perm for referral',
-    'giveaway ends soon','giveaway ends now','ends soon click',
-    'winner announced click','winner announced link',
-];
+    'ends soon click',
+    ];
 
 const SCAM_OR_EXPLOIT_PHRASES_EXTRA2 = [
     'free perm right now','free perms right now','instant free perm','instant free perms','free perm instantly','free perms instantly',
@@ -1947,12 +2021,9 @@ const SCAM_OR_EXPLOIT_PHRASES_EXTRA2 = [
     'free dark blade link','dark blade giveaway link','yoru giveaway link','free yoru link',
     'free 2x mastery link','free 2x money link','free fast boats link','free gamepass link','free gp link',
     'perm link','perms link','gamepass link','gp link','robux link','nitro link','gift link',
-    'free perm just click','free perms just click','just click the link','just click link','click and claim',
-    'verify and claim','verify then claim','verify then get','verify and get','verify to redeem','redeem after verify',
+    'free perm just click','free perms just click','just click the link','just click link','verify and claim','verify then claim','verify then get','verify and get','verify to redeem','redeem after verify',
     'free perm after join','free perm after you join','free perms after join','free perms after you join',
     'join then claim','join then verify','join then redeem','join and claim','join and verify','join and redeem',
-    'join this server now','join this now',
-    'official giveaway link','official reward link','official claim link','official redeem link',
     'discord verification required','discord verify required','roblox verification required','roblox verify required',
     'verify your email','verify email','verify your phone','verify phone','phone verification','email verification',
     'confirm your account','confirm account','confirm to claim','confirm to verify',
@@ -1969,52 +2040,43 @@ const SCAM_OR_EXPLOIT_PHRASES_EXTRA2 = [
     'download .exe','download .zip','download .rar','download .apk',
     'install extension','browser extension required','chrome extension required','install chrome extension',
     'install this extension','install my extension','install our extension',
-    'discord qr code','scan qr','scan qr code','qr code login','login using qr',
+    'discord qr code','scan qr','qr code login','login using qr',
     'steam login','steam sign in','steam signin','steam verification',
     'roblox login','roblox sign in','roblox signin','roblox verification',
     'discord login','discord sign in','discord signin','discord verification',
-    'account verification','verify account','account verify','verify now',
     'free nitro gift','free nitro gifts','nitro gifts','nitro gift','discord nitro gift',
     'gift nitro','gifted nitro','nitro claimed','nitro claim',
     'steam gift','steam gifts','steam gift card','steam gift cards','steam wallet code','wallet code',
     'apple gift card','itunes gift card','google play gift card','play store gift card',
     'crypto airdrop','airdrop claim','claim airdrop','free crypto','free btc','free eth',
     'metamask','wallet connect','connect wallet','connect your wallet',
-    'support team link','support link','contact admin link','contact mod link',
+    'support team link','contact admin link','contact mod link',
     'staff application link','staff app link','mod application link','mod app link',
     'appeal ban link','appeal mute link','appeal timeout link','appeal suspension link',
     'ban appeal link','mute appeal link','timeout appeal link',
-    'report here link','report link','submit report link',
+    'report here link','submit report link',
     'verify in dms','verify in dm','dm verification','dm verify',
     'send me a dm for verification','dm me for verification','dm me to verify',
     'drop your username and password','drop your login','send login info',
     'send your email and password','send your user and pass','send your username and password',
     'send your 2fa code','send the 2fa code','send the code',
-    'give me the code','give me your code','tell me the code',
+    'give me your code','tell me the code',
     'cookie required','send cookie to verify','send cookie to claim',
     'token required','send token to verify','send token to claim',
     'roblosecurity required','send roblosecurity','send .roblosecurity',
     'roblosecurity cookie','roblox cookie','discord token',
     'profile verification link','profile verify link','verify profile link',
-    'vouch here link','vouch link','vouch thread link','proof link in bio',
-    'trust me link','trusted link in bio','trusted proof link',
-    'anti scam link','antiscam link','safe link check',
-    'go to my website','visit my website','my website link','website in bio',
-    'short link in bio','shortened link in bio','bitly in bio','tinyurl in bio',
+    'vouch here link','vouch link','vouch thread link','trust me link','trusted link in bio','trusted proof link',
     'linkvertise in bio','lootlinks in bio','workink in bio','ouo in bio',
     'lootlinks.com','loot-links.com','work.ink','linkvertise.com','linkvertise',
     'captcha required','captcha check','captcha verify','captcha verification',
     'verify captcha','complete captcha','complete the captcha',
     'click verify button','press verify button','press verify',
     'open verification page','open verification site','open verify page',
-    'free private server link','free ps link','private server link',
-    'free vip server link','vip server link',
-    'download script from link','script download link','exploit download link','executor download link',
+    'free private server link','free ps link','free vip server link','download script from link','script download link','exploit download link','executor download link',
     'script in description','script in desc','script in bio',
-    'raw github script','github raw link','github raw',
-    'pastebin raw','rentry raw','hastebin raw',
+    'raw github script','pastebin raw','rentry raw','hastebin raw',
     'new exploit update','exploit update','executor update',
-    'urgent update required','urgent update','update required now',
     'fix your account click','fix account click','unlock account click',
     'account disabled click','account banned click','account compromised click',
     'verification failed click','verification failure click',
@@ -2022,15 +2084,14 @@ const SCAM_OR_EXPLOIT_PHRASES_EXTRA2 = [
     'free perm promo','free perm promotion','free perm promotional',
     'free nitro promo','free nitro promotion','free nitro promotional',
     'robux promo','robux promotion','robux promotional',
-    'giveaway promo link','giveaway promotion link','promo giveaway link',
     'click for free perms','click for free perm','click for free robux','click for free nitro',
     'tap for free perms','tap for free perm','tap for free robux','tap for free nitro',
     'visit for free perms','visit for free perm','visit for free robux','visit for free nitro',
     'free perm site','free perm website','free perm web',
     'discord nitro site','discord nitro website','nitro giveaway site',
     'robux site','robux website','robux giveaway site',
-    'blox fruits site','blox fruits website','blox fruits giveaway site',
-    'bloxfruits site','bloxfruits website','bloxfruits giveaway site',
+    'blox fruits giveaway site',
+    'bloxfruits giveaway site',
 ];
 
 // Extensions that are media file types, not TLDs — never treat these as domain extensions
@@ -2148,11 +2209,7 @@ const SCAM_DM_FREEBIE_PHRASES = [
     'slide in dms for free perm','slide in dms for free perms','dms for free perm','dms for free perms',
 
     // free gamepass / gp via DM
-    'dm me for free gamepass','dm me for free gp','dm for free gamepass','dm for free gp',
-    'pm me for free gamepass','pm me for free gp','pm for free gamepass','pm for free gp',
-    'message me for free gamepass','message me for free gp','hmu for free gamepass','hmu for free gp',
-
-    // free items / stuff via DM (generic)
+    'dm me for free gamepass','dm me for free gp','dm for free gamepass','pm me for free gamepass','pm me for free gp','pm for free gamepass','message me for free gamepass','message me for free gp','hmu for free gamepass',// free items / stuff via DM (generic)
     'dm me for free items','dm me for free stuff','dm for free items','dm for free stuff',
     'pm me for free items','pm me for free stuff','hmu for free items','hmu for free stuff',
 
@@ -2230,8 +2287,22 @@ function detectScamOrExploit(cleanText, rawText, guildAllowlist) {
 
     if ((rawText || '').length) {
         const r = rawText.toLowerCase();
-        if (r.includes('http') && /v+e+r+i+f+y+|c+l+a+i+m+|g+i+v+e+a+w+a+y+/i.test(r)) return { hit: true, reason: 'Verification/giveaway + link pattern' };
-        if (/r+o+b+l+o+x+\.?c+o+m/i.test(r) && /(free|claim|verify|generator)/i.test(r)) return { hit: true, reason: 'Roblox domain + scam keyword pattern' };
+        // Narrowed: dropped 'giveaway' (legit server giveaways with discord.gg links are too common).
+        // For verify/claim+link, only fire when at least one URL goes to a domain NOT in the safe list.
+        if (r.includes('http') && /v+e+r+i+f+y+|c+l+a+i+m+/i.test(r)) {
+            const urls = (rawText.match(/https?:\/\/[^\s)\]"']+/gi) || []);
+            const hasUnsafeDomain = urls.some(u => {
+                const m = u.match(/^https?:\/\/([^\/\s?#:]+)/i);
+                if (!m) return false;
+                const d = m[1].toLowerCase().replace(/^www\./, '');
+                return !domainInList(d, _safeList);
+            });
+            if (hasUnsafeDomain) return { hit: true, reason: 'Verification/claim + suspicious link pattern' };
+        }
+        // Narrowed from bare "free" (fires on "free updates on roblox.com") to specific scam combos.
+        if (/r+o+b+l+o+x+\.?c+o+m/i.test(r) &&
+            /(free\s+robux|free\s+perm|free\s+nitro|claim\s+reward|verify\s+to\s+claim|robux\s+generator)/i.test(r))
+            return { hit: true, reason: 'Roblox domain + scam keyword pattern' };
     }
 
     return { hit: false };
@@ -2240,7 +2311,8 @@ function detectScamOrExploit(cleanText, rawText, guildAllowlist) {
 
 const TRIALS_CORE_WORDS = [
     'trial','trials','trails','trail','tril','trils','tials','trilas','triles','traiIs','trai1s','triaIs',
-    'v4trial','v4trials','v3trial','v3trials','v2trial','v2trials','v4 trials','v3 trials','v2 trials',
+    'v4trial','v4trials','v3trial','v3trials','v2trial','v2trials','v1trial','v1trials',
+    'v4 trials','v3 trials','v2 trials','v1 trials',
     'race trial','race trials','race v4 trial','race v4 trials','racev4trial','racev4trials',
 ];
 const TRIALS_HELP_VERBS = [
@@ -2272,7 +2344,7 @@ const TRIALS_NUMBER_WORDS = [
 ];
 const TRIALS_CONTEXT_WORDS = [
     'race','races','angel','human','mink','shark','ghoul','cyborg','draco',
-    'v4','v3','v2','awakening','awaken','awakend','awakened',
+    'v4','v3','v2','v1','awakening','awaken','awakend','awakened',
     'mirror fractal','mirage','blue gear','gear','trial room','temple of time','temple',
     'full moon','fm','moon','night','server hop','hop','hopping',
     'private server','ps','priv server','vip',
@@ -2407,6 +2479,774 @@ const TRIALS_STRICT_PHRASES_EXTRA = [
     'need partner for v4 trials','need partners for v4 trials','need partner for trials','need partners for trials',
     'join for v4 trials','join for trials','join v4 trials','join trials',
     'team for v4 trials','team for trials','party for v4 trials','party for trials','squad for v4 trials','squad for trials',
+    // ── Race + version help / max-out patterns (all races × v1-v4) ──────────
+    'help with angel v1',
+    'help with angel v1 trials',
+    'need help with angel v1',
+    'need help with angel v1 trials',
+    'help me with angel v1',
+    'help me angel v1',
+    'who wanna max out angel v1',
+    'who wants to max out angel v1',
+    'who wanna max angel v1',
+    'who wants to max angel v1',
+    'wanna max out angel v1',
+    'want to max out angel v1',
+    'max out angel v1',
+    'maxing out angel v1',
+    'maxing angel v1',
+    'carry angel v1',
+    'carrying angel v1',
+    'run angel v1',
+    'running angel v1',
+    'do angel v1',
+    'doing angel v1',
+    'lf angel v1',
+    'lfg angel v1',
+    'looking for angel v1',
+    'looking for angel v1 trials',
+    'lf angel v1 trials',
+    'help with angel v2',
+    'help with angel v2 trials',
+    'need help with angel v2',
+    'need help with angel v2 trials',
+    'help me with angel v2',
+    'help me angel v2',
+    'who wanna max out angel v2',
+    'who wants to max out angel v2',
+    'who wanna max angel v2',
+    'who wants to max angel v2',
+    'wanna max out angel v2',
+    'want to max out angel v2',
+    'max out angel v2',
+    'maxing out angel v2',
+    'maxing angel v2',
+    'carry angel v2',
+    'carrying angel v2',
+    'run angel v2',
+    'running angel v2',
+    'do angel v2',
+    'doing angel v2',
+    'lf angel v2',
+    'lfg angel v2',
+    'looking for angel v2',
+    'looking for angel v2 trials',
+    'lf angel v2 trials',
+    'help with angel v3',
+    'help with angel v3 trials',
+    'need help with angel v3',
+    'need help with angel v3 trials',
+    'help me with angel v3',
+    'help me angel v3',
+    'who wanna max out angel v3',
+    'who wants to max out angel v3',
+    'who wanna max angel v3',
+    'who wants to max angel v3',
+    'wanna max out angel v3',
+    'want to max out angel v3',
+    'max out angel v3',
+    'maxing out angel v3',
+    'maxing angel v3',
+    'carry angel v3',
+    'carrying angel v3',
+    'run angel v3',
+    'running angel v3',
+    'do angel v3',
+    'doing angel v3',
+    'lf angel v3',
+    'lfg angel v3',
+    'looking for angel v3',
+    'looking for angel v3 trials',
+    'lf angel v3 trials',
+    'help with angel v4',
+    'help with angel v4 trials',
+    'need help with angel v4',
+    'need help with angel v4 trials',
+    'help me with angel v4',
+    'help me angel v4',
+    'who wanna max out angel v4',
+    'who wants to max out angel v4',
+    'who wanna max angel v4',
+    'who wants to max angel v4',
+    'wanna max out angel v4',
+    'want to max out angel v4',
+    'max out angel v4',
+    'maxing out angel v4',
+    'maxing angel v4',
+    'carry angel v4',
+    'carrying angel v4',
+    'run angel v4',
+    'running angel v4',
+    'do angel v4',
+    'doing angel v4',
+    'lf angel v4',
+    'lfg angel v4',
+    'looking for angel v4',
+    'looking for angel v4 trials',
+    'lf angel v4 trials',
+    'help with human v1',
+    'help with human v1 trials',
+    'need help with human v1',
+    'need help with human v1 trials',
+    'help me with human v1',
+    'help me human v1',
+    'who wanna max out human v1',
+    'who wants to max out human v1',
+    'who wanna max human v1',
+    'who wants to max human v1',
+    'wanna max out human v1',
+    'want to max out human v1',
+    'max out human v1',
+    'maxing out human v1',
+    'maxing human v1',
+    'carry human v1',
+    'carrying human v1',
+    'run human v1',
+    'running human v1',
+    'do human v1',
+    'doing human v1',
+    'lf human v1',
+    'lfg human v1',
+    'looking for human v1',
+    'looking for human v1 trials',
+    'lf human v1 trials',
+    'help with human v2',
+    'help with human v2 trials',
+    'need help with human v2',
+    'need help with human v2 trials',
+    'help me with human v2',
+    'help me human v2',
+    'who wanna max out human v2',
+    'who wants to max out human v2',
+    'who wanna max human v2',
+    'who wants to max human v2',
+    'wanna max out human v2',
+    'want to max out human v2',
+    'max out human v2',
+    'maxing out human v2',
+    'maxing human v2',
+    'carry human v2',
+    'carrying human v2',
+    'run human v2',
+    'running human v2',
+    'do human v2',
+    'doing human v2',
+    'lf human v2',
+    'lfg human v2',
+    'looking for human v2',
+    'looking for human v2 trials',
+    'lf human v2 trials',
+    'help with human v3',
+    'help with human v3 trials',
+    'need help with human v3',
+    'need help with human v3 trials',
+    'help me with human v3',
+    'help me human v3',
+    'who wanna max out human v3',
+    'who wants to max out human v3',
+    'who wanna max human v3',
+    'who wants to max human v3',
+    'wanna max out human v3',
+    'want to max out human v3',
+    'max out human v3',
+    'maxing out human v3',
+    'maxing human v3',
+    'carry human v3',
+    'carrying human v3',
+    'run human v3',
+    'running human v3',
+    'do human v3',
+    'doing human v3',
+    'lf human v3',
+    'lfg human v3',
+    'looking for human v3',
+    'looking for human v3 trials',
+    'lf human v3 trials',
+    'help with human v4',
+    'help with human v4 trials',
+    'need help with human v4',
+    'need help with human v4 trials',
+    'help me with human v4',
+    'help me human v4',
+    'who wanna max out human v4',
+    'who wants to max out human v4',
+    'who wanna max human v4',
+    'who wants to max human v4',
+    'wanna max out human v4',
+    'want to max out human v4',
+    'max out human v4',
+    'maxing out human v4',
+    'maxing human v4',
+    'carry human v4',
+    'carrying human v4',
+    'run human v4',
+    'running human v4',
+    'do human v4',
+    'doing human v4',
+    'lf human v4',
+    'lfg human v4',
+    'looking for human v4',
+    'looking for human v4 trials',
+    'lf human v4 trials',
+    'help with mink v1',
+    'help with mink v1 trials',
+    'need help with mink v1',
+    'need help with mink v1 trials',
+    'help me with mink v1',
+    'help me mink v1',
+    'who wanna max out mink v1',
+    'who wants to max out mink v1',
+    'who wanna max mink v1',
+    'who wants to max mink v1',
+    'wanna max out mink v1',
+    'want to max out mink v1',
+    'max out mink v1',
+    'maxing out mink v1',
+    'maxing mink v1',
+    'carry mink v1',
+    'carrying mink v1',
+    'run mink v1',
+    'running mink v1',
+    'do mink v1',
+    'doing mink v1',
+    'lf mink v1',
+    'lfg mink v1',
+    'looking for mink v1',
+    'looking for mink v1 trials',
+    'lf mink v1 trials',
+    'help with mink v2',
+    'help with mink v2 trials',
+    'need help with mink v2',
+    'need help with mink v2 trials',
+    'help me with mink v2',
+    'help me mink v2',
+    'who wanna max out mink v2',
+    'who wants to max out mink v2',
+    'who wanna max mink v2',
+    'who wants to max mink v2',
+    'wanna max out mink v2',
+    'want to max out mink v2',
+    'max out mink v2',
+    'maxing out mink v2',
+    'maxing mink v2',
+    'carry mink v2',
+    'carrying mink v2',
+    'run mink v2',
+    'running mink v2',
+    'do mink v2',
+    'doing mink v2',
+    'lf mink v2',
+    'lfg mink v2',
+    'looking for mink v2',
+    'looking for mink v2 trials',
+    'lf mink v2 trials',
+    'help with mink v3',
+    'help with mink v3 trials',
+    'need help with mink v3',
+    'need help with mink v3 trials',
+    'help me with mink v3',
+    'help me mink v3',
+    'who wanna max out mink v3',
+    'who wants to max out mink v3',
+    'who wanna max mink v3',
+    'who wants to max mink v3',
+    'wanna max out mink v3',
+    'want to max out mink v3',
+    'max out mink v3',
+    'maxing out mink v3',
+    'maxing mink v3',
+    'carry mink v3',
+    'carrying mink v3',
+    'run mink v3',
+    'running mink v3',
+    'do mink v3',
+    'doing mink v3',
+    'lf mink v3',
+    'lfg mink v3',
+    'looking for mink v3',
+    'looking for mink v3 trials',
+    'lf mink v3 trials',
+    'help with mink v4',
+    'help with mink v4 trials',
+    'need help with mink v4',
+    'need help with mink v4 trials',
+    'help me with mink v4',
+    'help me mink v4',
+    'who wanna max out mink v4',
+    'who wants to max out mink v4',
+    'who wanna max mink v4',
+    'who wants to max mink v4',
+    'wanna max out mink v4',
+    'want to max out mink v4',
+    'max out mink v4',
+    'maxing out mink v4',
+    'maxing mink v4',
+    'carry mink v4',
+    'carrying mink v4',
+    'run mink v4',
+    'running mink v4',
+    'do mink v4',
+    'doing mink v4',
+    'lf mink v4',
+    'lfg mink v4',
+    'looking for mink v4',
+    'looking for mink v4 trials',
+    'lf mink v4 trials',
+    'help with shark v1',
+    'help with shark v1 trials',
+    'need help with shark v1',
+    'need help with shark v1 trials',
+    'help me with shark v1',
+    'help me shark v1',
+    'who wanna max out shark v1',
+    'who wants to max out shark v1',
+    'who wanna max shark v1',
+    'who wants to max shark v1',
+    'wanna max out shark v1',
+    'want to max out shark v1',
+    'max out shark v1',
+    'maxing out shark v1',
+    'maxing shark v1',
+    'carry shark v1',
+    'carrying shark v1',
+    'run shark v1',
+    'running shark v1',
+    'do shark v1',
+    'doing shark v1',
+    'lf shark v1',
+    'lfg shark v1',
+    'looking for shark v1',
+    'looking for shark v1 trials',
+    'lf shark v1 trials',
+    'help with shark v2',
+    'help with shark v2 trials',
+    'need help with shark v2',
+    'need help with shark v2 trials',
+    'help me with shark v2',
+    'help me shark v2',
+    'who wanna max out shark v2',
+    'who wants to max out shark v2',
+    'who wanna max shark v2',
+    'who wants to max shark v2',
+    'wanna max out shark v2',
+    'want to max out shark v2',
+    'max out shark v2',
+    'maxing out shark v2',
+    'maxing shark v2',
+    'carry shark v2',
+    'carrying shark v2',
+    'run shark v2',
+    'running shark v2',
+    'do shark v2',
+    'doing shark v2',
+    'lf shark v2',
+    'lfg shark v2',
+    'looking for shark v2',
+    'looking for shark v2 trials',
+    'lf shark v2 trials',
+    'help with shark v3',
+    'help with shark v3 trials',
+    'need help with shark v3',
+    'need help with shark v3 trials',
+    'help me with shark v3',
+    'help me shark v3',
+    'who wanna max out shark v3',
+    'who wants to max out shark v3',
+    'who wanna max shark v3',
+    'who wants to max shark v3',
+    'wanna max out shark v3',
+    'want to max out shark v3',
+    'max out shark v3',
+    'maxing out shark v3',
+    'maxing shark v3',
+    'carry shark v3',
+    'carrying shark v3',
+    'run shark v3',
+    'running shark v3',
+    'do shark v3',
+    'doing shark v3',
+    'lf shark v3',
+    'lfg shark v3',
+    'looking for shark v3',
+    'looking for shark v3 trials',
+    'lf shark v3 trials',
+    'help with shark v4',
+    'help with shark v4 trials',
+    'need help with shark v4',
+    'need help with shark v4 trials',
+    'help me with shark v4',
+    'help me shark v4',
+    'who wanna max out shark v4',
+    'who wants to max out shark v4',
+    'who wanna max shark v4',
+    'who wants to max shark v4',
+    'wanna max out shark v4',
+    'want to max out shark v4',
+    'max out shark v4',
+    'maxing out shark v4',
+    'maxing shark v4',
+    'carry shark v4',
+    'carrying shark v4',
+    'run shark v4',
+    'running shark v4',
+    'do shark v4',
+    'doing shark v4',
+    'lf shark v4',
+    'lfg shark v4',
+    'looking for shark v4',
+    'looking for shark v4 trials',
+    'lf shark v4 trials',
+    'help with ghoul v1',
+    'help with ghoul v1 trials',
+    'need help with ghoul v1',
+    'need help with ghoul v1 trials',
+    'help me with ghoul v1',
+    'help me ghoul v1',
+    'who wanna max out ghoul v1',
+    'who wants to max out ghoul v1',
+    'who wanna max ghoul v1',
+    'who wants to max ghoul v1',
+    'wanna max out ghoul v1',
+    'want to max out ghoul v1',
+    'max out ghoul v1',
+    'maxing out ghoul v1',
+    'maxing ghoul v1',
+    'carry ghoul v1',
+    'carrying ghoul v1',
+    'run ghoul v1',
+    'running ghoul v1',
+    'do ghoul v1',
+    'doing ghoul v1',
+    'lf ghoul v1',
+    'lfg ghoul v1',
+    'looking for ghoul v1',
+    'looking for ghoul v1 trials',
+    'lf ghoul v1 trials',
+    'help with ghoul v2',
+    'help with ghoul v2 trials',
+    'need help with ghoul v2',
+    'need help with ghoul v2 trials',
+    'help me with ghoul v2',
+    'help me ghoul v2',
+    'who wanna max out ghoul v2',
+    'who wants to max out ghoul v2',
+    'who wanna max ghoul v2',
+    'who wants to max ghoul v2',
+    'wanna max out ghoul v2',
+    'want to max out ghoul v2',
+    'max out ghoul v2',
+    'maxing out ghoul v2',
+    'maxing ghoul v2',
+    'carry ghoul v2',
+    'carrying ghoul v2',
+    'run ghoul v2',
+    'running ghoul v2',
+    'do ghoul v2',
+    'doing ghoul v2',
+    'lf ghoul v2',
+    'lfg ghoul v2',
+    'looking for ghoul v2',
+    'looking for ghoul v2 trials',
+    'lf ghoul v2 trials',
+    'help with ghoul v3',
+    'help with ghoul v3 trials',
+    'need help with ghoul v3',
+    'need help with ghoul v3 trials',
+    'help me with ghoul v3',
+    'help me ghoul v3',
+    'who wanna max out ghoul v3',
+    'who wants to max out ghoul v3',
+    'who wanna max ghoul v3',
+    'who wants to max ghoul v3',
+    'wanna max out ghoul v3',
+    'want to max out ghoul v3',
+    'max out ghoul v3',
+    'maxing out ghoul v3',
+    'maxing ghoul v3',
+    'carry ghoul v3',
+    'carrying ghoul v3',
+    'run ghoul v3',
+    'running ghoul v3',
+    'do ghoul v3',
+    'doing ghoul v3',
+    'lf ghoul v3',
+    'lfg ghoul v3',
+    'looking for ghoul v3',
+    'looking for ghoul v3 trials',
+    'lf ghoul v3 trials',
+    'help with ghoul v4',
+    'help with ghoul v4 trials',
+    'need help with ghoul v4',
+    'need help with ghoul v4 trials',
+    'help me with ghoul v4',
+    'help me ghoul v4',
+    'who wanna max out ghoul v4',
+    'who wants to max out ghoul v4',
+    'who wanna max ghoul v4',
+    'who wants to max ghoul v4',
+    'wanna max out ghoul v4',
+    'want to max out ghoul v4',
+    'max out ghoul v4',
+    'maxing out ghoul v4',
+    'maxing ghoul v4',
+    'carry ghoul v4',
+    'carrying ghoul v4',
+    'run ghoul v4',
+    'running ghoul v4',
+    'do ghoul v4',
+    'doing ghoul v4',
+    'lf ghoul v4',
+    'lfg ghoul v4',
+    'looking for ghoul v4',
+    'looking for ghoul v4 trials',
+    'lf ghoul v4 trials',
+    'help with cyborg v1',
+    'help with cyborg v1 trials',
+    'need help with cyborg v1',
+    'need help with cyborg v1 trials',
+    'help me with cyborg v1',
+    'help me cyborg v1',
+    'who wanna max out cyborg v1',
+    'who wants to max out cyborg v1',
+    'who wanna max cyborg v1',
+    'who wants to max cyborg v1',
+    'wanna max out cyborg v1',
+    'want to max out cyborg v1',
+    'max out cyborg v1',
+    'maxing out cyborg v1',
+    'maxing cyborg v1',
+    'carry cyborg v1',
+    'carrying cyborg v1',
+    'run cyborg v1',
+    'running cyborg v1',
+    'do cyborg v1',
+    'doing cyborg v1',
+    'lf cyborg v1',
+    'lfg cyborg v1',
+    'looking for cyborg v1',
+    'looking for cyborg v1 trials',
+    'lf cyborg v1 trials',
+    'help with cyborg v2',
+    'help with cyborg v2 trials',
+    'need help with cyborg v2',
+    'need help with cyborg v2 trials',
+    'help me with cyborg v2',
+    'help me cyborg v2',
+    'who wanna max out cyborg v2',
+    'who wants to max out cyborg v2',
+    'who wanna max cyborg v2',
+    'who wants to max cyborg v2',
+    'wanna max out cyborg v2',
+    'want to max out cyborg v2',
+    'max out cyborg v2',
+    'maxing out cyborg v2',
+    'maxing cyborg v2',
+    'carry cyborg v2',
+    'carrying cyborg v2',
+    'run cyborg v2',
+    'running cyborg v2',
+    'do cyborg v2',
+    'doing cyborg v2',
+    'lf cyborg v2',
+    'lfg cyborg v2',
+    'looking for cyborg v2',
+    'looking for cyborg v2 trials',
+    'lf cyborg v2 trials',
+    'help with cyborg v3',
+    'help with cyborg v3 trials',
+    'need help with cyborg v3',
+    'need help with cyborg v3 trials',
+    'help me with cyborg v3',
+    'help me cyborg v3',
+    'who wanna max out cyborg v3',
+    'who wants to max out cyborg v3',
+    'who wanna max cyborg v3',
+    'who wants to max cyborg v3',
+    'wanna max out cyborg v3',
+    'want to max out cyborg v3',
+    'max out cyborg v3',
+    'maxing out cyborg v3',
+    'maxing cyborg v3',
+    'carry cyborg v3',
+    'carrying cyborg v3',
+    'run cyborg v3',
+    'running cyborg v3',
+    'do cyborg v3',
+    'doing cyborg v3',
+    'lf cyborg v3',
+    'lfg cyborg v3',
+    'looking for cyborg v3',
+    'looking for cyborg v3 trials',
+    'lf cyborg v3 trials',
+    'help with cyborg v4',
+    'help with cyborg v4 trials',
+    'need help with cyborg v4',
+    'need help with cyborg v4 trials',
+    'help me with cyborg v4',
+    'help me cyborg v4',
+    'who wanna max out cyborg v4',
+    'who wants to max out cyborg v4',
+    'who wanna max cyborg v4',
+    'who wants to max cyborg v4',
+    'wanna max out cyborg v4',
+    'want to max out cyborg v4',
+    'max out cyborg v4',
+    'maxing out cyborg v4',
+    'maxing cyborg v4',
+    'carry cyborg v4',
+    'carrying cyborg v4',
+    'run cyborg v4',
+    'running cyborg v4',
+    'do cyborg v4',
+    'doing cyborg v4',
+    'lf cyborg v4',
+    'lfg cyborg v4',
+    'looking for cyborg v4',
+    'looking for cyborg v4 trials',
+    'lf cyborg v4 trials',
+    'help with draco v1',
+    'help with draco v1 trials',
+    'need help with draco v1',
+    'need help with draco v1 trials',
+    'help me with draco v1',
+    'help me draco v1',
+    'who wanna max out draco v1',
+    'who wants to max out draco v1',
+    'who wanna max draco v1',
+    'who wants to max draco v1',
+    'wanna max out draco v1',
+    'want to max out draco v1',
+    'max out draco v1',
+    'maxing out draco v1',
+    'maxing draco v1',
+    'carry draco v1',
+    'carrying draco v1',
+    'run draco v1',
+    'running draco v1',
+    'do draco v1',
+    'doing draco v1',
+    'lf draco v1',
+    'lfg draco v1',
+    'looking for draco v1',
+    'looking for draco v1 trials',
+    'lf draco v1 trials',
+    'help with draco v2',
+    'help with draco v2 trials',
+    'need help with draco v2',
+    'need help with draco v2 trials',
+    'help me with draco v2',
+    'help me draco v2',
+    'who wanna max out draco v2',
+    'who wants to max out draco v2',
+    'who wanna max draco v2',
+    'who wants to max draco v2',
+    'wanna max out draco v2',
+    'want to max out draco v2',
+    'max out draco v2',
+    'maxing out draco v2',
+    'maxing draco v2',
+    'carry draco v2',
+    'carrying draco v2',
+    'run draco v2',
+    'running draco v2',
+    'do draco v2',
+    'doing draco v2',
+    'lf draco v2',
+    'lfg draco v2',
+    'looking for draco v2',
+    'looking for draco v2 trials',
+    'lf draco v2 trials',
+    'help with draco v3',
+    'help with draco v3 trials',
+    'need help with draco v3',
+    'need help with draco v3 trials',
+    'help me with draco v3',
+    'help me draco v3',
+    'who wanna max out draco v3',
+    'who wants to max out draco v3',
+    'who wanna max draco v3',
+    'who wants to max draco v3',
+    'wanna max out draco v3',
+    'want to max out draco v3',
+    'max out draco v3',
+    'maxing out draco v3',
+    'maxing draco v3',
+    'carry draco v3',
+    'carrying draco v3',
+    'run draco v3',
+    'running draco v3',
+    'do draco v3',
+    'doing draco v3',
+    'lf draco v3',
+    'lfg draco v3',
+    'looking for draco v3',
+    'looking for draco v3 trials',
+    'lf draco v3 trials',
+    'help with draco v4',
+    'help with draco v4 trials',
+    'need help with draco v4',
+    'need help with draco v4 trials',
+    'help me with draco v4',
+    'help me draco v4',
+    'who wanna max out draco v4',
+    'who wants to max out draco v4',
+    'who wanna max draco v4',
+    'who wants to max draco v4',
+    'wanna max out draco v4',
+    'want to max out draco v4',
+    'max out draco v4',
+    'maxing out draco v4',
+    'maxing draco v4',
+    'carry draco v4',
+    'carrying draco v4',
+    'run draco v4',
+    'running draco v4',
+    'do draco v4',
+    'doing draco v4',
+    'lf draco v4',
+    'lfg draco v4',
+    'looking for draco v4',
+    'looking for draco v4 trials',
+    'lf draco v4 trials',
+    'help with race v1',
+    'need help race v1',
+    'help with race v1 trials',
+    'who wanna max out race v1',
+    'who wants to max out race v1',
+    'wanna max out race v1',
+    'max out race v1',
+    'maxing race v1',
+    'carry race v1',
+    'lf race v1',
+    'looking for race v1',
+    'help with race v2',
+    'need help race v2',
+    'help with race v2 trials',
+    'who wanna max out race v2',
+    'who wants to max out race v2',
+    'wanna max out race v2',
+    'max out race v2',
+    'maxing race v2',
+    'carry race v2',
+    'lf race v2',
+    'looking for race v2',
+    'help with race v3',
+    'need help race v3',
+    'help with race v3 trials',
+    'who wanna max out race v3',
+    'who wants to max out race v3',
+    'wanna max out race v3',
+    'max out race v3',
+    'maxing race v3',
+    'carry race v3',
+    'lf race v3',
+    'looking for race v3',
+    'who wanna max out race v4',
+    'who wants to max out race v4',
+    'wanna max out race v4',
+    'max out race v4',
+    'maxing race v4',
+    'carry race v4',
 ];
 
 // ══════════════════════════════════════════════════════════
@@ -2930,7 +3770,7 @@ const PREHISTORIC_ISLAND_RE = /\bprehistoric\s*island\b|\bprehistoric\s*isle\b|\
 /** Mirage island detection */
 const MIRAGE_ISLAND_RE = /\bmirage\s*island\b|\bmirage\s*isle\b|\bmirage\b/i;
 /** Race V4 / trials / blue gear detection */
-const RACE_V4_SERVICE_RE = /\b(race\s*v4|race\s*reroll|trials?|blue\s*gear)\b/i;
+const RACE_V4_SERVICE_RE = /\b(race\s*v[1234]|race\s*reroll|trials?|blue\s*gear|max(?:ing)?\s*(?:out\s*)?race|max(?:ing)?\s*(?:out\s*)?(?:angel|human|mink|shark|ghoul|cyborg|draco)\s*v[1234])\b/i;
 /** Raid / dungeon / boss service detection */
 const RAID_SERVICE_RE = /\b(raid|dungeon|raid\s*boss|boss\s*carry|lev?el\s*up|lvl\s*up|lvling\s*up|leveling|sword\s*quest|cdk|ttk|enchant|material|bounty\s*reset|bounty\s*farm|materials?\s*hunt|pain\s*and\s*suffering|haze\s*of\s*misery|fear\s*the\s*reaper|sense\s*of\s*duty|the\s*hunter|soulless|legendary\s*sword\s*dealer|sword\s*dealer|mysterious\s*man|mastery\s*grind|mastery\s*farm|mastery\s*300|2m\s*beli|beli\s*purchase|wando\s*purchase|shisui\s*purchase|saddi\s*purchase|ttk\s*fusion|ttk\s*quest|cdk\s*quest|cdk\s*chain|ttk\s*chain|tushita\s*quest|yama\s*quest)\b/i;
 
@@ -3084,15 +3924,17 @@ function getGuildSettings(guildId, data) {
 
             invitePolicyEnabled: false,
             inviteAllowlistDomains: [
-                'discord.com','discord.gg','discordapp.com',
+                'discord.com','discordapp.com',
             ],
             inviteDenylistDomains: [
-                'discord.gg','discord.com','discordapp.com',
+                'discord.com','discordapp.com',
                 'discord.me','discord.io','discord.li','discord.id',
                 'disboard.org','top.gg',
                 'invite.gg','inv.gg','discord.link','dsc.gg',
                 'dis.gd','discord.gift',
-                'discordcdn.com','cdn.discordapp.com',
+                'discordcdn.com',
+    'support.discord.com',   // official Discord help centre
+    'status.discordapp.com', // Discord status page'cdn.discordapp.com',
             ],
             inviteAllowedChannelIds: [],
 
@@ -3116,9 +3958,9 @@ function getGuildSettings(guildId, data) {
             linkPolicyEnabled: false,
             linkAllowlistedDomains: [
                 // ── Discord (every CDN/attachment/media variant) ──────────────
-                'discord.com','discord.gg','discordapp.com','discordapp.net',
+                'discord.com','discordapp.com','discordapp.net',
                 'discordcdn.com','discord.media',
-                'cdn.discordapp.com','media.discordapp.net',
+                'media.discordapp.net',
                 'images-ext-1.discordapp.net','images-ext-2.discordapp.net',
                 'images-ext-3.discordapp.net','images-ext-4.discordapp.net',
                 'attachments.discordapp.com',
@@ -3414,7 +4256,7 @@ const REAL_TLDS = new Set([
     'com','net','org','edu','gov','mil','int','biz','info','name','mobi','aero','coop','museum','tel','travel','jobs','pro',
     // New gTLDs (common / scam-relevant)
     'io','co','ai','app','dev','cloud','online','site','store','shop','tech','digital','media','news','blog','studio',
-    'agency','design','marketing','email','finance','money','bank','insurance','legal','law','health','care',
+    'agency','design','marketing','email','finance','money','bank','legal','law','health','care',
     'world','global','international','social','network','community','live','stream','video','tv','radio',
     'space','fun','games','game','play','win','today','club','vip','pro','expert','solutions','services',
     'support','help','center','click','link','page','web','host','server','systems','software','solutions',
@@ -3490,6 +4332,8 @@ function detectObfuscatedDomains(rawText, extraAllowed) {
         // Reject if the "TLD" is not a real registered TLD — catches sentence-boundary
         // false positives like "more. feel" → "more.feel" where "feel" isn't a TLD.
         if (!REAL_TLDS.has(tld)) return false;
+        // Guard: skip pure version/numeric strings like v1.0, 2.5.1, 4k, 60fps, etc.
+        if (/^v?\d+(?:[._]\d+)*[a-z]{0,3}$/i.test(candidate.trim())) return false;
         // ── Sentence-boundary guard ───────────────────────────────────────────
         // Even if "word.tld" passes the TLD check (e.g. "today.it", "pretty.me"),
         // verify that in the ORIGINAL raw text the dot is actually attached to the
@@ -7363,8 +8207,9 @@ const ACC_TRADE_VERBS = [
     "sell","selling","sold","wts","for sale","forsale",
     "buy","buying","bought","wtb","looking to buy",
     "trade","trading","swap","swapping","wtt",
-    "transfer","transferring","give away","giveaway","giving away",
-    "offer","offering",
+    // "transfer","transferring" removed: fires on "transfer game data for my acc"
+    // "giveaway","give away","giving away" removed: fires on legitimate server giveaways near "acc"
+    // "offer","offering" removed: fires on "offering help with your acc"
 ];
 const ACC_TRADING_PHRASES = [
     "sell my account","selling my account","selling account","sell account",
@@ -7450,7 +8295,8 @@ function scanForServiceIntent(cleanText, strictness = 5) {
 
     // ── Curated strict phrases — active at ALL levels ──────
     for (const phrase of SERVICE_INTENT_PHRASE) {
-        if (ns.includes(phrase.replace(/\s/g,'')) || cleanText.includes(phrase)) return true;
+        const _p = phrase.toLowerCase().replace(/\s/g,'');
+        if (ns.includes(_p) || cleanText.includes(phrase.toLowerCase())) return true;
     }
 
     // ── At level 1-2: curated phrases + exact SERVICE_INTENT_EXACT only (no fuzzy, no EXTRA) ──
@@ -7468,14 +8314,15 @@ function scanForServiceIntent(cleanText, strictness = 5) {
     }
 
     // ── At level 3+: EXTRA lists (both already require p.length >= 6) ──
+    // BUG FIX: phrase data contains mixed-case strings; .toLowerCase() aligns with ns/cleanText
     for (const phrase of SERVICE_INTENT_PHRASE_EXTRA) {
-        const p = phrase.replace(/\s/g,'');
-        if (p.length >= 6 && (ns.includes(p) || cleanText.includes(phrase))) return true;
+        const p = phrase.toLowerCase().replace(/\s/g,'');
+        if (p.length >= 6 && (ns.includes(p) || cleanText.includes(phrase.toLowerCase()))) return true;
     }
 
     for (const phrase of SERVICE_INTENT_PHRASE_EXTRA2) {
-        const p = phrase.replace(/\s/g,'');
-        if (p.length >= 6 && (ns.includes(p) || cleanText.includes(phrase))) return true;
+        const p = phrase.toLowerCase().replace(/\s/g,'');
+        if (p.length >= 6 && (ns.includes(p) || cleanText.includes(phrase.toLowerCase()))) return true;
     }
 
     // ── Token fuzzy matching — stricter threshold at lower levels ──
@@ -7532,6 +8379,36 @@ const SAFE_PHRASE_EXCEPTIONS = [
     /\bgiving (?:away|out) (?:advice|tips?|info|help)\b/i,
     /\bhave (?:a )?(?:fun|good|great|nice|bad) (?:day|time|game|one)\b/i,
     /\bi have (?:a |an )?(?:question|problem|issue|suggestion)\b/i,
+    // ── Additional false-positive guards added in FP-cleanup pass ─────────────
+    /\b(?:check|visit|see|go to)\s+(?:our|the|this)\s+(?:website|site|page|channel|server)\b/i,
+    /\bthank(?:s| you)?\s+for\s+(?:the\s+)?(?:help|carry|boost|run|service|trade|info)\b/i,
+    /\bgood\s+(?:luck|game|run|carry|trade)\b/i,
+    /\bjust\s+(?:want(?:ed)?|need(?:ed)?|got|found)\s+(?:a|an|to)\b/i,
+    /\bmy\s+friend\s+(?:helped|carried|boosted|gave|sent)\b/i,
+    /\b(?:biology|chemistry|physics|science|history|math|school|class|study|studying)\b/i,
+    /\b(?:hydrogen|electron|codex)\b(?!\s*(?:executor|exploit|injector|script|hack))/i,
+    // ── Conversational question patterns — never service advertisements ─────
+    /\bhow (?:do|can|should|would|to) (?:i|you|we|someone)\b/i,
+    /\bwhere (?:can|do|should|would|to)\b/i,
+    /\bwhat(?:'s| is| are| was| were)\b.*\?/i,
+    /\bwhich (?:fruit|sword|weapon|move|skill|class|race|stat|build|boss)\b/i,
+    /\bbest (?:fruit|sword|weapon|move|skill|class|race|stat|build|place|way)\b/i,
+    /\bis (?:there|this|it|that|anyone|somebody)\b/i,
+    /\bcan (?:anyone|someone|somebody|i|you|we) (?:help|carry|boost|assist|show|tell|explain)\b/i,
+    /\b(?:anyone|someone|pls|please|plz) (?:help|carry|boost|assist)\b/i,
+    /\bneed(?:ed|ing)? (?:a|an)? (?:carry|boost|help|guide|tip|advice)\b/i,
+    /\blooking for (?:a |an )?(?:carry|boost|help|guide|party|team|group|friend|partner)\b/i,
+    /\bwho(?:'s| is) (?:hosting|carrying|running|doing)\b/i,
+    /\bhow much (?:is|does|for|would|are)\b/i,
+    /\bwhat(?:'s| is) (?:the )?(?:price|worth|value|cost|rate)\b/i,
+    /\b(?:worth|value) (?:of|for)\b/i,
+    /\bused to (?:carry|sell|buy|host|offer|trade)\b/i,
+    /\bmy (?:friend|bro|sis|mate|buddy|homie) (?:helped|carried|gave|sold|bought|traded)\b/i,
+    /\b(?:already|just|recently) (?:bought|sold|traded|got|received|sent)\b/i,
+    /\bi (?:was|am|got|got) (?:helped|carried|boosted|scammed)\b/i,
+    /\b(?:got|been) (?:scammed|hacked|stolen from|robbed)\b/i,
+    /\bfree (?:time|space|will|range|throw|kick|hit|fall|style)\b/i,
+    /\bfree (?:to (?:play|join|use|try)|for all|forever|always)\b/i,
 ];
 
 function scanForIntent(cleanText, strictness = 5) {
@@ -7655,7 +8532,7 @@ function detectAccountTrading(cleanText) {
             else if (tok === vc || fuzzyRatio(tok, vc) >= 0.85) { verbIdx.push(i); break; }
         }
     }
-    for (const ai of accIdx) for (const vi of verbIdx) if (Math.abs(ai-vi) <= 8) return true;
+    for (const ai of accIdx) for (const vi of verbIdx) if (Math.abs(ai-vi) <= 5) return true;
     return false;
 }
 
@@ -7969,10 +8846,11 @@ const COMMON_ALLOWED_DOMAINS = [
     'discord.com',
     'discordapp.com',       // covers cdn.discordapp.com, attachments.discordapp.com, etc.
     'discordapp.net',       // covers media.discordapp.net, images-ext-*.discordapp.net, etc.
-    'discord.gg',
     'discord.co',
     'discord.media',
     'discordcdn.com',
+    'support.discord.com',   // official Discord help centre
+    'status.discordapp.com', // Discord status page
     'cdn.discordapp.com',
     'media.discordapp.net',
     'media.discordapp.com', // FIX: bare/partial form that obfuscation regex can match
@@ -8009,7 +8887,7 @@ const COMMON_ALLOWED_DOMAINS = [
     'media3.tenor.com',
     // ── Giphy ─────────────────────────────────────────────────────────────────
     'giphy.com',
-    'media.giphy.com',
+    
     'media0.giphy.com',
     'media1.giphy.com',
     'media2.giphy.com',
@@ -8030,6 +8908,15 @@ const COMMON_ALLOWED_DOMAINS = [
     'giant.gfycat.com',
     // ── Roblox (every CDN) ────────────────────────────────────────────────────
     'roblox.com',
+    'en.help.roblox.com',    // Roblox help centre
+    'devforum.roblox.com',   // Roblox DevForum
+    'status.roblox.com',     // Roblox status
+    'create.roblox.com',     // Roblox creation portal
+    'en.help.roblox.com',       // Roblox official help centre
+    'devforum.roblox.com',      // Roblox developer forum
+    'status.roblox.com',        // Roblox status page
+    'create.roblox.com',        // Roblox creation portal
+    'education.roblox.com',
     'rbxcdn.com',
     'rbx.com',
     'cdn.roblox.com',
@@ -8074,7 +8961,6 @@ const COMMON_ALLOWED_DOMAINS = [
     'githubusercontent.com',
     'github.io',
     'gist.github.com',
-    'raw.githubusercontent.com',
     // ── Streamable / Medal / clip hosts ──────────────────────────────────────
     'streamable.com',
     'medal.tv',
@@ -8322,8 +9208,7 @@ const COMMON_ALLOWED_DOMAINS = [
     'carrd.co',
     'bio.link',
     'solo.to',
-    'linkt.ree',
-    // ── Payment / finance (safe to link, not scam) ────────────────────────────
+// ── Payment / finance (safe to link, not scam) ────────────────────────────
     'paypal.com','paypal.me',
     'venmo.com','cash.app',
     'stripe.com',
@@ -8348,7 +9233,7 @@ const COMMON_ALLOWED_DOMAINS = [
     'knowyourmeme.com',
     'cdn.discordapp.com',
     'images.genius.com',
-    'is.gd',            // safe generic shortener
+                // safe generic shortener
     'v.redd.it',
     // ── Messaging / community platforms ──────────────────────────────────────
     'telegram.org',
@@ -8362,7 +9247,7 @@ const COMMON_ALLOWED_DOMAINS = [
     'images.google.com',
     'search.google.com',
     'photos.app.goo.gl',
-    'goo.gl',
+    
     'lens.google.com',
     // ── Additional safe hosting / app platforms ───────────────────────────────
     'repl.it',
@@ -8390,7 +9275,7 @@ const COMMON_ALLOWED_DOMAINS = [
     'prntscr.com',    // Lightshot screenshot
     'screencast.com',
     'share.icloud.com',
-    'photos.app.goo.gl',
+    
     'drive.google.com',
     'dropbox.com',
     'dropboxusercontent.com',
@@ -8433,10 +9318,10 @@ const COMMON_ALLOWED_DOMAINS = [
     'wick.fun',
     'zeppelin.gg',
     'atlas.bot',
-    'combot.org',
+    
     'cleanbot.xyz',
     'hammertime.cyou',
-    'discordbotlist.com',
+    
     'discordstatus.com',
     'statuspage.io',
     // ── VirusTotal / safe-link checkers ──────────────────────────────────────
@@ -8484,6 +9369,8 @@ const COMMON_ALLOWED_DOMAINS = [
     'addons.mozilla.org',
     'addons.opera.com',
     'microsoftedge.microsoft.com',
+    'aka.ms',             // Microsoft official link shortener
+    // Microsoft official link shortener (docs, products)
     // ── Popular social link aggregators ──────────────────────────────────────
     'allmylinks.com',
     'taplink.cc',
@@ -9101,8 +9988,7 @@ const COMMON_ALLOWED_DOMAINS = [
 
 // ── Microsoft extra subdomains ────────────────────────────────────────────────
 'support.microsoft.com','learn.microsoft.com','docs.microsoft.com',
-'dev.azure.com','portal.azure.com','aka.ms',
-'support.microsoft','learn.microsoft','docs.microsoft',
+'dev.azure.com','portal.azure.com','support.microsoft','learn.microsoft','docs.microsoft',
 'dev.azure','portal.azure',
 'copilot.microsoft.com','copilot.microsoft',
 
@@ -9442,9 +10328,9 @@ const ATTACHMENT_SUSPICIOUS_NAME_TOKENS = [
     'nitro','gift','free','giveaway','reward','rewards','promo','promotion','claim','verify','verification','steam','wallet',
     'robux','rbx','roblox','blox','bloxfruits','bloxfruit','discord','token','cookie','roblosecurity','session','login',
     'password','pass','2fa','authenticator','auth','security','support','staff','admin','moderator','mod',
-    'invoice','receipt','payment','payout','cashout','cash out','bank','paypal','stripe','crypto','airdrop','metamask',
+    'invoice','receipt','payment','payout','cashout','cash out','bank','stripe','airdrop','metamask',
     'update','urgent','fix','patch','installer','setup','install','verify-now','verify_now','verify-now',
-    'launcher','loader','injector','executor','script','macro','autoclicker','auto-clicker','exploit','cheat','hack',
+    'launcher','loader','injector','executor','macro','autoclicker','auto-clicker','exploit','cheat','hack',
     'keygen','crack','activator','serial','license','licensekey','license-key',
     'proof','vouch','screenshare','ss','recording','clip','video',
     'readme','instructions','howto','how-to','clickme','click-me','openme','open-me',
@@ -14726,15 +15612,30 @@ client.on('interactionCreate', async interaction => {
                         inline: false
                     },
 
-                    { name: '🚨 Flags', value:
-                        `Account Trading: ${accTrade ? '🚨 YES' : '✅ CLEAN'}\n` +
-                        `Begging: ${begging ? '🚨 YES' : '✅ CLEAN'}\n` +
-                        `Trade Flag: ${tradeFlag ? '🚨 YES' : '✅ CLEAN'}\n` +
-                        `Service Flag: ${svcFlag ? '🚨 YES' : '✅ CLEAN'}\n` +
-                        `Race Flag: ${raceFlag ? '🚨 YES' : '✅ CLEAN'}\n` +
-                        `Pain Flag: ${painFlag ? '🚨 YES' : '✅ CLEAN'}\n` +
-                        `Lightning Flag: ${lightFlag ? '🚨 YES' : '✅ CLEAN'}`
+                    { name: '🚩 Mod Flags', value:
+                        'Account Trading: ' + (accTrade ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                        'Begging: '         + (begging  ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                        'Trade Flag: '      + (tradeFlag? '🚨 YES' : '✅ CLEAN') + '\n' +
+                        'Service Flag: '    + (svcFlag  ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                        'Race Flag: '       + (raceFlag ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                        'Pain Flag: '       + (painFlag ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                        'Lightning Flag: '  + (lightFlag? '🚨 YES' : '✅ CLEAN'),
+                        inline: false
                     },
+                    { name: '🔍 Security Flags', value: (() => {
+                        const _sH = detectScamOrExploit(text, text);
+                        const _dH = detectObfuscatedDomains(text);
+                        const _stH= detectStretchSpam(cleaned, gs);
+                        const _mH = SCAM_DM_FREEBIE_PHRASES.some(p => cleaned.includes(p));
+                        const _iH = /discord(?:\.gg|app\.com)\/[a-z0-9]{2,}/i.test(text) && (gs.invitePolicy||'off') !== 'off';
+                        const _lH = (() => { const _u=(text.match(/https?:\/\/[^\s)\]"']+/gi)||[]); return _u.some(u => { const m=u.match(/^https?:\/\/([^\/\s?#:]+)/i); return m&&(LINK_SHORTENERS.has(m[1].toLowerCase())||LINK_SHORTENERS.has(m[1].toLowerCase().replace(/^www\./,''))); }); })();
+                        return 'Scam/Exploit: '    + (_sH?.hit ? '🚨 — ' + _sH.reason : '✅ CLEAN') + '\n' +
+                               'Obfusc. Domain: '  + (_dH  ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                               'Stretch Spam: '    + (_stH ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                               'DM Freebie: '      + (_mH  ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                               'Link Shortener: '  + (_lH  ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                               'Invite (policy): ' + (_iH  ? '⚠️ YES' : '✅ CLEAN');
+                    })(), inline: false },
 
                 )], flags: MessageFlags.Ephemeral });
             break;
@@ -15499,8 +16400,8 @@ function parseInviteDomains(text) {
         const m = u.match(/^https?:\/\/([^\/\s?#:]+)(?::\d+)?/i);
         if (m && m[1]) domains.push(m[1]);
     }
-    if (s.includes('discord.gg/') || s.includes('discord.com/invite') || s.includes('discordapp.com/invite')) {
-        domains.push('discord.gg');
+    if (s.includes('discord.gg/') || s.includes() || s.includes()) {
+        domains.push();
         domains.push('discord.com');
     }
     return [...new Set(domains)];
@@ -16254,7 +17155,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── DUPLICATE MESSAGE SPAM ────────────────────────────
-    if (!immune && !isCategoryImmune(message.member, guildId, data, 'dupe') && gs.dupeSpamEnabled) {
+    if (!immune && !isCategoryImmune(message.member, guildId, data, ) && gs.dupeSpamEnabled) {
         const res = detectDupeSpam(message.author.id, guildId, message.content, gs);
         if (res?.hit) {
             try { await message.delete(); } catch {}
@@ -17402,7 +18303,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
         if (target.id === message.author.id) return message.channel.send('❌ You cannot exile yourself.');
-        if (target.roles.highest.position >= message.member.roles.highest.position) return message.channel.send('❌ You cannot exile someone with equal or higher roles.');
+        // Use checkHierarchy() for consistent role-position enforcement
+        const _exHierErr = checkHierarchy(message.member, target);
+        if (_exHierErr) return message.channel.send(_exHierErr);
         const durArg   = args.slice(1).find(a => /^\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/.test(a.trim().toLowerCase()));
         const duration = (durArg ? parseDuration(durArg) : null) ?? EXILE_DURATION_MINS;
         const reason   = args.slice(1).filter(a => a !== durArg).join(' ') || 'Manual admin action';
@@ -17973,6 +18876,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'clearviolations' && isAdmin) {
         const target = await resolveMember(args[0]);
         if (target && target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send('❌ You cannot clear your own violations.');
+        if (target) {
+            const _cvHierErr = checkHierarchy(message.member, target);
+            if (_cvHierErr) return message.channel.send(_cvHierErr);
+        }
         if (!target) {
             const rawId = args[0]?.match(/^<@!?(\d+)>$/) ? args[0].match(/^<@!?(\d+)>$/)[1] : (args[0]?.match(/^\d{15,20}$/) ? args[0] : null);
             if (!rawId) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
@@ -18003,6 +18910,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
         if (target.id === message.author.id) return message.channel.send('❌ You cannot warn yourself.');
+        if (target.user?.bot) return message.channel.send('❌ You cannot warn a bot.');
+        const _warnHierErr = checkHierarchy(message.member, target);
+        if (_warnHierErr) return message.channel.send(_warnHierErr);
         const reason = args.slice(1).join(' ') || 'Manual warn';
         const count  = addViolationEntry(data, target.id, { reason, category: 'manual', by: message.author.id });
         const warnId = getLastWarnId(data, target.id);
@@ -18046,6 +18956,8 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
         if (target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send('❌ You cannot unwarn yourself.');
+        const _unwarnHierErr = checkHierarchy(message.member, target);
+        if (_unwarnHierErr) return message.channel.send(_unwarnHierErr);
         const next = decrementViolationEntry(data, target.id);
         saveData(data);
         await message.channel.send(`✅ Unwarned ${target}. Violations: **${next}/${threshold}**`);
@@ -18074,7 +18986,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                 // Include the command message itself in the delete batch
                 toDelete.set(message.id, message);
                 const deleted = await message.channel.bulkDelete(toDelete, true).catch(() => null);
-                const notice = await message.channel.send(`✅ Purged **${deleted ? deleted.size : 0}** messages from <@${targetId}>.`);
+                const notice = await message.channel.send(`✅ Purged **${deleted ? Math.max(0, deleted.size - 1) : 0}** messages from <@${targetId}>.`);
                 setTimeout(() => notice.delete().catch(() => {}), 6000);
             } catch (e) {
                 message.channel.send(`❌ Purge failed: ${e.message}`).catch(() => {});
@@ -18095,9 +19007,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     }
 
     // !lock [#channel|id] [reason...]
-    else if (cmd === 'lock' && (isAdmin || isMod)) {
-        if (!isAdmin)
-            return message.channel.send('❌ `/lock` is restricted to admins only.');
+    else if (cmd === 'lock' && isAdmin) {
         const chArg = args[0] ? await resolveChannel(args[0]) : null;
         const targetCh = chArg || message.channel;
         const reasonStart = chArg ? 1 : 0;
@@ -18112,9 +19022,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     }
 
     // !unlock [#channel|id] [reason...]
-    else if (cmd === 'unlock' && (isAdmin || isMod)) {
-        if (!isAdmin)
-            return message.channel.send('❌ `/unlock` is restricted to admins only.');
+    else if (cmd === 'unlock' && isAdmin) {
         const chArg = args[0] ? await resolveChannel(args[0]) : null;
         const targetCh = chArg || message.channel;
         const reasonStart = chArg ? 1 : 0;
@@ -18718,24 +19626,47 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         let exchange  = tradeRegex.test(cleaned);
         if (!exchange) for (const p of NOSPACE_PATTERNS) if(p.test(ns)){exchange=true;break;}
 
+        // ── extra detectors for complete coverage ──────────────────────────
+        const _scamHit = detectScamOrExploit(text, text);
+        const _domHit  = detectObfuscatedDomains(text);
+        const _strHit  = detectStretchSpam(cleaned, gs);
+        const _dmHit   = SCAM_DM_FREEBIE_PHRASES.some(p => cleaned.includes(p));
+        const _invHit  = /discord(?:\.gg|app\.com)\/[a-z0-9]{2,}/i.test(text) && (gs.invitePolicy||'off') !== 'off';
+        const _srtHit  = (() => { const _u=(text.match(/https?:\/\/[^\s)\]"']+/gi)||[]); return _u.some(u => { const m=u.match(/^https?:\/\/([^\/\s?#:]+)/i); return m&&(LINK_SHORTENERS.has(m[1].toLowerCase())||LINK_SHORTENERS.has(m[1].toLowerCase().replace(/^www\./,''))); }); })();
         const embed = new EmbedBuilder()
             .setTitle('🔬 SKYNET V7 — Scan Test')
             .setColor(0x00FF88)
             .addFields(
-                { name: 'Cleaned',         value: `\`${cleaned.slice(0,200)}\``, inline: false },
-                { name: 'Fruits',          value: fruits.join(', ')    || 'None', inline: false },
-                { name: 'Bosses',          value: bosses.join(', ')    || 'None', inline: false },
-                { name: 'Swords',          value: swords.join(', ')    || 'None', inline: false },
-                { name: 'Pain Upgrades',   value: painUpg.join(', ')   || 'None', inline: false },
-                { name: 'Lightning Upgr.', value: lightUpg.join(', ')  || 'None', inline: false },
-                { name: 'Materials',       value: materials.join(', ')  || 'None', inline: false },
-                { name: 'NPCs',            value: npcs.join(', ')       || 'None', inline: false },
-                { name: 'Trade Intent',    value: intent   ? '✅' : '❌', inline: true },
-                { name: 'Service Intent',  value: svcInt   ? '✅' : '❌', inline: true },
-                { name: 'Tier Keyword',    value: tier     ? '✅' : '❌', inline: true },
-                { name: 'Direct Exchange', value: exchange ? '✅' : '❌', inline: true },
-                { name: 'Account Trading', value: accTrd   ? '🚨 YES' : '✅ CLEAN', inline: true },
-                { name: 'Begging',         value: beg      ? '🚨 YES' : '✅ CLEAN', inline: true },
+                { name: 'Cleaned', value: '`' + cleaned.slice(0,200) + '`', inline: false },
+                { name: '📦 Items', value:
+                    'Fruits: '    + (fruits.join(', ')    || 'None') + '\n' +
+                    'Bosses: '    + (bosses.join(', ')    || 'None') + '\n' +
+                    'Swords: '    + (swords.join(', ')    || 'None') + '\n' +
+                    'Materials: ' + (materials.join(', ') || 'None'),
+                    inline: false },
+                { name: '⚡ Upgrades', value:
+                    'Pain Upgrades: '      + (painUpg.join(', ')  || 'None') + '\n' +
+                    'Lightning Upgrades: ' + (lightUpg.join(', ') || 'None') + '\n' +
+                    'NPCs: '               + (npcs.join(', ')     || 'None'),
+                    inline: false },
+                { name: '🧠 Intent', value:
+                    'Trade Intent: '    + (intent   ? '✅' : '❌') + '\n' +
+                    'Service Intent: '  + (svcInt   ? '✅' : '❌') + '\n' +
+                    'Tier Keyword: '    + (tier     ? '✅' : '❌') + '\n' +
+                    'Direct Exchange: ' + (exchange ? '✅' : '❌'),
+                    inline: false },
+                { name: '🚩 Moderation Flags', value:
+                    'Account Trading: ' + (accTrd ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                    'Begging: '         + (beg    ? '🚨 YES' : '✅ CLEAN'),
+                    inline: false },
+                { name: '🔍 Security Flags', value:
+                    'Scam/Exploit: '      + (_scamHit?.hit ? '🚨 YES — ' + _scamHit.reason : '✅ CLEAN') + '\n' +
+                    'Obfusc. Domain: '    + (_domHit  ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                    'Stretch Spam: '      + (_strHit  ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                    'DM Freebie: '        + (_dmHit   ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                    'Link Shortener: '    + (_srtHit  ? '🚨 YES' : '✅ CLEAN') + '\n' +
+                    'Invite (policy): '   + (_invHit  ? '⚠️ YES' : '✅ CLEAN'),
+                    inline: false },
             );
         await message.channel.send({ embeds: [embed] });
     }
