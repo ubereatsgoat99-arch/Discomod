@@ -98,6 +98,7 @@ graeffe(GEN p)
   return gc_upto(av, RgX_sub(s0, RgX_shift_shallow(s1,1)));
 }
 
+/* return q such that p(x)p(-x) = q(x^2) */
 GEN
 ZX_graeffe(GEN p)
 {
@@ -112,6 +113,50 @@ ZX_graeffe(GEN p)
   s1 = ZX_sqr(p1);
   return gc_upto(av, ZX_sub(s0, RgX_shift_shallow(s1,1)));
 }
+
+GEN
+RgX_Graeffe(GEN T, long d)
+{
+  pari_sp av = avma;
+  if (d <= 0) pari_err_DOMAIN("polgraeffe","n","<=",gen_0,stoi(d));
+  switch(d)
+  {
+    case 1: return gcopy(T);
+    case 2:
+    {
+      GEN T0, T1;
+      RgX_even_odd(T, &T0, &T1);
+      T0 = RgX_sqr(T0);
+      T1 = RgX_sqr(T1);
+      return gc_upto(av, RgX_sub(T0, RgX_shift_shallow(T1,1)));
+    }
+    case 3:
+    {
+      GEN h = RgX_splitting(T,3);
+      GEN h1s = RgX_sqr(gel(h,1)), h2s = RgX_sqr(gel(h,2)), h3s = RgX_sqr(gel(h,3));
+      GEN h13 = RgX_mul(gel(h,1), gel(h,3));
+      GEN h1c = RgX_mul(gel(h,1), h1s);
+      GEN h3c = RgX_mul(gel(h,3), h3s);
+      GEN th = RgX_mul(RgX_sub(h2s, RgX_muls(h13,3)), gel(h,2));
+      GEN R = RgX_add(RgX_shift_shallow(h3c,2), RgX_add(RgX_shift_shallow(th,1), h1c));
+      return gc_upto(av, R);
+    }
+    default:
+    {
+      GEN P;
+      long i, v = RgX_valrem(T, &P), l = lgpol(P);
+      GEN Q = RgXn_div(RgX_deriv(P),P,l*d), R;
+      GEN S = cgetg(l+2, t_POL);
+      S[1] = P[1];
+      for(i = 1; i <= l; i++)
+        gel(S,1+i) = gel(Q,1+i*d);
+      R = RgX_shift(RgX_Rg_mul(RgXn_expint(S,l), gpowgs(gel(P,2),d)), v);
+      return gc_upto(av, R);
+    }
+  }
+}
+
+/* return q such that p(x)p(-x) = q(x^2) */
 GEN
 polgraeffe(GEN p)
 {
@@ -127,6 +172,13 @@ polgraeffe(GEN p)
   s0 = RgX_sqr(p0);
   s1 = RgX_sqr(p1);
   return gc_upto(av, RgX_sub(s0, RgX_shift_shallow(s1,1)));
+}
+
+GEN
+polgraeffe0(GEN p, long d)
+{
+  if (typ(p) != t_POL) pari_err_TYPE("polgraeffe",p);
+  return RgX_Graeffe(p, d);
 }
 
 /********************************************************************/
@@ -2208,7 +2260,7 @@ polsolve(GEN P, long bitprec)
         cprec = minss(2*cprec, PREC);
       rc = rtor(rc, cprec); continue; /* backtrack one step */
     }
-    dist = typ(Ppc) == t_REAL? divrr(Pc, Ppc): divri(Pc, Ppc);
+    dist = divrmp(Pc, Ppc);
     rc = subrr(rc, dist);
     if (cmprr(ra, rc) > 0 || cmprr(rb, rc) < 0)
     {

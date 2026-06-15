@@ -1,12 +1,16 @@
 #include <cmath>
 
 #include "xsf_wrappers.h"
+#include <xsf/agm.h>
 #include <xsf/airy.h>
 #include <xsf/amos.h>
 #include <xsf/bessel.h>
 #include <xsf/beta.h>
 #include <xsf/binom.h>
+#include <xsf/boxcox.h>
 #include <xsf/cdflib.h>
+#include <xsf/convex_analysis.h>
+#include <xsf/cpu/stats.h>
 #include <xsf/digamma.h>
 #include <xsf/digammainv.h>
 #include <xsf/ellip.h>
@@ -22,9 +26,11 @@
 #include <xsf/log_exp.h>
 #include <xsf/loggamma.h>
 #include <xsf/mathieu.h>
+#include <xsf/ndtri_exp.h>
 #include <xsf/par_cyl.h>
 #include <xsf/sici.h>
 #include <xsf/specfun.h>
+#include <xsf/spence.h>
 #include <xsf/sph_bessel.h>
 #include <xsf/sph_harm.h>
 #include <xsf/sphd_wave.h>
@@ -47,7 +53,6 @@
 #include <xsf/cephes/rgamma.h>
 #include <xsf/cephes/round.h>
 #include <xsf/cephes/scipy_iv.h>
-#include <xsf/cephes/spence.h>
 #include <xsf/cephes/trig.h>
 #include <xsf/cephes/unity.h>
 #include <xsf/cephes/yn.h>
@@ -81,6 +86,26 @@ double xsf_expi(double x) { return xsf::expi(x); }
 npy_cdouble xsf_cexpi(npy_cdouble z) { return to_ccomplex(xsf::expi(to_complex(z))); }
 
 npy_double special_exprel(npy_double x) { return xsf::exprel(x); }
+
+double special_entr(double x) { return xsf::entr(x); }
+
+double special_kl_div(double x, double y) { return xsf::kl_div(x, y); }
+
+double special_rel_entr(double x, double y) { return xsf::rel_entr(x, y); }
+
+double special_huber(double delta, double r) { return xsf::huber(delta, r); }
+
+double special_pseudo_huber(double delta, double r) { return xsf::pseudo_huber(delta, r); }
+
+double special_boxcox(double x, double lmbda) { return xsf::boxcox(x, lmbda); }
+
+double special_boxcox1p(double x, double lmbda) { return xsf::boxcox1p(x, lmbda); }
+
+double special_inv_boxcox(double x, double lmbda) { return xsf::inv_boxcox(x, lmbda); }
+
+double special_inv_boxcox1p(double x, double lmbda) { return xsf::inv_boxcox1p(x, lmbda); }
+
+double special_ndtri_exp(double x) { return xsf::ndtri_exp(x); }
 
 npy_cdouble cerf_wrap(npy_cdouble z) { return to_ccomplex(xsf::cerf(to_complex(z))); }
 
@@ -255,6 +280,8 @@ npy_cdouble special_ccyl_hankel_2e(double v, npy_cdouble z) {
     return to_ccomplex(xsf::cyl_hankel_2e(v, to_complex(z)));
 }
 
+double special_agm(double a, double b) { return xsf::agm(a, b); }
+
 double xsf_binom(double n, double k) { return xsf::binom(n, k); }
 
 double special_digamma(double z) { return xsf::digamma(z); }
@@ -373,8 +400,6 @@ double cephes_igami(double a, double p) { return xsf::cephes::igami(a, p); }
 
 double cephes_igamci(double a, double p) { return xsf::cephes::igamci(a, p); }
 
-double cephes_igam_fac(double a, double x) { return xsf::cephes::detail::igam_fac(a, x); }
-
 double cephes_lanczos_sum_expg_scaled(double x) { return xsf::cephes::lanczos_sum_expg_scaled(x); }
 
 double cephes_poch(double x, double m) { return xsf::cephes::poch(x, m); }
@@ -425,7 +450,9 @@ double cephes_erfcinv(double y) { return xsf::cephes::erfcinv(y); }
 
 double cephes_round(double x) { return xsf::cephes::round(x); }
 
-double cephes_spence(double x) { return xsf::cephes::spence(x); }
+double xsf_spence(double x) { return xsf::spence(x); }
+
+npy_cdouble xsf_cspence(npy_cdouble z) { return to_ccomplex(xsf::spence(to_complex(z))); }
 
 double xsf_struve_h(double v, double z) { return xsf::struve_h(v, z); }
 
@@ -603,15 +630,15 @@ double xsf_gdtrib(double a, double p, double x) { return xsf::gdtrib(a, p, x); }
 
 double xsf_gdtrix(double a, double b, double p) { return xsf::gdtrix(a, b, p); }
 
-double xsf_kolmogorov(double x) { return xsf::kolmogorov(x); }
+double xsf_kolmogorov(double x) { return xsf::cpu::kolmogorov(x); }
 
-double xsf_kolmogc(double x) { return xsf::kolmogc(x); }
+double xsf_kolmogc(double x) { return xsf::cpu::kolmogc(x); }
 
-double xsf_kolmogi(double x) { return xsf::kolmogi(x); }
+double xsf_kolmogi(double x) { return xsf::cpu::kolmogi(x); }
 
-double xsf_kolmogci(double x) { return xsf::kolmogci(x); }
+double xsf_kolmogci(double x) { return xsf::cpu::kolmogci(x); }
 
-double xsf_kolmogp(double x) { return xsf::kolmogp(x); }
+double xsf_kolmogp(double x) { return xsf::cpu::kolmogp(x); }
 
 double xsf_nbdtr(int k, int n, double p) { return xsf::nbdtr(k, n, p); }
 
@@ -641,15 +668,15 @@ double xsf_pdtrc(double k, double m) { return xsf::pdtrc(k, m); }
 
 double xsf_pdtri(int k, double y) { return xsf::pdtri(k, y); }
 
-double xsf_smirnov(int n, double x) { return xsf::smirnov(n, x); }
+double xsf_smirnov(int n, double x) { return xsf::cpu::smirnov(n, x); }
 
-double xsf_smirnovc(int n, double x) { return xsf::smirnovc(n, x); }
+double xsf_smirnovc(int n, double x) { return xsf::cpu::smirnovc(n, x); }
 
-double xsf_smirnovi(int n, double x) { return xsf::smirnovi(n, x); }
+double xsf_smirnovi(int n, double x) { return xsf::cpu::smirnovi(n, x); }
 
-double xsf_smirnovci(int n, double x) { return xsf::smirnovci(n, x); }
+double xsf_smirnovci(int n, double x) { return xsf::cpu::smirnovci(n, x); }
 
-double xsf_smirnovp(int n, double x) { return xsf::smirnovp(n, x); }
+double xsf_smirnovp(int n, double x) { return xsf::cpu::smirnovp(n, x); }
 
 double xsf_tukeylambdacdf(double x, double lmbda) { return xsf::tukeylambdacdf(x, lmbda); }
 

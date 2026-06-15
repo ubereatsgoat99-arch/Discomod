@@ -28,10 +28,6 @@ BEGINEXTERN
 #define bl_prev(x)   (((GEN*)x)[-2])
 #define bl_num(x)    (((GEN)x)[-1])
 
-void clone_lock(GEN C);
-void clone_unlock(GEN C);
-void clone_unlock_deep(GEN C);
-
 /* swap */
 #define lswap(x,y) {long _z=x; x=y; y=_z;}
 #define pswap(x,y) {GEN *_z=x; x=y; y=_z;}
@@ -81,6 +77,8 @@ GEN  derivfun0(GEN args, GEN def, GEN code, long k, long prec);
 GEN  direuler_bad(void *E, GEN (*eval)(void *, GEN, long), GEN a, GEN b, GEN c, GEN Sbad);
 GEN  vecexpr0(GEN nmax, GEN code, GEN pred);
 GEN  vecexpr1(GEN nmax, GEN code, GEN pred);
+GEN  vecexpreq0(GEN nmax, GEN code, GEN pred);
+GEN  vecexpreq1(GEN nmax, GEN code, GEN pred);
 
 /* crt */
 GEN  gen_crt(const char *str, GEN worker, forprime_t *S, GEN dB, ulong bound, long mmin, GEN *pt_mod,

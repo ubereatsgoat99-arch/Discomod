@@ -115,35 +115,6 @@ wordFrom(l,i) ==
     k := k + 1
   [SUBSEQ(l, k0, k), k + 1]
 
-DEFPARAMETER($msg_hash, nil)
-
-cacheKeyedMsg1(in_file) ==
-    key := nil
-    line := '""
-    msg := '""
-    repeat
-        line := READ_-LINE(in_file, nil, nil)
-        null(line) =>
-            if key then HPUT($msg_hash, key, msg)
-            -- THROW('DONE, nil)
-            return nil
-        #line = 0 => "iterate"
-        line.0 = char('"S") =>
-            if key then HPUT($msg_hash, key, msg)
-            key := INTERN(line, "BOOT")
-            msg := '""
-        msg := CONCAT(msg, line)
-
-cacheKeyedMsg(db_name) ==
-    CATCH('DONE, handle_input_file(db_name, function cacheKeyedMsg1, []))
-
-getKeyedMsg(key) ==
-    STRINGP(key) => key
-    if not($msg_hash) then
-        $msg_hash := MAKE_HASHTABLE('EQ)
-        cacheKeyedMsg($defaultMsgDatabaseName)
-    HGET($msg_hash, key)
-
 --% Formatting and Printing Keyed Messages
 
 segmentKeyedMsg(msg) == string2Words msg
@@ -273,7 +244,7 @@ DEFPARAMETER($msgdbListPrims, '(%m %s %ce %rj "%m" "%s" "%ce" "%rj"))
 noBlankBeforeP word==
     INTEGERP word => false
     word in $msgdbNoBlanksBeforeGroup => true
-    if STRINGP word and SIZE word > 1 then
+    if STRINGP(word) and #word > 1 then
        word.0 = char '% and word.1 = char 'x => return true
        word.0 = char " " => return true
     (PAIRP word) and (first word in $msgdbListPrims) => true
@@ -286,7 +257,7 @@ DEFPARAMETER($msgdbNoBlanksAfterGroup, ['" ", " ",'"%" ,"%",_
 noBlankAfterP word==
     INTEGERP word => false
     word in $msgdbNoBlanksAfterGroup => true
-    if STRINGP word and (s := SIZE word) > 1 then
+    if STRINGP(word) and (s := #word) > 1 then
        word.0 = char '% and word.1 = char 'x => return true
        word.(s-1) = char " " => return true
     (PAIRP word) and (first word in $msgdbListPrims) => true
@@ -343,12 +314,6 @@ throw_msg_pos(key, msg, args, tree) ==
         srcPosDisplay(sp)
     throw_msg(key, msg, args)
 
-throwKeyedMsgSP(key, args, atree) ==
-    throw_msg_pos(key, getKeyedMsg(key), args, atree)
-
-throwKeyedMsg(key, args) ==
-    throw_msg(key, getKeyedMsg(key), args)
-
 throw_msg(key, msg, args) ==
     $noEvalTypeMsg => spadThrow()
     sayMSG '" "
@@ -396,7 +361,8 @@ query_user_msg(key, msg, args) ==
   ioHook("startQueryUser")
   ans := read_line conStream
   ioHook("endOfQueryUser")
-  UPCASE(ans)
+  ans := DOWNCASE(STRING_-TRIM('" ", ans))
+  ans = '"y" or ans = '"yes"
 
 flowSegmentedMsg(msg, len, offset) ==
   -- tries to break a sayBrightly-type input msg into multiple
@@ -472,9 +438,6 @@ msg_comp_failure1(key, msg, args, tree) ==
   THROW('mapCompiler,'tryInterpOnly)
 
 msg_comp_failure(key, msg, args) == msg_comp_failure1(key, msg, args, [])
-
-keyedMsgCompFailureSP(key, args, atree) ==
-    msg_comp_failure1(key, getKeyedMsg(key), args, atree)
 
 throwMsgCannotCoerceWithValue(val,t1,t2) ==
   val' :=
@@ -724,7 +687,7 @@ sayBrightlyLength1 x ==
 sayAsManyPerLineAsPossible l ==
   -- it is assumed that l is a list of strings
   l := [atom2String a for a in l]
-  m := 1 + "MAX"/[SIZE(a) for a in l]
+  m := 1 + "MAX"/[#a for a in l]
   -- w will be the field width in which we will display the elements
   m > $LINELENGTH =>
     for a in l repeat sayMSG a

@@ -2132,7 +2132,7 @@ FpXQXn_div(GEN g, GEN f, long e, GEN T, GEN p)
     if (degpol(f) <= 0) return scalarpol(a, v);
     b = Fq_neg(gel(f,3),T,p);
     if (signe(b)==0) return scalarpol(a, v);
-    if (!is_pm1(a)) b = Fq_mul(b, Fq_sqr(a, T, p), T, p);
+    b = Fq_mul(b, Fq_sqr(a, T, p), T, p);
     W = deg1pol_shallow(b, a, v);
     return gc_GEN(av, W);
   }

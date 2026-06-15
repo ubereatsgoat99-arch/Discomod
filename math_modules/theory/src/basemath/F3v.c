@@ -122,6 +122,41 @@ F3v_sub_inplace(GEN x, GEN y)
     x[i] = F3_sub(x[i], y[i]);
 }
 
+static ulong
+F3_dotsquare(ulong x)
+{ return hammingu(x)%3UL; }
+
+ulong
+F3v_dotsquare(GEN x)
+{
+  long i, lx = lg(x);
+  ulong c;
+  if (lx <= 2) return 0;
+  c = F3_dotsquare(uel(x,2));
+  for (i=3; i<lx; i++) c = Fl_add(c, F3_dotsquare(uel(x,i)), 3);
+  return c;
+}
+
+static ulong
+F3_dotproduct(ulong x, ulong y)
+{
+  ulong x1 = 3*(x&TRITS_MASK);
+  ulong x2 = 3*((x>>1)&TRITS_MASK);
+  ulong z =(x1&y) | bitswap(x2&y);
+  return (hammingu(z&TRITS_MASK)+2*hammingu(z&(TRITS_MASK<<1)))%3;
+}
+
+ulong
+F3v_dotproduct(GEN x, GEN y)
+{
+  long i, lx = lg(x);
+  ulong c;
+  if (lx <= 2) return 0;
+  c = F3_dotproduct(uel(x,2), uel(y,2));
+  for (i=3; i<lx; i++) c = Fl_add(c, F3_dotproduct(uel(x,i), uel(y,i)), 3);
+  return c;
+}
+
 GEN
 Flv_to_F3v(GEN x)
 {
@@ -243,7 +278,7 @@ F3m_ker_sp(GEN x, long deplin)
   {
     GEN xk = gel(x,k);
     for (j=1; j<=m; j++)
-      if (F2v_coeff(c,j) && F3m_coeff(x,j,k)) break;
+      if (F2v_coeff(c,j) && F3v_coeff(xk,j)) break;
     if (j>m)
     {
       if (deplin) {
@@ -288,6 +323,13 @@ F3m_ker_sp(GEN x, long deplin)
 
 GEN
 F3m_ker(GEN x) { return F3m_ker_sp(F3m_copy(x), 0); }
+
+long
+F3m_rank(GEN x)
+{
+  pari_sp av = avma;
+  return gc_long (av, lg(x) - lg(F3m_ker(x)));
+}
 
 INLINE GEN
 F3m_F3c_mul_i(GEN x, GEN y, long lx, long l)

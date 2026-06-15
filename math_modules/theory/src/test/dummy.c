@@ -1,5 +1,5 @@
 void nchar2nlong(){}
-void newblock(){}
+void newblock_t(){}
 void remsBIL(){}
 void bit_accuracy(){}
 void is_bigint(){}
@@ -14,6 +14,7 @@ void gc_all_unsafe(){}
 void ceilr(){}
 void roundr(){}
 void pari_err(){}
+void pari_err_TYPE2(){}
 void pari_err_BUG(){}
 void pari_err_INV(){}
 void pari_err_OVERFLOW(){}

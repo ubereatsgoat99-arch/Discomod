@@ -341,7 +341,7 @@ errnum(GEN x, GEN d)
   setabssign(D); return D;
 }
 
-/* Try to reduce the bound through continued fractions; see paper. */
+/* Try to reduce the bound through continued fractions. *B0 t_REAL. */
 static int
 CF_1stPass(GEN *B0, GEN kappa, baker_s *BS)
 {
@@ -896,7 +896,7 @@ init_get_B(long i1, long i2, GEN Delta2, GEN Lambda, GEN Deps5, baker_s *BS,
 static GEN
 get_B0(long i1, GEN Delta2, GEN Lambda, GEN Deps5, long prec, baker_s *BS)
 {
-  GEN B0 = Baker(BS);
+  GEN B0 = Baker(BS); /* t_REAL */
   long step = 0, i2 = (i1 == 1)? 2: 1;
   for(;;) /* i2 from 1 to r unless r = 1 [then i2 = 2] */
   {
@@ -920,7 +920,7 @@ get_B0(long i1, GEN Delta2, GEN Lambda, GEN Deps5, long prec, baker_s *BS)
 
         if (! (Q = GuessQi(BS->delta, BS->lambda, &ep)) ) break;
 
-        denbound = mpadd(B0, absi_shallow(gel(Q,1)));
+        denbound = addii(floorr(B0), absi_shallow(gel(Q,1)));
         q = denom_i( bestappr(BS->delta, denbound) );
         l0 = subrr(errnum(BS->delta, q), ep);
         if (signe(l0) <= 0) break;
@@ -929,7 +929,7 @@ get_B0(long i1, GEN Delta2, GEN Lambda, GEN Deps5, long prec, baker_s *BS)
         if (DEBUGLEVEL>1) err_printf("Semirat. reduction: B0 -> %Ps\n",B0);
       }
       /* if no progress, stop */
-      if (gcmp(oldB0, gadd(B0,dbltor(0.1))) <= 0)
+      if (gcmp(oldB0, addrr(B0, dbltor(0.1))) <= 0)
         return gmin_shallow(oldB0, B0);
       else step++;
     }

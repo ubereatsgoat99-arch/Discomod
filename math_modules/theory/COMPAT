@@ -21,6 +21,9 @@ This file lists the incompatible changes between Version 2.x and older versions
     default for bnrinit); this saves time and no PARI function needs them
   - polgalois: default 'new_galois_format' defaults to 1.
   - default 'simplify' defaults to 0.
+  - gphelp: remove GPHELP_TMPDIR and GPHELP_DOCDIR aliases for GPTMPDIR
+    and GPDOCDIR environment variables (obsoleted and left undocumented
+    since pari-2.0.12 (1998)).
 
 * Specific to the PARI library:
 ===============================
@@ -88,6 +91,13 @@ This file lists the incompatible changes between Version 2.x and older versions
     use a default value of 0 in pari_init_primes to emulate previous
     behaviour. Low-level initprimetable requires an explicit value.
   - RgX_homogenous_evalpow now takes the homogenous degree as extra argument.
+  - mpdiv is obsolete, don't use it. Its semantics changes unexpectedly
+    (Euclidean quotient instead of real quotient) when both inputs are t_INTs.
+    Use the safe divmpr or divrmp when one of the inputs is a known t_REAL.
+  - ZX_gcd_all(A, B, &Anew) returns d = gcd(A,B) and used to set Anew to an
+    integer multiple of A / d. We now set Anew to the primitive part of A / d.
+    This is the same as before when gcd(lc(A), lc(B)) = 1 and A is primitive
+    and possibly a rational multiple in other cases.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%% VERSION 2.16 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    - binomial changed to agree with Loeb's definition

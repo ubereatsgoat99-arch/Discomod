@@ -1,8 +1,10 @@
 Function: polgraeffe
 Section: polynomials
-C-Name: polgraeffe
-Prototype: G
-Help: polgraeffe(f): returns the Graeffe transform g of f, such that
- g(x^2) = f(x)f(-x).
+C-Name: polgraeffe0
+Prototype: GD2,L,
+Help: polgraeffe(f,{d=2}): returns the Graeffe transform g of f, such that
+ g(x^2) = f(x)f(-x). if d>0 is given, return g such that
+ g(x^d) = prod(i=0,d-1,f(x*y^i)) mod y^d-1
 Doc: returns the \idx{Graeffe} transform $g$ of $f$, such that $g(x^{2}) = f(x)
- f(-x)$.
+ f(-x)$. If $d > 0$ is given, return $g$ such that
+ $g(x^d) \equiv \prod_{i=0}^{d-1} f(x\*y^i) \pmod {y^d-1}$.

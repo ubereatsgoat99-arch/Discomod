@@ -332,7 +332,7 @@ clone_unlock_deep(GEN x)
  * x[-1]: number of allocated blocs.
  * x[0..n-1]: malloc-ed memory. */
 GEN
-newblock(size_t n)
+newblock_t(size_t n, long rec)
 {
   long d = 0;
   long *x;
@@ -341,11 +341,18 @@ newblock(size_t n)
 
   bl_size(x) = n;
   bl_refc(x) = 1;
-  bl_next(x) = NULL;
+  bl_next(x) = 0;
   bl_prev(x) = cur_block;
   bl_num(x)  = next_block++;
   if (cur_block) bl_next(cur_block) = x;
-  root_block = blockinsert(x, root_block, &d);
+  if (rec)
+    root_block = blockinsert(x, root_block, &d);
+  else
+  {
+    bl_height(x) = 0;
+    bl_left(x) = 0;
+    bl_right(x)  = 0;
+  }
   if (DEBUGMEM > 2)
     err_printf("new block, size %6lu (no %ld): %08lx\n", n, next_block-1, x);
   cur_block = x;
@@ -368,7 +375,8 @@ gunclone(GEN x)
 {
   if (--bl_refc(x) > 0) return;
   BLOCK_SIGINT_START;
-  root_block = blockdelete(x, root_block);
+  if (bl_height(x))
+    root_block = blockdelete(x, root_block);
   if (bl_next(x)) bl_prev(bl_next(x)) = bl_prev(x);
   else
   {
@@ -570,19 +578,11 @@ getheap(void)
   traverseheap(&f_getheap, &T); return mkvec2s(T.n, T.l);
 }
 
-static void
-traverseheap_r(GEN bl, void(*f)(GEN, void *), void *data)
-{
-  if (!bl) return;
-  traverseheap_r(bl_left(bl), f, data);
-  traverseheap_r(bl_right(bl), f, data);
-  f(bl, data);
-}
-
 void
 traverseheap( void(*f)(GEN, void *), void *data)
 {
-  traverseheap_r(root_block,f, data);
+  GEN x;
+  for (x = cur_block; x; x = bl_prev(x)) f(x, data);
 }
 
 /*********************************************************************/
@@ -2330,7 +2330,7 @@ GEN
 gclone(GEN x)
 {
   long i,lx,tx = typ(x), t = gsizeclone(x);
-  GEN y = newblock(t);
+  GEN y = newblock_t(t,is_recursive_t(tx));
   switch(tx)
   { /* non recursive types */
     case t_INT:

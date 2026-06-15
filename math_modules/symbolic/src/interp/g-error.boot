@@ -120,9 +120,10 @@ handleLispBreakLoop($BreakMode) ==
         '"    ",:bright '"top     ",'"  to return to top level, or",'%l,_
         '"    ",:bright '"break   ",'"  to enter a LISP break loop.",'%l,_
         '%l,'"   Please enter your choice now:"]
-      x := STRING2ID_N(queryUser(msgQ), 1)
+      x := find_symbol(STRING_-TRIM('" ", queryUser(msgQ)))
       x :=
-        selectOption(x, '(top break continue), nil)
+            not(first(x) = 0) => nil
+            selectOption(rest(x), '(top break continue), nil)
       null x =>
         sayBrightly bright '"  That was not one of your choices!"
         gotIt := NIL

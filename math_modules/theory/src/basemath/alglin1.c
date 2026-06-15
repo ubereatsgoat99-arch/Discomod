@@ -4177,11 +4177,12 @@ RgM_rank_FpM(GEN x, GEN p)
   pari_sp av = avma;
   ulong pp;
   long r;
-  x = RgM_Fp_init(x,p,&pp);
+  x = RgM_Fp_init3(x,p,&pp);
   switch(pp)
   {
   case 0: r = FpM_rank(x,p); break;
   case 2: r = F2m_rank(x); break;
+  case 3: r = F3m_rank(x); break;
   default:r = Flm_rank(x,pp); break;
   }
   return gc_long(av, r);

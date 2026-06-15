@@ -17,11 +17,6 @@
             "ellip_harmonic_unsafe": "ddddddd->d"
         }
     },
-    "_igam_fac": {
-        "xsf_wrappers.h": {
-            "cephes_igam_fac": "dd->d"
-        }
-    },
     "_lanczos_sum_expg_scaled": {
         "xsf_wrappers.h": {
             "cephes_lanczos_sum_expg_scaled": "d->d"
@@ -50,11 +45,6 @@
     "_struve_power_series": {
         "xsf_wrappers.h": {
             "cephes__struve_power_series": "ddp*d->d"
-        }
-    },
-    "agm": {
-        "_agm.pxd": {
-            "agm": "dd->d"
         }
     },
     "bdtr": {
@@ -121,16 +111,6 @@
         "boost_special_functions.h++": {
             "ibetac_inv_float": "fff->f",
             "ibetac_inv_double": "ddd->d"
-        }
-    },
-    "boxcox": {
-        "_boxcox.pxd": {
-            "boxcox": "dd->d"
-        }
-    },
-    "boxcox1p": {
-        "_boxcox.pxd": {
-            "boxcox1p": "dd->d"
         }
     },
     "btdtria": {
@@ -215,11 +195,6 @@
 	    "fellint_RJ": "dddd->d",
 	    "cellint_RJ": "DDDD->D"
 	}
-    },
-    "entr": {
-        "_convex_analysis.pxd": {
-            "entr": "d->d"
-        }
     },
     "erfinv": {
         "boost_special_functions.h++": {
@@ -378,11 +353,6 @@
             "xsf_gdtrib": "ddd->d"
         }
     },
-    "huber": {
-        "_convex_analysis.pxd": {
-            "huber": "dd->d"
-        }
-    },
     "hyp0f1": {
         "_hyp0f1.pxd": {
             "_hyp0f1_cmplx": "dD->D",
@@ -400,21 +370,6 @@
     "hyperu": {
         "_hypergeometric.pxd": {
             "hyperu": "ddd->d"
-        }
-    },
-    "inv_boxcox": {
-        "_boxcox.pxd": {
-            "inv_boxcox": "dd->d"
-        }
-    },
-    "inv_boxcox1p": {
-        "_boxcox.pxd": {
-            "inv_boxcox1p": "dd->d"
-        }
-    },
-    "kl_div": {
-        "_convex_analysis.pxd": {
-            "kl_div": "dd->d"
         }
     },
     "kn": {
@@ -478,6 +433,18 @@
         "boost_special_functions.h++": {
             "landau_isf_float": "fff->f",
             "landau_isf_double": "ddd->d"
+        }
+    },
+    "log_gammainc": {
+        "boost_special_functions.h++": {
+            "lgamma_p_float": "ff->f",
+            "lgamma_p_double": "dd->d"
+        }
+    },
+    "log_gammaincc": {
+        "boost_special_functions.h++": {
+            "lgamma_q_float": "ff->f",
+            "lgamma_q_double": "dd->d"
         }
     },
     "lpmv": {
@@ -615,16 +582,6 @@
             "powm1_double": "dd->d"
         }
     },
-    "pseudo_huber": {
-        "_convex_analysis.pxd": {
-            "pseudo_huber": "dd->d"
-        }
-    },
-    "rel_entr": {
-        "_convex_analysis.pxd": {
-            "rel_entr": "dd->d"
-        }
-    },
     "round": {
         "xsf_wrappers.h": {
             "cephes_round": "d->d"
@@ -682,14 +639,6 @@
             "cephes_smirnovp_wrap": "pd->d"
         }
     },
-    "spence": {
-        "_spence.pxd": {
-            "cspence": "D-> D"
-        },
-        "xsf_wrappers.h": {
-            "cephes_spence": "d->d"
-        }
-    },
     "stdtr": {
         "boost_special_functions.h++": {
             "t_cdf_float": "ff->f",
@@ -729,11 +678,6 @@
         },
         "xsf_wrappers.h": {
             "cephes_yn_wrap": "pd->d"
-        }
-    },
-    "ndtri_exp": {
-        "_ndtri_exp.pxd": {
-            "ndtri_exp": "d->d"
         }
     },
     "_beta_pdf": {

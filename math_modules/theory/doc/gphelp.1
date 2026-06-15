@@ -186,7 +186,11 @@ time.
 .TP
 GPTEX
 .RS
-TeX typesetting program to use
+TeX typesetting program to use. Defaut value: tex. This may for instance be
+changed to 'pdftex' to let the gphelp system produce PDF output. To make this
+example work, make sure to modify GPXDVI to a PDF previewer or a general
+tool indicating user's preferred application (such as 'xdg-open' on Linux
+or 'open' on OS/X).
 .RE
 
 .TP
@@ -196,8 +200,20 @@ directory where temporary files are written
 .TP
 GPXDVI
 .RS
-dvi previewer to use. You may use this to specify options for vanilla xdvi,
-for instance "xdvi -s 7" to select a shrink factor.
+previewer to use to open documents produced by $GPTEX. Default value: xdvi.
+By default $GPTEX is 'tex' and produces dvi files; you may use GPXDVI to
+specify options for vanilla xdvi, for instance "xdvi -s 7" to select a shrink
+factor. If you change GPTEX to produce another format then GPXDVI must be
+changed accordingly. For instance to a PDF previewer or a generic 'xdg-open'
+(Linux) or 'open' (OS/X).
+.RE
+
+.TP
+GPXDVIREF
+.RS
+previewer to use when displaying reference cards. Default value: $GPXDVI.
+You may use this to specify options for vanilla xdvi, for instance
+"xdvi -s 5 -fullscreen" to ensure the whole reference card is shown.
 .RE
 
 .SH FILES
@@ -245,6 +261,7 @@ Rewritten and expanded by Karim Belabas for the main PARI distribution.
 .IR gzip (1),
 .IR readline (1),
 .IR tex (1),
+.IR xdg-open (1),
 .IR xdvi (1).
 
 .SH COPYING

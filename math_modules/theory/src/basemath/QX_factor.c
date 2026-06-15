@@ -896,18 +896,20 @@ ZX_squff(GEN f, GEN *pE)
   if (signe(leading_coeff(f)) < 0) f = ZX_neg(f);
   E = cgetg(n, t_VECSMALL);
   P = cgetg(n, t_COL);
+  f = Q_primpart(f); /* FIXME: caller could ensure this */
   T = ZX_gcd_all(f, ZX_deriv(f), &V);
   for (k = i = 1;; k++)
-  {
+  { /* T, V are primitive */
     GEN W = ZX_gcd_all(T,V, &T); /* V and W are squarefree */
     long dW = degpol(W), dV = degpol(V);
+    /* T, W are primitive */
     /* f = prod_i T_i^{e_i}
      * W = prod_{i: e_i > k} T_i,
      * V = prod_{i: e_i >= k} T_i,
      * T = prod_{i: e_i > k} T_i^{e_i - k} */
     if (!dW)
     {
-      if (dV) { gel(P,i) = Q_primpart(V); E[i] = k; i++; }
+      if (dV) { gel(P,i) = V; E[i] = k; i++; }
       break;
     }
     if (dW == dV)
@@ -917,7 +919,7 @@ ZX_squff(GEN f, GEN *pE)
     }
     else
     {
-      gel(P,i) = Q_primpart(RgX_div(V,W));
+      gel(P,i) = RgX_div(V,W);
       E[i] = k; i++; V = W;
     }
   }
@@ -1181,7 +1183,11 @@ ZX_gcd_all(GEN A, GEN B, GEN *Anew)
   if (g) H = Q_primpart(H);
   if (c) H = ZX_Z_mul(H,c);
   if (DEBUGLEVEL>5) err_printf("done\n");
-  if (Anew) *Anew = RgX_shift_shallow(R, valA);
+  if (Anew)
+  {
+    if (g) R = Q_primpart(R);
+    *Anew = RgX_shift_shallow(R, valA);
+  }
   return valH? RgX_shift_shallow(H, valH): H;
 }
 
@@ -1529,8 +1535,8 @@ myconcat(GEN v, GEN x)
 }
 
 /* Bradford-Davenport algorithm.
- * f a squarefree ZX of degree > 0, return NULL or a vector of coprime
- * cyclotomic factors of f [ possibly reducible ] */
+ * f a primitive squarefree ZX of degree > 0, return NULL or a vector of
+ * coprime cyclotomic factors of f [ possibly reducible ] */
 static GEN
 BD(GEN f)
 {
@@ -1552,10 +1558,10 @@ BD(GEN f)
   }
   /* f no longer divisible by Phi_1 or Phi_2 */
   if (degpol(f) <= 1) return G;
-  f1 = ZX_graeffe(f); /* has at most square factors */
+  f1 = ZX_graeffe(f); /* primitive, has at most square factors */
   if (ZX_equal(f1, f)) return myconcat(G,f); /* f = product of Phi_n, n odd */
 
-  fs2 = ZX_gcd_all(f1, ZX_deriv(f1), &f2); /* fs2 squarefree */
+  fs2 = ZX_gcd_all(f1, ZX_deriv(f1), &f2); /* fs2 squarefree primitive */
   if (degpol(fs2))
   { /* fs contains all Phi_n | f, 4 | n; and only those */
     /* In that case, Graeffe(Phi_n) = Phi_{n/2}^2, and Phi_n = Phi_{n/2}(x^2) */

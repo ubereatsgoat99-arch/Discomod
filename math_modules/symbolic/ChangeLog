@@ -1,3 +1,97 @@
+2026-06-14  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/expr.spad: Optimize '=' in Expression further
+
+2026-06-14  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/expr.spad: Optimize 'reduc' in Expression
+
+2026-06-14  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/expr.spad: Optimize '=' in Expression
+
+2026-06-14  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/expr.spad: Fix unsimplified expression
+	in 'algreduc' in EXPR
+
+2026-06-14  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/efupxs.spad: Remove duplicated
+	functions from EFUPXS
+
+2026-06-09  Waldek Hebisch  <cas@fricas.org>
+
+	* algebra/files.spad,src/algebra/fops.spad,
+	src/interp/m_util.boot, src/lisp/fricas-lisp.lisp:
+	Add openIfCan
+
+2026-06-08  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/i-spec1.boot, src/interp/i-spec2.boot:
+	Fix thinkos in latest message change
+
+2026-06-07  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/fname.spad, src/interp/as.boot,
+	src/interp/server.boot, src/interp/setvars.boot,
+	src/interp/vmlisp.lisp: Minor cleanups
+
+2026-06-07  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/format.boot, src/interp/g-boot.boot,
+	src/interp/g-cndata.boot, src/interp/g-util.boot,
+	src/interp/i-coerfn.boot, src/interp/i-eval.boot,
+	src/interp/i-map.boot, src/interp/i-output.boot,
+	src/interp/i-resolv.boot, src/interp/i-spec2.boot,
+	src/interp/msg.boot, src/interp/msgdb.boot,
+	src/interp/nruncomp.boot, src/interp/nrunfast.boot,
+	src/interp/nrunopt.boot, src/interp/scan.boot,
+	src/interp/trace.boot, src/interp/vmlisp.lisp:
+	Replace SIZE by #
+
+2026-06-07  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/Makefile.in, src/interp/format.boot,
+	src/interp/g-cndata.boot, src/interp/i-analy.boot,
+	src/interp/i-coerce.boot, src/interp/i-eval.boot,
+	src/interp/i-output.boot, src/interp/i-spec1.boot,
+	src/interp/i-spec2.boot, src/interp/i-toplev.boot,
+	src/interp/lisplib.boot, src/interp/msg.boot,
+	src/interp/msgdb.boot: Move remaining messages inline
+	src/share/doc/msgs/s2-us.msgs: Remove
+
+2026-06-07  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/g-error.boot: Fix previous commit
+
+2026-06-06  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/c-doc.boot, src/interp/format.boot,
+	src/interp/g-error.boot, src/interp/i-output.boot,
+	src/interp/i-syscmd.boot, src/interp/m_util.boot,
+	src/interp/msgdb.boot, src/interp/package.boot,
+	src/interp/vmlisp.lisp: Misc cleanups and simplifications
+
+2026-06-06  Qian Yun <oldk1331@gmail.com>
+
+	* src/interp/i-syscmd.boot: Fix ')history )file'
+
+2026-06-06  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/fname.spad, src/include/cfuns-c.H1,
+	src/lib/cfuns-c.c, src/lisp/fricas-lisp.lisp:
+	Fix 'writablep' and 'writable?'
+
+2026-06-05  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/br_sup.boot, src/interp/clam.boot:
+	Clear HyperDoc callbacks in a single place
+
+2026-06-05  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/m_util.boot: Fix a typo
+
 2026-06-04  Waldek Hebisch  <cas@fricas.org>
 
 	* src/algebra/hypertex.spad, src/interp/br-data.boot,

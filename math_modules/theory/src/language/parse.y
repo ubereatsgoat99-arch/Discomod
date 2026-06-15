@@ -83,8 +83,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA. */
 %type <val> matrixelts matrixeltsno matrixlines arg listarg definition
 %type <val> funcid memberid
 %type <val> backticks history
-%type <val> compr in inseq
-%destructor { pari_discarded++; } seq matrix range matrix_index expr exprno lvalue matrixelts matrixeltsno matrixlines arg listarg definition funcid memberid backticks history compr in inseq deriv
+%type <val> compr in eq inseq
+%destructor { pari_discarded++; } seq matrix range matrix_index expr exprno lvalue matrixelts matrixeltsno matrixlines arg listarg definition funcid memberid backticks history compr in eq inseq deriv
 %%
 
 sequence: seq        {$$=$1; (void) pari_nerrs;} /* skip the destructor */
@@ -213,10 +213,17 @@ matrix: '[' ']'             {$$=newnode(Fvec,-1,-1,&@$);}
 in: lvalue '<' '-' expr {$$=newnode(Flistarg,$4,$1,&@$);}
 ;
 
+eq: lvalue '=' expr {$$=newnode(Flistarg,$3,$1,&@$);}
+;
+
 inseq: in                    {$$=newopcall(OPcompr,$1,-2,&@$);}
      | in ',' expr           {$$=newopcall3(OPcompr,$1,-2,$3,&@$);}
      | in ';' inseq          {$$=newopcall(OPcomprc,$1,$3,&@$);}
      | in ',' expr ';' inseq {$$=newopcall3(OPcomprc,$1,$5,$3,&@$);}
+     | eq                    {$$=newopcall(OPcompreq,$1,-2,&@$);}
+     | eq ',' expr           {$$=newopcall3(OPcompreq,$1,-2,$3,&@$);}
+     | eq ';' inseq          {$$=newopcall(OPcompreqc,$1,$3,&@$);}
+     | eq ',' expr ';' inseq {$$=newopcall3(OPcompreqc,$1,$5,$3,&@$);}
 ;
 
 compr: '[' expr '|' inseq ']' {$$=addcurrexpr($4,$2,&@$);}

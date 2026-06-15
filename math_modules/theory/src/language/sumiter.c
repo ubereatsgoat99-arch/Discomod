@@ -1069,9 +1069,25 @@ vecexpr0(GEN vec, GEN code, GEN pred)
 }
 
 GEN
+vecexpreq0(GEN x, GEN code, GEN pred)
+{
+  if (pred)
+    EXPR_WRAP(code,eqselapply((void*)pred,&gp_evalbool,EXPR_ARGUPTO,x))
+  else
+    EXPR_WRAP(code,eqselapply(NULL,NULL,EXPR_ARGUPTO,x))
+}
+
+GEN
 vecexpr1(GEN vec, GEN code, GEN pred)
 {
   GEN v = vecexpr0(vec, code, pred);
+  return lg(v) == 1? v: shallowconcat1(v);
+}
+
+GEN
+vecexpreq1(GEN x, GEN code, GEN pred)
+{
+  GEN v = vecexpreq0(x, code, pred);
   return lg(v) == 1? v: shallowconcat1(v);
 }
 

@@ -43,7 +43,7 @@ $index_filename := "index.KAF"
 get_io_index_stream(dir_name, io?) ==
     ds := (io? => 'io; 'input)
     ind_name := CONCAT(dir_name, '"/", $index_filename)
-    open_stream(ind_name, ds, false)
+    open_stream2(ind_name, ds, false)
 
 get_io_index_table(stream, io?) ==
     pos := READ(stream, nil, nil)
@@ -58,20 +58,29 @@ get_io_index_table(stream, io?) ==
         nil
     nil
 
-kaf_open(name, io?) ==
+kaf_open2(name, io?) ==
     full_name :=
         io? => name
         make_input_filename1(name)
+    NULL(full_name) => nil
+    res1 := true
     if io? then
         kind := file_kind(full_name)
-        if kind = -1 then
-            makedir(full_name)
-        else if kind = 0 then
-            ERROR(FORMAT(nil, '"~s is an existing file, not a library",
-                  full_name))
+        res1 :=
+            kind = -1 => makedir(full_name) = 0
+            kind = 0 => nil
+            true
+    NULL(res1) => nil
     stream := get_io_index_stream(full_name, io?)
+    NULL(stream) => nil
     make_kaf((io? => 'output; 'input), full_name,
              get_io_index_table(stream, io?), stream)
+
+kaf_open(name, io?) ==
+    res1 := kaf_open2(name, io?)
+    NULL(res1) =>
+        ERROR(FORMAT(nil, '"Can not open ~s", name))
+    res1
 
 kaf_close(kaf) ==
     istr := kaf_index_stream(kaf)
@@ -205,7 +214,7 @@ file_directory(n) ==
     while k >=0 and not(is_dir_separator?(n.k)) repeat
         k := k - 1
     k < 0 => '""
-    k = 0 => "/"
+    k = 0 => '"/"
     SUBSTRING(n, 0, k)
 
 make_filename2(n, e) ==
@@ -269,7 +278,8 @@ is_system_path?(n) ==
 delete_file(f) == DELETE_-FILE(f)
 
 MAKE_INSTREAM(name) ==
-    open_stream(make_input_filename1(name), 'input, false)
+    NULL(fn := make_input_filename1(name)) => nil
+    open_stream2(fn, 'input, false)
 
 MAKE_OUTSTREAM(name) == open_stream(name, 'output, false)
 
@@ -336,3 +346,10 @@ bright_warn(m) ==
 COT(x) == COS(x)/SIN(x)
 
 is_char?(c) == CHARACTERP(c)
+
+first_symbol(s) ==
+    pos := search_str('" ", s, 0)
+    INTERN(SUBSTRING(s, 0, pos))
+
+DOWNCASE(s) == STRING_-DOWNCASE(s)
+

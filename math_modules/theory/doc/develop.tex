@@ -37,6 +37,29 @@ Hopefully, this will eventually document everything that we buried in
 \kbd{paripriv.h} or even more private header files like \kbd{anal.h}.
 Possibly, even implementation choices! Way to go.
 
+\section{Clones and blocks}
+
+\fun{GEN}{newblock_t}{size_t n, long rec} As \kbd{newblock}, but if
+\kbd{rec} is not $0$, set the block as {\emph recursive}.
+The component of a recursive block can be locked, see below, unfortunately
+this requires to add the block to the \kbd{block\_tree} structure which has a
+performance cost.
+Non recursive \kbd{GEN} (see \kbd{is\_recursive\_t}) and clones whose components
+are all themselves clones need not be marked as recursive.
+
+\fun{void}{clone_lock}{GEN x} Lock $x$, assuming $x$ is a clone or
+a part of a recursive clone, otherwise this has no effect.
+Locking simply increases the reference count of the clone $x$ is
+a part of. This is used to prevent $x$ to be freed until the corresponding call
+to \kbd{clone\_unlock(x)}.
+
+\fun{void}{clone_unlock}{GEN x} Unlock $x$, assuming $x$ is a clone or
+a part of a recursive clone, otherwise this has no effect.
+Unlocking simply applies \kbd{gunclone} to the clone $x$ is a a part of.
+
+\fun{void}{clone_unlock_deep}{GEN x} As \kbd{clone\_unlock}, but call
+\kbd{gunclone\_deep} instead of \kbd{gunclone}.
+
 \section{The type \typ{CLOSURE}}\kbdsidx{t_CLOSURE}\sidx{closure}
 This type holds closures and functions in compiled form, so is deeply
 linked to the internals of the GP compiler and evaluator.
@@ -423,6 +446,12 @@ implements \kbd{[a(x)|x<-b,c(x)]}.
 
 \fun{GEN}{veccatselapply}{void *Ep, long (*p)(void* E, GEN x), void *E, GEN (*f)(void* E, GEN x), GEN A}
 implements \kbd{concat([a(x)|x<-b,c(x)])}.
+
+\fun{GEN}{selapply}{void *Epred, long (*pred)(void* E, GEN x), void *Efun, GEN (*fun)(void* E, GEN x), GEN A}
+implements \kbd{[a(x)|x=b,c(x)]}.
+
+\fun{GEN}{catselapply}{void *Ep, long (*p)(void* E, GEN x), void *E, GEN (*f)(void* E, GEN x), GEN A}
+implements \kbd{concat([a(x)|x=b,c(x)])}.
 
 \subsec{Local precision}
 

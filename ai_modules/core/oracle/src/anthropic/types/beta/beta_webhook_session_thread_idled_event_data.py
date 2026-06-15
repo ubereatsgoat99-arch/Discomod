@@ -9,9 +9,12 @@ __all__ = ["BetaWebhookSessionThreadIdledEventData"]
 
 class BetaWebhookSessionThreadIdledEventData(BaseModel):
     id: str
-    """ID of the resource that triggered the event."""
+    """ID of the session that triggered the event."""
 
     organization_id: str
+
+    session_thread_id: str
+    """ID of the session thread this event refers to."""
 
     type: Literal["session.thread_idled"]
 

@@ -48,12 +48,13 @@ chomp($datadir);
 # Granted environment variables (override):
 #  GPTMPDIR: where temporary files will go (/tmp by default).
 #  GPDOCDIR: where is manual (by default, where make install will put it).
-#  GPXDVI: which 'xdvi' program to call (xdvi by default)
+#  GPXDVI: which 'xdvi + flags' program to call (xdvi by default)
+#  GPXDVIREF: which 'xdvi + flags' for refcards (xdvi by default)
 #
 $wwwsite= "https://pari.math.u-bordeaux.fr/";
 
 $xdvi = $ENV{GPXDVI} || "xdvi";
-$xdviref = $ENV{GPXDVIREF} || "$xdvi -paper 29.7x21cm";
+$xdviref = $ENV{GPXDVIREF} || "$xdvi";
 $gzip = "gzip";
 $zcat = "$gzip -dc";
 $bzip = "bzip2";
@@ -129,7 +130,7 @@ sub options {
 }
 
 sub get_docdir {
-  my $d = $ENV{GPDOCDIR} || $ENV{GPHELP_DOCDIR};
+  my $d = $ENV{GPDOCDIR};
   if (!defined $d) {
     # work from TOPDIR/Oarch or TOPDIR too: may be uninstalled yet;
     $d = $0; $d =~ s,/gphelp,,;
@@ -201,25 +202,20 @@ sub safe_setsid {
   };
 }
 
-# assume we're in $docdir
-sub open_viewer_then_quit {
+sub viewer_arg_redirect {
   my $F = shift;
-  my ($f, $viewer, $redirect);
+  my $redirect = ' 2>/dev/null >/dev/null &';
+  my $viewer;
+  if ($F =~ /\.dvi/)
+  { # DVI
+    $viewer = ($F =~ /refcard/)? $xdviref: $xdvi;
+    return ($viewer, $F, $redirect);
+  }
+  # PDF
   my $cygwin = ($^O =~ /cygwin/);
   my $win32 = ($^O =~ /ms(win|ys)/);
   my $osx = ($^O =~ /darwin/);
-
-  $f = "$F.dvi";
-  $f = "$F.dvi.gz" if (! -f "$f");
-  $f = "$F.pdf"    if (! -f "$f");
-  die "could not find \'$F\'" if (! -f "$f");
-  $F = $f;
-  $redirect = ' 2>/dev/null >/dev/null &';
-  if ($f =~ /\.dvi/)
-  { # DVI
-    $viewer = ($f =~ /refcard/)? $xdviref: $xdvi;
-  }
-  elsif ($cygwin)
+  if ($cygwin)
   { # PDF Win32
     @_ = split(/"/, `acro.exe`);
     ($viewer = $_[1]) =~ s,\\,/,g;
@@ -231,8 +227,8 @@ sub open_viewer_then_quit {
   }
   elsif ($win32)
   { # PDF Win32
-    @_ = split(/"/, "$ENV{GP_PDF_VIEWER}");
-    $viewer = $_[1];
+    my @T = split(/"/, "$ENV{GP_PDF_VIEWER}");
+    $viewer = $T[1];
     print "using \'$viewer\', ";
   }
   elsif ($osx)
@@ -243,18 +239,23 @@ sub open_viewer_then_quit {
   { # PDF generic
     $viewer = "acroread";
   }
+  return ($viewer, $F, $redirect);
+}
 
-  print "displaying \'$F\'.";
+# assume we're in $docdir
+sub open_viewer_then_quit {
+  my $F = shift;
+  my $f = "$F.dvi";
+  $f = "$F.dvi.gz" if (! -f "$f");
+  $f = "$F.pdf"    if (! -f "$f");
+  die "could not find \'$F\'" if (! -f "$f");
+  my ($viewer, $file, $redirect) = viewer_arg_redirect($f);
+
+  print "displaying \'$file\'.";
   print "\n" if (!$fromgp);
   safe_setsid();
-  if ($win32)
-  {
-    system($viewer,$F);
-  }
-  else
-  {
-    system("$viewer $F$redirect");
-  }
+  if ($redirect) { system "$viewer $file $redirect"; }
+  else           { system($viewer,$file); }
   cleanexit();
 }
 
@@ -433,7 +434,7 @@ sub apropos {
 ##
 # Actual text is in file TEX. Parimacro + Geometry info goes to WRAP
 sub pretex {
-  my ($basedir) = $ENV{GPHELP_TMPDIR} || $ENV{GPTMPDIR} || $ENV{TMPDIR} || "/tmp";
+  my ($basedir) = $ENV{GPTMPDIR} || $ENV{TMPDIR} || "/tmp";
   $tmpdir = "$basedir/gp.help$$";
   mkdir $tmpdir, 0755 || die "Cannot create temporary directory";
   $texfile = "$tmpdir/gp.help";

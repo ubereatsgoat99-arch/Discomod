@@ -101,6 +101,11 @@ Expression(R : Comparable) : Exports == Implementation where
             x : % + y : %        == algreduc(x +$Rep y, commonk(x, y))
             (x : % - y : %) : %    == algreduc(x -$Rep y, commonk(x, y))
             x : % / y : %        == algreduc(x /$Rep y, commonk(x, y))
+            x : % = y : % ==
+                denom(x) = denom(y) => numer(x) = numer(y)
+                -- we only need to care about the numerator of (x - y)
+                res := (numer(x)*denom(y) - numer(y)*denom(x))::Rep
+                zero?(reduc(res, commonk(x, y)))$Rep
 
             number?(x : %) : Boolean ==
                 if R has RetractableTo(Integer) then
@@ -139,7 +144,6 @@ Expression(R : Comparable) : Exports == Implementation where
                   simplifyPower(denominator x, n::Integer)
 
             smaller?(x : %, y : %)  == smaller?(x, y)$Rep
-            x : % = y : %        == (x - y) =$Rep 0$Rep
             numer x          == numer(x)$Rep
             denom x          == denom(x)$Rep
 
@@ -201,7 +205,7 @@ Expression(R : Comparable) : Exports == Implementation where
                 if #akl = 1 then
                     r := akl(1)
                     simple_root(r) =>
-                        return root_reduce(x, r)
+                        return root_reduce(x1, r)
                 sas := create()$SingletonAsOrderedSet
                 for k in akl repeat
                    q := univariate(x1, k, minPoly k
@@ -384,7 +388,10 @@ Expression(R : Comparable) : Exports == Implementation where
             reduc(x, l) ==
                 for k in l repeat
                     p := minPoly k
-                    x := evl(numer x, k, p) /$Rep evl(denom x, k, p)
+                    d := degree p
+                    -- avoid division when possible
+                    if degree(numer x, k) >= d or degree(denom x, k) >= d then
+                        x := evl(numer x, k, p) /$Rep evl(denom x, k, p)
                 x
 
             evl0(p, k) ==

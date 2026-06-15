@@ -9,6 +9,8 @@ __all__ = ["ModelParam"]
 
 ModelParam: TypeAlias = Union[
     Literal[
+        "claude-fable-5",
+        "claude-mythos-5",
         "claude-opus-4-8",
         "claude-opus-4-7",
         "claude-mythos-preview",
@@ -22,11 +24,6 @@ ModelParam: TypeAlias = Union[
         "claude-sonnet-4-5-20250929",
         "claude-opus-4-1",
         "claude-opus-4-1-20250805",
-        "claude-opus-4-0",
-        "claude-opus-4-20250514",
-        "claude-sonnet-4-0",
-        "claude-sonnet-4-20250514",
-        "claude-3-haiku-20240307",
     ],
     str,
 ]

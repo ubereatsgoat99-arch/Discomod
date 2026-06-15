@@ -73,13 +73,6 @@
         ((atom l) l)
         (t (mapcar #'upcase l))))
 
-(defun DOWNCASE (l)
-  (cond ((stringp l) (string-downcase l))
-        ((identp l) (intern (string-downcase (symbol-name l))))
-        ((characterp l) (char-downcase l))
-        ((atom l) l)
-        (t (mapcar #'downcase l))))
-
 ; 11.2 Accessing
 
 (defun PNAME (x) (symbol-name x))
@@ -212,21 +205,11 @@
 
 (defun LIST2VEC (list) (coerce list 'vector))
 
-; 16.2 Accessing
-
-
-(defun SIZE (l)
-  (cond ((vectorp l) (length l))
-        ((consp l)   (list-length l))
-        (t           0)))
-
 ; 17.0 Operations on Character and Bit Vectors
 
 (defun NUM2CHAR (n) (code-char n))
 
 (defun CHAR2NUM (c) (char-code (character c)))
-
-(define-function '|isLowerCaseLetter| #'LOWER-CASE-P)
 
 #+(or :UNICODE :SB-UNICODE :OPENMCL-UNICODE-STRINGS)
 (defun NUM2USTR (n)
@@ -347,17 +330,6 @@
 (define-function 'STRCONC #'CONCAT)
 
 ; 17.2 Accessing
-
-(defun STRING2ID_N (cvec n)
-  (if (< n 1)
-      nil
-      (let ((start (position-if-not #'(lambda (x) (char= x #\Space)) cvec)))
-        (if start
-            (let ((end (or (position #\Space cvec :start start) (length cvec))))
-              (if (= n 1)
-                  (intern (subseq cvec start end))
-                  (STRING2ID_N (subseq cvec end) (1- n))))
-            0))))
 
 (defun SUBSTRING (cvec start length)
   (setq cvec (string cvec))

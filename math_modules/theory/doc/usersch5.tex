@@ -3060,19 +3060,27 @@ sets of functions in different contexts: generic functions allow to write
 high-level code forgetting about types, letting PARI return results which are
 sensible and as simple as possible; type specific functions are used in
 kernel programming, where we do care about types and need to maintain strict
-consistency: it is much easier to compute the types of results when they are
+consistency: it is easier to compute the types of results when they are
 determined from the types of the inputs only (without taking into account
-further arithmetic properties, like being nonzero).
+further arithmetic properties, such as being nonzero).
 \smallskip
 
 The names and prototypes of the low-level functions corresponding
-to \op\ are as follows. In this section, the \kbd{z} argument in the
-\kbd{z}-functions must be of type \typ{INT} when no \kbd{r} or \kbd{mp}
-appears in the argument code (no \typ{REAL} operand is involved, only integer
-types), and of type \typ{REAL} otherwise.
+to \op\ are as follows.
 
 \funno{GEN}{mp\op}{GEN x, GEN y} applies \op\ to
-the \typ{INT} or \typ{REAL} \kbd{x} and~\kbd{y}.
+the \typ{INT} or \typ{REAL} \kbd{x} and~\kbd{y}. The result is a \typ{INT}
+if both inputs are integers and a \typ{REAL} otherwise.
+
+\misctitle{Warning about division} the \kbd{mpdiv} function is obsolete
+and should not be used: it is only sensible when one argument is a \typ{REAL}.
+Indeed, if both inputs are \typ{INT} : we can't return $x/y$ as a \typ{FRAC}
+(not an allowed type here) or as a \typ{REAL} since its accuracy can't be
+determined from the inputs; finally Euclidean division semantics $x = qy + r$
+is not the desired one. Thus \kbd{mpdiv} will error out in this case of
+\typ{INT} arguments, to avoid unexpected behaviour. Instead we have
+\tet{divrmp}$(x,y)$ when $x$ is a \typ{REAL} and $y$ is a \typ{INT} or
+\typ{REAL}; and \tet{divmpr}$(x,y)$ when $y$ is a \typ{REAL}.
 
 \funno{GEN}{\op si}{long s, GEN x} applies \op\ to the
 \kbd{long}~\kbd{s} and the \typ{INT}~\kbd{x}.
@@ -4878,6 +4886,12 @@ to the $j$-th row of the \kbd{F3m} $x$.
 
 \fun{GEN}{F3m_mul}{GEN x, GEN y} multiplies  \kbd{x} and \kbd{y} (assumed to
 have compatible dimensions).
+
+\fun{long}{F3m_rank}{GEN x}
+
+\fun{GEN}{F3v_dotproduct}{GEN x, GEN y}
+
+\fun{GEN}{F3v_dotsquare}{GEN x}
 
 \fun{GEN}{zero_F3v}{long n} creates a \kbd{F3v} with \kbd{n} components set to
 $0$.
@@ -7215,6 +7229,10 @@ which case we assume \kbd{SMALL\_ULONG}$(p)$.
 \fun{GEN}{FlxqXn_inv}{GEN a, long n, GEN T, ulong p}
 
 \fun{GEN}{FlxqXn_inv_pre}{GEN a, long n, GEN T, ulong p, ulong pi}
+
+\fun{GEN}{FlxqXn_div}{GEN a, GEN b, long n, GEN T, ulong p}
+
+\fun{GEN}{FlxqXn_div_pre}{GEN a, GEN b, long n, GEN T, ulong p, ulong pi}
 
 \fun{GEN}{FlxqXn_expint}{GEN a, long n, GEN T, ulong p}
 
@@ -10305,11 +10323,11 @@ is a vector of \kbd{ZX}, returns $\sum_{i=0}^{n}{c_i\*B^i}$.
 \fun{GEN}{ZX_gcd}{GEN x,GEN y} returns a gcd of the \kbd{ZX} $x$ and $y$.
 
 \fun{GEN}{ZX_gcd_all}{GEN x, GEN y, GEN *pX} returns a gcd $d$ of $x$ and
-$y$. If \kbd{pX} is not \kbd{NULL}, set $\kbd{*pX}$ to a (nonzero) integer
-multiple of $x/d$. If $x$ and $y$ are both monic, then $d$ is monic and
-\kbd{*pX} is exactly $x/d$. Not stack-clean.
+$y$. If \kbd{pX} is not \kbd{NULL}, set $\kbd{*pX}$ to the primitive part
+of $x/d$. If $x$ and $y$ have coprime leading terms, then $d$ is monic and
+\kbd{*pX} is \kbd{Q\_primpart}$(x)$ divided by $d$. Not stack-clean.
 
-\fun{GEN}{ZX_radical}{GEN x} returns the largest squarefree divisor
+\fun{GEN}{ZX_radical}{GEN x} returns the largest squarefree primitive divisor
 of the \kbd{ZX} $x$. Not stack-clean.
 
 \fun{GEN}{ZX_content}{GEN x} returns the content of the \kbd{ZX} $x$.
@@ -10410,12 +10428,13 @@ of \kbd{T} over $\Q[X]$ (the content is lost).
 \fun{long}{ZX_is_irred}{GEN T} returns 1 it \kbd{T} is irreducible, and
 0 otherwise.
 
-\fun{GEN}{ZX_squff}{GEN T, GEN *E} write the nonzero \kbd{ZX} $T$ as a
-product $\prod T_i^{e_i}$ with the $e_1 < e_2 < \cdots$ all distinct and the
-$T_i$ pairwise coprime. Return the vector of the $T_i$, and set \kbd{*E} to
-the vector of the $e_i$, as a \typ{VECSMALL}. For efficiency, powers of $x$
-should have been removed from $T$ using \kbd{ZX\_valrem}, but the result is
-also correct if not. Not stack-clean.
+\fun{GEN}{ZX_squff}{GEN T, GEN *E} write the primitive part of the
+nonzero \kbd{ZX} $T$ as a product $\prod T_i^{e_i}$ with the $e_1 < e_2 <
+\cdots$ all distinct and the $T_i$ primitive and pairwise coprime. Return the
+vector of the $T_i$, and set \kbd{*E} to the vector of the $e_i$, as a
+\typ{VECSMALL}. For efficiency, powers of $x$ should have been removed from
+$T$ using \kbd{ZX\_valrem}, but the result is also correct if not. Not
+stack-clean.
 
 \fun{GEN}{ZX_Uspensky}{GEN P, GEN ab, long flag, long bitprec} let \kbd{P} be a
 \kbd{ZX} polynomial whose real roots are simple and \kbd{bitprec} is the
@@ -10902,6 +10921,8 @@ as \kbd{RgX\_deflate} where $F$ is a \typ{RFRAC}.
 to $D x$ for some well-chosen integer $D$. More precisely, if the input is
 exact, $D$ is the denominator of $x$; else it is a power of $2$ chosen
 so that all inexact entries are correctly rounded to 1 ulp.
+
+\fun{GEN}{RgX_Graeffe}{GEN P, long d} as the GP function polgraeffe.
 
 \fun{GEN}{RgX_homogenize}{GEN P, long v} Return the homogenous polynomial
 associated to $P$ in the secondary variable $v$, that is $y^d*P(x/y)$ where $d$

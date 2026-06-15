@@ -501,6 +501,9 @@ outputTranIteration itl ==
   null rest itl => outputTranIterate first itl
   ['CONCATB,outputTranIterate first itl,outputTranIteration rest itl]
 
+throw_msg_internal(l) == throw_msg("S2IX0008",
+    '"Internal system problem in function %1b : %2", l)
+
 outputTranIterate x ==
   x is ['STEP,n,init,step,:final] =>
     init' := outputTran init
@@ -513,9 +516,12 @@ outputTranIterate x ==
     ['STEP,outputTran n,init',outputTran step,:final']
   x is ["IN",n,s] => ["IN",outputTran n,outputTran s]
   x is [op,p] and op in '(_| UNTIL WHILE) =>
-    op:= DOWNCASE op
+    op :=
+        op = 'WHILE => "while"
+        op = 'UNTIL => "until"
+        op
     ['CONCATB,op,outputTran p]
-  throwKeyedMsg("S2IX0008",['outputTranIterate,['"illegal iterate: ",x]])
+  throw_msg_internal(['outputTranIterate,['"illegal iterate: ",x]])
 
 outputConstructTran x ==
   x is [op,a,b] =>
@@ -724,7 +730,7 @@ appInfix(e,x,y,d) ==
   leftPrec:= getOpBindingPower(op,"Led","left")
   leftPrec = 1000 => return nil --no infix operator is allowed default value
   rightPrec:= getOpBindingPower(op,"Led","right")
-  #e < 2 => throwKeyedMsg("S2IX0008",['appInfix,
+  #e < 2 => throw_msg_internal(['appInfix,
       '"fewer than 2 arguments to an infix function"])
   opString:= GETL(op,"INFIXOP") or '","
   opWidth:= WIDTH opString
@@ -922,14 +928,14 @@ putWidth u ==
   u
 
 opWidth(op,has2Arguments) ==
-  op = "EQUATNUM" => 4
-  NUMBERP op => 2+SIZE STRINGIMAGE op
-  if null has2Arguments then
-    a := GETL(op, "PREFIXOP") => return SIZE a
-  else
-    a := GETL(op, "INFIXOP") => return SIZE a
-  STRINGP op => 2 + # op
-  2+SIZE PNAME op
+    op = "EQUATNUM" => 4
+    NUMBERP op => 2 + #STRINGIMAGE(op)
+    if null has2Arguments then
+        a := GETL(op, "PREFIXOP") => return #a
+    else
+        a := GETL(op, "INFIXOP") => return #a
+    STRINGP op => 2 + #op
+    2 + #PNAME(op)
 
 matrixBorder(x,y1,y2,d,leftOrRight) ==
   y1 = y2 =>
@@ -1118,12 +1124,12 @@ bigopAppAux(bot,top,arg,x,y,d,kind) ==
   xCenter := quotient_INT(maxWidth - 1, 2) + x
   d:=APP(arg,x+2+maxWidth,y,d)
   d:=
-      atom bot and SIZE atom2String bot = 1 => APP(bot,xCenter,y-2,d)
+      atom(bot) and #atom2String(bot) = 1 => APP(bot,xCenter,y-2,d)
       APP(bot, x + quotient_INT(maxWidth - botWidth, 2),
           y - 2 - superspan(bot), d)
   if top then
     d:=
-      atom top and SIZE atom2String top = 1 => APP(top,xCenter,y+2,d)
+      atom(top) and #atom2String(top) = 1 => APP(top,xCenter,y+2,d)
       APP(top, x + quotient_INT(maxWidth - topWidth, 2),
           y + 2 + subspan(top), d)
   delta := (kind = 'pi => 2; 1)
@@ -1378,7 +1384,7 @@ outputNumber(start,linelength,num) ==
   firsttime:=(linelength>3)
   if linelength>2 then
      linelength:=linelength-1
-  while SIZE(num) > linelength repeat
+  while #num > linelength repeat
     if $collectOutput then
        $outputLines := [CONCAT(blnks, SUBSTRING(num,0,linelength),under),
                         :$outputLines]
@@ -1398,7 +1404,7 @@ outputNumber(start,linelength,num) ==
 outputString(start,linelength,str) ==
   if start > 1 then blnks := filler_spaces(start - 1)
   else blnks := '""
-  while SIZE(str) > linelength repeat
+  while #str > linelength repeat
     if $collectOutput then
        $outputLines := [CONCAT(blnks, SUBSTRING(str,0,linelength)),
                         :$outputLines]

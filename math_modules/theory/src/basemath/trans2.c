@@ -1766,12 +1766,12 @@ gammafrac24(GEN a, GEN b, long prec)
         if (m > 0)
         {
           t = mulu_interval_step(x, (m-1)*B + x, B);
-          t = typ(t) == t_INT? divir(t, Bm): divrr(t, Bm);
+          t = divmpr(t, Bm);
         }
         else
         {
           t = mulu_interval_step(B-x, -m*B - x, B);
-          t = typ(t) == t_INT? divri(Bm, t): divrr(Bm, t);
+          t = divrmp(Bm, t);
         }
         if (m < 0 && odd(m)) togglesign(t);
         z = mulrr(z,t);

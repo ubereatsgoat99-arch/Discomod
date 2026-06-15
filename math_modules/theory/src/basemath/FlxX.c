@@ -2462,7 +2462,7 @@ FlxqXn_mulhigh(GEN f, GEN g, long n2, long n, GEN T, ulong p, ulong pi)
 }
 
 GEN
-FlxqXn_inv_pre(GEN f, long e, GEN T, ulong p, ulong pi)
+FlxqXn_div_pre(GEN g, GEN f, long e, GEN T, ulong p, ulong pi)
 {
   pari_sp av = avma, av2;
   ulong mask;
@@ -2471,8 +2471,8 @@ FlxqXn_inv_pre(GEN f, long e, GEN T, ulong p, ulong pi)
 
   if (!signe(f)) pari_err_INV("FlxqXn_inv",f);
   a = Flxq_inv_pre(gel(f,2), T, p, pi);
-  if (e == 1) return scalarpol(a, v);
-  else if (e == 2)
+  if (e == 1 && !g) return scalarpol(a, v);
+  else if (e == 2 && !g)
   {
     GEN b;
     if (degpol(f) <= 0) return scalarpol(a, v);
@@ -2492,8 +2492,17 @@ FlxqXn_inv_pre(GEN f, long e, GEN T, ulong p, ulong pi)
     n<<=1; if (mask & 1) n--;
     mask >>= 1;
     fr = FlxXn_red(f, n);
-    u = FlxqXn_mul_pre(W, FlxqXn_mulhigh(fr, W, n2, n, T,p,pi), n-n2, T,p,pi);
-    W = FlxX_sub(W, FlxX_shift(u, n2, vT), p);
+    if (mask>1 || !g)
+    {
+      u = FlxqXn_mul_pre(W, FlxqXn_mulhigh(fr, W, n2, n, T, p, pi), n-n2, T, p, pi);
+      W = FlxX_sub(W, FlxX_shift(u, n2, vT), p);
+    }
+    else
+    {
+      GEN y = FlxqXn_mul_pre(g, W, n, T, p, pi), yt =  FlxXn_red(y, n-n2);
+      u = FlxqXn_mul_pre(yt, FlxqXn_mulhigh(fr,  W, n2, n, T, p, pi), n-n2, T, p, pi);
+      W = FlxX_sub(y, FlxX_shift(u, n2, vT), p);
+    }
     if (gc_needed(av2,2))
     {
       if(DEBUGMEM>1) pari_warn(warnmem,"FlxqXn_inv, e = %ld", n);
@@ -2502,9 +2511,18 @@ FlxqXn_inv_pre(GEN f, long e, GEN T, ulong p, ulong pi)
   }
   return gc_upto(av, W);
 }
+
+GEN
+FlxqXn_div(GEN f, GEN g, long e, GEN T, ulong p)
+{ return FlxqXn_div_pre(f, g, e, T, p, SMALL_ULONG(p)? 0: get_Fl_red(p)); }
+
+GEN
+FlxqXn_inv_pre(GEN f, long e, GEN T, ulong p, ulong pi)
+{ return FlxqXn_div_pre(NULL, f, e, T, p, pi); }
+
 GEN
 FlxqXn_inv(GEN f, long e, GEN T, ulong p)
-{ return FlxqXn_inv_pre(f, e, T, p, SMALL_ULONG(p)? 0: get_Fl_red(p)); }
+{ return FlxqXn_div_pre(NULL, f, e, T, p, SMALL_ULONG(p)? 0: get_Fl_red(p)); }
 
 /* Compute intformal(x^n*S)/x^(n+1) */
 static GEN

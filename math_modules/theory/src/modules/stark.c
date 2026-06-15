@@ -776,12 +776,12 @@ _data3(GEN arch, long r2)
 static void
 ch_get3(GEN dtcr, long *a, long *b, long *c)
 { GEN v = ch_3(dtcr); *a = v[1]; *b = v[2]; *c = v[3]; }
-/* 2^(2*r2) pi^N */
+/* 1 / (2^(2*r2) pi^N) */
 static GEN
 get_P(GEN nf, long prec)
 {
-  long r2 = nf_get_r2(nf), N = nf_get_degree(nf);
-  GEN P = powru(mppi(prec), N); shiftr_inplace(P, 2*r2); return P;
+  GEN P = powru(mppi(prec), nf_get_degree(nf));
+  shiftr_inplace(P, 2 * nf_get_r2(nf)); return invr(P);
 }
 /* sort chars according to conductor */
 static GEN
@@ -792,6 +792,11 @@ sortChars(GEN ch)
   for (j = 1; j < l; j++) gel(F, j) = gmael(ch,j,2);
   return vec_equiv(F);
 }
+
+/* sqrt(|D| Norm F_0 / P) */
+static GEN
+get_ch_C(GEN D, GEN F, GEN P)
+{ return sqrtr_abs(mulir(mulii(D, ZM_det_triangular(gel(F,1))), P)); }
 
 /* Given a list [chi, F = cond(chi)] of characters over Cl(bnr), return
  * [vChar, dataCR], where vChar contains the equivalence classes of
@@ -823,7 +828,7 @@ InitChar(GEN bnr, GEN ch, long all, long prec)
     long a, i = v[1], lc = lg(v);
     GEN F = gmael(ch,i,2), map = NULL;
     gel(dataCR, i) = D = cgetg(8, t_VEC);
-    ch_C(D) = sqrtr_abs(divir(mulii(dk, ZM_det_triangular(gel(F,1))), P));
+    ch_C(D) = get_ch_C(dk, F, P);
     ch_3(D) = _data3(gel(F,2), r2);
     if (gequal(F, mod))
     {
@@ -865,17 +870,17 @@ static void
 CharNewPrec(GEN data, long prec)
 {
   long j, l, prec2 = precdbl(prec) + EXTRAPREC64;
-  GEN P, nf, dataCR = gmael(data,4,2), D = gel(dataCR,1);
+  GEN P, nf, dk, dataCR = gmael(data,4,2), D = gel(dataCR,1);
 
   if (ch_prec(D) >= prec2) return;
   nf = bnr_get_nf(ch_bnr(D));
   if (nf_get_prec(nf) < prec) nf = nfnewprec_shallow(nf, prec); /* not prec2 */
-  P = get_P(nf, prec2); l = lg(dataCR);
+  dk = nf_get_disc(nf); P = get_P(nf, prec2); l = lg(dataCR);
   for (j = 1; j < l; j++)
   {
-    GEN f0, bnr;
-    D = gel(dataCR,j); f0 = gel(bnr_get_mod(ch_bnr(D)), 1);
-    ch_C(D) = sqrtr_abs(divir(mulii(nf_get_disc(nf),ZM_det_triangular(f0)), P));
+    GEN bnr;
+    D = gel(dataCR,j);
+    ch_C(D) = get_ch_C(dk, bnr_get_mod(ch_bnr(D)), P);
     ch_bnr(D) = bnr = shallowcopy(ch_bnr(D));
     gel(bnr,1) = shallowcopy(gel(bnr,1)); gmael(bnr,1,7) = nf;
     ch_CHI(D) = get_Char(gel(ch_CHI(D),1), prec2);

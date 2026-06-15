@@ -196,6 +196,10 @@ stack_calloc_align(size_t N, long k)
   return stack_calloc(N);
 }
 
+INLINE GEN
+newblock(size_t n)
+{ return newblock_t(n, 0); }
+
 /* cgetg(lg(x), typ(x)), set *lx. Implicit unsetisclone() */
 INLINE GEN
 cgetg_copy(GEN x, long *plx) {
@@ -1133,13 +1137,19 @@ mpmul(GEN x, GEN y)
 }
 INLINE GEN
 mpsqr(GEN x) { return (typ(x)==t_INT) ? sqri(x) : sqrr(x); }
+
+/* obsolete */
 INLINE GEN
 mpdiv(GEN x, GEN y)
 {
-  if (typ(x)==t_INT)
-    return (typ(y)==t_INT) ? divii(x,y) : divir(x,y);
-  return (typ(y)==t_INT) ? divri(x,y) : divrr(x,y);
+  if (typ(x) == t_REAL) return divrmp(x,y);
+  if (typ(y) == t_REAL) return divmpr(x,y);
+  pari_err_TYPE2("mpdiv",x,y); return NULL;
 }
+INLINE GEN
+divrmp(GEN x, GEN y) { return (typ(y)==t_INT) ? divri(x,y) : divrr(x,y); }
+INLINE GEN
+divmpr(GEN x, GEN y) { return (typ(x)==t_INT) ? divir(x,y) : divrr(x,y); }
 
 /*******************************************************************/
 /*                                                                 */

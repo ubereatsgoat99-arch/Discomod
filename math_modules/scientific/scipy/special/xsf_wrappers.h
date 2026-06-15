@@ -95,6 +95,7 @@ void special_itairy(double x, double *apt, double *bpt, double *ant, double *bnt
 npy_cdouble hyp2f1_complex_wrap(double a, double b, double c, npy_cdouble zp);
 double sin_pi(double x);
 
+double special_agm(double a, double b);
 double xsf_binom(double n, double k);
 
 double special_digamma(double z);
@@ -107,6 +108,18 @@ double special_expit(double x);
 npy_longdouble special_expitl(npy_longdouble x);
 
 npy_double special_exprel(npy_double x);
+
+double special_entr(double x);
+double special_kl_div(double x, double y);
+double special_rel_entr(double x, double y);
+double special_huber(double delta, double r);
+double special_pseudo_huber(double delta, double r);
+
+double special_boxcox(double x, double lmbda);
+double special_boxcox1p(double x, double lmbda);
+double special_inv_boxcox(double x, double lmbda);
+double special_inv_boxcox1p(double x, double lmbda);
+double special_ndtri_exp(double x);
 
 float special_log_expitf(float x);
 double special_log_expit(double x);
@@ -174,8 +187,6 @@ double cephes_igami(double a, double p);
 
 double cephes_igamci(double a, double p);
 
-double cephes_igam_fac(double a, double x);
-
 double cephes_lanczos_sum_expg_scaled(double x);
 
 double cephes_poch(double x, double m);
@@ -208,7 +219,8 @@ double cephes_erfcinv(double y);
 
 double cephes_round(double x);
 
-double cephes_spence(double x);
+double xsf_spence(double x);
+npy_cdouble xsf_cspence(npy_cdouble z);
 
 double xsf_struve_h(double v, double z);
 

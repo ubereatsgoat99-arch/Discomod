@@ -776,12 +776,54 @@ vecselapply(void *Epred, long (*pred)(void* E, GEN x), void *Efun,
 }
 
 GEN
+eqselapply(void *Epred, long (*pred)(void* E, GEN x), void *Efun,
+                      GEN (*fun)(void* E, GEN x), GEN A)
+{
+  GEN y;
+  if (!pred || pred(Epred, A))
+  {
+    y = cgetg(2, t_VEC);
+    if (fun)
+    {
+      clone_lock(A);
+      gel(y,1) = fun(Efun, A);
+      clone_unlock_deep(A); return y;
+    } else
+      gel(y,1) = A;
+  } else
+    y = cgetg(1, t_VEC);
+  return y;
+}
+
+GEN
 veccatselapply(void *Epred, long (*pred)(void* E, GEN x), void *Efun,
                             GEN (*fun)(void* E, GEN x), GEN A)
 {
   pari_sp av = avma;
   GEN v = vecselapply(Epred, pred, Efun, fun, A);
   return lg(v) == 1? v: gc_GEN(av, shallowconcat1(v));
+}
+
+GEN
+eqcatselapply(void *Epred, long (*pred)(void* E, GEN x), void *Efun,
+                            GEN (*fun)(void* E, GEN x), GEN A)
+{
+  pari_sp av = avma;
+  GEN y = NULL;
+  clone_lock(A);
+  if (!pred || pred(Epred, A))
+  {
+    if (fun)
+    {
+      clone_lock(A);
+      y = fun(Efun, A);
+      clone_unlock_deep(A); return y;
+    } else
+      y = A;
+  }
+  clone_unlock_deep(A);
+  if (!y) retgc_const(av, cgetg(1, t_VEC));
+  return gc_GEN(av, y);
 }
 
 /* suitable for gc_upto */

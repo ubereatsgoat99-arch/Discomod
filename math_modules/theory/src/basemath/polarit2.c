@@ -2205,16 +2205,25 @@ Q_content(GEN x)
 GEN
 ZX_content(GEN x)
 {
-  long i, l = lg(x);
+  pari_sp av = avma;
+  long n = lg(x)-1;
   GEN d;
-  pari_sp av;
 
-  if (l == 2) return gen_0;
-  d = gel(x,2);
-  if (l == 3) return absi(d);
-  av = avma;
-  for (i=3; !is_pm1(d) && i<l; i++) d = gcdii(d, gel(x,i));
-  if (signe(d) < 0) d = negi(d);
+  if (n == 1) return gen_0;
+  d = gel(x,n); /* != 0 */
+  if (is_pm1(d)) return gen_1;
+  if (n == 2) return absi(d);
+  if (is_pm1(gel(x,2))) return gen_1;
+  for (n--; n>1; n--)
+  {
+    GEN z = gel(x,n);
+    if (signe(z))
+    {
+      d = gcdii(d, z); /* > 0 */
+      if (is_pm1(d)) return gc_const(av, gen_1);
+    }
+  }
+  if (signe(d) < 0) return absi(d); /* x = d*t^n */
   return gc_INT(av, d);
 }
 
