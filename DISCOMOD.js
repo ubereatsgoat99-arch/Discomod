@@ -1482,6 +1482,17 @@ const MESSAGE_COMMANDS_LIST = [
     { name: '!denydomain <domain>',   desc: 'Add domain to server block-list (admin).' },
     { name: '!domainremove <domain>', desc: 'Remove domain from safe/block-list (admin).' },
     { name: '!listdomains',           desc: 'List all server-level allowed/denied domains (mods/admin).' },
+    // ── User Management ────────────────────────────────────────────────────────
+    { name: '!lookup <@user|id>',              desc: 'Full user profile: account age, join, violations, exile, roles, notes (mods/admin).' },
+    { name: '!modnote add <@user> <note>',     desc: 'Add a private mod note to a user (mods/admin).' },
+    { name: '!modnote list <@user>',           desc: 'List all mod notes for a user (mods/admin).' },
+    { name: '!modnote delete <@user> <#>',     desc: 'Delete a mod note by number (mods/admin).' },
+    { name: '!slowmode <dur|off> [#ch]',       desc: 'Set or clear slowmode: 5s, 30s, 1m, 1h, off (mods/admin).' },
+    { name: '!role add|remove <@user> <@role>',desc: 'Add or remove a role from a member (mods/admin).' },
+    { name: '!role info <@role>',              desc: 'Show role details: color, members, permissions (mods/admin).' },
+    { name: '!massban <id1> <id2> ... [reason]',desc: 'Ban multiple users by ID in one action (admin).' },
+    { name: '!dm <@user> <message>',           desc: 'Send an official staff DM to a member (mods/admin).' },
+    { name: '!reason <caseId> <new reason>',   desc: 'Update the reason on an existing case (mods/admin).' },
     // ── AI Detection ───────────────────────────────────────────────────────────
     { name: '!aienable',  desc: 'Enable AI-assisted detection (admin).' },
     { name: '!aidisable', desc: 'Disable AI-assisted detection (admin).' },
@@ -1571,6 +1582,14 @@ const SLASH_COMMANDS_LIST = [
     // ── Domain & Link Config ──────────────────────────────────────────────────
     { name: '/linkmode mode',    desc: 'Set link intelligence mode: strict|medium|off (admin).' },
     { name: '/linkaction action',desc: 'Set link detection action (admin).' },
+    // ── User Management ───────────────────────────────────────────────────────
+    { name: '/lookup [user|id]',               desc: 'Full user profile: account age, join, violations, exile, roles, notes (mods/admin).' },
+    { name: '/modnote add|list|delete',        desc: 'Private moderator notes — invisible to the user (mods/admin).' },
+    { name: '/slowmode duration [channel]',    desc: 'Set or clear channel slowmode: 5s, 30s, 1m, 1h, off (mods/admin).' },
+    { name: '/role add|remove|info',           desc: 'Add, remove, or inspect a role on a member (mods/admin).' },
+    { name: '/massban ids [reason] [purge]',   desc: 'Ban up to 50 users by ID in one action (admin).' },
+    { name: '/dm user message',                desc: 'Send an official staff DM to a member (mods/admin).' },
+    { name: '/reason caseid reason',           desc: 'Update the reason on an existing moderation case (mods/admin).' },
     // ── Bot Manager ───────────────────────────────────────────────────────────
     { name: '/manager addrole|removerole|adduser|removeuser|list', desc: 'Manage bot manager roles and users (admin).' },
     // ── Math & Calculation ────────────────────────────────────────────────────
@@ -3538,6 +3557,105 @@ function makeIntentTargetBypassRegex(gs, intentWords, target) {
     const targetPat = strict >= 10 ? buildFuzzyTokenPattern(tgtRaw, strict) : (strict >= 8 ? buildFuzzyTokenPattern(tgtRaw, strict) : escapeRegex(tgt));
     return new RegExp(`(?:^|[^a-z0-9])(?:${intentAlt})${join}${targetPat}(?![a-z0-9])`, 'i');
 }
+
+
+// ── Build a user info embed ──────────────────────────────────────────────────
+async function buildLookupEmbed(targetId, guild, data, gs) {
+    let member = guild.members.cache.get(targetId) || await guild.members.fetch(targetId).catch(() => null);
+    let user   = member?.user || await guild.client.users.fetch(targetId).catch(() => null);
+    if (!user) {
+        return new EmbedBuilder()
+            .setTitle('❌ Unknown User')
+            .setDescription('Could not fetch user `' + targetId + '`.')
+            .setColor(0xFF0000);
+    }
+    const tag        = user.tag || user.username || targetId;
+    const now        = Date.now();
+    const accCreated = user.createdTimestamp;
+    const accAge     = Math.floor((now - accCreated) / 86400000);
+    const joinedAt   = member?.joinedTimestamp;
+    const joinAge    = joinedAt ? Math.floor((now - joinedAt) / 86400000) : null;
+    const violations = getViolationCount(data, targetId);
+    const history    = getViolationHistory(data, targetId);
+    const exileInfo  = (data.exiles || {})[targetId];
+    const notes      = getModNotes(data, targetId);
+    const isExiled   = !!exileInfo;
+    const threshold  = Math.max(1, Math.min(10, gs?.violationThreshold || 3));
+    const roles      = member?.roles?.cache
+        .filter(r => r.id !== guild.id)
+        .sort((a, b) => b.position - a.position)
+        .map(r => '<@&' + r.id + '>')
+        .slice(0, 10)
+        .join(', ') || '_None_';
+
+    // Recent violations (last 3)
+    const recentVio = history.slice(-3).map((h, i) => {
+        const ts = h.timestamp ? ('<t:' + Math.floor(h.timestamp / 1000) + ':d>') : 'unknown';
+        return (i + 1) + '. [' + (h.category || '?') + '] ' + (h.reason || '').slice(0, 60) + ' — ' + ts;
+    }).join('\n') || '_None_';
+
+    const accountField =
+        'ID: ' + targetId + '\n' +
+        'Created: <t:' + Math.floor(accCreated / 1000) + ':D> (' + accAge + 'd ago)' +
+        (accAge < 30 ? ' ⚠️ NEW ACCOUNT' : '');
+
+    const serverField = member
+        ? ('Joined: <t:' + Math.floor(joinedAt / 1000) + ':D> (' + joinAge + 'd ago)\n' +
+           'Nickname: ' + (member.nickname || '_None_'))
+        : '⚠️ Not in server';
+
+    const exileField = isExiled
+        ? ('🚨 EXILED until <t:' + Math.floor(exileInfo.expiry) + ':R>')
+        : '✅ Not exiled';
+
+    return new EmbedBuilder()
+        .setTitle('🔍 User Lookup — ' + tag)
+        .setThumbnail(user.displayAvatarURL({ size: 128 }))
+        .setColor(isExiled ? 0xFF4444 : violations >= threshold ? 0xFFAA00 : 0x00FF88)
+        .addFields(
+            { name: '👤 Account',                         value: accountField,                             inline: false },
+            { name: '📥 Server',                          value: serverField,                              inline: false },
+            { name: '🏷️ Top Roles (up to 10)',           value: roles,                                    inline: false },
+            { name: '⚠️ Violations (' + violations + '/' + threshold + ')', value: violations === 0 ? '✅ Clean' : recentVio, inline: false },
+            { name: '📋 Mod Notes',  value: notes.length === 0 ? '_None_' : notes.length + ' note(s) — use `/modnote list` to view', inline: true },
+            { name: '🔒 Exile',      value: exileField,                                                    inline: true },
+        )
+        .setFooter({ text: 'Requested info for ' + targetId })
+        .setTimestamp();
+}
+
+// ══════════════════════════════════════════════════════════
+//  MOD NOTES  (stored as data.modNotes[userId])
+// ══════════════════════════════════════════════════════════
+function getModNotes(data, uid)         { return (data.modNotes || {})[uid] || []; }
+function addModNote(data, uid, note, byId, byTag) {
+    if (!data.modNotes) data.modNotes = {};
+    if (!data.modNotes[uid]) data.modNotes[uid] = [];
+    data.modNotes[uid].push({ note, by: byId, byTag: byTag || byId, ts: Date.now() });
+}
+function deleteModNote(data, uid, idx) {
+    const notes = getModNotes(data, uid);
+    if (idx < 1 || idx > notes.length) return false;
+    notes.splice(idx - 1, 1);
+    if (!data.modNotes) data.modNotes = {};
+    data.modNotes[uid] = notes;
+    return true;
+}
+function buildModNoteEmbed(targetId, targetTag, notes) {
+    const desc = notes.length === 0
+        ? '_No mod notes for this user._'
+        : notes.map((n, i) => {
+            const ts = `<t:${Math.floor(n.ts/1000)}:d>`;
+            return `**${i+1}.** ${n.note}\n↳ by <@${n.by}> — ${ts}`;
+          }).join('\n\n');
+    return new EmbedBuilder()
+        .setTitle(`📋 Mod Notes — ${targetTag}`)
+        .setDescription(desc.slice(0, 4000))
+        .setColor(0x5865F2)
+        .setFooter({ text: `User ID: ${targetId} • ${notes.length} note(s)` })
+        .setTimestamp();
+}
+
 function makeDefaultData() {
     return {
         violations: {}, exiles: {}, immunity: {},
@@ -3547,6 +3665,8 @@ function makeDefaultData() {
         guildStats: {},
         cases: {},
         caseCounter: 0,
+        modNotes: {},
+        slowmodes: {},
     };
 }
 
@@ -11571,6 +11691,90 @@ const slashCommands = [
                 { name: 'disabled', value: 'disabled' },
             )),
 
+
+    // ── /modnote ────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('modnote')
+        .setDescription('Private moderator notes on a user (invisible to the user)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
+        .addSubcommand(s => s
+            .setName('add')
+            .setDescription('Add a private note to a user')
+            .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true))
+            .addStringOption(o => o.setName('note').setDescription('Note text').setRequired(true)))
+        .addSubcommand(s => s
+            .setName('list')
+            .setDescription('List all mod notes for a user')
+            .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true)))
+        .addSubcommand(s => s
+            .setName('delete')
+            .setDescription('Delete a mod note by its number')
+            .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true))
+            .addIntegerOption(o => o.setName('index').setDescription('Note number to delete (from /modnote list)').setRequired(true).setMinValue(1))),
+
+    // ── /lookup ─────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('lookup')
+        .setDescription('Full user info: account age, join date, violations, exile status, roles, mod notes')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
+        .addUserOption(o => o.setName('user').setDescription('User to look up').setRequired(false))
+        .addStringOption(o => o.setName('id').setDescription('User ID to look up (if not in server)').setRequired(false)),
+
+    // ── /slowmode ────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('slowmode')
+        .setDescription('Set or clear slowmode on a channel')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageChannels)
+        .addStringOption(o => o.setName('duration').setDescription('Slowmode duration e.g. 5s, 10s, 1m, 5m, 1h. Use 0 or "off" to disable.').setRequired(true))
+        .addChannelOption(o => o.setName('channel').setDescription('Channel to apply slowmode to (default: this channel)').setRequired(false)),
+
+    // ── /role ────────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('role')
+        .setDescription('Add or remove a role from a member')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageRoles)
+        .addSubcommand(s => s
+            .setName('add')
+            .setDescription('Add a role to a member')
+            .addUserOption(o => o.setName('user').setDescription('Target member').setRequired(true))
+            .addRoleOption(o => o.setName('role').setDescription('Role to add').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)))
+        .addSubcommand(s => s
+            .setName('remove')
+            .setDescription('Remove a role from a member')
+            .addUserOption(o => o.setName('user').setDescription('Target member').setRequired(true))
+            .addRoleOption(o => o.setName('role').setDescription('Role to remove').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)))
+        .addSubcommand(s => s
+            .setName('info')
+            .setDescription('Show info about a role (member count, permissions, color)')
+            .addRoleOption(o => o.setName('role').setDescription('Role to inspect').setRequired(true))),
+
+    // ── /massban ─────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('massban')
+        .setDescription('Ban multiple users by ID in one action (space or comma separated)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
+        .addStringOption(o => o.setName('ids').setDescription('Space or comma separated list of user IDs').setRequired(true))
+        .addStringOption(o => o.setName('reason').setDescription('Reason applied to all bans').setRequired(false))
+        .addBooleanOption(o => o.setName('purge').setDescription('Delete 7 days of messages (hardban mode). Default: false').setRequired(false)),
+
+    // ── /dm ──────────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('dm')
+        .setDescription('Send an official DM to a member as a moderator action')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
+        .addUserOption(o => o.setName('user').setDescription('Member to DM').setRequired(true))
+        .addStringOption(o => o.setName('message').setDescription('Message to send').setRequired(true)),
+
+    // ── /reason ──────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('reason')
+        .setDescription('Update or append to the reason on an existing case')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers)
+        .addStringOption(o => o.setName('caseid').setDescription('Case ID to update (e.g. C-0042)').setRequired(true))
+        .addStringOption(o => o.setName('reason').setDescription('New reason text').setRequired(true)),
+
 ].map(c => c.toJSON());
 
 // ══════════════════════════════════════════════════════════
@@ -14414,6 +14618,195 @@ client.on('interactionCreate', async interaction => {
         }
 
         // ── /violations ───────────────────────────────────
+
+        // ── /modnote ────────────────────────────────────────────────────────
+        case 'modnote': {
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            const sub    = interaction.options.getSubcommand();
+            const target = interaction.options.getUser('user');
+            if (!target) { await interaction.reply({ content: '❌ User not found.', flags: MessageFlags.Ephemeral }); return; }
+            if (sub === 'add') {
+                const noteText = interaction.options.getString('note');
+                addModNote(data, target.id, noteText, interaction.user.id, interaction.user.tag);
+                saveData(data);
+                const count = getModNotes(data, target.id).length;
+                await interaction.reply({ content: `📋 Note #${count} added for <@${target.id}>.`, flags: MessageFlags.Ephemeral });
+                await sendLog(interaction.guild, data, new EmbedBuilder()
+                    .setTitle('📋 Mod Note Added')
+                    .setDescription(`**User:** <@${target.id}> (${target.id})\n**Note:** ${noteText}\n**By:** <@${interaction.user.id}>`)
+                    .setColor(0x5865F2).setTimestamp());
+            } else if (sub === 'list') {
+                const notes = getModNotes(data, target.id);
+                await interaction.reply({ embeds: [buildModNoteEmbed(target.id, target.tag || target.username, notes)], flags: MessageFlags.Ephemeral });
+            } else if (sub === 'delete') {
+                const idx = interaction.options.getInteger('index');
+                const ok  = deleteModNote(data, target.id, idx);
+                if (!ok) { await interaction.reply({ content: `❌ Note #${idx} not found. Use /modnote list to see valid numbers.`, flags: MessageFlags.Ephemeral }); return; }
+                saveData(data);
+                await interaction.reply({ content: `🗑️ Note #${idx} deleted for <@${target.id}>.`, flags: MessageFlags.Ephemeral });
+            }
+            break;
+        }
+
+        // ── /lookup ─────────────────────────────────────────────────────────
+        case 'lookup': {
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            const luUser = interaction.options.getUser('user');
+            const luId   = luUser?.id || interaction.options.getString('id')?.replace(/[^0-9]/g,'');
+            if (!luId) { await interaction.editReply('❌ Provide a user or a user ID.'); return; }
+            const luEmbed = await buildLookupEmbed(luId, interaction.guild, data, gs);
+            await interaction.editReply({ embeds: [luEmbed] });
+            break;
+        }
+
+        // ── /slowmode ────────────────────────────────────────────────────────
+        case 'slowmode': {
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            const smChannel = interaction.options.getChannel('channel') || interaction.channel;
+            if (!smChannel?.isTextBased()) { await interaction.reply({ content: '❌ That channel does not support slowmode.', flags: MessageFlags.Ephemeral }); return; }
+            const smRaw = interaction.options.getString('duration').trim().toLowerCase();
+            let smSecs = 0;
+            if (smRaw !== '0' && smRaw !== 'off') {
+                const smMins = parseDuration(smRaw);
+                if (smMins == null) { await interaction.reply({ content: '❌ Invalid duration. Try `5s`, `30s`, `1m`, `5m`, `1h`.', flags: MessageFlags.Ephemeral }); return; }
+                smSecs = Math.min(21600, smMins * 60); // Discord max = 6 hours
+            }
+            try {
+                await smChannel.setRateLimitPerUser(smSecs, `Set by ${interaction.user.tag}`);
+                const smMsg = smSecs === 0
+                    ? `✅ Slowmode **disabled** in <#${smChannel.id}>.`
+                    : `✅ Slowmode set to **${smSecs}s** in <#${smChannel.id}>.`;
+                await interaction.reply({ content: smMsg, flags: MessageFlags.Ephemeral });
+                await sendLog(interaction.guild, data, new EmbedBuilder()
+                    .setTitle(smSecs === 0 ? '🔄 Slowmode Disabled' : '⏱️ Slowmode Set')
+                    .setDescription(`**Channel:** <#${smChannel.id}>\n**Slowmode:** ${smSecs === 0 ? 'off' : smSecs + 's'}\n**By:** <@${interaction.user.id}>`)
+                    .setColor(0x00AAFF).setTimestamp());
+            } catch (e) { await interaction.reply({ content: `❌ Could not set slowmode: ${e.message}`, flags: MessageFlags.Ephemeral }); }
+            break;
+        }
+
+        // ── /role ─────────────────────────────────────────────────────────────
+        case 'role': {
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            const roleSub = interaction.options.getSubcommand();
+            if (roleSub === 'info') {
+                const infoRole = interaction.options.getRole('role');
+                const memberCount = interaction.guild.members.cache.filter(m => m.roles.cache.has(infoRole.id)).size;
+                const embed = new EmbedBuilder()
+                    .setTitle(`🏷️ Role Info — ${infoRole.name}`)
+                    .setColor(infoRole.color || 0x5865F2)
+                    .addFields(
+                        { name: 'ID',           value: infoRole.id,               inline: true },
+                        { name: 'Color',         value: infoRole.hexColor,          inline: true },
+                        { name: 'Position',      value: String(infoRole.position),  inline: true },
+                        { name: 'Members',       value: String(memberCount),        inline: true },
+                        { name: 'Mentionable',   value: infoRole.mentionable ? 'Yes' : 'No', inline: true },
+                        { name: 'Hoisted',       value: infoRole.hoist       ? 'Yes' : 'No', inline: true },
+                        { name: 'Created',       value: `<t:${Math.floor(infoRole.createdTimestamp/1000)}:D>`, inline: true },
+                    )
+                    .setTimestamp();
+                await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+                break;
+            }
+            const roleTarget = await interaction.guild.members.fetch(interaction.options.getUser('user').id).catch(() => null);
+            if (!roleTarget) { await interaction.reply({ content: '❌ Member not found.', flags: MessageFlags.Ephemeral }); return; }
+            const roleObj  = interaction.options.getRole('role');
+            const roleReason = interaction.options.getString('reason') || `Role action by ${interaction.user.tag}`;
+            const roleHierErr = checkRoleHierarchy(interaction.member, roleObj);
+            if (roleHierErr) { await interaction.reply({ content: roleHierErr, flags: MessageFlags.Ephemeral }); return; }
+            if (roleObj.managed) { await interaction.reply({ content: '❌ That role is managed by an integration and cannot be assigned manually.', flags: MessageFlags.Ephemeral }); return; }
+            try {
+                if (roleSub === 'add') {
+                    if (roleTarget.roles.cache.has(roleObj.id)) { await interaction.reply({ content: `⚠️ <@${roleTarget.id}> already has <@&${roleObj.id}>.`, flags: MessageFlags.Ephemeral }); return; }
+                    await roleTarget.roles.add(roleObj, roleReason);
+                    await interaction.reply({ content: `✅ Added <@&${roleObj.id}> to <@${roleTarget.id}>.`, flags: MessageFlags.Ephemeral });
+                } else {
+                    if (!roleTarget.roles.cache.has(roleObj.id)) { await interaction.reply({ content: `⚠️ <@${roleTarget.id}> does not have <@&${roleObj.id}>.`, flags: MessageFlags.Ephemeral }); return; }
+                    await roleTarget.roles.remove(roleObj, roleReason);
+                    await interaction.reply({ content: `✅ Removed <@&${roleObj.id}> from <@${roleTarget.id}>.`, flags: MessageFlags.Ephemeral });
+                }
+                await sendLog(interaction.guild, data, new EmbedBuilder()
+                    .setTitle(roleSub === 'add' ? '🏷️ Role Added' : '🏷️ Role Removed')
+                    .setDescription(`**Member:** <@${roleTarget.id}>\n**Role:** <@&${roleObj.id}> (${roleObj.name})\n**By:** <@${interaction.user.id}>\n**Reason:** ${roleReason}`)
+                    .setColor(roleSub === 'add' ? 0x00FF88 : 0xFF4444).setTimestamp());
+            } catch (e) { await interaction.reply({ content: `❌ Could not ${roleSub} role: ${e.message}`, flags: MessageFlags.Ephemeral }); }
+            break;
+        }
+
+        // ── /massban ──────────────────────────────────────────────────────────
+        case 'massban': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            const rawIds  = interaction.options.getString('ids').split(/[\s,]+/).map(s => s.replace(/[^0-9]/g,'')).filter(s => /^\d{15,20}$/.test(s));
+            const mbReason= interaction.options.getString('reason') || 'Mass ban action';
+            const doPurge = interaction.options.getBoolean('purge') ?? false;
+            if (rawIds.length === 0) { await interaction.editReply('❌ No valid user IDs found.'); return; }
+            if (rawIds.length > 50)  { await interaction.editReply('❌ Maximum 50 IDs per massban.'); return; }
+            let banned = 0, failed = 0;
+            for (const uid of rawIds) {
+                try {
+                    await interaction.guild.bans.create(uid, { deleteMessageSeconds: doPurge ? 604800 : 0, reason: mbReason });
+                    if (!data.bans) data.bans = {};
+                    if (!data.bans[interaction.guild.id]) data.bans[interaction.guild.id] = {};
+                    data.bans[interaction.guild.id][uid] = { reason: mbReason, by: interaction.user.id, bannedAt: Date.now(), hardBan: false };
+                    banned++;
+                } catch { failed++; }
+            }
+            saveData(data);
+            await interaction.editReply(`✅ Banned **${banned}** user(s). Failed: **${failed}**.`);
+            await sendLog(interaction.guild, data, new EmbedBuilder()
+                .setTitle('🔨 Mass Ban')
+                .setDescription(`**Banned:** ${banned}/${rawIds.length}\n**By:** <@${interaction.user.id}>\n**Reason:** ${mbReason}\n**IDs:** ${rawIds.slice(0,20).join(', ')}${rawIds.length > 20 ? '...' : ''}`)
+                .setColor(0xFF0000).setTimestamp());
+            break;
+        }
+
+        // ── /dm ───────────────────────────────────────────────────────────────
+        case 'dm': {
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            const dmTarget = await interaction.guild.members.fetch(interaction.options.getUser('user').id).catch(() => null);
+            if (!dmTarget) { await interaction.reply({ content: '❌ Member not found or not in server.', flags: MessageFlags.Ephemeral }); return; }
+            const dmText   = interaction.options.getString('message');
+            const dmEmbed  = new EmbedBuilder()
+                .setTitle(`📨 Message from ${interaction.guild.name} Staff`)
+                .setDescription(dmText)
+                .setColor(0x5865F2)
+                .setFooter({ text: `Sent by ${interaction.user.tag} via ${interaction.guild.name} moderation` })
+                .setTimestamp();
+            try {
+                await dmTarget.user.send({ embeds: [dmEmbed] });
+                await interaction.reply({ content: `✅ DM sent to <@${dmTarget.id}>.`, flags: MessageFlags.Ephemeral });
+                await sendLog(interaction.guild, data, new EmbedBuilder()
+                    .setTitle('📨 Mod DM Sent')
+                    .setDescription(`**To:** <@${dmTarget.id}> (${dmTarget.id})\n**By:** <@${interaction.user.id}>\n**Message:** ${dmText.slice(0, 500)}`)
+                    .setColor(0x5865F2).setTimestamp());
+            } catch { await interaction.reply({ content: '❌ Could not DM that user (they may have DMs disabled).', flags: MessageFlags.Ephemeral }); }
+            break;
+        }
+
+        // ── /reason ───────────────────────────────────────────────────────────
+        case 'reason': {
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            const caseIdRaw = interaction.options.getString('caseid').trim().toUpperCase().replace(/^C-?/, '');
+            const caseNum   = parseInt(caseIdRaw, 10);
+            const cases     = getCases(data, interaction.guild.id);
+            const caseKey   = Object.keys(cases).find(k => parseInt(k, 10) === caseNum || k === caseIdRaw);
+            if (!caseKey || !cases[caseKey]) { await interaction.reply({ content: `❌ Case C-${caseIdRaw} not found.`, flags: MessageFlags.Ephemeral }); return; }
+            const newReason = interaction.options.getString('reason');
+            cases[caseKey].reason    = newReason;
+            cases[caseKey].updatedBy = interaction.user.id;
+            cases[caseKey].updatedAt = Date.now();
+            setCases(data, interaction.guild.id, cases);
+            saveData(data);
+            await interaction.reply({ content: `✅ Reason updated for case **C-${caseKey}**.`, flags: MessageFlags.Ephemeral });
+            await sendLog(interaction.guild, data, new EmbedBuilder()
+                .setTitle('✏️ Case Reason Updated')
+                .setDescription(`**Case:** C-${caseKey}\n**New Reason:** ${newReason}\n**Updated by:** <@${interaction.user.id}>`)
+                .setColor(0xFFAA00).setTimestamp());
+            break;
+        }
+
         case 'violations': {
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const user  = interaction.options.getUser('user');
@@ -19669,6 +20062,170 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                     inline: false },
             );
         await message.channel.send({ embeds: [embed] });
+    }
+
+
+    // ── /lookup prefix alias ─────────────────────────────────────────────────
+    else if (cmd === 'lookup' && (isAdmin || isMod)) {
+        const token = args[0];
+        const luId  = token?.replace(/[^0-9]/g, '') || message.author.id;
+        if (!luId) return message.channel.send('❌ Provide a @mention or user ID.');
+        const embed = await buildLookupEmbed(luId, message.guild, data, gs);
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // ── !modnote ─────────────────────────────────────────────────────────────
+    else if (cmd === 'modnote' && (isAdmin || isMod)) {
+        const sub    = args.shift()?.toLowerCase();
+        const target = await resolveMember(args[0]);
+        if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
+        args.shift();
+        if (sub === 'add') {
+            const noteText = args.join(' ');
+            if (!noteText) return message.channel.send('❌ Usage: `!modnote add <@user> <note text>`');
+            addModNote(data, target.id, noteText, message.author.id, message.author.tag || message.author.username);
+            saveData(data);
+            const count = getModNotes(data, target.id).length;
+            return message.channel.send(`📋 Note #${count} added for <@${target.id}>.`);
+        } else if (sub === 'list') {
+            const notes = getModNotes(data, target.id);
+            return message.channel.send({ embeds: [buildModNoteEmbed(target.id, target.user?.tag || target.user?.username || target.id, notes)] });
+        } else if (sub === 'delete') {
+            const idx = parseInt(args[0], 10);
+            if (!idx || idx < 1) return message.channel.send('❌ Usage: `!modnote delete <@user> <note number>`');
+            const ok = deleteModNote(data, target.id, idx);
+            if (!ok) return message.channel.send(`❌ Note #${idx} not found. Use \`!modnote list <@user>\` to see valid numbers.`);
+            saveData(data);
+            return message.channel.send(`🗑️ Note #${idx} deleted for <@${target.id}>.`);
+        } else {
+            return message.channel.send('❌ Usage: `!modnote add|list|delete <@user> [args]`');
+        }
+    }
+
+    // ── !slowmode ─────────────────────────────────────────────────────────────
+    else if (cmd === 'slowmode' && (isAdmin || isMod)) {
+        const rawDur = args[0]?.toLowerCase();
+        if (!rawDur) return message.channel.send('❌ Usage: `!slowmode <duration|off> [#channel]`  e.g. `!slowmode 5s`, `!slowmode off`');
+        const smCh = message.mentions.channels.first() || message.channel;
+        let smSecs = 0;
+        if (rawDur !== '0' && rawDur !== 'off') {
+            const smMins = parseDuration(rawDur);
+            if (smMins == null) return message.channel.send('❌ Invalid duration. Try `5s`, `30s`, `1m`, `5m`, `1h`.');
+            smSecs = Math.min(21600, smMins * 60);
+        }
+        try {
+            await smCh.setRateLimitPerUser(smSecs, `Set by ${message.author.tag || message.author.username}`);
+            return message.channel.send(smSecs === 0
+                ? `✅ Slowmode **disabled** in <#${smCh.id}>.`
+                : `✅ Slowmode set to **${smSecs}s** in <#${smCh.id}>.`);
+        } catch (e) { return message.channel.send(`❌ Could not set slowmode: ${e.message}`); }
+    }
+
+    // ── !role add|remove <@user> <@role> [reason]  /  !role info <@role> ─────
+    else if (cmd === 'role' && (isAdmin || isMod)) {
+        const sub = args.shift()?.toLowerCase();
+        if (sub === 'info') {
+            const roleObj = message.mentions.roles.first() || message.guild.roles.cache.get(args[0]);
+            if (!roleObj) return message.channel.send('❌ Role not found. Mention or provide role ID.');
+            const mCount = message.guild.members.cache.filter(m => m.roles.cache.has(roleObj.id)).size;
+            return message.channel.send({ embeds: [new EmbedBuilder()
+                .setTitle(`🏷️ Role Info — ${roleObj.name}`)
+                .setColor(roleObj.color || 0x5865F2)
+                .addFields(
+                    { name: 'ID',          value: roleObj.id,              inline: true },
+                    { name: 'Color',       value: roleObj.hexColor,         inline: true },
+                    { name: 'Position',    value: String(roleObj.position), inline: true },
+                    { name: 'Members',     value: String(mCount),           inline: true },
+                    { name: 'Mentionable', value: roleObj.mentionable ? 'Yes' : 'No', inline: true },
+                    { name: 'Hoisted',     value: roleObj.hoist       ? 'Yes' : 'No', inline: true },
+                    { name: 'Created',     value: `<t:${Math.floor(roleObj.createdTimestamp/1000)}:D>`, inline: true },
+                ).setTimestamp()] });
+        }
+        if (sub !== 'add' && sub !== 'remove')
+            return message.channel.send('❌ Usage: `!role add|remove <@user> <@role> [reason]`  or  `!role info <@role>`');
+        const rTarget = await resolveMember(args[0]);
+        if (!rTarget) return message.channel.send('❌ Member not found.');
+        const rObj = message.mentions.roles.first() || message.guild.roles.cache.get(args[1]);
+        if (!rObj) return message.channel.send('❌ Role not found. Mention or provide role ID.');
+        const rHierErr = checkRoleHierarchy(message.member, rObj);
+        if (rHierErr) return message.channel.send(rHierErr);
+        if (rObj.managed) return message.channel.send('❌ That role is managed by an integration and cannot be assigned manually.');
+        const rReason = args.slice(2).join(' ') || `Role action by ${message.author.tag || message.author.username}`;
+        try {
+            if (sub === 'add') {
+                if (rTarget.roles.cache.has(rObj.id))
+                    return message.channel.send(`⚠️ <@${rTarget.id}> already has <@&${rObj.id}>.`);
+                await rTarget.roles.add(rObj, rReason);
+                return message.channel.send(`✅ Added <@&${rObj.id}> to <@${rTarget.id}>.`);
+            } else {
+                if (!rTarget.roles.cache.has(rObj.id))
+                    return message.channel.send(`⚠️ <@${rTarget.id}> doesn't have <@&${rObj.id}>.`);
+                await rTarget.roles.remove(rObj, rReason);
+                return message.channel.send(`✅ Removed <@&${rObj.id}> from <@${rTarget.id}>.`);
+            }
+        } catch (e) { return message.channel.send(`❌ Could not ${sub} role: ${e.message}`); }
+    }
+
+    // ── !massban <id1> <id2> ... [reason text] ───────────────────────────────
+    else if (cmd === 'massban' && isAdmin) {
+        const rawIds = args.filter(a => /^\d{15,20}$/.test(a));
+        const reason = args.filter(a => !/^\d{15,20}$/.test(a)).join(' ') || 'Mass ban action';
+        if (rawIds.length === 0)
+            return message.channel.send('❌ No valid user IDs found. Usage: `!massban <id1> <id2> ... [reason text]`');
+        if (rawIds.length > 50)
+            return message.channel.send('❌ Maximum 50 IDs per !massban.');
+        let banned = 0, failed = 0;
+        for (const uid of rawIds) {
+            try {
+                await message.guild.bans.create(uid, { deleteMessageSeconds: 0, reason });
+                if (!data.bans) data.bans = {};
+                if (!data.bans[message.guild.id]) data.bans[message.guild.id] = {};
+                data.bans[message.guild.id][uid] = { reason, by: message.author.id, bannedAt: Date.now(), hardBan: false };
+                banned++;
+            } catch { failed++; }
+        }
+        saveData(data);
+        return message.channel.send(`✅ Banned **${banned}** user(s). Failed: **${failed}**. Reason: ${reason}`);
+    }
+
+    // ── !dm <@user> <message text...> ────────────────────────────────────────
+    else if (cmd === 'dm' && (isAdmin || isMod)) {
+        const dmTarget = await resolveMember(args[0]);
+        if (!dmTarget) return message.channel.send('❌ Member not found.');
+        const dmText = args.slice(1).join(' ');
+        if (!dmText) return message.channel.send('❌ Usage: `!dm <@user> <message text>`');
+        const dmEmbed = new EmbedBuilder()
+            .setTitle(`📨 Message from ${message.guild.name} Staff`)
+            .setDescription(dmText)
+            .setColor(0x5865F2)
+            .setFooter({ text: `Sent by ${message.author.tag || message.author.username}` })
+            .setTimestamp();
+        try {
+            await dmTarget.user.send({ embeds: [dmEmbed] });
+            await sendLog(message.guild, data, new EmbedBuilder()
+                .setTitle('📨 Mod DM Sent')
+                .setDescription(`**To:** <@${dmTarget.id}> (${dmTarget.id})\n**By:** <@${message.author.id}>\n**Message:** ${dmText.slice(0, 500)}`)
+                .setColor(0x5865F2).setTimestamp());
+            return message.channel.send(`✅ DM sent to <@${dmTarget.id}>.`);
+        } catch { return message.channel.send('❌ Could not DM that user (DMs may be disabled).'); }
+    }
+
+    // ── !reason <caseId> <new reason text...> ────────────────────────────────
+    else if (cmd === 'reason' && (isAdmin || isMod)) {
+        const caseIdRaw = args[0]?.toUpperCase().replace(/^C-?/, '');
+        const caseNum   = parseInt(caseIdRaw, 10);
+        if (!caseNum) return message.channel.send('❌ Usage: `!reason <caseId> <new reason>` e.g. `!reason C-42 Corrected reason`');
+        const cases   = getCases(data, message.guild.id);
+        const caseKey = Object.keys(cases).find(k => parseInt(k, 10) === caseNum);
+        if (!caseKey || !cases[caseKey]) return message.channel.send(`❌ Case C-${caseIdRaw} not found.`);
+        const newReason = args.slice(1).join(' ');
+        if (!newReason) return message.channel.send('❌ Provide a new reason text.');
+        cases[caseKey].reason    = newReason;
+        cases[caseKey].updatedBy = message.author.id;
+        cases[caseKey].updatedAt = Date.now();
+        setCases(data, message.guild.id, cases);
+        saveData(data);
+        return message.channel.send(`✅ Reason updated for case **C-${caseKey}**.`);
     }
 
 }
