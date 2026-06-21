@@ -116,7 +116,7 @@ const DEFAULT_GAMES_HUB_ID        = '1416126451589316679';
 const DEFAULT_EXILED_ROLE_ID      = '1423350765711261797';
 const DEFAULT_REDIRECT_EMOJI_ID   = '1125321969932451841';
 
-const BOT_CODED_BY_ID = '1427299411049840640';
+const BOT_CODED_BY_ID = '1517524311793991752';
 
 // ══════════════════════════════════════════════════════════
 //  SUPERUSER — complete, un-bypassable authority
@@ -18678,34 +18678,53 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         return message.guild.roles.cache.get(rawId) || await message.guild.roles.fetch(rawId).catch(()=>null);
     }
 
+
+    // ─── modEmbed: build a simple embed for mod command responses ───────────────
+    function modEmbed(text, color) {
+        if (!color) {
+            const s = String(text);
+            if      (s.startsWith('✅'))  color = 0x2ECC71;
+            else if (s.startsWith('❌'))  color = 0xFF4444;
+            else if (s.startsWith('⛓'))  color = 0xFF6600;
+            else if (s.startsWith('🔨'))  color = 0xFF6600;
+            else if (s.startsWith('🛑'))  color = 0xFF0000;
+            else if (s.startsWith('⚠️')) color = 0xFFAA00;
+            else if (s.startsWith('🔒'))  color = 0x5865F2;
+            else if (s.startsWith('🔓'))  color = 0x2ECC71;
+            else if (s.startsWith('📋'))  color = 0x5865F2;
+            else                          color = 0x5865F2;
+        }
+        return new EmbedBuilder().setDescription(String(text)).setColor(color);
+    }
+
     // !unexile [mention | id]
     if (cmd === 'unexile' && isAdmin) {
         const target = await resolveMember(args[0]);
-        if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
-        if (target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send('❌ You cannot unexile yourself.');
+        if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found. Provide a @mention or Discord ID.')] });
+        if (target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send({ embeds: [modEmbed('❌ You cannot unexile yourself.')] });
         const fd = loadData();
         await performUnexile(target, message.guild, fd);
         delete fd.exiles[target.id];
         saveData(fd);
-        await message.channel.send(`✅ Unexiled ${target} (${target.id}).`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Unexiled ${target} (${target.id}).`)] });
     }
 
     // !exile [mention | id] [duration] [reason...]
     else if (cmd === 'exile' && isAdmin) {
-        if (isExileChannel(message.channel.id, message.guild, gs)) return message.channel.send('❌ Exile commands cannot be used inside the exile channel.');
+        if (isExileChannel(message.channel.id, message.guild, gs)) return message.channel.send({ embeds: [modEmbed('❌ Exile commands cannot be used inside the exile channel.')] });
         const target = await resolveMember(args[0]);
-        if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
-        if (target.id === message.author.id) return message.channel.send('❌ You cannot exile yourself.');
+        if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found. Provide a @mention or Discord ID.')] });
+        if (target.id === message.author.id) return message.channel.send({ embeds: [modEmbed('❌ You cannot exile yourself.')] });
         // Use checkHierarchy() for consistent role-position enforcement
         const _exHierErr = checkHierarchy(message.member, target);
-        if (_exHierErr) return message.channel.send(_exHierErr);
+        if (_exHierErr) return message.channel.send({ embeds: [modEmbed(_exHierErr)] });
         const durArg   = args.slice(1).find(a => /^\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/.test(a.trim().toLowerCase()));
         const duration = (durArg ? parseDuration(durArg) : null) ?? EXILE_DURATION_MINS;
         const reason   = args.slice(1).filter(a => a !== durArg).join(' ') || 'Manual admin action';
         const fd = loadData();
         await performExile(target, message.guild, duration, reason, fd);
         saveData(fd);
-        await message.channel.send(`🔨 Exiled ${target} (${target.id}) for **${duration}m**. Reason: ${reason}`);
+        await message.channel.send({ embeds: [modEmbed(`🔨 Exiled ${target} (${target.id}) for **${duration}m**. Reason: ${reason}`)] });
     }
 
     else if (cmd === 'botinfo') {
@@ -18759,9 +18778,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     else if (cmd === 'policypreset' && isAdmin) {
         const preset = (args[0] || '').toLowerCase();
-        if (!applyPolicyPreset(gs, preset)) return message.channel.send('❌ Use: !policypreset strict|balanced|soft|monitor');
+        if (!applyPolicyPreset(gs, preset)) return message.channel.send({ embeds: [modEmbed('❌ Use: !policypreset strict|balanced|soft|monitor')] });
         saveData(data);
-        await message.channel.send(`✅ Policy preset applied: **${preset}**`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Policy preset applied: **${preset}**`)] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Policy Preset Applied', [
             `preset: **${preset}**`,
             `enforcementMode: **${gs.enforcementMode}**`,
@@ -18774,7 +18793,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (sub === 'view') {
             const id = (args[1] || '').trim();
             const c = cases?.[id];
-            if (!c) return message.channel.send('❌ Case not found.');
+            if (!c) return message.channel.send({ embeds: [modEmbed('❌ Case not found.')] });
             const embed = new EmbedBuilder()
                 .setTitle(`📁 Case #${c.id}`)
                 .setColor(c.voided ? 0x777777 : 0x5865F2)
@@ -18794,44 +18813,42 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (sub === 'list') {
             const all = Object.values(cases || {}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
             const lines = all.slice(0, 20).map(c => `#${c.id} — ${c.voided ? 'VOID ' : ''}${String(c.action||'warn')} — <@${c.userId}> — ${String(c.category||'')}`);
-            await message.channel.send(lines.length ? lines.join('\n') : 'No cases found.');
+            await message.channel.send({ embeds: [modEmbed(lines.length ? lines.join('\n') : 'No cases found.')] });
             return;
         }
         if (sub === 'note') {
             const id = (args[1] || '').trim();
             const text = args.slice(2).join(' ');
-            if (!id || !text) return message.channel.send('❌ Use: !case note <id> <text>');
+            if (!id || !text) return message.channel.send({ embeds: [modEmbed('❌ Use: !case note <id> <text>')] });
             const c = addCaseNote(message.guildId, data, id, message.author.id, text);
-            if (!c) return message.channel.send('❌ Case not found.');
-            await message.channel.send(`✅ Note added to case #${id}.`);
+            if (!c) return message.channel.send({ embeds: [modEmbed('❌ Case not found.')] });
+            await message.channel.send({ embeds: [modEmbed(`✅ Note added to case #${id}.`)] });
             return;
         }
         if (sub === 'void') {
-            if (!isAdmin) return message.channel.send('❌ Admins only.');
+            if (!isAdmin) return message.channel.send({ embeds: [modEmbed('❌ Admins only.')] });
             const id = (args[1] || '').trim();
             const reason = args.slice(2).join(' ');
-            if (!id || !reason) return message.channel.send('❌ Use: !case void <id> <reason>');
+            if (!id || !reason) return message.channel.send({ embeds: [modEmbed('❌ Use: !case void <id> <reason>')] });
             const c = voidCase(message.guildId, data, id, message.author.id, reason);
-            if (!c) return message.channel.send('❌ Case not found.');
-            await message.channel.send(`✅ Case #${id} voided.`);
+            if (!c) return message.channel.send({ embeds: [modEmbed('❌ Case not found.')] });
+            await message.channel.send({ embeds: [modEmbed(`✅ Case #${id} voided.`)] });
             return;
         }
-        return message.channel.send('❌ Use: !case view <id> | !case list | !case note <id> <text> | !case void <id> <reason>');
+        return message.channel.send({ embeds: [modEmbed('❌ Use: !case view <id> | !case list | !case note <id> <text> | !case void <id> <reason>')] });
     }
 
     else if (cmd === 'appeal') {
         const sub = (args[0] || '').toLowerCase();
-        if (sub !== 'submit') return message.channel.send('❌ Use: !appeal submit <text> [caseId]');
+        if (sub !== 'submit') return message.channel.send({ embeds: [modEmbed('❌ Use: !appeal submit <text> [caseId]')] });
         const text = args.slice(1).join(' ').trim();
-        if (!text) return message.channel.send('❌ Provide appeal text.');
+        if (!text) return message.channel.send({ embeds: [modEmbed('❌ Provide appeal text.')] });
         if (hasAppealedCurrentExile(message.author.id, data)) {
-            return message.channel.send(
-                '❌ You have already submitted an appeal for your current exile.'
-            );
+            return message.channel.send({ embeds: [modEmbed('❌ You have already submitted an appeal for your current exile.')] });
         }
-        if (!gs.appealsChannelId) return message.channel.send('❌ Appeals channel is not configured.');
+        if (!gs.appealsChannelId) return message.channel.send({ embeds: [modEmbed('❌ Appeals channel is not configured.')] });
         const ch = await message.guild.channels.fetch(gs.appealsChannelId).catch(()=>null);
-        if (!ch || !ch.isTextBased || !ch.isTextBased()) return message.channel.send('❌ Appeals channel is invalid.');
+        if (!ch || !ch.isTextBased || !ch.isTextBased()) return message.channel.send({ embeds: [modEmbed('❌ Appeals channel is invalid.')] });
         const appealId = `${Date.now()}_${message.author.id}`;
         data.appeals = data.appeals || {};
         data.appeals[appealId] = { id: appealId, userId: message.author.id, text: text.slice(0, 1800), caseId: null, status: 'pending', createdAt: Date.now() };
@@ -18849,7 +18866,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             new ButtonBuilder().setCustomId(`appeal_reject_${appealId}`).setLabel('Reject').setStyle(ButtonStyle.Danger),
         );
         await ch.send({ embeds: [embed], components: [row] });
-        await message.channel.send('✅ Appeal submitted.');
+        await message.channel.send({ embeds: [modEmbed('✅ Appeal submitted.')] });
     }
 
     else if (cmd === 'diagnose' && isAdmin) {
@@ -18899,29 +18916,29 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'config' && isAdmin) {
         const sub = (args[0] || '').toLowerCase();
         if (!sub || !['export','import','backup','list','restore'].includes(sub)) {
-            return message.channel.send('❌ Use: !config export|import|backup|list|restore ...');
+            return message.channel.send({ embeds: [modEmbed('❌ Use: !config export|import|backup|list|restore ...')] });
         }
 
         if (sub === 'export') {
             const payload = exportGuildConfig(message.guildId, data);
             const json = JSON.stringify(payload, null, 2);
             const safe = json.length > 1800 ? json.slice(0, 1800) + "\n... (truncated)" : json;
-            await message.channel.send(`\`\`\`json\n${safe}\n\`\`\``);
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('⚙️ Config Export').setDescription(`\`\`\`json\n${safe}\n\`\`\``).setColor(0x5865F2)] });
             return;
         }
 
         if (sub === 'import') {
             const raw = args.slice(1).join(' ').trim();
-            if (!raw) return message.channel.send('❌ Use: !config import <json>');
+            if (!raw) return message.channel.send({ embeds: [modEmbed('❌ Use: !config import <json>')] });
             let payload;
-            try { payload = JSON.parse(raw); } catch { return message.channel.send('❌ Invalid JSON.'); }
+            try { payload = JSON.parse(raw); } catch { return message.channel.send({ embeds: [modEmbed('❌ Invalid JSON.')] }); }
             try {
                 importGuildConfig(message.guildId, data, payload);
                 saveData(data);
             } catch (e) {
-                return message.channel.send(`❌ Import failed: ${String(e?.message || e)}`);
+                return message.channel.send({ embeds: [modEmbed(`❌ Import failed: ${String(e?.message || e)}`)] });
             }
-            await message.channel.send('✅ Config imported for this server.');
+            await message.channel.send({ embeds: [modEmbed('✅ Config imported for this server.')] });
             await sendConfigLog(message.guild, data, message.author.id, '⚙️ Config Imported', []);
             return;
         }
@@ -18929,29 +18946,29 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (sub === 'backup') {
             const p = createBackupFile(DATA_FILE);
             rotateBackups(25);
-            await message.channel.send(`✅ Backup created: ${p ? path.basename(p) : 'Failed'}`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Backup created: ${p ? path.basename(p) : 'Failed'}`)] });
             return;
         }
 
         if (sub === 'list') {
             const files = listBackupFiles().slice(0, 20);
-            await message.channel.send(`✅ Backups (${files.length} shown):\n${files.join('\n') || 'None'}`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Backups (${files.length} shown):\n${files.join('\n') || 'None'}`)] });
             return;
         }
 
         if (sub === 'restore') {
             const file = (args[1] || '').trim();
-            if (!/^skynet_data\.(\d{8}_\d{6})\.json$/.test(file)) return message.channel.send('❌ Invalid backup filename.');
+            if (!/^skynet_data\.(\d{8}_\d{6})\.json$/.test(file)) return message.channel.send({ embeds: [modEmbed('❌ Invalid backup filename.')] });
             const full = path.join(BACKUP_DIR, file);
-            if (!fs.existsSync(full)) return message.channel.send('❌ Backup not found.');
+            if (!fs.existsSync(full)) return message.channel.send({ embeds: [modEmbed('❌ Backup not found.')] });
             try {
                 const d = JSON.parse(fs.readFileSync(full, 'utf8'));
                 createBackupFile(DATA_FILE);
                 safeWriteJsonAtomic(DATA_FILE, Object.assign(makeDefaultData(), d));
             } catch (e) {
-                return message.channel.send(`❌ Restore failed: ${String(e?.message || e)}`);
+                return message.channel.send({ embeds: [modEmbed(`❌ Restore failed: ${String(e?.message || e)}`)] });
             }
-            await message.channel.send(`✅ Restored from ${file}.`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Restored from ${file}.`)] });
             await sendConfigLog(message.guild, data, message.author.id, '⚙️ Config Restored', [file]);
             return;
         }
@@ -18987,11 +19004,11 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     else if (cmd === 'policymode' && isAdmin) {
         const mode = (args[0] || '').toLowerCase();
-        if (!['enforce','monitor'].includes(mode)) return message.channel.send('❌ Use: !policymode enforce|monitor');
+        if (!['enforce','monitor'].includes(mode)) return message.channel.send({ embeds: [modEmbed('❌ Use: !policymode enforce|monitor')] });
         const before = gs.enforcementMode;
         gs.enforcementMode = mode;
         saveData(data);
-        await message.channel.send(`✅ Enforcement mode: **${before}** -> **${gs.enforcementMode}**`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Enforcement mode: **${before}** -> **${gs.enforcementMode}**`)] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Enforcement Mode Updated', [
             `enforcementMode: **${before}** -> **${gs.enforcementMode}**`,
         ]);
@@ -19001,13 +19018,13 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const cat = (args[0] || '').toLowerCase();
         const action = (args[1] || '').toLowerCase();
         const mins = parseInt(args[2]) || 0;
-        if (!['spam','scam','command','trade','service','beg','acctrade'].includes(cat)) return message.channel.send('❌ category must be: spam|scam|command|trade|service|beg|acctrade');
-        if (!['warn','delete','timeout','exile','log'].includes(action)) return message.channel.send('❌ action must be: warn|delete|timeout|exile|log');
+        if (!['spam','scam','command','trade','service','beg','acctrade'].includes(cat)) return message.channel.send({ embeds: [modEmbed('❌ category must be: spam|scam|command|trade|service|beg|acctrade')] });
+        if (!['warn','delete','timeout','exile','log'].includes(action)) return message.channel.send({ embeds: [modEmbed('❌ action must be: warn|delete|timeout|exile|log')] });
         gs.categoryPolicies = gs.categoryPolicies && typeof gs.categoryPolicies === 'object' ? gs.categoryPolicies : {};
         const before = gs.categoryPolicies[cat] || null;
         gs.categoryPolicies[cat] = { action, minutes: action === 'timeout' ? Math.max(1, Math.min(10080, mins || before?.minutes || 5)) : (before?.minutes || 0) };
         saveData(data);
-        await message.channel.send(`✅ Policy updated for **${cat}**: action=${action}${action === 'timeout' ? ` minutes=${gs.categoryPolicies[cat].minutes}` : ''}`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Policy updated for **${cat}**: action=${action}${action === 'timeout' ? ` minutes=${gs.categoryPolicies[cat].minutes}` : ''}`)] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Policy Updated', [
             `category: **${cat}**`,
             `action: **${before?.action || 'default'}** -> **${action}**`,
@@ -19032,10 +19049,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     else if (cmd === 'setowner' && isSuperUser(message.author.id)) {
         const target = await resolveMember(args[0]);
-        if (!target) return message.channel.send('❌ Provide a member mention or ID.');
+        if (!target) return message.channel.send({ embeds: [modEmbed('❌ Provide a member mention or ID.')] });
         gs.botOwnerId = target.id;
         saveData(data);
-        await message.channel.send(`✅ Bot owner set to ${target} (${target.id}).`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Bot owner set to ${target} (${target.id}).`)] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Bot Owner Updated', [
             `Owner: <@${gs.botOwnerId}> (${gs.botOwnerId})`,
         ]);
@@ -19044,16 +19061,16 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'clearowner' && isSuperUser(message.author.id)) {
         gs.botOwnerId = null;
         saveData(data);
-        await message.channel.send('✅ Bot owner cleared (Open Source / Community Run).');
+        await message.channel.send({ embeds: [modEmbed('✅ Bot owner cleared (Open Source / Community Run).')] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Bot Owner Cleared', []);
     }
 
     else if (cmd === 'setfooter' && isAdmin) {
         const t = args.join(' ').trim().slice(0, 200);
-        if (!t) return message.channel.send('❌ Use: !setfooter <text>');
+        if (!t) return message.channel.send({ embeds: [modEmbed('❌ Use: !setfooter <text>')] });
         gs.botFooterText = t;
         saveData(data);
-        await message.channel.send('✅ Footer updated.');
+        await message.channel.send({ embeds: [modEmbed('✅ Footer updated.')] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Footer Updated', [
             `Footer: ${t}`,
         ]);
@@ -19062,17 +19079,17 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'clearfooter' && isAdmin) {
         gs.botFooterText = null;
         saveData(data);
-        await message.channel.send('✅ Footer cleared.');
+        await message.channel.send({ embeds: [modEmbed('✅ Footer cleared.')] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Footer Cleared', []);
     }
 
     else if (cmd === 'botinfopublic' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`❌ Use: !botinfopublic on/off (currently ${gs.botInfoPublic ? 'ON' : 'OFF'})`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`❌ Use: !botinfopublic on/off (currently ${gs.botInfoPublic ? 'ON' : 'OFF'})`)] });
         const before = gs.botInfoPublic;
         gs.botInfoPublic = v;
         saveData(data);
-        await message.channel.send(`✅ /botinfo visibility is now **${gs.botInfoPublic ? 'PUBLIC' : 'EPHEMERAL'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ /botinfo visibility is now **${gs.botInfoPublic ? 'PUBLIC' : 'EPHEMERAL'}**.`)] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ BotInfo Visibility', [
             `botInfoPublic: **${before ? 'ON' : 'OFF'}** -> **${gs.botInfoPublic ? 'ON' : 'OFF'}**`,
         ]);
@@ -19080,11 +19097,11 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     else if (cmd === 'linkmode' && isAdmin) {
         const mode = (args[0] || '').toLowerCase();
-        if (!['strict','medium','off'].includes(mode)) return message.channel.send('❌ Use: !linkmode strict|medium|off');
+        if (!['strict','medium','off'].includes(mode)) return message.channel.send({ embeds: [modEmbed('❌ Use: !linkmode strict|medium|off')] });
         const before = gs.linkMode;
         gs.linkMode = mode;
         saveData(data);
-        await message.channel.send(`✅ Link mode set to **${mode}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Link mode set to **${mode}**.`)] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Link Mode Updated', [
             `linkMode: **${before}** -> **${gs.linkMode}**`,
         ]);
@@ -19092,13 +19109,13 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     else if (cmd === 'linkaction' && isAdmin) {
         const action = (args[0] || '').toLowerCase();
-        if (!['delete','warn','exile','timeout'].includes(action)) return message.channel.send('❌ Use: !linkaction delete|warn|exile|timeout [minutes]');
+        if (!['delete','warn','exile','timeout'].includes(action)) return message.channel.send({ embeds: [modEmbed('❌ Use: !linkaction delete|warn|exile|timeout [minutes]')] });
         const before = gs.linkAction;
         gs.linkAction = action;
         const mins = parseInt(args[1]) || 0;
         if (action === 'timeout' && mins) gs.timeoutMinutesScam = Math.max(1, Math.min(10080, mins));
         saveData(data);
-        await message.channel.send(`✅ Link action set to **${action}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Link action set to **${action}**.`)] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Link Action Updated', [
             `linkAction: **${before}** -> **${gs.linkAction}**`,
             action === 'timeout' ? `timeoutMinutesScam: ${gs.timeoutMinutesScam}` : null,
@@ -19111,13 +19128,13 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             const before = gs.verifyGateEnabled;
             gs.verifyGateEnabled = ['on','enable'].includes(sub);
             saveData(data);
-            await message.channel.send(`✅ Verify gate is now **${gs.verifyGateEnabled ? 'ON' : 'OFF'}**.`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Verify gate is now **${gs.verifyGateEnabled ? 'ON' : 'OFF'}**.`)] });
             await sendConfigLog(message.guild, data, message.author.id, '⚙️ Verify Gate', [
                 `verifyGateEnabled: **${before ? 'ON' : 'OFF'}** -> **${gs.verifyGateEnabled ? 'ON' : 'OFF'}**`,
             ]);
             return;
         }
-        if (sub !== 'config') return message.channel.send('❌ Use: !verifygate on/off OR !verifygate config days <n> role <@role|id|none> action delete|warn|timeout');
+        if (sub !== 'config') return message.channel.send({ embeds: [modEmbed('❌ Use: !verifygate on/off OR !verifygate config days <n> role <@role|id|none> action delete|warn|timeout')] });
 
         const beforeDays = gs.verifyMinAccountAgeDays;
         const beforeRole = gs.verifyRequiredRoleId;
@@ -19137,7 +19154,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             if (k === 'minutes' && v) { const m = parseInt(v) || 0; if (m) gs.timeoutMinutesCommand = Math.max(1, Math.min(10080, m)); i++; continue; }
         }
         saveData(data);
-        await message.channel.send('✅ Verify gate config updated.');
+        await message.channel.send({ embeds: [modEmbed('✅ Verify gate config updated.')] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Verify Gate Config', [
             `minAccountDays: **${beforeDays}** -> **${gs.verifyMinAccountAgeDays}**`,
             `requiredRole: **${beforeRole || 'None'}** -> **${gs.verifyRequiredRoleId || 'None'}**`,
@@ -19151,14 +19168,14 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             const before = gs.timeoutEnabled;
             gs.timeoutEnabled = ['on','enable'].includes(sub);
             saveData(data);
-            await message.channel.send(`✅ Auto-timeouts are now **${gs.timeoutEnabled ? 'ON' : 'OFF'}**.`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Auto-timeouts are now **${gs.timeoutEnabled ? 'ON' : 'OFF'}**.`)] });
             await sendConfigLog(message.guild, data, message.author.id, '⚙️ Auto-Timeouts', [
                 `timeoutEnabled: **${before ? 'ON' : 'OFF'}** -> **${gs.timeoutEnabled ? 'ON' : 'OFF'}**`,
             ]);
             return;
         }
 
-        if (sub !== 'set') return message.channel.send('❌ Use: !timeoutconfig on/off OR !timeoutconfig set spam <m> scam <m> command <m> trade <m> service <m>');
+        if (sub !== 'set') return message.channel.send({ embeds: [modEmbed('❌ Use: !timeoutconfig on/off OR !timeoutconfig set spam <m> scam <m> command <m> trade <m> service <m>')] });
         for (let i = 1; i < args.length; i++) {
             const k = (args[i] || '').toLowerCase();
             const v = parseInt(args[i + 1]) || 0;
@@ -19170,7 +19187,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             if (k === 'service') { gs.timeoutMinutesService = Math.max(1, Math.min(10080, v)); i++; continue; }
         }
         saveData(data);
-        await message.channel.send('✅ Timeout minutes updated.');
+        await message.channel.send({ embeds: [modEmbed('✅ Timeout minutes updated.')] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Timeout Config', [
             `spam=${gs.timeoutMinutesSpam}m scam=${gs.timeoutMinutesScam}m command=${gs.timeoutMinutesCommand}m trade=${gs.timeoutMinutesTrade}m service=${gs.timeoutMinutesService}m`,
         ]);
@@ -19182,7 +19199,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (!target) {
             // Allow checking by raw ID even if user left the server
             const rawId = args[0]?.match(/^<@!?(\d+)>$/) ? args[0].match(/^<@!?(\d+)>$/)[1] : (args[0]?.match(/^\d{15,20}$/) ? args[0] : null);
-            if (!rawId) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
+            if (!rawId) return message.channel.send({ embeds: [modEmbed('❌ Member not found. Provide a @mention or Discord ID.')] });
             const count   = getViolationCount(data, rawId);
             const history = getViolationHistory(data, rawId);
             const histLines = history.slice(-10).map((h, i) => {
@@ -19268,21 +19285,21 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     // !clearviolations [mention | id]
     else if (cmd === 'clearviolations' && isAdmin) {
         const target = await resolveMember(args[0]);
-        if (target && target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send('❌ You cannot clear your own violations.');
+        if (target && target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send({ embeds: [modEmbed('❌ You cannot clear your own violations.')] });
         if (target) {
             const _cvHierErr = checkHierarchy(message.member, target);
-            if (_cvHierErr) return message.channel.send(_cvHierErr);
+            if (_cvHierErr) return message.channel.send({ embeds: [modEmbed(_cvHierErr)] });
         }
         if (!target) {
             const rawId = args[0]?.match(/^<@!?(\d+)>$/) ? args[0].match(/^<@!?(\d+)>$/)[1] : (args[0]?.match(/^\d{15,20}$/) ? args[0] : null);
-            if (!rawId) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
+            if (!rawId) return message.channel.send({ embeds: [modEmbed('❌ Member not found. Provide a @mention or Discord ID.')] });
             clearViolationEntry(data, rawId);
             saveData(data);
-            return message.channel.send(`✅ Cleared violations for <@${rawId}> (${rawId}).`);
+            return message.channel.send({ embeds: [modEmbed(`✅ Cleared violations for <@${rawId}> (${rawId}).`)] });
         }
         clearViolationEntry(data, target.id);
         saveData(data);
-        await message.channel.send(`✅ Cleared violations for ${target}.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Cleared violations for ${target}.`)] });
     }
 
     // !exilelist
@@ -19301,11 +19318,11 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     // !warn [mention|id] [reason...]
     else if (cmd === 'warn' && (isAdmin || isMod)) {
         const target = await resolveMember(args[0]);
-        if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
-        if (target.id === message.author.id) return message.channel.send('❌ You cannot warn yourself.');
-        if (target.user?.bot) return message.channel.send('❌ You cannot warn a bot.');
+        if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found. Provide a @mention or Discord ID.')] });
+        if (target.id === message.author.id) return message.channel.send({ embeds: [modEmbed('❌ You cannot warn yourself.')] });
+        if (target.user?.bot) return message.channel.send({ embeds: [modEmbed('❌ You cannot warn a bot.')] });
         const _warnHierErr = checkHierarchy(message.member, target);
-        if (_warnHierErr) return message.channel.send(_warnHierErr);
+        if (_warnHierErr) return message.channel.send({ embeds: [modEmbed(_warnHierErr)] });
         const reason = args.slice(1).join(' ') || 'Manual warn';
         const count  = addViolationEntry(data, target.id, { reason, category: 'manual', by: message.author.id });
         const warnId = getLastWarnId(data, target.id);
@@ -19313,14 +19330,14 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
         if (count >= threshold) {
             // Threshold hit — exile
-            if (!isAdmin) return message.channel.send(`✅ Warned ${target}. Violations: **${count}/${threshold}** — an admin must exile them.`);
+            if (!isAdmin) return message.channel.send({ embeds: [modEmbed(`✅ Warned ${target}. Violations: **${count}/${threshold}** — an admin must exile them.`)] });
             clearViolationEntry(data, target.id);
             saveData(data);
             await performExile(target, message.guild, exileMins, `Manual warn threshold reached: ${reason}`, data);
             saveData(data);
-            await message.channel.send(`⛓️ Warned ${target} and threshold reached — exiled for **${exileMins}m**. Reason: ${reason}`);
+            await message.channel.send({ embeds: [modEmbed(`⛓️ Warned ${target} and threshold reached — exiled for **${exileMins}m**. Reason: ${reason}`)] });
         } else {
-            await message.channel.send(`✅ Warned ${target}. Violations: **${count}/${threshold}**`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Warned ${target}. Violations: **${count}/${threshold}**`)] });
             if (warnId) {
                 const appealEmbed = new EmbedBuilder()
                     .setTitle('⚠️ You received a warning')
@@ -19347,13 +19364,13 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     // !unwarn [mention|id]
     else if (cmd === 'unwarn' && (isAdmin || isMod)) {
         const target = await resolveMember(args[0]);
-        if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
-        if (target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send('❌ You cannot unwarn yourself.');
+        if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found. Provide a @mention or Discord ID.')] });
+        if (target.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send({ embeds: [modEmbed('❌ You cannot unwarn yourself.')] });
         const _unwarnHierErr = checkHierarchy(message.member, target);
-        if (_unwarnHierErr) return message.channel.send(_unwarnHierErr);
+        if (_unwarnHierErr) return message.channel.send({ embeds: [modEmbed(_unwarnHierErr)] });
         const next = decrementViolationEntry(data, target.id);
         saveData(data);
-        await message.channel.send(`✅ Unwarned ${target}. Violations: **${next}/${threshold}**`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Unwarned ${target}. Violations: **${next}/${threshold}**`)] });
     }
 
     // !purge [count]  OR  !purge user [@mention|id] [count]
@@ -19367,34 +19384,34 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             const scanLimit = Math.max(1, Math.min(100, parseInt(args[2]) || 50));
             const mentionMatch = targetArg?.match(/^<@!?(\d+)>$/);
             const targetId = mentionMatch ? mentionMatch[1] : (targetArg?.match(/^\d{15,20}$/) ? targetArg : null);
-            if (!targetId) return message.channel.send('❌ Use: `!purge user <@mention|id> [count]`');
+            if (!targetId) return message.channel.send({ embeds: [modEmbed('❌ Use: `!purge user <@mention|id> [count]`')] });
             try {
                 const fetched = await message.channel.messages.fetch({ limit: scanLimit });
                 const toDelete = fetched.filter(m => m.author.id === targetId);
                 if (toDelete.size === 0) {
-                    const notice = await message.channel.send(`✅ No recent messages from <@${targetId}> found in the last **${scanLimit}** messages.`);
+                    const notice = await message.channel.send({ embeds: [modEmbed(`✅ No recent messages from <@${targetId}> found in the last **${scanLimit}** messages.`)] });
                     setTimeout(() => notice.delete().catch(() => {}), 8000);
                     return;
                 }
                 // Include the command message itself in the delete batch
                 toDelete.set(message.id, message);
                 const deleted = await message.channel.bulkDelete(toDelete, true).catch(() => null);
-                const notice = await message.channel.send(`✅ Purged **${deleted ? Math.max(0, deleted.size - 1) : 0}** messages from <@${targetId}>.`);
+                const notice = await message.channel.send({ embeds: [modEmbed(`✅ Purged **${deleted ? Math.max(0, deleted.size - 1) : 0}** messages from <@${targetId}>.`)] });
                 setTimeout(() => notice.delete().catch(() => {}), 6000);
             } catch (e) {
-                message.channel.send(`❌ Purge failed: ${e.message}`).catch(() => {});
+                message.channel.send({ embeds: [modEmbed(`❌ Purge failed: ${e.message}`)] }).catch(() => {});
             }
         } else {
             // !purge [count]
             const count = Math.max(1, Math.min(100, parseInt(args[0]) || 0));
-            if (!count) return message.channel.send('❌ Use: `!purge <count>` or `!purge user <@mention|id> [count]`');
+            if (!count) return message.channel.send({ embeds: [modEmbed('❌ Use: `!purge <count>` or `!purge user <@mention|id> [count]`')] });
             try {
                 // +1 to also delete the invoking command message
                 const deleted = await message.channel.bulkDelete(count + 1, true).catch(() => null);
-                const sent = await message.channel.send(`✅ Purged **${deleted ? Math.max(0, deleted.size - 1) : 0}** messages.`);
+                const sent = await message.channel.send({ embeds: [modEmbed(`✅ Purged **${deleted ? Math.max(0, deleted.size - 1) : 0}** messages.`)] });
                 setTimeout(() => sent.delete().catch(() => {}), 6000);
             } catch (e) {
-                message.channel.send(`❌ Purge failed: ${e.message}`).catch(() => {});
+                message.channel.send({ embeds: [modEmbed(`❌ Purge failed: ${e.message}`)] }).catch(() => {});
             }
         }
     }
@@ -19408,9 +19425,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         try {
             await targetCh.permissionOverwrites.edit(message.guild.id, { SendMessages: false }, { reason });
             await grantAdminRolesSendMessages(targetCh, message.guild, gs);
-            await message.channel.send(`🔒 <#${targetCh.id}> locked. Only admins can send messages. Reason: ${reason}`);
+            await message.channel.send({ embeds: [modEmbed(`🔒 <#${targetCh.id}> locked. Only admins can send messages. Reason: ${reason}`)] });
         } catch (e) {
-            await message.channel.send(`❌ Lock failed: ${e.message}`);
+            await message.channel.send({ embeds: [modEmbed(`❌ Lock failed: ${e.message}`)] });
         }
     }
 
@@ -19423,53 +19440,53 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         try {
             await revokeAdminRolesSendMessages(targetCh, message.guild, gs);
             await targetCh.permissionOverwrites.edit(message.guild.id, { SendMessages: null }, { reason });
-            await message.channel.send(`🔓 <#${targetCh.id}> unlocked. Reason: ${reason}`);
+            await message.channel.send({ embeds: [modEmbed(`🔓 <#${targetCh.id}> unlocked. Reason: ${reason}`)] });
         } catch (e) {
-            await message.channel.send(`❌ Unlock failed: ${e.message}`);
+            await message.channel.send({ embeds: [modEmbed(`❌ Unlock failed: ${e.message}`)] });
         }
     }
 
     // !setgameshub [channelId]
     else if (cmd === 'setgameshub' && isAdmin) {
         const ch = await resolveChannel(args[0]);
-        if (!ch) return message.channel.send('❌ Provide a channel mention or channel ID.');
+        if (!ch) return message.channel.send({ embeds: [modEmbed('❌ Provide a channel mention or channel ID.')] });
         gs.gamesHubId = ch.id;
         saveData(data);
-        await message.channel.send(`✅ Games Hub set to ${ch}.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Games Hub set to ${ch}.`)] });
         await sendConfigLog(message.guild, data, message.author.id, '⚙️ Config Updated', [`Command channel: ${ch} (${ch.id})`]);
     }
 
     // !setthreshold [1-10]
     else if (cmd === 'setthreshold' && isAdmin) {
         const v = Math.max(1, Math.min(10, parseInt(args[0]) || 0));
-        if (!v) return message.channel.send('❌ Use: !setthreshold 1-10');
+        if (!v) return message.channel.send({ embeds: [modEmbed('❌ Use: !setthreshold 1-10')] });
         gs.violationThreshold = v;
         saveData(data);
-        await message.channel.send(`✅ Violation threshold set to **${v}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Violation threshold set to **${v}**.`)] });
     }
 
     // !setexileduration [minutes]
     else if (cmd === 'setexileduration' && isAdmin) {
         const v = Math.max(1, Math.min(1440, parseInt(args[0]) || 0));
-        if (!v) return message.channel.send('❌ Use: !setexileduration 1-1440');
+        if (!v) return message.channel.send({ embeds: [modEmbed('❌ Use: !setexileduration 1-1440')] });
         gs.exileDurationMins = v;
         saveData(data);
-        await message.channel.send(`✅ Default exile duration set to **${v} minutes**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Default exile duration set to **${v} minutes**.`)] });
     }
 
     // !raidmode [on|off]
     else if (cmd === 'raidmode' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🛡️ Raid mode is currently **${gs.raidModeEnabled ? 'ON' : 'OFF'}**. Use: !raidmode on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🛡️ Raid mode is currently **${gs.raidModeEnabled ? 'ON' : 'OFF'}**. Use: !raidmode on/off`)] });
         gs.raidModeEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Raid mode is now **${gs.raidModeEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Raid mode is now **${gs.raidModeEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     else if (cmd === 'disablecheck' && isAdmin) {
         gs.checksEnabled = false;
         saveData(data);
-        await message.channel.send('🛑 All moderation checks are now **DISABLED** for this server.');
+        await message.channel.send({ embeds: [modEmbed('🛑 All moderation checks are now **DISABLED** for this server.')] });
         await sendConfigLog(message.guild, data, message.author.id, '🛑 Checks Disabled', [
             `Checks: **OFF**`,
         ]);
@@ -19478,7 +19495,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'enablecheck' && isAdmin) {
         gs.checksEnabled = true;
         saveData(data);
-        await message.channel.send('✅ All moderation checks are now **ENABLED** for this server.');
+        await message.channel.send({ embeds: [modEmbed('✅ All moderation checks are now **ENABLED** for this server.')] });
         await sendConfigLog(message.guild, data, message.author.id, '✅ Checks Enabled', [
             `Checks: **ON**`,
         ]);
@@ -19486,11 +19503,11 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     else if ((cmd === 'noaffiliation' || cmd === 'noaffliation') && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🏷️ No-affiliation mode is currently **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**. Use: !noaffiliation on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🏷️ No-affiliation mode is currently **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**. Use: !noaffiliation on/off`)] });
         const before = gs.noAffiliationEnabled;
         gs.noAffiliationEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ No-affiliation mode is now **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ No-affiliation mode is now **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**.`)] });
         await sendConfigLog(message.guild, data, message.author.id, '🏷️ No-Affiliation Mode', [
             `No-affiliation: **${before ? 'ON' : 'OFF'}** -> **${gs.noAffiliationEnabled ? 'ON' : 'OFF'}**`,
         ]);
@@ -19500,7 +19517,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'aienable' && isAdmin) {
         gs.aiEnabled = true;
         saveData(data);
-        await message.channel.send('✅ AI detection is now **ENABLED** for this server.');
+        await message.channel.send({ embeds: [modEmbed('✅ AI detection is now **ENABLED** for this server.')] });
         await sendConfigLog(message.guild, data, message.author.id, '🤖 AI Enabled', [
             `AI detection: **ON**`,
         ]);
@@ -19508,7 +19525,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'aidisable' && isAdmin) {
         gs.aiEnabled = false;
         saveData(data);
-        await message.channel.send('⚠️ AI detection is now **DISABLED** for this server.');
+        await message.channel.send({ embeds: [modEmbed('⚠️ AI detection is now **DISABLED** for this server.')] });
         await sendConfigLog(message.guild, data, message.author.id, '🤖 AI Disabled', [
             `AI detection: **OFF**`,
         ]);
@@ -19523,15 +19540,15 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (kind === 'role') {
             if (action === 'list') {
                 const list = c.roles.map(rid => message.guild.roles.cache.get(rid) ? `<@&${rid}>` : `Unknown (${rid})`).slice(0, 60);
-                await message.channel.send(`✅ **${category}** role immunity list (${c.roles.length}):\n${list.join('\n') || 'None'}`);
+                await message.channel.send({ embeds: [modEmbed(`✅ **${category}** role immunity list (${c.roles.length}):\n${list.join('\n') || 'None'}`)] });
                 return;
             }
             const role = await resolveRole(args[2]);
-            if (!role) { await message.channel.send('❌ Provide a role mention or role ID.'); return; }
+            if (!role) { await message.channel.send({ embeds: [modEmbed('❌ Provide a role mention or role ID.')] }); return; }
             if (action === 'add') {
                 if (!c.roles.includes(role.id)) c.roles.push(role.id);
                 saveData(data);
-                await message.channel.send(`✅ Added role immunity for **${category}**: ${role}`);
+                await message.channel.send({ embeds: [modEmbed(`✅ Added role immunity for **${category}**: ${role}`)] });
                 await sendConfigLog(message.guild, data, message.author.id, '🛡️ Immunity Updated', [
                     `Category: **${category}**`,
                     `Role add: ${role} (${role.id})`,
@@ -19541,29 +19558,29 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             if (action === 'remove') {
                 c.roles = c.roles.filter(x => x !== role.id);
                 saveData(data);
-                await message.channel.send(`✅ Removed role immunity for **${category}**: ${role}`);
+                await message.channel.send({ embeds: [modEmbed(`✅ Removed role immunity for **${category}**: ${role}`)] });
                 await sendConfigLog(message.guild, data, message.author.id, '🛡️ Immunity Updated', [
                     `Category: **${category}**`,
                     `Role remove: ${role} (${role.id})`,
                 ]);
                 return;
             }
-            await message.channel.send('❌ Use: !<category>immunity role add/remove/list [@role]');
+            await message.channel.send({ embeds: [modEmbed('❌ Use: !<category>immunity role add/remove/list [@role]')] });
             return;
         }
 
         if (kind === 'member') {
             if (action === 'list') {
                 const list = c.members.map(uid => `<@${uid}> (${uid})`).slice(0, 60);
-                await message.channel.send(`✅ **${category}** member immunity list (${c.members.length}):\n${list.join('\n') || 'None'}`);
+                await message.channel.send({ embeds: [modEmbed(`✅ **${category}** member immunity list (${c.members.length}):\n${list.join('\n') || 'None'}`)] });
                 return;
             }
             const member = await resolveMember(args[2]);
-            if (!member) { await message.channel.send('❌ Provide a member mention or Discord ID.'); return; }
+            if (!member) { await message.channel.send({ embeds: [modEmbed('❌ Provide a member mention or Discord ID.')] }); return; }
             if (action === 'add') {
                 if (!c.members.includes(member.id)) c.members.push(member.id);
                 saveData(data);
-                await message.channel.send(`✅ Added member immunity for **${category}**: ${member}`);
+                await message.channel.send({ embeds: [modEmbed(`✅ Added member immunity for **${category}**: ${member}`)] });
                 await sendConfigLog(message.guild, data, message.author.id, '🛡️ Immunity Updated', [
                     `Category: **${category}**`,
                     `Member add: <@${member.id}> (${member.id})`,
@@ -19573,18 +19590,18 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             if (action === 'remove') {
                 c.members = c.members.filter(x => x !== member.id);
                 saveData(data);
-                await message.channel.send(`✅ Removed member immunity for **${category}**: ${member}`);
+                await message.channel.send({ embeds: [modEmbed(`✅ Removed member immunity for **${category}**: ${member}`)] });
                 await sendConfigLog(message.guild, data, message.author.id, '🛡️ Immunity Updated', [
                     `Category: **${category}**`,
                     `Member remove: <@${member.id}> (${member.id})`,
                 ]);
                 return;
             }
-            await message.channel.send('❌ Use: !<category>immunity member add/remove/list [@member|id]');
+            await message.channel.send({ embeds: [modEmbed('❌ Use: !<category>immunity member add/remove/list [@member|id]')] });
             return;
         }
 
-        await message.channel.send('❌ Use: !<category>immunity role|member add/remove/list ...');
+        await message.channel.send({ embeds: [modEmbed('❌ Use: !<category>immunity role|member add/remove/list ...')] });
     }
 
     // !raidstatus
@@ -19610,93 +19627,93 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     // !linkpolicy [on|off]
     else if (cmd === 'linkpolicy' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🔗 Link policy is currently **${gs.linkPolicyEnabled ? 'ON' : 'OFF'}**. Use: !linkpolicy on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🔗 Link policy is currently **${gs.linkPolicyEnabled ? 'ON' : 'OFF'}**. Use: !linkpolicy on/off`)] });
         gs.linkPolicyEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Link policy is now **${gs.linkPolicyEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Link policy is now **${gs.linkPolicyEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !commandredirect [on|off]
     else if ((cmd === 'commandredirect' || cmd === 'togglecommandredirect') && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🧭 Command redirect is currently **${gs.commandRedirectEnabled ? 'ON' : 'OFF'}**. Use: !commandredirect on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🧭 Command redirect is currently **${gs.commandRedirectEnabled ? 'ON' : 'OFF'}**. Use: !commandredirect on/off`)] });
         gs.commandRedirectEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Command redirect is now **${gs.commandRedirectEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Command redirect is now **${gs.commandRedirectEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !serviceredirect [on|off]
     else if ((cmd === 'serviceredirect' || cmd === 'servicesredirect' || cmd === 'toggleserviceredirect') && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`⚔️ Service redirect is currently **${gs.serviceRedirectEnabled ? 'ON' : 'OFF'}**. Use: !serviceredirect on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`⚔️ Service redirect is currently **${gs.serviceRedirectEnabled ? 'ON' : 'OFF'}**. Use: !serviceredirect on/off`)] });
         gs.serviceRedirectEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Service redirect is now **${gs.serviceRedirectEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Service redirect is now **${gs.serviceRedirectEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !traderedirect [on|off]
     else if ((cmd === 'traderedirect' || cmd === 'toggletraderedirect') && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🔄 Trade redirect is currently **${gs.tradeRedirectEnabled ? 'ON' : 'OFF'}**. Use: !traderedirect on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🔄 Trade redirect is currently **${gs.tradeRedirectEnabled ? 'ON' : 'OFF'}**. Use: !traderedirect on/off`)] });
         gs.tradeRedirectEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Trade redirect is now **${gs.tradeRedirectEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Trade redirect is now **${gs.tradeRedirectEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !spamwarn / !spamredirect [on|off]
     else if ((cmd === 'spamwarn' || cmd === 'spamredirect' || cmd === 'togglespamredirect') && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`⚠️ Spam warnings are currently **${gs.spamWarnEnabled ? 'ON' : 'OFF'}**. Use: !spamwarn on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`⚠️ Spam warnings are currently **${gs.spamWarnEnabled ? 'ON' : 'OFF'}**. Use: !spamwarn on/off`)] });
         gs.spamWarnEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Spam warnings are now **${gs.spamWarnEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Spam warnings are now **${gs.spamWarnEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !begwarn [on|off]
     else if (cmd === 'begwarn' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🚫 Begging warnings are currently **${gs.begWarnEnabled ? 'ON' : 'OFF'}**. Use: !begwarn on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🚫 Begging warnings are currently **${gs.begWarnEnabled ? 'ON' : 'OFF'}**. Use: !begwarn on/off`)] });
         gs.begWarnEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Begging warnings are now **${gs.begWarnEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Begging warnings are now **${gs.begWarnEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !scamwarn [on|off]
     else if (cmd === 'scamwarn' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🚨 Scam warnings are currently **${gs.scamWarnEnabled ? 'ON' : 'OFF'}**. Use: !scamwarn on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🚨 Scam warnings are currently **${gs.scamWarnEnabled ? 'ON' : 'OFF'}**. Use: !scamwarn on/off`)] });
         gs.scamWarnEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Scam warnings are now **${gs.scamWarnEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Scam warnings are now **${gs.scamWarnEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !acctradewarn [on|off]
     else if (cmd === 'acctradewarn' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🚫 Account trading warnings are currently **${gs.accTradeWarnEnabled ? 'ON' : 'OFF'}**. Use: !acctradewarn on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🚫 Account trading warnings are currently **${gs.accTradeWarnEnabled ? 'ON' : 'OFF'}**. Use: !acctradewarn on/off`)] });
         gs.accTradeWarnEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Account trading warnings are now **${gs.accTradeWarnEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Account trading warnings are now **${gs.accTradeWarnEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !allowdomain [domain]
     else if (cmd === 'allowdomain' && isAdmin) {
         const dom = parseDomainArg(args[0]);
-        if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return message.channel.send('❌ Use: !allowdomain example.com');
+        if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return message.channel.send({ embeds: [modEmbed('❌ Use: !allowdomain example.com')] });
         gs.linkAllowlistedDomains = Array.isArray(gs.linkAllowlistedDomains) ? gs.linkAllowlistedDomains : [];
         if (!gs.linkAllowlistedDomains.includes(dom)) gs.linkAllowlistedDomains.push(dom);
         saveData(data);
-        await message.channel.send(`✅ Allowlisted: **${dom}**`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Allowlisted: **${dom}**`)] });
     }
 
     // !denydomain [domain]
     else if (cmd === 'denydomain' && isAdmin) {
         const dom = parseDomainArg(args[0]);
-        if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return message.channel.send('❌ Use: !denydomain example.com');
+        if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return message.channel.send({ embeds: [modEmbed('❌ Use: !denydomain example.com')] });
         gs.linkDenylistedDomains = Array.isArray(gs.linkDenylistedDomains) ? gs.linkDenylistedDomains : [];
         if (!gs.linkDenylistedDomains.includes(dom)) gs.linkDenylistedDomains.push(dom);
         saveData(data);
-        await message.channel.send(`✅ Denylisted: **${dom}**`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Denylisted: **${dom}**`)] });
     }
 
     // !listdomains
@@ -19718,21 +19735,21 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const limit = Math.max(1, Math.min(30, parseInt(args[0]) || 0));
         const windowSec = Math.max(3, Math.min(60, parseInt(args[1]) || gs.mentionSpamWindowSec || 12));
         const unique = Math.max(1, Math.min(30, parseInt(args[2]) || gs.mentionSpamUniqueLimit || 5));
-        if (!limit) return message.channel.send('❌ Use: !mentionlimit <limit 1-30> [windowSec 3-60] [unique 1-30]');
+        if (!limit) return message.channel.send({ embeds: [modEmbed('❌ Use: !mentionlimit <limit 1-30> [windowSec 3-60] [unique 1-30]')] });
         gs.mentionSpamLimit = limit;
         gs.mentionSpamWindowSec = windowSec;
         gs.mentionSpamUniqueLimit = unique;
         saveData(data);
-        await message.channel.send(`✅ Mention spam limits updated: total=${limit}, unique=${unique}, window=${windowSec}s`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Mention spam limits updated: total=${limit}, unique=${unique}, window=${windowSec}s`)] });
     }
 
     // !togglescanedits [on|off]
     else if (cmd === 'togglescanedits' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`✏️ Scan edits is currently **${gs.scanEditsEnabled ? 'ON' : 'OFF'}**. Use: !togglescanedits on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`✏️ Scan edits is currently **${gs.scanEditsEnabled ? 'ON' : 'OFF'}**. Use: !togglescanedits on/off`)] });
         gs.scanEditsEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Scan edits is now **${gs.scanEditsEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Scan edits is now **${gs.scanEditsEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !automodstats
@@ -19769,16 +19786,16 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (args[2]) gs.dupeThreshold  = Math.max(2,  Math.min(20,  parseInt(args[2]) || gs.dupeThreshold  || 4));
         if (args[3]) gs.dupeMinLen     = Math.max(5,  Math.min(200, parseInt(args[3]) || gs.dupeMinLen     || 10));
         saveData(data);
-        await message.channel.send(`✅ Dupe config: enabled=${gs.dupeSpamEnabled} window=${gs.dupeWindowSec}s threshold=${gs.dupeThreshold} minLen=${gs.dupeMinLen}`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Dupe config: enabled=${gs.dupeSpamEnabled} window=${gs.dupeWindowSec}s threshold=${gs.dupeThreshold} minLen=${gs.dupeMinLen}`)] });
     }
 
     // !raidconfig [window <sec>] [threshold <n>] [lockdown <mins>] [lockchannels on/off] [blocklinks on/off] [newacctdays <n>]
     else if (cmd === 'raidconfig' && isAdmin) {
         if (!args.length) {
-            return message.channel.send(
+            return message.channel.send({ embeds: [modEmbed(
                 `📋 Raid config: window=${gs.raidJoinWindowSec||25}s threshold=${gs.raidJoinThreshold||7} lockdown=${gs.raidLockdownMins||8}m lockChannels=${gs.raidLockChannels} blockLinks=${gs.raidLinkBlockAll} newAcctDays=${gs.raidNewAccountDays||7}\n` +
                 `Use: !raidconfig window <s> threshold <n> lockdown <m> lockchannels on/off blocklinks on/off newacctdays <d>`
-            );
+            )] });
         }
         for (let i = 0; i < args.length; i++) {
             const k = (args[i] || '').toLowerCase();
@@ -19791,7 +19808,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             if (k === 'blocklinks'  && v) { const p = parseOnOff(v); if (p !== null) gs.raidLinkBlockAll  = p; i++; continue; }
         }
         saveData(data);
-        await message.channel.send(`✅ Raid config updated. window=${gs.raidJoinWindowSec}s threshold=${gs.raidJoinThreshold} lockdown=${gs.raidLockdownMins}m lockChannels=${gs.raidLockChannels} blockLinks=${gs.raidLinkBlockAll} newAcctDays=${gs.raidNewAccountDays}`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Raid config updated. window=${gs.raidJoinWindowSec}s threshold=${gs.raidJoinThreshold} lockdown=${gs.raidLockdownMins}m lockChannels=${gs.raidLockChannels} blockLinks=${gs.raidLinkBlockAll} newAcctDays=${gs.raidNewAccountDays}`)] });
     }
 
     // !unlockdown [unlockchannels on/off]
@@ -19801,7 +19818,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const e = joinSpikeTracker.get(message.guildId);
         if (e) { e.lockedUntil = 0; joinSpikeTracker.set(message.guildId, e); }
         if (unlockChannels) await unlockGuildTextChannels(message.guild, gs);
-        await message.channel.send(`✅ Raid lockdown disabled.${unlockChannels ? ' Channels unlocked.' : ''}`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Raid lockdown disabled.${unlockChannels ? ' Channels unlocked.' : ''}`)] });
     }
 
     // !linkstatus
@@ -19824,12 +19841,12 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'domainremove' && isAdmin) {
         const list = (args[0] || '').toLowerCase();
         const dom = parseDomainArg(args[1]);
-        if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return message.channel.send('❌ Use: !domainremove allow|deny example.com');
-        if (list !== 'allow' && list !== 'deny') return message.channel.send('❌ First arg must be allow or deny.');
+        if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return message.channel.send({ embeds: [modEmbed('❌ Use: !domainremove allow|deny example.com')] });
+        if (list !== 'allow' && list !== 'deny') return message.channel.send({ embeds: [modEmbed('❌ First arg must be allow or deny.')] });
         if (list === 'allow') gs.linkAllowlistedDomains = (gs.linkAllowlistedDomains || []).filter(x => normalizeDomain(x) !== dom);
         if (list === 'deny')  gs.linkDenylistedDomains  = (gs.linkDenylistedDomains  || []).filter(x => normalizeDomain(x) !== dom);
         saveData(data);
-        await message.channel.send(`✅ Removed **${dom}** from **${list}** list.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Removed **${dom}** from **${list}** list.`)] });
     }
 
     // !capsconfig [on/off] [percent] [minLetters] [maxRun]
@@ -19840,7 +19857,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (args[2]) gs.capsMinLetters  = Math.max(8,  Math.min(80,  parseInt(args[2]) || gs.capsMinLetters  || 16));
         if (args[3]) gs.capsMaxRun      = Math.max(10, Math.min(120, parseInt(args[3]) || gs.capsMaxRun      || 28));
         saveData(data);
-        await message.channel.send(`✅ Caps config: enabled=${gs.capsSpamEnabled} percent=${gs.capsMaxPercent} minLetters=${gs.capsMinLetters} maxRun=${gs.capsMaxRun}`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Caps config: enabled=${gs.capsSpamEnabled} percent=${gs.capsMaxPercent} minLetters=${gs.capsMinLetters} maxRun=${gs.capsMaxRun}`)] });
     }
 
     // !emojiconfig [on/off] [max] [windowSec]
@@ -19850,7 +19867,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (args[1]) gs.emojiMaxCount  = Math.max(5,  Math.min(60, parseInt(args[1]) || gs.emojiMaxCount  || 18));
         if (args[2]) gs.emojiWindowSec = Math.max(3,  Math.min(60, parseInt(args[2]) || gs.emojiWindowSec || 12));
         saveData(data);
-        await message.channel.send(`✅ Emoji config: enabled=${gs.emojiSpamEnabled} max=${gs.emojiMaxCount} window=${gs.emojiWindowSec}s`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Emoji config: enabled=${gs.emojiSpamEnabled} max=${gs.emojiMaxCount} window=${gs.emojiWindowSec}s`)] });
     }
 
     // !zalgoconfig [on/off] [maxMarks]
@@ -19859,16 +19876,16 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (onoff !== null) gs.zalgoEnabled = onoff;
         if (args[1]) gs.zalgoMaxCombining = Math.max(4, Math.min(80, parseInt(args[1]) || gs.zalgoMaxCombining || 12));
         saveData(data);
-        await message.channel.send(`✅ Zalgo config: enabled=${gs.zalgoEnabled} maxMarks=${gs.zalgoMaxCombining}`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Zalgo config: enabled=${gs.zalgoEnabled} maxMarks=${gs.zalgoMaxCombining}`)] });
     }
 
     // !invitepolicy [on/off]
     else if (cmd === 'invitepolicy' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🔗 Invite policy is currently **${gs.invitePolicyEnabled ? 'ON' : 'OFF'}**. Use: !invitepolicy on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🔗 Invite policy is currently **${gs.invitePolicyEnabled ? 'ON' : 'OFF'}**. Use: !invitepolicy on/off`)] });
         gs.invitePolicyEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Invite policy is now **${gs.invitePolicyEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Invite policy is now **${gs.invitePolicyEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !invitechannel [add|remove|list] [#channel]
@@ -19877,33 +19894,33 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         gs.inviteAllowedChannelIds = Array.isArray(gs.inviteAllowedChannelIds) ? gs.inviteAllowedChannelIds : [];
         if (mode === 'list') {
             const list = gs.inviteAllowedChannelIds.slice(0, 40).map(id => `<#${id}>`).join('\n');
-            await message.channel.send(`✅ Allowed invite channels (${gs.inviteAllowedChannelIds.length}):\n${list || 'None'}`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Allowed invite channels (${gs.inviteAllowedChannelIds.length}):\n${list || 'None'}`)] });
             return;
         }
         const ch = await resolveChannel(args[1]);
-        if (!ch) return message.channel.send('❌ Provide a channel mention or channel ID. Example: !invitechannel add #invites');
+        if (!ch) return message.channel.send({ embeds: [modEmbed('❌ Provide a channel mention or channel ID. Example: !invitechannel add #invites')] });
         if (mode === 'add') {
             if (!gs.inviteAllowedChannelIds.includes(ch.id)) gs.inviteAllowedChannelIds.push(ch.id);
             saveData(data);
-            await message.channel.send(`✅ Added allowed invite channel: <#${ch.id}>`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Added allowed invite channel: <#${ch.id}>`)] });
             return;
         }
         if (mode === 'remove') {
             gs.inviteAllowedChannelIds = gs.inviteAllowedChannelIds.filter(x => x !== ch.id);
             saveData(data);
-            await message.channel.send(`✅ Removed allowed invite channel: <#${ch.id}>`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Removed allowed invite channel: <#${ch.id}>`)] });
             return;
         }
-        await message.channel.send('❌ Use: !invitechannel add/remove/list');
+        await message.channel.send({ embeds: [modEmbed('❌ Use: !invitechannel add/remove/list')] });
     }
 
     // !attachmentpolicy [on/off]
     else if (cmd === 'attachmentpolicy' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`📎 Attachment policy is currently **${gs.attachmentPolicyEnabled ? 'ON' : 'OFF'}**. Use: !attachmentpolicy on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`📎 Attachment policy is currently **${gs.attachmentPolicyEnabled ? 'ON' : 'OFF'}**. Use: !attachmentpolicy on/off`)] });
         gs.attachmentPolicyEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Attachment policy is now **${gs.attachmentPolicyEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Attachment policy is now **${gs.attachmentPolicyEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !attachmentext [add|remove|list] [ext]
@@ -19913,23 +19930,23 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         gs.attachmentBlockExts = Array.isArray(gs.attachmentBlockExts) ? gs.attachmentBlockExts : [];
         if (mode === 'list') {
             const list = gs.attachmentBlockExts.slice(0, 120).map(x => '.'+String(x)).join(', ');
-            await message.channel.send(`✅ Blocked extensions (${gs.attachmentBlockExts.length}):\n${list || 'None'}`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Blocked extensions (${gs.attachmentBlockExts.length}):\n${list || 'None'}`)] });
             return;
         }
-        if (!ext || !/^[a-z0-9]{1,8}$/.test(ext)) return message.channel.send('❌ Use: !attachmentext add/remove/list [ext]');
+        if (!ext || !/^[a-z0-9]{1,8}$/.test(ext)) return message.channel.send({ embeds: [modEmbed('❌ Use: !attachmentext add/remove/list [ext]')] });
         if (mode === 'add') {
             if (!gs.attachmentBlockExts.includes(ext)) gs.attachmentBlockExts.push(ext);
             saveData(data);
-            await message.channel.send(`✅ Added blocked ext: .${ext}`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Added blocked ext: .${ext}`)] });
             return;
         }
         if (mode === 'remove') {
             gs.attachmentBlockExts = gs.attachmentBlockExts.filter(x => String(x).toLowerCase() !== ext);
             saveData(data);
-            await message.channel.send(`✅ Removed blocked ext: .${ext}`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Removed blocked ext: .${ext}`)] });
             return;
         }
-        await message.channel.send('❌ Use: !attachmentext add/remove/list');
+        await message.channel.send({ embeds: [modEmbed('❌ Use: !attachmentext add/remove/list')] });
     }
 
     // !stretchconfig [on/off] [maxCharRun] [maxPunctRun] [maxWordRepeat]
@@ -19940,7 +19957,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (args[2]) gs.stretchMaxPunctRun   = Math.max(6,  Math.min(40, parseInt(args[2]) || gs.stretchMaxPunctRun   || 10));
         if (args[3]) gs.stretchMaxWordRepeat = Math.max(3,  Math.min(20, parseInt(args[3]) || gs.stretchMaxWordRepeat  || 5));
         saveData(data);
-        await message.channel.send(`✅ Stretch config: enabled=${gs.stretchSpamEnabled} maxCharRun=${gs.stretchMaxCharRun} maxPunctRun=${gs.stretchMaxPunctRun} maxWordRepeat=${gs.stretchMaxWordRepeat}`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Stretch config: enabled=${gs.stretchSpamEnabled} maxCharRun=${gs.stretchMaxCharRun} maxPunctRun=${gs.stretchMaxPunctRun} maxWordRepeat=${gs.stretchMaxWordRepeat}`)] });
     }
 
     // !channelconfig [add|remove|list] [category] [#channel]
@@ -19953,33 +19970,33 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                 const ids = getChannelIds(gs, meta.key);
                 return `${meta.label} (\`${c}\`): ${ids.length ? ids.map(id=>`<#${id}>`).join(', ') : 'None'}`;
             });
-            return message.channel.send(`📋 **Channel Config Pools:**\n${lines.join('\n')}`);
+            return message.channel.send({ embeds: [modEmbed(`📋 **Channel Config Pools:**\n${lines.join('\n')}`)] });
         }
         const meta = CHANNEL_CATEGORIES[cat];
-        if (!meta) return message.channel.send(`❌ Unknown category \`${cat}\`. Valid: ${Object.keys(CHANNEL_CATEGORIES).join(', ')}\nUsage: !channelconfig add|remove|list [category] [#channel]`);
+        if (!meta) return message.channel.send({ embeds: [modEmbed(`❌ Unknown category \`${cat}\`. Valid: ${Object.keys(CHANNEL_CATEGORIES).join(', ')}\nUsage: !channelconfig add|remove|list [category] [#channel]`)] });
         const ch = await resolveChannel(args[2] || args[1]);
-        if (!ch) return message.channel.send('❌ Provide a channel mention or ID. Example: !channelconfig add trade #fast-trading');
+        if (!ch) return message.channel.send({ embeds: [modEmbed('❌ Provide a channel mention or ID. Example: !channelconfig add trade #fast-trading')] });
         gs[meta.key] = Array.isArray(gs[meta.key]) ? gs[meta.key] : [];
         if (mode === 'add') {
             if (!gs[meta.key].includes(ch.id)) { gs[meta.key].push(ch.id); saveData(data); }
-            await message.channel.send(`✅ Added <#${ch.id}> to **${meta.label}** pool. Pool: ${formatChannelIds(gs[meta.key])}`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Added <#${ch.id}> to **${meta.label}** pool. Pool: ${formatChannelIds(gs[meta.key])}`)] });
             return;
         }
         if (mode === 'remove') {
             gs[meta.key] = gs[meta.key].filter(id => id !== ch.id); saveData(data);
-            await message.channel.send(`✅ Removed <#${ch.id}> from **${meta.label}** pool. Pool: ${formatChannelIds(gs[meta.key])}`);
+            await message.channel.send({ embeds: [modEmbed(`✅ Removed <#${ch.id}> from **${meta.label}** pool. Pool: ${formatChannelIds(gs[meta.key])}`)] });
             return;
         }
-        await message.channel.send('❌ Use: !channelconfig add|remove|list [category] [#channel]');
+        await message.channel.send({ embeds: [modEmbed('❌ Use: !channelconfig add|remove|list [category] [#channel]')] });
     }
 
     // !togglescam [on|off]
     else if (cmd === 'togglescam' && isAdmin) {
         const v = parseOnOff(args[0]);
-        if (v === null) return message.channel.send(`🚨 Scam detection is currently **${gs.scamEnabled ? 'ON' : 'OFF'}**. Use: !togglescam on/off`);
+        if (v === null) return message.channel.send({ embeds: [modEmbed(`🚨 Scam detection is currently **${gs.scamEnabled ? 'ON' : 'OFF'}**. Use: !togglescam on/off`)] });
         gs.scamEnabled = v;
         saveData(data);
-        await message.channel.send(`✅ Scam detection is now **${gs.scamEnabled ? 'ON' : 'OFF'}**.`);
+        await message.channel.send({ embeds: [modEmbed(`✅ Scam detection is now **${gs.scamEnabled ? 'ON' : 'OFF'}**.`)] });
     }
 
     // !immunestatus
@@ -20069,7 +20086,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'lookup' && (isAdmin || isMod)) {
         const token = args[0];
         const luId  = token?.replace(/[^0-9]/g, '') || message.author.id;
-        if (!luId) return message.channel.send('❌ Provide a @mention or user ID.');
+        if (!luId) return message.channel.send({ embeds: [modEmbed('❌ Provide a @mention or user ID.')] });
         const embed = await buildLookupEmbed(luId, message.guild, data, gs);
         return message.channel.send({ embeds: [embed] });
     }
@@ -20078,47 +20095,47 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     else if (cmd === 'modnote' && (isAdmin || isMod)) {
         const sub    = args.shift()?.toLowerCase();
         const target = await resolveMember(args[0]);
-        if (!target) return message.channel.send('❌ Member not found. Provide a @mention or Discord ID.');
+        if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found. Provide a @mention or Discord ID.')] });
         args.shift();
         if (sub === 'add') {
             const noteText = args.join(' ');
-            if (!noteText) return message.channel.send('❌ Usage: `!modnote add <@user> <note text>`');
+            if (!noteText) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!modnote add <@user> <note text>`')] });
             addModNote(data, target.id, noteText, message.author.id, message.author.tag || message.author.username);
             saveData(data);
             const count = getModNotes(data, target.id).length;
-            return message.channel.send(`📋 Note #${count} added for <@${target.id}>.`);
+            return message.channel.send({ embeds: [modEmbed(`📋 Note #${count} added for <@${target.id}>.`)] });
         } else if (sub === 'list') {
             const notes = getModNotes(data, target.id);
             return message.channel.send({ embeds: [buildModNoteEmbed(target.id, target.user?.tag || target.user?.username || target.id, notes)] });
         } else if (sub === 'delete') {
             const idx = parseInt(args[0], 10);
-            if (!idx || idx < 1) return message.channel.send('❌ Usage: `!modnote delete <@user> <note number>`');
+            if (!idx || idx < 1) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!modnote delete <@user> <note number>`')] });
             const ok = deleteModNote(data, target.id, idx);
-            if (!ok) return message.channel.send(`❌ Note #${idx} not found. Use \`!modnote list <@user>\` to see valid numbers.`);
+            if (!ok) return message.channel.send({ embeds: [modEmbed(`❌ Note #${idx} not found. Use \`!modnote list <@user>\` to see valid numbers.`)] });
             saveData(data);
-            return message.channel.send(`🗑️ Note #${idx} deleted for <@${target.id}>.`);
+            return message.channel.send({ embeds: [modEmbed(`🗑️ Note #${idx} deleted for <@${target.id}>.`)] });
         } else {
-            return message.channel.send('❌ Usage: `!modnote add|list|delete <@user> [args]`');
+            return message.channel.send({ embeds: [modEmbed('❌ Usage: `!modnote add|list|delete <@user> [args]`')] });
         }
     }
 
     // ── !slowmode ─────────────────────────────────────────────────────────────
     else if (cmd === 'slowmode' && (isAdmin || isMod)) {
         const rawDur = args[0]?.toLowerCase();
-        if (!rawDur) return message.channel.send('❌ Usage: `!slowmode <duration|off> [#channel]`  e.g. `!slowmode 5s`, `!slowmode off`');
+        if (!rawDur) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!slowmode <duration|off> [#channel]`  e.g. `!slowmode 5s`, `!slowmode off`')] });
         const smCh = message.mentions.channels.first() || message.channel;
         let smSecs = 0;
         if (rawDur !== '0' && rawDur !== 'off') {
             const smMins = parseDuration(rawDur);
-            if (smMins == null) return message.channel.send('❌ Invalid duration. Try `5s`, `30s`, `1m`, `5m`, `1h`.');
+            if (smMins == null) return message.channel.send({ embeds: [modEmbed('❌ Invalid duration. Try `5s`, `30s`, `1m`, `5m`, `1h`.')] });
             smSecs = Math.min(21600, smMins * 60);
         }
         try {
             await smCh.setRateLimitPerUser(smSecs, `Set by ${message.author.tag || message.author.username}`);
-            return message.channel.send(smSecs === 0
+            return message.channel.send({ embeds: [modEmbed(smSecs === 0
                 ? `✅ Slowmode **disabled** in <#${smCh.id}>.`
-                : `✅ Slowmode set to **${smSecs}s** in <#${smCh.id}>.`);
-        } catch (e) { return message.channel.send(`❌ Could not set slowmode: ${e.message}`); }
+                : `✅ Slowmode set to **${smSecs}s** in <#${smCh.id}>.`)] });
+        } catch (e) { return message.channel.send({ embeds: [modEmbed(`❌ Could not set slowmode: ${e.message}`)] }); }
     }
 
     // ── !role add|remove <@user> <@role> [reason]  /  !role info <@role> ─────
@@ -20126,7 +20143,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const sub = args.shift()?.toLowerCase();
         if (sub === 'info') {
             const roleObj = message.mentions.roles.first() || message.guild.roles.cache.get(args[0]);
-            if (!roleObj) return message.channel.send('❌ Role not found. Mention or provide role ID.');
+            if (!roleObj) return message.channel.send({ embeds: [modEmbed('❌ Role not found. Mention or provide role ID.')] });
             const mCount = message.guild.members.cache.filter(m => m.roles.cache.has(roleObj.id)).size;
             return message.channel.send({ embeds: [new EmbedBuilder()
                 .setTitle(`🏷️ Role Info — ${roleObj.name}`)
@@ -20142,28 +20159,28 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                 ).setTimestamp()] });
         }
         if (sub !== 'add' && sub !== 'remove')
-            return message.channel.send('❌ Usage: `!role add|remove <@user> <@role> [reason]`  or  `!role info <@role>`');
+            return message.channel.send({ embeds: [modEmbed('❌ Usage: `!role add|remove <@user> <@role> [reason]`  or  `!role info <@role>`')] });
         const rTarget = await resolveMember(args[0]);
-        if (!rTarget) return message.channel.send('❌ Member not found.');
+        if (!rTarget) return message.channel.send({ embeds: [modEmbed('❌ Member not found.')] });
         const rObj = message.mentions.roles.first() || message.guild.roles.cache.get(args[1]);
-        if (!rObj) return message.channel.send('❌ Role not found. Mention or provide role ID.');
+        if (!rObj) return message.channel.send({ embeds: [modEmbed('❌ Role not found. Mention or provide role ID.')] });
         const rHierErr = checkRoleHierarchy(message.member, rObj);
-        if (rHierErr) return message.channel.send(rHierErr);
-        if (rObj.managed) return message.channel.send('❌ That role is managed by an integration and cannot be assigned manually.');
+        if (rHierErr) return message.channel.send({ embeds: [modEmbed(rHierErr)] });
+        if (rObj.managed) return message.channel.send({ embeds: [modEmbed('❌ That role is managed by an integration and cannot be assigned manually.')] });
         const rReason = args.slice(2).join(' ') || `Role action by ${message.author.tag || message.author.username}`;
         try {
             if (sub === 'add') {
                 if (rTarget.roles.cache.has(rObj.id))
-                    return message.channel.send(`⚠️ <@${rTarget.id}> already has <@&${rObj.id}>.`);
+                    return message.channel.send({ embeds: [modEmbed(`⚠️ <@${rTarget.id}> already has <@&${rObj.id}>.`)] });
                 await rTarget.roles.add(rObj, rReason);
-                return message.channel.send(`✅ Added <@&${rObj.id}> to <@${rTarget.id}>.`);
+                return message.channel.send({ embeds: [modEmbed(`✅ Added <@&${rObj.id}> to <@${rTarget.id}>.`)] });
             } else {
                 if (!rTarget.roles.cache.has(rObj.id))
-                    return message.channel.send(`⚠️ <@${rTarget.id}> doesn't have <@&${rObj.id}>.`);
+                    return message.channel.send({ embeds: [modEmbed(`⚠️ <@${rTarget.id}> doesn't have <@&${rObj.id}>.`)] });
                 await rTarget.roles.remove(rObj, rReason);
-                return message.channel.send(`✅ Removed <@&${rObj.id}> from <@${rTarget.id}>.`);
+                return message.channel.send({ embeds: [modEmbed(`✅ Removed <@&${rObj.id}> from <@${rTarget.id}>.`)] });
             }
-        } catch (e) { return message.channel.send(`❌ Could not ${sub} role: ${e.message}`); }
+        } catch (e) { return message.channel.send({ embeds: [modEmbed(`❌ Could not ${sub} role: ${e.message}`)] }); }
     }
 
     // ── !massban <id1> <id2> ... [reason text] ───────────────────────────────
@@ -20171,9 +20188,9 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const rawIds = args.filter(a => /^\d{15,20}$/.test(a));
         const reason = args.filter(a => !/^\d{15,20}$/.test(a)).join(' ') || 'Mass ban action';
         if (rawIds.length === 0)
-            return message.channel.send('❌ No valid user IDs found. Usage: `!massban <id1> <id2> ... [reason text]`');
+            return message.channel.send({ embeds: [modEmbed('❌ No valid user IDs found. Usage: `!massban <id1> <id2> ... [reason text]`')] });
         if (rawIds.length > 50)
-            return message.channel.send('❌ Maximum 50 IDs per !massban.');
+            return message.channel.send({ embeds: [modEmbed('❌ Maximum 50 IDs per !massban.')] });
         let banned = 0, failed = 0;
         for (const uid of rawIds) {
             try {
@@ -20185,15 +20202,15 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             } catch { failed++; }
         }
         saveData(data);
-        return message.channel.send(`✅ Banned **${banned}** user(s). Failed: **${failed}**. Reason: ${reason}`);
+        return message.channel.send({ embeds: [modEmbed(`✅ Banned **${banned}** user(s). Failed: **${failed}**. Reason: ${reason}`)] });
     }
 
     // ── !dm <@user> <message text...> ────────────────────────────────────────
     else if (cmd === 'dm' && (isAdmin || isMod)) {
         const dmTarget = await resolveMember(args[0]);
-        if (!dmTarget) return message.channel.send('❌ Member not found.');
+        if (!dmTarget) return message.channel.send({ embeds: [modEmbed('❌ Member not found.')] });
         const dmText = args.slice(1).join(' ');
-        if (!dmText) return message.channel.send('❌ Usage: `!dm <@user> <message text>`');
+        if (!dmText) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!dm <@user> <message text>`')] });
         const dmEmbed = new EmbedBuilder()
             .setTitle(`📨 Message from ${message.guild.name} Staff`)
             .setDescription(dmText)
@@ -20206,26 +20223,26 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                 .setTitle('📨 Mod DM Sent')
                 .setDescription(`**To:** <@${dmTarget.id}> (${dmTarget.id})\n**By:** <@${message.author.id}>\n**Message:** ${dmText.slice(0, 500)}`)
                 .setColor(0x5865F2).setTimestamp());
-            return message.channel.send(`✅ DM sent to <@${dmTarget.id}>.`);
-        } catch { return message.channel.send('❌ Could not DM that user (DMs may be disabled).'); }
+            return message.channel.send({ embeds: [modEmbed(`✅ DM sent to <@${dmTarget.id}>.`)] });
+        } catch { return message.channel.send({ embeds: [modEmbed('❌ Could not DM that user (DMs may be disabled).')] }); }
     }
 
     // ── !reason <caseId> <new reason text...> ────────────────────────────────
     else if (cmd === 'reason' && (isAdmin || isMod)) {
         const caseIdRaw = args[0]?.toUpperCase().replace(/^C-?/, '');
         const caseNum   = parseInt(caseIdRaw, 10);
-        if (!caseNum) return message.channel.send('❌ Usage: `!reason <caseId> <new reason>` e.g. `!reason C-42 Corrected reason`');
+        if (!caseNum) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!reason <caseId> <new reason>` e.g. `!reason C-42 Corrected reason`')] });
         const cases   = getCases(data, message.guild.id);
         const caseKey = Object.keys(cases).find(k => parseInt(k, 10) === caseNum);
-        if (!caseKey || !cases[caseKey]) return message.channel.send(`❌ Case C-${caseIdRaw} not found.`);
+        if (!caseKey || !cases[caseKey]) return message.channel.send({ embeds: [modEmbed(`❌ Case C-${caseIdRaw} not found.`)] });
         const newReason = args.slice(1).join(' ');
-        if (!newReason) return message.channel.send('❌ Provide a new reason text.');
+        if (!newReason) return message.channel.send({ embeds: [modEmbed('❌ Provide a new reason text.')] });
         cases[caseKey].reason    = newReason;
         cases[caseKey].updatedBy = message.author.id;
         cases[caseKey].updatedAt = Date.now();
         setCases(data, message.guild.id, cases);
         saveData(data);
-        return message.channel.send(`✅ Reason updated for case **C-${caseKey}**.`);
+        return message.channel.send({ embeds: [modEmbed(`✅ Reason updated for case **C-${caseKey}**.`)] });
     }
 
 }
