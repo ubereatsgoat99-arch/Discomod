@@ -1202,6 +1202,19 @@ ZXX_Z_mul(GEN y, GEN x)
 }
 
 GEN
+ZXX_shifti(GEN y, long n)
+{
+  long i, l = lg(y);
+  GEN z = cgetg(l,t_POL); z[1] = y[1];
+  for(i=2; i<l; i++)
+    if(typ(gel(y,i))==t_INT)
+      gel(z,i) = shifti(gel(y,i),n);
+    else
+      gel(z,i) = ZX_shifti(gel(y,i), n);
+  return z;
+}
+
+GEN
 ZXX_Z_add_shallow(GEN x, GEN y)
 {
   long i, l = lg(x);

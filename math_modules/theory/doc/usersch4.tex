@@ -2161,8 +2161,10 @@ Below \kbd{f} and \kbd{g} are \typ{CLOSURE}s of arity $1$.
 \fun{GEN}{gen_parapply}{GEN f, GEN V} applies \kbd{f} to each components of $V$ in parallel. Used to implement
 \kbd{parapply}.
 
-\fun{GEN}{gen_parapply_percent}{GEN f, GEN V, long percent} as \kbd{gen\_parapply}, if \kbd{percent} not zero,
-print percentage of completion. \kbd{percent} should be $0$ when \kbd{DEBUGLEVEL} is $0$.
+\fun{GEN}{gen_parapply_percent}{GEN f, GEN V, long percent} as
+\kbd{gen\_parapply}, if \kbd{percent} not zero, print percentage of completion
+every \kbd{percent} steps.  In \kbd{libpari}, \kbd{percent} should be $0$ when
+\kbd{DEBUGLEVEL} is $0$.
 
 \fun{GEN}{gen_parapply_slice}{GEN g, GEN V, long m}
 splits $V$ in at most \kbd{m} chunks in arithmetic progressions,
@@ -2171,9 +2173,19 @@ and calls \kbd{g} on each in parallel, and reassembles the result.
 The result is identical to \kbd{gen\_parapply(f, V)} with a lower overhead.
 The usual choice of \kbd{m} is \kbd{mt\_nbthreads()}.
 
-\fun{GEN}{gen_parapply_slice_zv}{GEN g, GEN V, long m)}
+\fun{GEN}{gen_parapply_slice_zv}{GEN g, GEN V, long m}
 As \kbd{gen\_parapply\_slice}, but \kbd{g} must return \typ{VECSMALL} and the
 output is a \typ{VECSMALL} of \kbd{long} (\kbd{zv}).
+
+\fun{GEN}{gen_parpairwiseop}{GEN h, GEN V}
+\kbd{h} being a \typ{CLOSURE} of arity $2$, compute the vector
+$[h(V[1],V[2]), h(V[3],V[4]), \ldots]$
+by apply \kbd{h} in parallel.
+
+\fun{GEN}{gen_parpairwiseop}{GEN h, GEN V, long percent}
+ as \kbd{gen\_parpairwiseop}, if \kbd{percent} not zero, print percentage of
+completion every \kbd{percent} steps.  In \kbd{libpari}, \kbd{percent} should
+be $0$ when \kbd{DEBUGLEVEL} is $0$.
 
 \subsec{Numerical analysis}
 

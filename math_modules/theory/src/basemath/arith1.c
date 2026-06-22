@@ -1556,28 +1556,40 @@ ZV_producttree(GEN xa)
   return T;
 }
 
+/* not GC-clean */
 GEN
 ZMV_producttree(GEN xa)
 {
-  long n = lg(xa)-1;
+  long i, n = lg(xa)-1;
+  GEN T, worker;
   long m = n==1 ? 1: expu(n-1)+1;
-  GEN T = cgetg(m+1, t_VEC), t;
-  long i, j, k;
-  t = cgetg(((n+1)>>1)+1, t_VEC);
-  for (j=1, k=1; k<n; j++, k+=2)
-    gel(t, j) = ZM_mul(gel(xa,k+1), gel(xa,k));
-  if (k==n) gel(t, j) = ZM_copy(gel(xa,k));
-  gel(T,1) = t;
-  for (i=2; i<=m; i++)
+  pari_timer ti;
+  if (DEBUGLEVEL>4) timer_start(&ti);
+  worker = snm_closure(is_entry("_ZM_mulrev"),NULL);
+  m = expu(n-1)+1; T = cgetg(m+1, t_VEC);
+  if (DEBUGLEVEL>5) err_printf("start ZMV Product tree:\nlevel 1: ");
+  gel(T,1) = gen_parpairwiseop_percent(worker,xa,DEBUGLEVEL>5);
+  if (DEBUGLEVEL>5) err_printf("\n");
+  if (m > 1)
   {
-    GEN u = gel(T, i-1);
-    long n = lg(u)-1;
-    t = cgetg(((n+1)>>1)+1, t_VEC);
-    for (j=1, k=1; k<n; j++, k+=2)
-      gel(t, j) = ZM_mul(gel(u, k+1), gel(u, k));
-    if (k==n) gel(t, j) = gel(u, k);
-    gel(T, i) = t;
+    for (i = 2; i < m-1; i++)
+    {
+      if (DEBUGLEVEL>5) err_printf("level %ld:",i);
+      gel(T, i) = gen_parpairwiseop_percent(worker,gel(T,i-1),DEBUGLEVEL>5);
+      if (DEBUGLEVEL>5) err_printf("\n");
+    }
+    if (m > 2)
+    {
+      if (DEBUGLEVEL>5) err_printf("level %ld:",m-1);
+      gel(T, m-1) = odd(lg(gel(T,m-2)))
+                ? mkvec2(RgM_ZM_mul(gmael(T,m-2,2), gmael(T,m-2,1)), RgM_ZM_mul(gmael(T,m-2,4), gmael(T,m-2,3)))
+                : mkvec2(RgM_ZM_mul(gmael(T,m-2,2), gmael(T,m-2,1)), gmael(T,m-2,3));
+    }
+    if (DEBUGLEVEL>5) err_printf("\nlevel %ld:",m);
+    gel(T, m) = mkvec(RgM_ZM_mul(gmael(T,m-1,2), gmael(T,m-1,1)));
+    if (DEBUGLEVEL>5) err_printf("\n");
   }
+  if (DEBUGLEVEL>4) timer_printf(&ti,"ZMV_producttree");
   return T;
 }
 

@@ -2063,86 +2063,6 @@ lfunellmfpeters(GEN E, long bitprec)
 /*************************************************************/
 
 static GEN
-Flx_difftable(GEN P, ulong p)
-{
-  long i, n = degpol(P);
-  GEN V = cgetg(n+2, t_VECSMALL);
-  uel(V, n+1) = Flx_constant(P);
-  for(i = n; i >= 1; i--)
-  {
-    P = Flx_diff1(P, p);
-    uel(V, i) = Flx_constant(P);
-  }
-  return V;
-}
-
-static long
-Flx_genus2trace_naive(GEN H, ulong p)
-{
-  pari_sp av = avma;
-  ulong i, j;
-  long a, n = degpol(H);
-  GEN k = const_vecsmall(p, -1), d;
-  k[1] = 0;
-  for (i=1, j=1; i < p; i += 2, j = Fl_add(j, i, p))
-    k[j+1] = 1;
-  a = n == 5 ? 0: k[1+Flx_lead(H)];
-  d = Flx_difftable(H, p);
-  for (i=0; i < p; i++)
-  {
-    a += k[1+uel(d,n+1)];
-    if (n==6)
-      uel(d,7) = Fl_add(uel(d,7), uel(d,6), p);
-    uel(d,6) = Fl_add(uel(d,6), uel(d,5), p);
-    uel(d,5) = Fl_add(uel(d,5), uel(d,4), p);
-    uel(d,4) = Fl_add(uel(d,4), uel(d,3), p);
-    uel(d,3) = Fl_add(uel(d,3), uel(d,2), p);
-    uel(d,2) = Fl_add(uel(d,2), uel(d,1), p);
-  }
-  return gc_long(av, a);
-}
-
-static GEN
-dirgenus2(GEN Q, GEN p, long n)
-{
-  pari_sp av = avma;
-  GEN f;
-  if (n > 2)
-    f = RgX_recip(hyperellcharpoly(gmul(Q,gmodulo(gen_1, p))));
-  else
-  {
-    ulong pp = itou(p);
-    GEN Qp = ZX_to_Flx(Q, pp);
-    long t = Flx_genus2trace_naive(Qp, pp);
-    f = deg1pol_shallow(stoi(t), gen_1, 0);
-  }
-  return gc_upto(av, RgXn_inv_i(f, n));
-}
-
-GEN
-dirgenus2_worker(GEN P, ulong X, GEN Q)
-{
-  pari_sp av = avma;
-  long i, l = lg(P);
-  GEN V = cgetg(l, t_VEC);
-  for(i = 1; i < l; i++)
-  {
-    ulong p = uel(P,i);
-    long d = ulogint(X, p) + 1; /* minimal d such that p^d > X */
-    gel(V,i) = dirgenus2(Q, utoi(uel(P,i)), d);
-  }
-  return gc_GEN(av, mkvec2(P,V));
-}
-
-static GEN
-vecan_genus2(GEN an, long L)
-{
-  GEN Q = gel(an,1), bad = gel(an, 2);
-  GEN worker = snm_closure(is_entry("_dirgenus2_worker"), mkvec(Q));
-  return pardireuler(worker, gen_2, stoi(L), NULL, bad);
-}
-
-static GEN
 eulerf_genus2(GEN an, GEN p)
 {
   GEN Q = gel(an,1), bad = gel(an, 2);
@@ -2165,7 +2085,7 @@ lfungenus2(GEN G)
   if (ram2 && equalis(gmael(M,2,1),-1))
     pari_warn(warner,"unknown valuation of conductor at 2");
   e = cgetg(lL+(ram2?0:1), t_VEC);
-  gel(e,1) = mkvec2(gen_2, ram2 ? ginv(RgX_recip(genus2_eulerfact2(F, PQ)))
+  gel(e,1) = mkvec2(gen_2, ram2 ? ginv(RgX_recip(genus2_eulerfact2(PQ)))
            : ginv(RgX_recip(hyperellcharpoly(gmul(PQ,gmodulss(1,2))))) );
   for(i = ram2? 2: 1; i < lL; i++)
   {

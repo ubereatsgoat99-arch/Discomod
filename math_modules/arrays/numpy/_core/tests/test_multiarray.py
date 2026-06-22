@@ -6921,6 +6921,14 @@ class TestFlat:
         b.flat[::2] = unaligned[:n // 2]
         assert_array_equal(b[::2], unaligned[:n // 2])
 
+    def test_assignment_structured_with_objects(self):
+        # whole elements must be copied, not just the leading object field
+        dt = np.dtype([('x', 'O'), ('y', 'i8')])
+        a = np.array([('A', 1), ('B', 2)], dtype=dt)
+        b = np.zeros(2, dtype=dt)
+        b.flat = a
+        assert_array_equal(b, a)
+
     def test___array__(self):
         a0 = np.arange(20.0)
         a = a0.reshape(4, 5)
@@ -9210,7 +9218,7 @@ class TestNewBufferProtocol:
         self._check_roundtrip(x)
 
     def test_roundtrip_single_types(self):
-        for typ in np._core.sctypeDict.values():
+        for typ in np.typecodes["All"]:
             dtype = np.dtype(typ)
 
             if dtype.char in 'Mm':

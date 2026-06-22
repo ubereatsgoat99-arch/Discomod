@@ -22,5 +22,12 @@ varhigher("y",y);
 variable()
 varhigher("zzz",y);1/0
 variable()
+
+v=[x*y,x+y,x/y,O(x*y),Mod(x*y,x^2+y^2),[y,z],Mat(y*z),List([y,z])];
+{
+for(i=1,#v,
+  print(iferr(variables(v[i]), E,E))
+)
+}
 variables([v,tt,zz])
 variables()

@@ -108,6 +108,12 @@ template class TransformExpressionWithCache<G2_SERIAL>;
 std::vector<std::vector<int>> integer_partition(const int n, const int m)
 {
 	std::vector<std::vector<int>> result;
+        // 04.06.2026: bug fix: handle the case m=1 correctly
+	if (m==1) {
+		std::vector<int> decomposition(1, n);
+		result.emplace_back(decomposition);
+		return result;
+	}
 	std::vector<int> hlp(m, 0);
 	int k = 1;
 	hlp[1] = n;

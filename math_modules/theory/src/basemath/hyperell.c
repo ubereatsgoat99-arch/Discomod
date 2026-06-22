@@ -22,6 +22,190 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA. */
 
 #define DEBUGLEVEL DEBUGLEVEL_hyperell
 
+/*****************************************************************************
+ *******                                                               *******
+ *******             Naive algorithms for genus2                       *******
+ *******                                                               *******
+ *****************************************************************************/
+
+static GEN
+F2x_genus2charpoly_naive(GEN P, GEN Q)
+{
+  long a, b = 1, c = 0;
+  GEN T = mkvecsmall2(P[1], 7);
+  GEN PT = F2x_rem(P, T), QT = F2x_rem(Q, T);
+  long q0 = F2x_eval(Q, 0), q1 = F2x_eval(Q, 1);
+  long dP = F2x_degree(P), dQ = F2x_degree(Q);
+  a= dQ<3 ? 0: dP<=5 ? 1: -1;
+  a += (q0? F2x_eval(P, 0)? -1: 1: 0) + (q1? F2x_eval(P, 1)? -1: 1: 0);
+  b += q0 + q1;
+  if (lgpol(QT))
+    c = (F2xq_trace(F2xq_div(PT, F2xq_sqr(QT, T), T), T)==0 ? 1: -1);
+  return mkvecsmalln(6, 0UL, 4UL, 2*a, (b+2*c+a*a)>>1, a, 1UL);
+}
+
+static GEN
+Flx_difftable(GEN P, ulong p)
+{
+  long i, n = degpol(P);
+  GEN V = cgetg(n+2, t_VEC);
+  gel(V, n+1) = P;
+  for(i = n; i >= 1; i--)
+    gel(V, i) = Flx_diff1(gel(V, i+1), p);
+  return V;
+}
+
+static GEN
+Flx_difftable_constant(GEN P, ulong p)
+{
+  long i, n = degpol(P);
+  GEN V = cgetg(n+2, t_VECSMALL);
+  uel(V, n+1) = Flx_constant(P);
+  for(i = n; i >= 1; i--)
+  {
+    P = Flx_diff1(P, p);
+    uel(V, i) = Flx_constant(P);
+  }
+  return V;
+}
+static GEN
+FlxV_Fl2_eval_pre(GEN V, GEN x, ulong D, ulong p, ulong pi)
+{
+  long i, n = lg(V)-1;
+  GEN r = cgetg(n+1, t_VEC);
+  for (i = 1; i <= n; i++)
+    gel(r, i) = Flx_Fl2_eval_pre(gel(V, i), x, D, p, pi);
+  return r;
+}
+
+static GEN
+Fl2V_next(GEN V, ulong p)
+{
+  long i, n = lg(V)-1;
+  GEN r = cgetg(n+1, t_VEC);
+  gel(r, 1) = gel(V, 1);
+  for (i = 2; i <= n; i++)
+    gel(r, i) = Flv_add(gel(V, i), gel(V, i-1), p);
+  return r;
+}
+
+static GEN
+FlxV_constant(GEN x)
+{ pari_APPLY_long(Flx_constant(gel(x,i))) }
+
+static GEN
+Flx_genus2charpoly_naive(GEN H, ulong p)
+{
+  pari_sp av = avma, av2;
+  ulong pi = get_Fl_red(p);
+  ulong i, j, p2 = p>>1, D = 2, e = ((p&2UL) == 0) ? -1 : 1;
+  long a, b, c = 0, n = degpol(H);
+  GEN t, d, k = const_vecsmall(p, -1);
+  k[1] = 0;
+  for (i=1, j=1; i < p; i += 2, j = Fl_add(j, i, p)) k[j+1] = 1;
+  while (k[1+D] >= 0) D++;
+  b = n == 5 ? 0 : 1;
+  a = b ? k[1+Flx_lead(H)]: 0;
+  t = Flx_difftable(H, p);
+  d = FlxV_constant(t);
+  av2 = avma;
+  for (i=0; i < p; i++)
+  {
+    ulong v = uel(d,n+1);
+    a += k[1+v];
+    b += !!v;
+    if (n==6)
+      uel(d,7) = Fl_add(uel(d,7), uel(d,6), p);
+    uel(d,6) = Fl_add(uel(d,6), uel(d,5), p);
+    uel(d,5) = Fl_add(uel(d,5), uel(d,4), p);
+    uel(d,4) = Fl_add(uel(d,4), uel(d,3), p);
+    uel(d,3) = Fl_add(uel(d,3), uel(d,2), p);
+    uel(d,2) = Fl_add(uel(d,2), uel(d,1), p);
+  }
+  for (j=1; j <= p2; j++)
+  {
+    GEN V = FlxV_Fl2_eval_pre(t, mkvecsmall2(0, j), D, p, pi);
+    for (i=0;; i++)
+    {
+      GEN r2 = gel(V, n+1);
+      c += uel(r2,2) ?
+        (uel(r2,1) ? uel(k,1+Fl2_norm_pre(r2, D, p, pi)): e)
+         : !!uel(r2,1);
+      if (i == p-1) break;
+      V = Fl2V_next(V, p);
+    }
+    set_avma(av2);
+  }
+  set_avma(av);
+  return mkvecsmalln(6, 0UL, p*p, a*p, (b+2*c+a*a)>>1, a, 1UL);
+}
+
+static long
+Flx_genus2trace_naive(GEN H, ulong p)
+{
+  pari_sp av = avma;
+  ulong i, j;
+  long a, n = degpol(H);
+  GEN k = const_vecsmall(p, -1), d;
+  k[1] = 0;
+  for (i=1, j=1; i < p; i += 2, j = Fl_add(j, i, p))
+    k[j+1] = 1;
+  a = n == 5 ? 0: k[1+Flx_lead(H)];
+  d = Flx_difftable_constant(H, p);
+  for (i=0; i < p; i++)
+  {
+    a += k[1+uel(d,n+1)];
+    if (n==6)
+      uel(d,7) = Fl_add(uel(d,7), uel(d,6), p);
+    uel(d,6) = Fl_add(uel(d,6), uel(d,5), p);
+    uel(d,5) = Fl_add(uel(d,5), uel(d,4), p);
+    uel(d,4) = Fl_add(uel(d,4), uel(d,3), p);
+    uel(d,3) = Fl_add(uel(d,3), uel(d,2), p);
+    uel(d,2) = Fl_add(uel(d,2), uel(d,1), p);
+  }
+  return gc_long(av, a);
+}
+
+static GEN
+dirgenus2(GEN Q, GEN p, long n)
+{
+  pari_sp av = avma;
+  GEN f;
+  if (n > 2)
+    f = RgX_recip(hyperellcharpoly(gmul(Q,gmodulo(gen_1, p))));
+  else
+  {
+    ulong pp = itou(p);
+    GEN Qp = ZX_to_Flx(Q, pp);
+    long t = Flx_genus2trace_naive(Qp, pp);
+    f = deg1pol_shallow(stoi(t), gen_1, 0);
+  }
+  return gc_upto(av, RgXn_inv_i(f, n));
+}
+
+GEN
+dirgenus2_worker(GEN P, ulong X, GEN Q)
+{
+  pari_sp av = avma;
+  long i, l = lg(P);
+  GEN V = cgetg(l, t_VEC);
+  for(i = 1; i < l; i++)
+  {
+    ulong p = uel(P,i);
+    long d = ulogint(X, p) + 1; /* minimal d such that p^d > X */
+    gel(V,i) = dirgenus2(Q, utoi(uel(P,i)), d);
+  }
+  return gc_GEN(av, mkvec2(P,V));
+}
+
+GEN
+vecan_genus2(GEN an, long L)
+{
+  GEN Q = gel(an,1), bad = gel(an, 2);
+  GEN worker = snm_closure(is_entry("_dirgenus2_worker"), mkvec(Q));
+  return pardireuler(worker, gen_2, stoi(L), NULL, bad);
+}
+
 /* Implementation of Kedlaya Algorithm for counting point on hyperelliptic
 curves by Bill Allombert based on a GP script by Bernadette Perrin-Riou.
 
@@ -619,105 +803,6 @@ hyperellpadicfrobenius0(GEN H, GEN Tp, long n)
   if (lgefint(p) > 3) pari_err_IMPL("large prime in hyperellpadicfrobenius");
   return T? nfhyperellpadicfrobenius(H, T, itou(p), n)
           : hyperellpadicfrobenius(H, itou(p), n);
-}
-
-static GEN
-F2x_genus2charpoly_naive(GEN P, GEN Q)
-{
-  long a, b = 1, c = 0;
-  GEN T = mkvecsmall2(P[1], 7);
-  GEN PT = F2x_rem(P, T), QT = F2x_rem(Q, T);
-  long q0 = F2x_eval(Q, 0), q1 = F2x_eval(Q, 1);
-  long dP = F2x_degree(P), dQ = F2x_degree(Q);
-  a= dQ<3 ? 0: dP<=5 ? 1: -1;
-  a += (q0? F2x_eval(P, 0)? -1: 1: 0) + (q1? F2x_eval(P, 1)? -1: 1: 0);
-  b += q0 + q1;
-  if (lgpol(QT))
-    c = (F2xq_trace(F2xq_div(PT, F2xq_sqr(QT, T), T), T)==0 ? 1: -1);
-  return mkvecsmalln(6, 0UL, 4UL, 2*a, (b+2*c+a*a)>>1, a, 1UL);
-}
-
-static GEN
-Flx_difftable(GEN P, ulong p)
-{
-  long i, n = degpol(P);
-  GEN V = cgetg(n+2, t_VEC);
-  gel(V, n+1) = P;
-  for(i = n; i >= 1; i--)
-    gel(V, i) = Flx_diff1(gel(V, i+1), p);
-  return V;
-}
-
-static GEN
-FlxV_Fl2_eval_pre(GEN V, GEN x, ulong D, ulong p, ulong pi)
-{
-  long i, n = lg(V)-1;
-  GEN r = cgetg(n+1, t_VEC);
-  for (i = 1; i <= n; i++)
-    gel(r, i) = Flx_Fl2_eval_pre(gel(V, i), x, D, p, pi);
-  return r;
-}
-
-static GEN
-Fl2V_next(GEN V, ulong p)
-{
-  long i, n = lg(V)-1;
-  GEN r = cgetg(n+1, t_VEC);
-  gel(r, 1) = gel(V, 1);
-  for (i = 2; i <= n; i++)
-    gel(r, i) = Flv_add(gel(V, i), gel(V, i-1), p);
-  return r;
-}
-
-static GEN
-FlxV_constant(GEN x)
-{ pari_APPLY_long(Flx_constant(gel(x,i))) }
-
-static GEN
-Flx_genus2charpoly_naive(GEN H, ulong p)
-{
-  pari_sp av = avma, av2;
-  ulong pi = get_Fl_red(p);
-  ulong i, j, p2 = p>>1, D = 2, e = ((p&2UL) == 0) ? -1 : 1;
-  long a, b, c = 0, n = degpol(H);
-  GEN t, d, k = const_vecsmall(p, -1);
-  k[1] = 0;
-  for (i=1, j=1; i < p; i += 2, j = Fl_add(j, i, p)) k[j+1] = 1;
-  while (k[1+D] >= 0) D++;
-  b = n == 5 ? 0 : 1;
-  a = b ? k[1+Flx_lead(H)]: 0;
-  t = Flx_difftable(H, p);
-  d = FlxV_constant(t);
-  av2 = avma;
-  for (i=0; i < p; i++)
-  {
-    ulong v = uel(d,n+1);
-    a += k[1+v];
-    b += !!v;
-    if (n==6)
-      uel(d,7) = Fl_add(uel(d,7), uel(d,6), p);
-    uel(d,6) = Fl_add(uel(d,6), uel(d,5), p);
-    uel(d,5) = Fl_add(uel(d,5), uel(d,4), p);
-    uel(d,4) = Fl_add(uel(d,4), uel(d,3), p);
-    uel(d,3) = Fl_add(uel(d,3), uel(d,2), p);
-    uel(d,2) = Fl_add(uel(d,2), uel(d,1), p);
-  }
-  for (j=1; j <= p2; j++)
-  {
-    GEN V = FlxV_Fl2_eval_pre(t, mkvecsmall2(0, j), D, p, pi);
-    for (i=0;; i++)
-    {
-      GEN r2 = gel(V, n+1);
-      c += uel(r2,2) ?
-        (uel(r2,1) ? uel(k,1+Fl2_norm_pre(r2, D, p, pi)): e)
-         : !!uel(r2,1);
-      if (i == p-1) break;
-      V = Fl2V_next(V, p);
-    }
-    set_avma(av2);
-  }
-  set_avma(av);
-  return mkvecsmalln(6, 0UL, p*p, a*p, (b+2*c+a*a)>>1, a, 1UL);
 }
 
 static GEN
@@ -2126,9 +2211,10 @@ genus2_eulerfact2_semistable(GEN PQ)
 }
 
 GEN
-genus2_eulerfact2(GEN F, GEN PQ)
+genus2_eulerfact2(GEN PQ)
 {
   pari_sp av = avma;
+  GEN F = gadd(gsqr(gel(PQ, 2)), gmul2n(gel(PQ, 1), 2));
   GEN W, R = genus2_type5(F, gen_2), E;
   if (R) return R;
   W = hyperellextremalmodels_i(PQ, 2, gen_2);
@@ -2146,7 +2232,7 @@ genus2charpoly(GEN G, GEN p)
   GEN PQ = gel(gr, 3), L = gel(gr, 4), r = gel(L, 4);
   GEN P = gadd(gsqr(gel(PQ, 2)), gmul2n(gel(PQ, 1), 2));
   if (equaliu(p,2))
-    F = genus2_eulerfact2(P, PQ);
+    F = genus2_eulerfact2(PQ);
   else
     F = genus2_eulerfact(P,p, r[1],r[2]);
   return gc_upto(av, F);

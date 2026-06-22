@@ -849,6 +849,11 @@ ZM_powu(GEN x, ulong n)
   if (!n) return matid(lg(x)-1);
   return gc_GEN(av, gen_powu_i(x, n, NULL, &_ZM_sqr, &_ZM_mul));
 }
+
+GEN
+ZMV_prod(GEN v)
+{ return gen_product(v, NULL, _ZM_mul); }
+
 /********************************************************************/
 /**                                                                **/
 /**                           ADD, SUB                             **/

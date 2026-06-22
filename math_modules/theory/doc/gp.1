@@ -252,6 +252,14 @@ function for large base fields. This environment variable
 overrides PARI's 'datadir', defined at Configure time.
 
 .TP
+.I $GP_PDF_VIEWER
+an application able to display PDF files. This is currently not directly
+used inside gp but passed on to the external
+.I gphelp
+application to display PDF documentation on systems where the default DVI
+documentation was not installed.
+
+.TP
 .I $GP_POSTSCRIPT_VIEWER
 an application able to display PostScript files, used by the
 .I plotps

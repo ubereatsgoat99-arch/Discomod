@@ -157,6 +157,10 @@ BA  80- [libpari] newblock_t, clone_lock, clone_unlock, clone_unlock_deep
     81- [libpari] divmpr, divrmp
 BA  82- [libpari] RgX_Graeffe
 BA  83- [libpari] FlxqXn_div, FlxqXn_div_pre
+BA  84- [libpari] gen_parpairwiseop, gen_parpairwiseop_percent
+BA  85- [libpari] ZMV_prod
+BA  86- [libpari] get_Flx_algebra, get_Flxq_algebra
+BA  87- [libpari] ZXX_shifti
 
   Changed
      1- subst: use fast RgX_affine function to compute P(a*x+b) + RgX_deflate

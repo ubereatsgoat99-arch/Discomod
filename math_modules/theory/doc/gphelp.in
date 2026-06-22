@@ -61,6 +61,15 @@ $bzip = "bzip2";
 $bzcat = "$bzip -dc";
 $docdir = &get_docdir();
 $tex = $ENV{GPTEX} || "tex";
+$xpdf = $ENV{GP_PDF_VIEWER};
+if ($xpdf)
+{ # special treatment in case we're on a non-Unix system
+  if ($xpdf =~ /^"/)
+  {
+    my @T = split(/"/, "$xpdf");
+    $xpdf = $T[1];
+  }
+}
 
 $refcard = (@ARGV and $ARGV[-1] =~ /refcard/i);
 
@@ -205,40 +214,32 @@ sub safe_setsid {
 sub viewer_arg_redirect {
   my $F = shift;
   my $redirect = ' 2>/dev/null >/dev/null &';
-  my $viewer;
   if ($F =~ /\.dvi/)
   { # DVI
-    $viewer = ($F =~ /refcard/)? $xdviref: $xdvi;
+    my $viewer = ($F =~ /refcard/)? $xdviref: $xdvi;
     return ($viewer, $F, $redirect);
   }
   # PDF
-  my $cygwin = ($^O =~ /cygwin/);
-  my $win32 = ($^O =~ /ms(win|ys)/);
-  my $osx = ($^O =~ /darwin/);
+  my $viewer = $xpdf;
+  if ($viewer) { print "using \'$viewer\', "; } # for debugging
+  my $cygwin= ($^O =~ /cygwin/);
+  my $win32 = ($^O =~ /(mswin|msys)/);
+  my $macOS = ($^O =~ /darwin/);
   if ($cygwin)
-  { # PDF Win32
-    @_ = split(/"/, `acro.exe`);
-    ($viewer = $_[1]) =~ s,\\,/,g;
-
+  {
+    if (!$viewer)
+    {
+      my @T = split(/"/, `acro.exe`);
+      ($viewer = $T[1]) =~ s,\\,/,g;
+    }
+    $viewer = "\"$viewer\"";
     $redirect = "";
     $F =~ s,/cygdrive/(.),$1:, ; # Reader can't cope with Cygwin paths
-    $F      = "\"$F\"";
-    $viewer = "\"$viewer\"";
+    $F = "\"$F\"";
   }
-  elsif ($win32)
-  { # PDF Win32
-    my @T = split(/"/, "$ENV{GP_PDF_VIEWER}");
-    $viewer = $T[1];
-    print "using \'$viewer\', ";
-  }
-  elsif ($osx)
-  {
-    $viewer = "open";
-  }
-  else
-  { # PDF generic
-    $viewer = "acroread";
-  }
+  elsif ($win32) { }
+  elsif ($macOS) { $viewer = "open" if (!$viewer); }
+  else { $viewer = "acroread" if (!$viewer); } # hope for the best
   return ($viewer, $F, $redirect);
 }
 
@@ -495,8 +496,12 @@ sub posttex {
   -f "$F"
     || die "could not create '$F': status=$?, $out";
   safe_setsid();
-  my ($goners) = join(" ", @goners);
-  system("($xdvi $F 2>/dev/null >/dev/null; rm -f $goners; rmdir $tmpdir)&");
+  my $goners = join(" ", @goners);
+  my $viewer = $xdvi;
+  $viewer = $xpdf if ($F =~ /\.pdf$/ && $xpdf);
+  # 'sleep' for indirect viewers (e.g., through open or xdg-open): avoid
+  # removing the files before the actual applicationi is called
+  system("($viewer $F 2>/dev/null >/dev/null; sleep 2; rm -f $goners; rmdir $tmpdir)&");
 }
 
 #

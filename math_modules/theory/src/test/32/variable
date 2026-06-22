@@ -19,6 +19,14 @@ y
   ***                                     ^--
   *** _/_: impossible inverse in gdiv: 0.
 [y, y, x, y, z, y, y, tt]
+[x, y]
+[x, y]
+[x, y]
+[x]
+[x, y]
+[y, z]
+[y, z]
+[y, z]
 [y, x, y, z, y]
 [y, y, x, y, z, y, y, tt]
 Total time spent: 0

@@ -9434,6 +9434,8 @@ is a square \kbd{ZM} and $\kbd{n}\geq 0$.
 \fun{GEN}{ZM_powu}{GEN x, ulong n} returns $\kbd{x}^\kbd{n}$, assuming \kbd{x}
 is a square \kbd{ZM} and $\kbd{n}\geq 0$.
 
+\fun{GEN}{ZMV_prod}{GEN v} returns the product of the elements of $v$.
+
 \fun{GEN}{ZM_det}{GEN M} if \kbd{M} is a \kbd{ZM}, returns the determinant of
 $M$. This is the function underlying \tet{matdet} whenever $M$ is a \kbd{ZM}.
 
@@ -10616,6 +10618,9 @@ component in $x$; assume all coefficients are \typ{INT} or \kbd{ZX}s.
 
 \fun{GEN}{ZXX_Z_mul}{GEN x, GEN y} returns $x\*y$.
 
+\fun{GEN}{ZXX_shifti}{GEN x, long n} shifts all coefficients of \kbd{x} by $n$
+bits, which can be negative.
+
 \fun{GEN}{ZXX_Q_mul}{GEN x, GEN y} returns $x*y$, where $y$ is a rational number
 and the resulting \typ{POL} has rational entries.
 
@@ -11786,20 +11791,27 @@ accuracies, and thus have different weights.
 \fun{const struct bb_algebra *}{get_FpX_algebra}{void **E, GEN p, long v}
 return the algebra of polynomials over $\F_p$ in variable $v$.
 
+\fun{const struct bb_algebra *}{get_Flx_algebra}{void **E, ulong p, long v}
+return the algebra of polynomials over $\F_p$ in variable $v$ (for \kbd{ulong} $p$).
+
 \fun{const struct bb_algebra *}{get_FpXQ_algebra}{void **E, GEN T, GEN p}
 return the algebra $\F_p[X]/(T(X))$.
+
+\fun{const struct bb_algebra *}{get_Flxq_algebra}{void **E, GEN T, ulong p}
+return the algebra $\F_p[X]/(T(X))$ (for \kbd{ulong} $p$).
 
 \fun{const struct bb_algebra *}{get_FpXQX_algebra}{void **E, GEN T, GEN p, long v}
 return the algebra of polynomials over $\F_p[X]/(T(X))$ in variable $v$.
 
-\fun{const struct bb_algebra *}{get_FlxqXQ_algebra}{void **E, GEN S, GEN T, ulong p}
-return the algebra $\F_p[X,Y]/(S(X,Y),T(X))$ (for \kbd{ulong} $p$).
-
 \fun{const struct bb_algebra *}{get_FlxqX_algebra}{void **E, GEN T, ulong p, long v}
-return the algebra of polynomials over $\F_p[X]/(T(X))$ in variable $v$.
+return the algebra of polynomials over $\F_p[X]/(T(X))$ in variable $v$ (for
+\kbd{ulong} $p$).
 
 \fun{const struct bb_algebra *}{get_FpXQXQ_algebra}{void **E, GEN S, GEN T, GEN p}
 return the algebra $\F_p[X,Y]/(S(X,Y),T(X))$.
+
+\fun{const struct bb_algebra *}{get_FlxqXQ_algebra}{void **E, GEN S, GEN T, ulong p}
+return the algebra $\F_p[X,Y]/(S(X,Y),T(X))$ (for \kbd{ulong} $p$).
 
 \fun{const struct bb_algebra *}{get_Rg_algebra}{void}
 return the generic algebra (\kbd{E} is not used and can be set to \kbd{NULL}).

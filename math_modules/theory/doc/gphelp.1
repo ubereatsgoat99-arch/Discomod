@@ -179,6 +179,14 @@ where to launch the dvi previewer. If unset,
 mode is assumed automatically.
 
 .TP
+GP_PDF_VIEWER
+an application able to display PDF files. Used to display PDF
+documentation on systems where the default DVI documentation is not desired
+or available. When gphelp is called by gp and this variable is unset, the
+calling gp may set it automatically on some systems (for instance according
+to user's preferences from Windows registry).
+
+.TP
 GPDOCDIR
 directory where PARI help files are located. Default value set at Configure
 time.
@@ -188,9 +196,10 @@ GPTEX
 .RS
 TeX typesetting program to use. Defaut value: tex. This may for instance be
 changed to 'pdftex' to let the gphelp system produce PDF output. To make this
-example work, make sure to modify GPXDVI to a PDF previewer or a general
-tool indicating user's preferred application (such as 'xdg-open' on Linux
-or 'open' on OS/X).
+example work, make sure to set GP_PDF_VIEWER to a sensible value, whether
+a specific previewer or a general system tool using user's preferrences
+(such as 'xdg-open' on Linux or 'open' on macOS); another option is to change
+GPXDVI to a PDF previewer.
 .RE
 
 .TP
@@ -203,9 +212,9 @@ GPXDVI
 previewer to use to open documents produced by $GPTEX. Default value: xdvi.
 By default $GPTEX is 'tex' and produces dvi files; you may use GPXDVI to
 specify options for vanilla xdvi, for instance "xdvi -s 7" to select a shrink
-factor. If you change GPTEX to produce another format then GPXDVI must be
-changed accordingly. For instance to a PDF previewer or a generic 'xdg-open'
-(Linux) or 'open' (OS/X).
+factor. If you change GPTEX to produce another format then GPXDVI can be
+changed accordingly, for instance to a PDF previewer or a generic 'xdg-open'
+(Linux) or 'open' (macOS).
 .RE
 
 .TP

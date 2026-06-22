@@ -1722,6 +1722,11 @@ _Flx_add(void * E, GEN x, GEN y) {
   return Flx_add(x, y, D->p);
 }
 static GEN
+_Flx_sub(void * E, GEN x, GEN y) {
+  struct _Flx *D = (struct _Flx*) E;
+  return Flx_sub(x, y, D->p);
+}
+static GEN
 _Flx_mul(void *E, GEN x, GEN y) {
   struct _Flx *D = (struct _Flx*) E;
   return Flx_mul_pre(x, y, D->p, D->pi);
@@ -2925,12 +2930,10 @@ static GEN
 _Flxq_add(void *E, GEN x, GEN y)
 { struct _Flxq *s = (struct _Flxq *)E;
   return Flx_add(x,y,s->p); }
-#if 0
 static GEN
 _Flxq_sub(void *E, GEN x, GEN y)
 { struct _Flxq *s = (struct _Flxq *)E;
   return Flx_sub(x,y,s->p); }
-#endif
 static GEN
 _Flxq_sqr(void *data, GEN x)
 {
@@ -2949,7 +2952,12 @@ _Flxq_one(void *data)
   struct _Flxq *D = (struct _Flxq*)data;
   return pol1_Flx(get_Flx_var(D->T));
 }
-
+static GEN
+_Flxq_zero(void *data)
+{
+  struct _Flxq *D = (struct _Flxq*)data;
+  return pol0_Flx(get_Flx_var(D->T));
+}
 static GEN
 _Flxq_powu_i(struct _Flxq *D, GEN x, ulong n)
 { return gen_powu_i(x, n, (void*)D, &_Flxq_sqr, &_Flxq_mul); }
@@ -3206,10 +3214,40 @@ GEN
 FlxC_Flxq_eval(GEN x, GEN F, GEN T, ulong p)
 { return FlxC_Flxq_eval_pre(x, F, T, p, SMALL_ULONG(p)? 0: get_Fl_red(p)); }
 
-#if 0
-static struct bb_algebra Flxq_algebra = { _Flxq_red, _Flxq_add, _Flxq_sub,
-              _Flxq_mul, _Flxq_sqr, _Flxq_one, _Flxq_zero};
-#endif
+struct bb_algebra Flxq_algebra = { _Flxq_red, _Flxq_add, _Flxq_sub,
+                     _Flxq_mul, _Flxq_sqr, _Flxq_one, _Flxq_zero};
+
+const struct bb_algebra *
+get_Flxq_algebra(void **E, GEN T, ulong p)
+{
+  ulong pi = SMALL_ULONG(p)? 0: get_Fl_red(p);
+  GEN z = new_chunk(sizeof(struct _Flxq));
+  struct _Flxq *e = (struct _Flxq *) z;
+  e->T = Flx_get_red(T, p);
+  e->p  = p;
+  e->pi = pi; *E = (void*)e;
+  return &Flxq_algebra;
+}
+
+static GEN
+_Flx_red(void *E, GEN x)
+{ (void) E; return x; }
+static GEN
+_Flx_zero(void *E)
+{ struct _Flx *D = (struct _Flx *)E; return pol0_Flx(D->v); }
+
+static struct bb_algebra Flx_algebra = { _Flx_red, _Flx_add, _Flx_sub,
+       _Flx_mul, _Flx_sqr, _Flx_one, _Flx_zero };
+
+const struct bb_algebra *
+get_Flx_algebra(void **E, ulong p, long v)
+{
+  ulong pi = SMALL_ULONG(p)? 0: get_Fl_red(p);
+  GEN z = new_chunk(sizeof(struct _Flx));
+  struct _Flx *e = (struct _Flx *) z;
+  e->p  = p; e->pi = pi;
+  *E = (void*)e; return &Flx_algebra;
+}
 
 static GEN
 Flxq_autpow_sqr(void *E, GEN x)

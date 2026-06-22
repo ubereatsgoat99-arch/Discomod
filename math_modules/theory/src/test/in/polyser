@@ -1,4 +1,4 @@
-HEAP=[60, if(sizebyte(0)==16,4879,4930)];
+HEAP=[60, if(sizebyte(0)==16,4897,4948)];
 \e
 apol=y^3+5*y+1
 deriv((x+y)^5,y)

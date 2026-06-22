@@ -1486,39 +1486,16 @@ _shift(GEN P, long n, ulong p, long v)
   return FpXX_renormalize(r, l);
 }
 
-struct _can_mul
-{
-  GEN T, q;
-  ulong p;
-};
-
-static GEN
-_can5_mul(void *E, GEN A, GEN B)
-{
-  struct _can_mul *d = (struct _can_mul *)E;
-  GEN a = gel(A,1), b = gel(B,1);
-  long n = itos(gel(A,2));
-  GEN bn = _shift(b, n, d->p, get_FpX_var(d->T));
-  GEN c = FpXQX_mul(a, bn, d->T, d->q);
-  return mkvec2(c, addii(gel(A,2), gel(B,2)));
-}
-
-static GEN
-_can5_sqr(void *E, GEN A)
-{ return _can5_mul(E,A,A); }
-
 static GEN
 _can5_iter(void *E, GEN f, GEN q)
 {
   pari_sp av = avma;
-  struct _can_mul D;
   ulong p = *(ulong*)E;
   long i, vT = fetch_var();
-  GEN N, P, d, V, fs;
-  D.q = q; D.T = ZX_Z_sub(pol_xn(p,vT),gen_1);
-  D.p = p;
-  fs = mkvec2(_shift(f, 1, p, vT), gen_1);
-  N = gel(gen_powu_i(fs,p-1,(void*)&D,_can5_sqr,_can5_mul),1);
+  GEN N, P, d, V;
+  GEN T = ZX_Z_sub(pol_xn(p,vT),gen_1);
+  N = FpXQX_mul(_shift(f, 1, p, vT), _shift(f, 2, p, vT), T, q);
+  N = FpXQX_mul(N,_shift(N, 2, p, vT), T, q);
   N = ZXX_evalx0(FpXQX_red(N,polcyclo(p,vT),q));
   P = FpX_mul(N,f,q);
   P = RgX_deflate(P, p);

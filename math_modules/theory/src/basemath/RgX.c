@@ -1212,33 +1212,6 @@ RgX_recip_i(GEN x)
 /*                      ADDITION / SUBTRACTION                     */
 /*                                                                 */
 /*******************************************************************/
-/* cf RgX_coeff_simplify */
-INLINE GEN
-RgX_coeff_add(GEN a, GEN b)
-{
-  pari_sp av = avma;
-  GEN s = gadd(a, b);
-  if (typ(s) != t_POL) return s;
-  switch(lg(s))
-  {
-    case 2: return gc_const(av, gen_0);
-    case 3: return gc_GEN(av, gel(s,2));
-    default: return s;
-  }
-}
-INLINE GEN
-RgX_coeff_sub(GEN a, GEN b)
-{
-  pari_sp av = avma;
-  GEN s = gsub(a, b);
-  if (typ(s) != t_POL) return s;
-  switch(lg(s))
-  {
-    case 2: return gc_const(av, gen_0);
-    case 3: return gc_GEN(av, gel(s,2));
-    default: return s;
-  }
-}
 /* same variable */
 GEN
 RgX_add(GEN x, GEN y)
@@ -1247,12 +1220,12 @@ RgX_add(GEN x, GEN y)
   GEN z;
   if (ly <= lx) {
     z = cgetg(lx,t_POL); z[1] = x[1];
-    for (i=2; i < ly; i++) gel(z,i) = RgX_coeff_add(gel(x,i),gel(y,i));
+    for (i=2; i < ly; i++) gel(z,i) = gadd(gel(x,i),gel(y,i));
     for (   ; i < lx; i++) gel(z,i) = gcopy(gel(x,i));
     z = normalizepol_lg(z, lx);
   } else {
     z = cgetg(ly,t_POL); z[1] = y[1];
-    for (i=2; i < lx; i++) gel(z,i) = RgX_coeff_add(gel(x,i),gel(y,i));
+    for (i=2; i < lx; i++) gel(z,i) = gadd(gel(x,i),gel(y,i));
     for (   ; i < ly; i++) gel(z,i) = gcopy(gel(y,i));
     z = normalizepol_lg(z, ly);
   }
@@ -1265,12 +1238,12 @@ RgX_sub(GEN x, GEN y)
   GEN z;
   if (ly <= lx) {
     z = cgetg(lx,t_POL); z[1] = x[1];
-    for (i=2; i < ly; i++) gel(z,i) = RgX_coeff_sub(gel(x,i),gel(y,i));
+    for (i=2; i < ly; i++) gel(z,i) = gsub(gel(x,i),gel(y,i));
     for (   ; i < lx; i++) gel(z,i) = gcopy(gel(x,i));
     z = normalizepol_lg(z, lx);
   } else {
     z = cgetg(ly,t_POL); z[1] = y[1];
-    for (i=2; i < lx; i++) gel(z,i) = RgX_coeff_sub(gel(x,i),gel(y,i));
+    for (i=2; i < lx; i++) gel(z,i) = gsub(gel(x,i),gel(y,i));
     for (   ; i < ly; i++) gel(z,i) = gneg(gel(y,i));
     z = normalizepol_lg(z, ly);
   }
@@ -1287,7 +1260,7 @@ RgX_Rg_add(GEN y, GEN x)
   long lz = lg(y), i;
   if (lz == 2) return scalarpol(x,varn(y));
   z = cgetg(lz,t_POL); z[1] = y[1];
-  gel(z,2) = RgX_coeff_add(gel(y,2),x);
+  gel(z,2) = gadd(gel(y,2),x);
   for(i=3; i<lz; i++) gel(z,i) = gcopy(gel(y,i));
   /* probably useless unless lz = 3, but cannot be skipped if y is
    * an inexact 0 */
@@ -1300,7 +1273,7 @@ RgX_Rg_add_shallow(GEN y, GEN x)
   long lz = lg(y), i;
   if (lz == 2) return scalarpol(x,varn(y));
   z = cgetg(lz,t_POL); z[1] = y[1];
-  gel(z,2) = RgX_coeff_add(gel(y,2),x);
+  gel(z,2) = gadd(gel(y,2),x);
   for(i=3; i<lz; i++) gel(z,i) = gel(y,i);
   return normalizepol_lg(z,lz);
 }
@@ -1319,7 +1292,7 @@ RgX_Rg_sub(GEN y, GEN x)
     gel(z,2) = gneg(x); return z;
   }
   z = cgetg(lz,t_POL); z[1] = y[1];
-  gel(z,2) = RgX_coeff_sub(gel(y,2),x);
+  gel(z,2) = gsub(gel(y,2),x);
   for(i=3; i<lz; i++) gel(z,i) = gcopy(gel(y,i));
   return normalizepol_lg(z,lz);
 }
@@ -1330,7 +1303,7 @@ Rg_RgX_sub(GEN x, GEN y)
   long lz = lg(y), i;
   if (lz == 2) return scalarpol(x,varn(y));
   z = cgetg(lz,t_POL); z[1] = y[1];
-  gel(z,2) = RgX_coeff_sub(x, gel(y,2));
+  gel(z,2) = gsub(x, gel(y,2));
   for(i=3; i<lz; i++) gel(z,i) = gneg(gel(y,i));
   return normalizepol_lg(z,lz);
 }
@@ -1424,21 +1397,6 @@ RgXspec_kill0(GEN x, long lx)
   return z;
 }
 
-/* For consistency we want operations on t_POL of the same variable v
- * to return a t_POL in v; but this becomes a nuisance for coefficients,
- * e.g., multivariate t_POL, which should have simplest possible types */
-INLINE GEN
-RgX_coeff_simplify(pari_sp av, GEN s)
-{
-  if (!s) return gen_0;
-  if (typ(s) != t_POL) return gc_upto(av, s);
-  switch(lg(s))
-  {
-    case 2: return gen_0;
-    case 3: return gc_GEN(av, gel(s,2));
-    default: return gc_upto(av, s);
-  }
-}
 INLINE GEN
 RgX_mulspec_basecase_limb(GEN x, GEN y, long a, long b)
 {
@@ -1452,7 +1410,7 @@ RgX_mulspec_basecase_limb(GEN x, GEN y, long a, long b)
       GEN t = gmul(gel(y,i), gel(x,-i));
       s = s? gadd(s, t): t;
     }
-  return RgX_coeff_simplify(av, s);
+  return s? gc_upto(av, s): gen_0;
 }
 
 /* assume nx >= ny > 0, return x * y * t^v */
@@ -1679,7 +1637,7 @@ RgX_sqrspec_basecase_limb(GEN x, long a, long i)
       s = s? gadd(s, t): t;
     }
   }
-  return RgX_coeff_simplify(av, s);
+  return s? gc_upto(av,s): gen_0;
 }
 static GEN
 RgX_sqrspec_basecase(GEN x, long nx, long v)
@@ -1810,23 +1768,11 @@ RgX_Rg_divexact(GEN x, GEN y) {
   for (i=2; i<lx; i++) gel(z,i) = gdivexact(gel(x,i),y);
   return z;
 }
-/* cf RgX_coeff_simplify */
-INLINE GEN
-RgX_coeff_div(GEN a, GEN b)
-{
-  pari_sp av = avma;
-  GEN s = gdiv(a, b);
-  if (typ(s) != t_POL) return s;
-  switch(lg(s))
-  {
-    case 2: return gc_const(av, gen_0);
-    case 3: return gc_GEN(av, gel(s,2));
-    default: return s;
-  }
-}
 GEN
 RgX_Rg_div(GEN x, GEN y) {
-  if (lg(x) == 2) return gcopy(x);
+  long i, lx = lg(x);
+  GEN z;
+  if (lx == 2) return gcopy(x);
   switch(typ(y))
   {
     case t_INT:
@@ -1834,7 +1780,9 @@ RgX_Rg_div(GEN x, GEN y) {
       break;
     case t_INTMOD: case t_POLMOD: return RgX_Rg_mul(x, ginv(y));
   }
-  pari_APPLY_pol(RgX_coeff_div(gel(x,i), y));
+  z = cgetg(lx, t_POL); z[1] = x[1];
+  for (i=2; i<lx; i++) gel(z,i) = gdiv(gel(x,i),y);
+  return normalizepol_lg(z, lx);
 }
 GEN
 RgX_normalize(GEN x)
@@ -2379,23 +2327,8 @@ RgX_pseudodivrem(GEN x, GEN y, GEN *ptr)
 GEN
 RgXQX_mul(GEN x, GEN y, GEN T)
 { return RgXQX_red(RgX_mul(x,y), T); }
-
-/* cf RgX_coeff_simplify */
-INLINE GEN
-RgX_coeff_mul(GEN a, GEN b)
-{
-  pari_sp av = avma;
-  GEN s = gmul(a, b);
-  if (typ(s) != t_POL) return s;
-  switch(lg(s))
-  {
-    case 2: return gc_const(av, gen_0);
-    case 3: return gc_GEN(av, gel(s,2));
-    default: return s;
-  }
-}
 GEN
-RgX_Rg_mul(GEN x, GEN y) { pari_APPLY_pol(RgX_coeff_mul(y, gel(x,i))); }
+RgX_Rg_mul(GEN x, GEN y) { pari_APPLY_pol(gmul(y, gel(x,i))); }
 GEN
 RgX_mul2n(GEN x, long n) { pari_APPLY_pol(gmul2n(gel(x,i), n)); }
 GEN

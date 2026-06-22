@@ -1764,20 +1764,24 @@ GEN
 parmatrix(long n, long m, GEN code)
 {
   long i, pending = 0, workid, nm = n*m;
-  GEN worker, a, M, done;
+  long a[] = {evaltyp(t_VEC) | _evallg(3), 0, 0};
+  long ai[] = {evaltyp(t_INT) | _evallg(3), evalsigne(1) | evallgefint(3), 0};
+  long aj[] = {evaltyp(t_INT) | _evallg(3), evalsigne(1) | evallgefint(3), 0};
+  GEN worker, M, done;
   struct pari_mt pt;
   if (m < 0)  pari_err_DOMAIN("parmatrix", "nbcols", "<", gen_0, stoi(m));
   if (n < 0)  pari_err_DOMAIN("parmatrix", "nbrows", "<", gen_0, stoi(n));
   worker = snm_closure(is_entry("_parmatrix_worker"), mkvec(code));
   mt_queue_start_lim(&pt, worker, n);
-  a = mkvec2(cgetipos(3), cgetipos(3)); /* left on the stack */
+  gel(a,1) = ai;
+  gel(a,2) = aj;
   M = cgetg(m+1, t_MAT);
   for (i = 1; i <= m; i++)
     gel(M,i) = cgetg(n+1, t_COL);
   for (i = 0; i < nm || pending; i < nm ? i++: 0)
   {
-     mael(a,1,2) = 1+(i%n);
-     mael(a,2,2) = 1+(i/n);
+     ai[2] = 1 + (i%n);
+     aj[2] = 1 + (i/n);
      mt_queue_submit(&pt, i, i < nm ? a: NULL);
      done = mt_queue_get(&pt, &workid, &pending);
      if (done) gcoeff(M,1+(workid%n),1+(workid/n)) = done;
@@ -1790,16 +1794,18 @@ GEN
 parvector(long n, GEN code)
 {
   long i, pending = 0, workid;
-  GEN worker, a, V, done;
+  long a[] = {evaltyp(t_VEC) | _evallg(2), 0};
+  long ai[] = {evaltyp(t_INT) | _evallg(3), evalsigne(1) | evallgefint(3), 0};
+  GEN worker, V, done;
   struct pari_mt pt;
   if (n < 0)  pari_err_DOMAIN("parvector", "dimension", "<", gen_0, stoi(n));
   worker = snm_closure(is_entry("_parvector_worker"), mkvec(code));
   mt_queue_start_lim(&pt, worker, n);
-  a = mkvec(cgetipos(3)); /* left on the stack */
+  gel(a, 1) = ai;
   V = cgetg(n+1, t_VEC);
   for (i=1; i<=n || pending; i<=n ? i++: 0)
   {
-    mael(a,1,2) = i;
+    ai[2] = i;
     mt_queue_submit(&pt, i, i<=n? a: NULL);
     done = mt_queue_get(&pt, &workid, &pending);
     if (done) gel(V,workid) = done;

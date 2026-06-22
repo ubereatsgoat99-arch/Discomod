@@ -895,11 +895,11 @@ GEN
 gen_parapply_percent(GEN worker, GEN D, long percent)
 {
   long l = lg(D), i, pending = 0, cnt = 0, lper = -1, lcnt = 0;
-  GEN W, V;
+  long W[] = {evaltyp(t_VEC) | _evallg(2), 0};
+  GEN V;
   struct pari_mt pt;
 
   if (l == 1) return cgetg(1, typ(D));
-  W = cgetg(2, t_VEC);
   V = cgetg(l, typ(D));
   mt_queue_start_lim(&pt, worker, l-1);
   for (i = 1; i < l || pending; i++)
@@ -935,6 +935,44 @@ parapply(GEN C, GEN D)
   if (!is_vec_t(typ(D))) pari_err_TYPE("parapply",D);
   return gc_upto(av, gen_parapply(C, D));
 }
+
+GEN
+gen_parpairwiseop_percent(GEN worker, GEN D, long percent)
+{
+  long l = lg(D)-1, i, pending = 0, cnt = 0, lper = -1, lcnt = 0, n = l>>1;
+  long W[] = {evaltyp(t_VEC) | _evallg(3), 0, 0};
+  GEN V;
+  struct pari_mt pt;
+
+  if (l == 0) return cgetg(1, typ(D));
+  V = cgetg(((l+1)>>1)+1, t_VEC);
+  if (odd(l))
+    gel(V,n+1) = gcopy(gel(D, l));
+  mt_queue_start_lim(&pt, worker, n);
+  for (i = 1; i <= n || pending; i++)
+  {
+    long workid;
+    GEN done;
+    if (i <= n) { gel(W,1) = gel(D,2*i-1); gel(W,2) = gel(D,2*i); }
+    mt_queue_submit(&pt, i, i<=n ? W: NULL);
+    done = mt_queue_get(&pt, &workid, &pending);
+    if (done)
+    {
+      gel(V,workid) = done;
+      if (percent && (++cnt)-lcnt>=percent)
+      {
+        long per = (long)(cnt*100./n);
+        lcnt = cnt;
+        if (per > lper) { err_printf("%ld%% ",per); lper = per; }
+      }
+    }
+  }
+  mt_queue_end(&pt); return V;
+}
+
+GEN
+gen_parpairwiseop(GEN worker, GEN D)
+{ return gen_parpairwiseop_percent(worker, D, 0); }
 
 GEN
 genfold(void *E, GEN (*f)(void* E, GEN x, GEN y), GEN x)
