@@ -5000,6 +5000,49 @@ const HOMOGLYPHS_EXTRA = {
     '\u2061':'','\u2062':'','\u2063':'','\u2064':'','\u034f':'',
 };
 // ══════════════════════════════════════════════════════════
+//  IPA / PHONETIC EXTENSIONS / LATIN NON-DECOMPOSABLES
+//  Applied as a THIRD homoglyph pass in normalizeUnicode().
+//
+//  Why this is needed:
+//    NFKD + the U+0300–U+036F strip handles the common
+//    precomposed accented letters (é→e, í→i, ç→c, ñ→n…).
+//    But these characters are NOT precomposed — they have NO
+//    canonical NFKD decomposition to a base+combining pair:
+//      • IPA Extensions  (U+0250–U+02AF): ɑ ɛ ɔ ɪ ɡ ʟ ʀ …
+//      • Phonetic Ext.   (U+1D00–U+1D7F): ᴀ ᴅ ᴇ ᴋ ᴍ ᴏ ᴛ ᴜ …
+//      • Latin ligatures (non-NFKD): æ œ ŋ ĸ ƒ
+//    They look like ASCII letters and are used to spell fruit
+//    names (e.g. "ɪce", "ʟeopard", "drɑgon", "dᴏugh") so
+//    they must be folded to ASCII before tokenization.
+// ══════════════════════════════════════════════════════════
+const HOMOGLYPHS_DIACRITICS = {
+    // Latin ligatures — no NFKD decomposition
+    'æ':'ae','Æ':'ae','œ':'oe','Œ':'oe',
+    // Latin Extended — no NFKD decomposition
+    'ŋ':'n','Ŋ':'n','ĸ':'k','ȷ':'j','ƒ':'f',
+    // IPA Extensions (U+0250–U+02AF) — letter lookalikes
+    'ɑ':'a','ɐ':'a','ɒ':'o',
+    'ɓ':'b','ʙ':'b',
+    'ɔ':'o','ɵ':'o','ɷ':'o',
+    'ɖ':'d','ɗ':'d',
+    'ɘ':'e','ɛ':'e','ɜ':'e','ɝ':'e','ɞ':'e',
+    'ɡ':'g','ɢ':'g','ɣ':'g',
+    'ɦ':'h','ɧ':'h','ʜ':'h',
+    'ɨ':'i','ɩ':'i','ɪ':'i',
+    'ɫ':'l','ɬ':'l','ɭ':'l','ʟ':'l',
+    'ɱ':'m',
+    'ɲ':'n','ɳ':'n','ɴ':'n',
+    'ɸ':'f',
+    'ʀ':'r','ʁ':'r',
+    'ʂ':'s','ʃ':'sh',
+    'ʏ':'y',
+    'ʐ':'z','ʑ':'z',
+    // Phonetic Extensions (U+1D00–U+1D7F) — small-capital lookalikes
+    // (the modifier-superscript forms ᴬ ᵃ ᴮ … are already in HOMOGLYPHS_EXTRA)
+    'ᴀ':'a','ᴄ':'c','ᴅ':'d','ᴇ':'e','ᴊ':'j','ᴋ':'k',
+    'ᴍ':'m','ᴏ':'o','ᴘ':'p','ᴛ':'t','ᴜ':'u','ᴠ':'v','ᴡ':'w','ᴢ':'z',
+};
+// ══════════════════════════════════════════════════════════
 //  EMOJI → GAME WORD MAP
 //  Converts pictographic emoji used as item/fruit shortcuts
 //  into their plain-text equivalents BEFORE the decorative
@@ -5105,9 +5148,19 @@ function restoreTiers(t) {
     return t.split(T_V4).join('v4').split(T_V3).join('v3').split(T_V2).join('v2');
 }
 function normalizeUnicode(t) {
-    t = t.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    // Strip ALL Unicode combining-mark blocks so any diacritic-decorated letter
+    // (é→e, ï→i, ç→c, ñ→n, and rarer supplement/symbol marks) collapses to base.
+    //   U+0300–U+036F  Combining Diacritical Marks (core Latin block)
+    //   U+1AB0–U+1AFF  Combining Diacritical Marks Extended
+    //   U+1DC0–U+1DFF  Combining Diacritical Marks Supplement
+    //   U+20D0–U+20FF  Combining Diacritical Marks for Symbols
+    //   U+FE20–U+FE2F  Combining Half Marks
+    t = t.normalize('NFKD').replace(/[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe20-\ufe2f]/g, '');
     for (const [s, d] of Object.entries(HOMOGLYPHS)) t = t.split(s).join(d);
     for (const [s, d] of Object.entries(HOMOGLYPHS_EXTRA)) t = t.split(s).join(d);
+    // Third pass: IPA/Phonetic/Latin chars that have no NFKD decomposition
+    // and aren't caught by the strip above (e.g. ɑ, ɛ, ɪ, ʟ, ᴅ, æ, œ, ŋ…)
+    for (const [s, d] of Object.entries(HOMOGLYPHS_DIACRITICS)) t = t.split(s).join(d);
     // ── Step 1: Emoji → game word substitution ───────────────────────────────
     // Must run BEFORE the decorative strip so "lf 🐉" → "lf dragon" (not "lf ").
     // Variation-selector suffix (\uFE0F) is stripped alongside the base glyph
