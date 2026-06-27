@@ -26,7 +26,7 @@ read -p "Wolfram API: " WOLFRAM_APPID
 read -p "Groq API Key: " GROQ_API_KEY
 read -p "Client ID: " CLIENT_ID
 read -p "OpenAI Key: " OPENAI_API_KEY
-
+read -p "Gemini Key: " GEMINI_API_KEY
 # Optional inputs
 echo ""
 echo "=== Optional Configuration ==="
