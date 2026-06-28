@@ -275,9 +275,10 @@ AI_MODULES_DIR="${AI_MODULES_DIR:A}"
 
 print -P "\n%F{cyan}%B📦  Download AI library source repos into ai_modules?%b%f"
 print -P "   Each repo is shallow-cloned, then stripped of .git / .gitignore / README files."
-print -P "   %F{white}  core     → openai-python      oracle  → anthropic-sdk-python%f"
+print -P "   %F{white}  core     → openai-python       oracle   → anthropic-sdk-python%f"
 print -P "   %F{white}  stinger  → roastedbyai         velocity → groq-python%f"
 print -P "   %F{white}  wolfram  → WolframClientForPython%f"
+print -P "   %F{white}  genesis  → python-genai%f"
 print -n "\n   Clone now? [y/N] → "
 read -r _DLAI </dev/tty
 
@@ -295,6 +296,7 @@ if [[ "${_DLAI:l}" == "y" ]]; then
             stinger  "https://github.com/jvherck/roastedbyai"                     # [GH] roastedbyai
             velocity "https://github.com/groq/groq-python"                        # [GH] Groq Python SDK
             wolfram  "https://github.com/WolframResearch/WolframClientForPython"  # [GH] Wolfram Client for Python
+            genesis  "https://github.com/googleapis/python-genai"                 # [GH] Google Gemini Python SDK
         )
 
         _AI_CLONE_OK=0
