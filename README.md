@@ -5,6 +5,7 @@ A feature-rich Discord bot built with **discord.js v14**, designed for moderatio
 This bot includes advanced systems such as message monitoring, violation tracking, exile/timeout mechanics, and optional AI-powered detection (Claude API).
 Originally made for MonkeyVerseYT's server, but extended the use for everyone anyways.
 
+Oh yea also this bot can be hosted using GitHub codespace easily so you can abuse that shi
 ---
 
 ## 🚀 Features
