@@ -56,23 +56,32 @@ if [[ -z "$MATH_MODULES_DIR" ]]; then
     mkdir -p "$MATH_MODULES_DIR"
 fi
 
-# ── 0b. Fetch & Deploy True Latest Qalculate! (v5.11.0) ────────────────────────
-info "Downloading and deploying the absolute latest Qalculate! (v5.11.0)..."
+# ── 0b. Fetch & Deploy True Latest Qalculate! ─────────────────────────────────
+info "Detecting latest Qalculate! release from GitHub..."
 (
     cd /tmp
-    # Pull the official, self-contained modern 64-bit release from GitHub creators
-    if wget -q --show-progress https://github.com/Qalculate/libqalculate/releases/download/v5.11.0/qalculate-5.11.0-x86_64.tar.xz; then
-        tar -xf qalculate-5.11.0-x86_64.tar.xz
-        
-        # Deploy as the direct, default 'qalc' executable binary your bot uses
-        cp ./qalculate-5.11.0/qalculate "$MATH_MODULES_DIR/qalc"
+
+    QALC_TAG=$(wget -qO- \
+        "https://api.github.com/repos/Qalculate/libqalculate/releases/latest" \
+        | grep -m1 '"tag_name"' \
+        | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+
+    [[ -z "$QALC_TAG" ]] && fail "GitHub API returned no tag — check rate limits or connectivity."
+
+    QALC_VERSION="${QALC_TAG#v}"   # v5.11.0 → 5.11.0
+    QALC_ARCHIVE="qalculate-${QALC_VERSION}-x86_64.tar.xz"
+    QALC_URL="https://github.com/Qalculate/libqalculate/releases/download/${QALC_TAG}/${QALC_ARCHIVE}"
+
+    info "Downloading Qalculate! ${QALC_TAG}..."
+    if wget -q --show-progress "$QALC_URL"; then
+        tar -xf "$QALC_ARCHIVE"
+        cp "./qalculate-${QALC_VERSION}/qalculate" "$MATH_MODULES_DIR/qalc"
         chmod +x "$MATH_MODULES_DIR/qalc"
-        
-        # Clean up temporary archive files safely
-        rm -rf qalculate-5.11.0*
-        success "Modern v5.11.0 runtime successfully deployed to $MATH_MODULES_DIR/qalc"
+        rm -rf "qalculate-${QALC_VERSION}" "$QALC_ARCHIVE"
+        success "Qalculate! ${QALC_TAG} deployed → $MATH_MODULES_DIR/qalc"
     else
-        fail "Could not fetch the latest binary from GitHub repository."
+        rm -f "$QALC_ARCHIVE"
+        fail "Download failed for ${QALC_TAG} — URL was: $QALC_URL"
     fi
 )
 
