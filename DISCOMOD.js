@@ -1574,6 +1574,16 @@ const MESSAGE_COMMANDS_LIST = [
     { name: '!massban <id1> <id2> ... [reason]',desc: 'Ban multiple users by ID in one action (admin).' },
     { name: '!dm <@user> <message>',           desc: 'Send an official staff DM to a member (mods/admin).' },
     { name: '!reason <caseId> <new reason>',   desc: 'Update the reason on an existing case (mods/admin).' },
+    // ── Ticket System ──────────────────────────────────────────────────────────
+    { name: '!ticketsetup <#panel> <#category> [@role] [#log]', desc: 'Configure the ticket system and post the panel (admin).' },
+    { name: '!ticketpanel [#channel]',         desc: 'Post/refresh the ticket creation panel — defaults to current channel (mods/admin).' },
+    { name: '!ticketadd <@user|@role>',        desc: 'Add a user or role to the current ticket channel (mods/admin).' },
+    { name: '!ticketremove <@user|@role>',     desc: 'Remove a user or role from the current ticket channel (mods/admin).' },
+    { name: '!ticketclose [reason...]',        desc: 'Close the current ticket — generates transcript (staff or ticket opener).' },
+    { name: '!ticketrename <name>',            desc: 'Rename the current ticket channel (mods/admin).' },
+    { name: '!ticketclaim',                    desc: 'Claim the current ticket — removes all other staff (mods/admin).' },
+    { name: '!tickettransfer <@user>',         desc: 'Transfer ticket claim to another staff member (mods/admin).' },
+    { name: '!ticketstats',                    desc: 'Show ticket system stats for this server (mods/admin).' },
     // ── AI Detection ───────────────────────────────────────────────────────────
     { name: '!aienable',  desc: 'Enable AI-assisted detection (admin).' },
     { name: '!aidisable', desc: 'Disable AI-assisted detection (admin).' },
@@ -1591,6 +1601,8 @@ const SLASH_COMMANDS_LIST = [
     { name: '/botinfopublic',        desc: 'Toggle /botinfo public vs ephemeral (admin).' },
     { name: '/botstatus',            desc: 'Show full server configuration (admin).' },
     { name: '/uptime',               desc: 'Show bot uptime information.' },
+    { name: '/help slash|message',   desc: 'Show all bot commands, paginated across multiple embeds.' },
+    { name: '/commandslist <type>',  desc: 'List all bot commands — message or slash (default: slash).' },
     { name: '/messagecommandslist',  desc: 'List all ! message commands.' },
     { name: '/slashcommandslist',    desc: 'List all / slash commands.' },
     { name: '/diagnose',             desc: 'Run a permission & config diagnostic (admin).' },
@@ -1665,6 +1677,16 @@ const SLASH_COMMANDS_LIST = [
     { name: '/massban ids [reason] [purge]',   desc: 'Ban up to 50 users by ID in one action (admin).' },
     { name: '/dm user message',                desc: 'Send an official staff DM to a member (mods/admin).' },
     { name: '/reason caseid reason',           desc: 'Update the reason on an existing moderation case (mods/admin).' },
+    // ── Ticket System ─────────────────────────────────────────────────────────
+    { name: '/ticket setup',     desc: 'Configure the ticket system and post the panel (admin).' },
+    { name: '/ticket panel',     desc: 'Post/refresh the ticket creation panel in a channel (mods/admin).' },
+    { name: '/ticket add',       desc: 'Add a user or role to the current ticket channel (mods/admin).' },
+    { name: '/ticket remove',    desc: 'Remove a user or role from the current ticket channel (mods/admin).' },
+    { name: '/ticket close',     desc: 'Close the current ticket — generates a transcript (staff or ticket opener).' },
+    { name: '/ticket rename',    desc: 'Rename the current ticket channel (mods/admin).' },
+    { name: '/ticket claim',     desc: 'Claim the current ticket — removes all other staff (mods/admin).' },
+    { name: '/ticket transfer',  desc: 'Transfer ticket claim to another staff member (mods/admin).' },
+    { name: '/ticket stats',     desc: 'Show ticket system stats for this server (mods/admin).' },
     // ── Bot Manager ───────────────────────────────────────────────────────────
     { name: '/manager addrole|removerole|adduser|removeuser|list', desc: 'Manage bot manager roles and users (admin).' },
     // ── Math & Calculation ────────────────────────────────────────────────────
@@ -11391,6 +11413,11 @@ const slashCommands = [
         .addStringOption(o => o.setName('type').setDescription('message or slash (default: slash)').setRequired(false)
             .addChoices({ name: 'Message Commands (!)', value: 'message' }, { name: 'Slash Commands (/)', value: 'slash' })),
     new SlashCommandBuilder()
+        .setName('help')
+        .setDescription('Show every bot command, split across multiple embeds')
+        .addSubcommand(s => s.setName('slash').setDescription('List every / slash command'))
+        .addSubcommand(s => s.setName('message').setDescription('List every ! message command')),
+    new SlashCommandBuilder()
         .setName('uptime')
         .setDescription('Show bot uptime and process info'),
 
@@ -14424,6 +14451,27 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({ embeds: [embeds[0]], flags: MessageFlags.Ephemeral });
             for (let i = 1; i < embeds.length; i++) {
                 await interaction.followUp({ embeds: [embeds[i]], flags: MessageFlags.Ephemeral });
+            }
+            break;
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  /help — full command reference (slash + message), paginated embeds
+        // ══════════════════════════════════════════════════════════════════════
+        case 'help': {
+            const hSub = interaction.options.getSubcommand();
+            if (hSub === 'message') {
+                const embeds = buildCommandListEmbeds('💬 Message Commands (!)', MESSAGE_COMMANDS_LIST, gs);
+                await interaction.reply({ embeds: [embeds[0]], flags: MessageFlags.Ephemeral });
+                for (let i = 1; i < embeds.length; i++) {
+                    await interaction.followUp({ embeds: [embeds[i]], flags: MessageFlags.Ephemeral });
+                }
+            } else {
+                const embeds = buildCommandListEmbeds('✨ Slash Commands (/)', SLASH_COMMANDS_LIST, gs);
+                await interaction.reply({ embeds: [embeds[0]], flags: MessageFlags.Ephemeral });
+                for (let i = 1; i < embeds.length; i++) {
+                    await interaction.followUp({ embeds: [embeds[i]], flags: MessageFlags.Ephemeral });
+                }
             }
             break;
         }
@@ -21128,6 +21176,34 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         return message.guild.roles.cache.get(rawId) || await message.guild.roles.fetch(rawId).catch(()=>null);
     }
 
+    // resolves either a @role or a @user/ID from a single token — used by ticket add/remove
+    async function resolveUserOrRole(token) {
+        if (!token) {
+            const mRole = message.mentions.roles?.first();
+            if (mRole) return { target: mRole, isRole: true };
+            const mMember = message.mentions.members?.first();
+            if (mMember) return { target: mMember, isRole: false };
+            return null;
+        }
+        const roleMention = token.match(/^<@&(\d+)>$/);
+        if (roleMention) {
+            const role = message.guild.roles.cache.get(roleMention[1]) || await message.guild.roles.fetch(roleMention[1]).catch(()=>null);
+            if (role) return { target: role, isRole: true };
+        }
+        const userMention = token.match(/^<@!?(\d+)>$/);
+        if (userMention) {
+            const member = message.guild.members.cache.get(userMention[1]) || await message.guild.members.fetch(userMention[1]).catch(()=>null);
+            if (member) return { target: member, isRole: false };
+        }
+        if (/^\d{15,20}$/.test(token)) {
+            const role = message.guild.roles.cache.get(token);
+            if (role) return { target: role, isRole: true };
+            const member = message.guild.members.cache.get(token) || await message.guild.members.fetch(token).catch(()=>null);
+            if (member) return { target: member, isRole: false };
+        }
+        return null;
+    }
+
 
     // ─── modEmbed: build a simple embed for mod command responses ───────────────
     function modEmbed(text, color) {
@@ -22693,6 +22769,196 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         setCases(data, message.guild.id, cases);
         saveData(data);
         return message.channel.send({ embeds: [modEmbed(`✅ Reason updated for case **C-${caseKey}**.`)] });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  TICKET SYSTEM — message-command equivalents of /ticket's subcommands
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // ── !ticketsetup <#panel_channel> <#category> [@staff_role] [#log_channel] ─
+    else if (cmd === 'ticketsetup' && isAdmin) {
+        const panelCh = await resolveChannel(args[0]);
+        const cat     = await resolveChannel(args[1]);
+        if (!panelCh || !cat) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!ticketsetup <#panel_channel> <#category> [@staff_role] [#log_channel]`')] });
+        if (cat.type !== ChannelType.GuildCategory) return message.channel.send({ embeds: [modEmbed('❌ The second argument must be a category channel — mention it with `#`.')] });
+        const staffRole = await resolveRole(args[2]);
+        const logCh     = await resolveChannel(args[3]);
+
+        gs.ticketEnabled        = true;
+        gs.ticketCategoryId     = cat.id;
+        gs.ticketPanelChannelId = panelCh.id;
+        if (staffRole) gs.ticketStaffRoleId  = staffRole.id;
+        if (logCh)     gs.ticketLogChannelId = logCh.id;
+        saveData(data);
+
+        // Auto-post the panel in the chosen channel (identical to /ticket setup)
+        const panelEmbed = new EmbedBuilder()
+            .setTitle('🎫 Support Tickets')
+            .setColor(0x5865F2)
+            .setDescription(
+                '**Need help? Open a support ticket!**\n\n' +
+                '> 📋 You\'ll fill in a short form with your subject and details before the ticket is created.\n' +
+                '> ⚠️ Only open a ticket for genuine issues — abuse may result in moderation action.\n\n' +
+                '**Click below to open a ticket.**'
+            )
+            .setFooter({ text: `${message.guild.name} Support` })
+            .setTimestamp();
+        const panelRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('ticket_open_panel').setLabel('📩 Open a Ticket').setStyle(ButtonStyle.Primary)
+        );
+        await panelCh.send({ embeds: [panelEmbed], components: [panelRow] }).catch(()=>{});
+
+        await message.channel.send({ embeds: [new EmbedBuilder()
+            .setTitle('🎫 Ticket System Configured')
+            .setColor(0x2ECC71)
+            .addFields(
+                { name: 'Panel Channel', value: `<#${panelCh.id}>`, inline: true },
+                { name: 'Category',      value: cat.name, inline: true },
+                { name: 'Staff Role',    value: staffRole ? `<@&${staffRole.id}>` : '*(none)*', inline: true },
+                { name: 'Log Channel',   value: logCh ? `<#${logCh.id}>` : '*(none)*', inline: true },
+            )
+            .setDescription('✅ Panel posted! Users can now click the button to open tickets.\n*(Tip: use `/ticket setup` for extra options like a custom open-message or staff ping toggle.)*')
+            .setTimestamp()] });
+        await sendLog(message.guild, data, new EmbedBuilder()
+            .setTitle('🎫 Ticket System Configured')
+            .setDescription(`**By:** <@${message.author.id}>\n**Panel:** <#${panelCh.id}> | **Cat:** ${cat.name}`)
+            .setColor(0x2ECC71).setTimestamp());
+    }
+
+    // ── !ticketpanel [#channel] — post/refresh the panel ─────────────────────
+    else if (cmd === 'ticketpanel' && (isAdmin || isMod)) {
+        if (!gs.ticketEnabled) return message.channel.send({ embeds: [modEmbed('❌ Ticket system not set up. Run `!ticketsetup` or `/ticket setup` first.')] });
+        const panelCh = (await resolveChannel(args[0])) || message.channel;
+        const panelEmbed = new EmbedBuilder()
+            .setTitle('🎫 Support Tickets')
+            .setColor(0x5865F2)
+            .setDescription(
+                '**Need help?** Open a support ticket and a staff member will assist you shortly.\n\n' +
+                '> 📋 You will be asked to fill in a short form with your issue before the ticket is created.\n' +
+                '> ⚠️ Only open a ticket if you have a genuine question or issue — abuse will result in moderation action.\n\n' +
+                '**Click the button below to open a ticket.**'
+            )
+            .setFooter({ text: `${message.guild.name} Support` })
+            .setTimestamp();
+        const panelRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('ticket_open_panel').setLabel('📩 Open a Ticket').setStyle(ButtonStyle.Primary)
+        );
+        await panelCh.send({ embeds: [panelEmbed], components: [panelRow] });
+        await message.channel.send({ embeds: [modEmbed(`✅ Ticket panel posted in <#${panelCh.id}>.`)] });
+    }
+
+    // ── !ticketadd <@user|@role> — add to the current ticket ─────────────────
+    else if (cmd === 'ticketadd' && (isAdmin || isMod)) {
+        const tickets = getTickets(data, message.guild.id);
+        if (!tickets[message.channel.id]) return message.channel.send({ embeds: [modEmbed('❌ This command must be used inside a ticket channel.')] });
+        const resolved = await resolveUserOrRole(args[0]);
+        if (!resolved) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!ticketadd <@user|@role>`')] });
+        try {
+            await message.channel.permissionOverwrites.edit(resolved.target.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true });
+            await message.channel.send({ embeds: [modEmbed(`✅ Added ${resolved.isRole ? `<@&${resolved.target.id}>` : `<@${resolved.target.id}>`} to this ticket.`)] });
+        } catch (e) { await message.channel.send({ embeds: [modEmbed(`❌ Failed: ${e.message}`)] }); }
+    }
+
+    // ── !ticketremove <@user|@role> — remove from the current ticket ─────────
+    else if (cmd === 'ticketremove' && (isAdmin || isMod)) {
+        const tickets = getTickets(data, message.guild.id);
+        if (!tickets[message.channel.id]) return message.channel.send({ embeds: [modEmbed('❌ Must be used inside a ticket channel.')] });
+        const resolved = await resolveUserOrRole(args[0]);
+        if (!resolved) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!ticketremove <@user|@role>`')] });
+        try {
+            await message.channel.permissionOverwrites.delete(resolved.target.id);
+            await message.channel.send({ embeds: [modEmbed(`✅ Removed ${resolved.isRole ? `<@&${resolved.target.id}>` : `<@${resolved.target.id}>`} from this ticket.`)] });
+        } catch (e) { await message.channel.send({ embeds: [modEmbed(`❌ Failed: ${e.message}`)] }); }
+    }
+
+    // ── !ticketclose [reason...] — staff or the ticket opener ────────────────
+    else if (cmd === 'ticketclose') {
+        const tickets    = getTickets(data, message.guild.id);
+        const ticketInfo = tickets[message.channel.id];
+        if (!ticketInfo) return message.channel.send({ embeds: [modEmbed('❌ Must be used inside a ticket channel.')] });
+        if (!isMod && !isAdmin && message.author.id !== ticketInfo.userId) return message.channel.send({ embeds: [modEmbed('❌ Only staff or the ticket opener can close this ticket.')] });
+        const closeReason = args.join(' ') || 'Closed by staff';
+        await message.channel.send({ embeds: [modEmbed('🔒 Closing ticket…')] });
+        await performTicketClose(message.guild, message.channel, ticketInfo, gs, data, message.author.id, closeReason);
+    }
+
+    // ── !ticketrename <name> ──────────────────────────────────────────────────
+    else if (cmd === 'ticketrename' && (isAdmin || isMod)) {
+        const tickets = getTickets(data, message.guild.id);
+        if (!tickets[message.channel.id]) return message.channel.send({ embeds: [modEmbed('❌ Must be used inside a ticket channel.')] });
+        const newName = args.join(' ').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 100);
+        if (!newName) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!ticketrename <new name>`')] });
+        try {
+            await message.channel.setName(newName);
+            await message.channel.send({ embeds: [modEmbed(`✅ Renamed to \`${newName}\`.`)] });
+        } catch (e) { await message.channel.send({ embeds: [modEmbed(`❌ Failed: ${e.message}`)] }); }
+    }
+
+    // ── !ticketclaim — claim, kicking all other staff from the channel ───────
+    else if (cmd === 'ticketclaim' && (isAdmin || isMod)) {
+        const tickets = getTickets(data, message.guild.id);
+        const tInfo   = tickets[message.channel.id];
+        if (!tInfo) return message.channel.send({ embeds: [modEmbed('❌ Must be used inside a ticket channel.')] });
+
+        tInfo.claimedBy = message.author.id;
+        saveData(data);
+
+        // Kick all other staff-role holders from the channel, same as the button/slash flow
+        if (gs.ticketStaffRoleId) {
+            const staffRole = message.guild.roles.cache.get(gs.ticketStaffRoleId);
+            if (staffRole) {
+                for (const [memberId, member] of message.guild.members.cache) {
+                    if (memberId === message.author.id) continue; // keep claimant
+                    if (memberId === tInfo.userId)        continue; // keep opener
+                    if (memberId === client.user.id)      continue; // keep bot
+                    if (!member.roles.cache.has(staffRole.id)) continue;
+                    await message.channel.permissionOverwrites.edit(memberId, { ViewChannel: false }).catch(()=>{});
+                }
+            }
+        }
+        await message.channel.permissionOverwrites.edit(message.author.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }).catch(()=>{});
+
+        await message.channel.send({ embeds: [new EmbedBuilder()
+            .setTitle('🙋 Ticket Claimed')
+            .setDescription(`This ticket has been claimed by <@${message.author.id}>.\nAll other staff have been removed — only <@${message.author.id}> and <@${tInfo.userId}> remain.`)
+            .setColor(0x5865F2).setTimestamp()] });
+        await sendLog(message.guild, data, new EmbedBuilder()
+            .setTitle('🎫 Ticket Claimed')
+            .setDescription(`**Channel:** ${message.channel.name}\n**Claimed by:** <@${message.author.id}>\n**Opened by:** <@${tInfo.userId}>`)
+            .setColor(0x5865F2).setTimestamp());
+    }
+
+    // ── !tickettransfer <@user> ───────────────────────────────────────────────
+    else if (cmd === 'tickettransfer' && (isAdmin || isMod)) {
+        const tickets = getTickets(data, message.guild.id);
+        if (!tickets[message.channel.id]) return message.channel.send({ embeds: [modEmbed('❌ Must be used inside a ticket channel.')] });
+        const newOwner = await resolveMember(args[0]);
+        if (!newOwner) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!tickettransfer <@user>`')] });
+        tickets[message.channel.id].claimedBy = newOwner.id;
+        saveData(data);
+        await message.channel.permissionOverwrites.edit(newOwner.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }).catch(()=>{});
+        await message.channel.send({ embeds: [new EmbedBuilder()
+            .setDescription(`🔄 Ticket transferred to <@${newOwner.id}> by <@${message.author.id}>.`)
+            .setColor(0x5865F2).setTimestamp()] });
+    }
+
+    // ── !ticketstats — server-wide ticket stats ───────────────────────────────
+    else if (cmd === 'ticketstats' && (isAdmin || isMod)) {
+        const allTickets = getTickets(data, message.guild.id);
+        const tArr   = Object.values(allTickets);
+        const open   = tArr.filter(t => t.status === 'open').length;
+        const closed = tArr.filter(t => t.status === 'closed').length;
+        await message.channel.send({ embeds: [new EmbedBuilder()
+            .setTitle('🎫 Ticket Stats')
+            .setColor(0x5865F2)
+            .addFields(
+                { name: 'Total Tickets',  value: String(tArr.length), inline: true },
+                { name: 'Open',           value: String(open),        inline: true },
+                { name: 'Closed',         value: String(closed),      inline: true },
+                { name: 'Staff Role',     value: gs.ticketStaffRoleId ? `<@&${gs.ticketStaffRoleId}>` : '*(not set)*', inline: true },
+                { name: 'Category',       value: gs.ticketCategoryId ? `<#${gs.ticketCategoryId}>` : '*(not set)*', inline: true },
+                { name: 'Log Channel',    value: gs.ticketLogChannelId ? `<#${gs.ticketLogChannelId}>` : '*(not set)*', inline: true },
+            ).setTimestamp()] });
     }
 
 }
