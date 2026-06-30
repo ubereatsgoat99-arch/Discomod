@@ -2,6 +2,7 @@
 
 const roastBattles = new Map();
 const slashSessions = new Map();
+
 // ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║  SKYNET V7 — BLOX FRUITS ULTRA GUARDIAN                                     ║
 // ║  Professional-grade Discord moderation bot                                   ║
@@ -1646,14 +1647,8 @@ const SLASH_COMMANDS_LIST = [
     { name: '/bloxfruits redirect|trade|service|command|warn', desc: 'Configure per-category BF behavior (admin).' },
     { name: '/raid',                    desc: 'Configure raid detection and lockdown (admin).' },
     // ── Immunity ──────────────────────────────────────────────────────────────
-    { name: '/immunity role|add|remove',       desc: 'Manage global detection immunity (admin).' },
-    { name: '/commandimmunity add|remove',     desc: 'Immunity from command-redirect checks (admin).' },
-    { name: '/serviceimmunity add|remove',     desc: 'Immunity from service-ad detection (admin).' },
-    { name: '/tradeimmunity add|remove',       desc: 'Immunity from trade detection (admin).' },
-    { name: '/spamimmunity add|remove',        desc: 'Immunity from spam detection (admin).' },
-    { name: '/begimmunity add|remove',         desc: 'Immunity from begging detection (admin).' },
-    { name: '/scamimmunity add|remove',        desc: 'Immunity from scam detection (admin).' },
-    { name: '/acctradeimmunity add|remove',    desc: 'Immunity from account-trade detection (admin).' },
+    { name: '/immunity role|add|remove',       desc: 'Manage global staff/role/member immunity (admin).' },
+    { name: '/categoryimmunity role|member add|remove|list', desc: 'Per-category immunity: command/service/trade/spam/beg/scam/acctrade (admin).' },
     // ── Spam Config ───────────────────────────────────────────────────────────
     { name: '/stretchconfig',       desc: 'Configure stretched-letter spam detection (admin).' },
     { name: '/dupeconfig',          desc: 'Configure duplicate message detection (admin).' },
@@ -11513,118 +11508,85 @@ const slashCommands = [
         .addSubcommand(s => s.setName('status')
             .setDescription('Show current roast configuration')),
 
+    // Merged immunity command — was 7 separate commands (commandimmunity, serviceimmunity,
+    // tradeimmunity, spamimmunity, begimmunity, scamimmunity, acctradeimmunity), now one
+    // /immunity command with a "category" option, freeing 6 command slots.
     new SlashCommandBuilder()
-        .setName('commandimmunity')
-        .setDescription('Manage immunity for command scanning')
+        .setName('categoryimmunity')
+        .setDescription('Manage per-category scanning immunity for roles/members')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
             .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
+                .addStringOption(o => o.setName('category').setDescription('Scan category').setRequired(true)
+                    .addChoices(
+                        { name: 'Command',       value: 'command'  },
+                        { name: 'Service',       value: 'service'  },
+                        { name: 'Trade',         value: 'trade'    },
+                        { name: 'Spam',          value: 'spam'     },
+                        { name: 'Begging',       value: 'beg'      },
+                        { name: 'Scam',          value: 'scam'     },
+                        { name: 'Account Trade', value: 'acctrade' },
+                    ))
                 .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
             .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
+                .addStringOption(o => o.setName('category').setDescription('Scan category').setRequired(true)
+                    .addChoices(
+                        { name: 'Command',       value: 'command'  },
+                        { name: 'Service',       value: 'service'  },
+                        { name: 'Trade',         value: 'trade'    },
+                        { name: 'Spam',          value: 'spam'     },
+                        { name: 'Begging',       value: 'beg'      },
+                        { name: 'Scam',          value: 'scam'     },
+                        { name: 'Account Trade', value: 'acctrade' },
+                    ))
                 .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
+            .addSubcommand(s => s.setName('list').setDescription('List role immunity')
+                .addStringOption(o => o.setName('category').setDescription('Scan category').setRequired(true)
+                    .addChoices(
+                        { name: 'Command',       value: 'command'  },
+                        { name: 'Service',       value: 'service'  },
+                        { name: 'Trade',         value: 'trade'    },
+                        { name: 'Spam',          value: 'spam'     },
+                        { name: 'Begging',       value: 'beg'      },
+                        { name: 'Scam',          value: 'scam'     },
+                        { name: 'Account Trade', value: 'acctrade' },
+                    ))))
         .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
             .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
+                .addStringOption(o => o.setName('category').setDescription('Scan category').setRequired(true)
+                    .addChoices(
+                        { name: 'Command',       value: 'command'  },
+                        { name: 'Service',       value: 'service'  },
+                        { name: 'Trade',         value: 'trade'    },
+                        { name: 'Spam',          value: 'spam'     },
+                        { name: 'Begging',       value: 'beg'      },
+                        { name: 'Scam',          value: 'scam'     },
+                        { name: 'Account Trade', value: 'acctrade' },
+                    ))
                 .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
             .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
+                .addStringOption(o => o.setName('category').setDescription('Scan category').setRequired(true)
+                    .addChoices(
+                        { name: 'Command',       value: 'command'  },
+                        { name: 'Service',       value: 'service'  },
+                        { name: 'Trade',         value: 'trade'    },
+                        { name: 'Spam',          value: 'spam'     },
+                        { name: 'Begging',       value: 'beg'      },
+                        { name: 'Scam',          value: 'scam'     },
+                        { name: 'Account Trade', value: 'acctrade' },
+                    ))
                 .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
-    new SlashCommandBuilder()
-        .setName('serviceimmunity')
-        .setDescription('Manage immunity for service scanning')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
-        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
-    new SlashCommandBuilder()
-        .setName('tradeimmunity')
-        .setDescription('Manage immunity for trade scanning')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
-        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
-    new SlashCommandBuilder()
-        .setName('spamimmunity')
-        .setDescription('Manage immunity for spam scanning')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
-        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
-    new SlashCommandBuilder()
-        .setName('begimmunity')
-        .setDescription('Manage immunity for begging scanning')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
-        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
-    new SlashCommandBuilder()
-        .setName('scamimmunity')
-        .setDescription('Manage immunity for scam scanning')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
-        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
-    new SlashCommandBuilder()
-        .setName('acctradeimmunity')
-        .setDescription('Manage immunity for account trading scanning')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommandGroup(g => g.setName('role').setDescription('Manage role immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove role immunity')
-                .addRoleOption(o => o.setName('role').setDescription('Role').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List role immunity')))
-        .addSubcommandGroup(g => g.setName('member').setDescription('Manage member immunity')
-            .addSubcommand(s => s.setName('add').setDescription('Add member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('remove').setDescription('Remove member immunity')
-                .addUserOption(o => o.setName('member').setDescription('Member').setRequired(true)))
-            .addSubcommand(s => s.setName('list').setDescription('List member immunity'))),
+            .addSubcommand(s => s.setName('list').setDescription('List member immunity')
+                .addStringOption(o => o.setName('category').setDescription('Scan category').setRequired(true)
+                    .addChoices(
+                        { name: 'Command',       value: 'command'  },
+                        { name: 'Service',       value: 'service'  },
+                        { name: 'Trade',         value: 'trade'    },
+                        { name: 'Spam',          value: 'spam'     },
+                        { name: 'Begging',       value: 'beg'      },
+                        { name: 'Scam',          value: 'scam'     },
+                        { name: 'Account Trade', value: 'acctrade' },
+                    )))),
 
     // Exile management
     new SlashCommandBuilder()
@@ -12375,6 +12337,9 @@ const slashCommands = [
                 ))
             .addBooleanOption(o => o.setName('enabled').setDescription('On or off').setRequired(true)))
         .addSubcommand(s => s.setName('status').setDescription('Show the current logging configuration')),
+
+    // Math computation commands (grouped into a single /math command, see math_commands.js)
+    ...mathMod.mathSlashCommandBuilders,
 
 ].map(c => c.toJSON());
 
@@ -15372,13 +15337,11 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
-        case 'commandimmunity':  { await handleCategoryImmunity('command'); break; }
-        case 'serviceimmunity':  { await handleCategoryImmunity('service'); break; }
-        case 'tradeimmunity':    { await handleCategoryImmunity('trade'); break; }
-        case 'spamimmunity':     { await handleCategoryImmunity('spam'); break; }
-        case 'begimmunity':      { await handleCategoryImmunity('beg'); break; }
-        case 'scamimmunity':     { await handleCategoryImmunity('scam'); break; }
-        case 'acctradeimmunity': { await handleCategoryImmunity('acctrade'); break; }
+        case 'categoryimmunity': {
+            const category = interaction.options.getString('category') || '';
+            await handleCategoryImmunity(category);
+            break;
+        }
 
         // ── /roastconfig ──────────────────────────────────
         case 'roastconfig': {
