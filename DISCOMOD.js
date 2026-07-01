@@ -118,7 +118,8 @@ const DEFAULT_GAMES_HUB_ID        = '1416126451589316679';
 const DEFAULT_EXILED_ROLE_ID      = '1423350765711261797';
 const DEFAULT_REDIRECT_EMOJI_ID   = '1125321969932451841';
 
-const BOT_CODED_BY_ID = '1517524311793991752';
+// Falls back to the hardcoded ID below if SUPERUSER_ID isn't set in .env
+const BOT_CODED_BY_ID = process.env.SUPERUSER_ID || '1517524311793991752';
 
 // ══════════════════════════════════════════════════════════
 //  SUPERUSER — complete, un-bypassable authority
@@ -4929,6 +4930,103 @@ function checkRoleHierarchy(actorMember, role) {
         return '❌ You cannot manage a role that is equal to or higher than your own highest role.';
     }
     return null;
+}
+
+/** Human-readable labels for Discord permission flag names. */
+const PERM_FRIENDLY = {
+    AddReactions:              'Add Reactions',
+    Administrator:             'Administrator',
+    AttachFiles:               'Attach Files',
+    BanMembers:                'Ban Members',
+    ChangeNickname:            'Change Nickname',
+    Connect:                   'Connect (Voice)',
+    CreateInstantInvite:       'Create Invite',
+    CreatePrivateThreads:      'Create Private Threads',
+    CreatePublicThreads:       'Create Public Threads',
+    DeafenMembers:             'Deafen Members',
+    EmbedLinks:                'Embed Links',
+    KickMembers:               'Kick Members',
+    ManageChannels:            'Manage Channels',
+    ManageEmojisAndStickers:   'Manage Emojis & Stickers',
+    ManageEvents:              'Manage Events',
+    ManageGuild:               'Manage Server',
+    ManageMessages:            'Manage Messages',
+    ManageNicknames:           'Manage Nicknames',
+    ManageRoles:               'Manage Roles',
+    ManageThreads:             'Manage Threads',
+    ManageWebhooks:            'Manage Webhooks',
+    MentionEveryone:           'Mention @everyone',
+    ModerateMembers:           'Timeout Members',
+    MoveMembers:               'Move Members (Voice)',
+    MuteMembers:               'Mute Members (Voice)',
+    PrioritySpeaker:           'Priority Speaker',
+    ReadMessageHistory:        'Read Message History',
+    RequestToSpeak:            'Request to Speak',
+    SendMessages:              'Send Messages',
+    SendMessagesInThreads:     'Send Messages in Threads',
+    SendTTSMessages:           'Send TTS Messages',
+    Speak:                     'Speak (Voice)',
+    Stream:                    'Stream Video',
+    UseApplicationCommands:    'Use Application Commands',
+    UseEmbeddedActivities:     'Use Activities',
+    UseExternalEmojis:         'Use External Emojis',
+    UseExternalStickers:       'Use External Stickers',
+    UseVAD:                    'Use Voice Activity',
+    ViewAuditLog:              'View Audit Log',
+    ViewChannel:               'View Channel',
+    ViewGuildInsights:         'View Server Insights',
+};
+
+/**
+ * Prevents privilege escalation via role assignment / creation.
+ * Returns an error string if `actorMember` lacks any permission that
+ * `permBits` would grant — Administrators always pass (they hold all perms).
+ *
+ * @param {GuildMember}                           actorMember
+ * @param {PermissionsBitField|bigint|bigint[]}   permBits
+ * @returns {string|null}
+ */
+function checkPermissionElevation(actorMember, permBits) {
+    if (!actorMember || !permBits) return null;
+    // Administrators can grant anything — no further check needed.
+    if (actorMember.permissions.has(PermissionFlagsBits.Administrator)) return null;
+
+    const field = (permBits && typeof permBits === 'object' && typeof permBits.has === 'function')
+        ? permBits
+        : new PermissionsBitField(Array.isArray(permBits) ? permBits : [permBits]);
+
+    // A role with Administrator can only be granted by another Administrator (handled above).
+    if (field.has(PermissionFlagsBits.Administrator)) {
+        return '❌ You cannot assign or create a role with **Administrator** — only Administrators can do that.';
+    }
+
+    const missing = [];
+    for (const [name, flag] of Object.entries(PermissionFlagsBits)) {
+        if (flag === PermissionFlagsBits.Administrator) continue;
+        if (!field.has(flag)) continue;             // role doesn't have this perm
+        if (!actorMember.permissions.has(flag)) {   // actor is missing it
+            missing.push(PERM_FRIENDLY[name] || name);
+        }
+    }
+    if (missing.length === 0) return null;
+    return `❌ You cannot assign or create a role with permissions you don't hold yourself.\n**Missing:** ${missing.join(', ')}`;
+}
+
+/**
+ * Verifies the actor holds the Discord permission actually required for a
+ * moderation action (not just the bot's internal "isMod/isAdmin" flag).
+ * Administrators always pass.
+ *
+ * @param {GuildMember} actorMember
+ * @param {bigint}      permFlag    — e.g. PermissionFlagsBits.BanMembers
+ * @param {string}      actionName  — shown in the error message
+ * @returns {string|null}
+ */
+function checkModPermission(actorMember, permFlag, actionName) {
+    if (!actorMember) return null;
+    if (actorMember.permissions.has(PermissionFlagsBits.Administrator)) return null;
+    if (actorMember.permissions.has(permFlag)) return null;
+    return `❌ You need the **${actionName}** Discord permission to perform this action.`;
 }
 
 function getImmunitySettings(guildId, data) {
@@ -14879,6 +14977,12 @@ client.on('interactionCreate', async interaction => {
             const ecSub = interaction.options.getSubcommand();
             if (ecSub === 'setrole') {
                 const role = interaction.options.getRole('role');
+                const _ecHierErr = checkRoleHierarchy(interaction.member, role);
+                if (_ecHierErr) { await interaction.reply({ content: _ecHierErr, flags: MessageFlags.Ephemeral }); return; }
+                // This role gets auto-applied to every future exiled member, so the
+                // actor must personally hold every permission it grants.
+                const _ecElevErr = checkPermissionElevation(interaction.member, role.permissions);
+                if (_ecElevErr) { await interaction.reply({ content: _ecElevErr, flags: MessageFlags.Ephemeral }); return; }
                 gs.exiledRoleId = role.id;
                 saveData(data);
                 await interaction.reply({
@@ -15453,6 +15557,8 @@ client.on('interactionCreate', async interaction => {
 
             // /exile add — exile a member
             if (!sub || sub === 'add') {
+                const _exilePermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageRoles, 'Manage Roles');
+                if (_exilePermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _exilePermErr }); return; }
                 if (isExileChannel(interaction.channelId, interaction.guild, gs)) {
                     await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Exile commands cannot be used inside the exile channel.' });
                     return;
@@ -15481,6 +15587,8 @@ client.on('interactionCreate', async interaction => {
 
             // /exile remove — unexile a member
             } else if (sub === 'remove') {
+                const _unexilePermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageRoles, 'Manage Roles');
+                if (_unexilePermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _unexilePermErr }); return; }
                 const input  = interaction.options.getString('user');
                 const userId = (input.match(/<@!?(\d+)>/) || input.match(/^(\d{15,20})$/) || [])[1] || input;
                 const fd     = loadData();
@@ -15637,6 +15745,11 @@ client.on('interactionCreate', async interaction => {
             const roleHierErr = checkRoleHierarchy(interaction.member, roleObj);
             if (roleHierErr) { await interaction.reply({ content: roleHierErr, flags: MessageFlags.Ephemeral }); return; }
             if (roleObj.managed) { await interaction.reply({ content: '❌ That role is managed by an integration and cannot be assigned manually.', flags: MessageFlags.Ephemeral }); return; }
+            // When adding a role, actor must hold every permission that role grants.
+            if (roleSub === 'add') {
+                const _roleElevErr = checkPermissionElevation(interaction.member, roleObj.permissions);
+                if (_roleElevErr) { await interaction.reply({ content: _roleElevErr, flags: MessageFlags.Ephemeral }); return; }
+            }
             try {
                 if (roleSub === 'add') {
                     if (roleTarget.roles.cache.has(roleObj.id)) { await interaction.reply({ content: `⚠️ <@${roleTarget.id}> already has <@&${roleObj.id}>.`, flags: MessageFlags.Ephemeral }); return; }
@@ -15658,6 +15771,10 @@ client.on('interactionCreate', async interaction => {
         // ── /massban ──────────────────────────────────────────────────────────
         case 'massban': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            {
+                const _mbanPermErr = checkModPermission(interaction.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+                if (_mbanPermErr) { await interaction.reply({ content: _mbanPermErr, flags: MessageFlags.Ephemeral }); return; }
+            }
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const rawIds  = interaction.options.getString('ids').split(/[\s,]+/).map(s => s.replace(/[^0-9]/g,'')).filter(s => /^\d{15,20}$/.test(s));
             const mbReason= interaction.options.getString('reason') || 'Mass ban action';
@@ -16010,6 +16127,10 @@ client.on('interactionCreate', async interaction => {
 
         case 'warn': {
             if (!isMod && !isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Mods only.' }); return; }
+            {
+                const _warnPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+                if (_warnPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _warnPermErr }); return; }
+            }
             const user = interaction.options.getUser('user');
             if (user.id === interaction.user.id) {
                 await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot warn yourself.' });
@@ -16133,6 +16254,10 @@ client.on('interactionCreate', async interaction => {
 
         case 'purge': {
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            {
+                const _purgePermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+                if (_purgePermErr) { await interaction.reply({ content: _purgePermErr, flags: MessageFlags.Ephemeral }); return; }
+            }
             if (!interaction.channel || !interaction.channel.isTextBased()) { await interaction.reply({ content: '❌ This command can only be used in a text channel.', flags: MessageFlags.Ephemeral }); return; }
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const purgeSub = interaction.options.getSubcommand(false) || 'count';
@@ -16166,6 +16291,10 @@ client.on('interactionCreate', async interaction => {
 
         case 'lock': {
             if (!isAdmin) { await interaction.reply({ content: '❌ This command is restricted to admins only.', flags: MessageFlags.Ephemeral }); return; }
+            {
+                const _lockPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+                if (_lockPermErr) { await interaction.reply({ content: _lockPermErr, flags: MessageFlags.Ephemeral }); return; }
+            }
             const reason = interaction.options.getString('reason') || 'Channel locked';
             const ch = interaction.channel;
             try {
@@ -16181,6 +16310,10 @@ client.on('interactionCreate', async interaction => {
 
         case 'unlock': {
             if (!isAdmin) { await interaction.reply({ content: '❌ This command is restricted to admins only.', flags: MessageFlags.Ephemeral }); return; }
+            {
+                const _unlockPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+                if (_unlockPermErr) { await interaction.reply({ content: _unlockPermErr, flags: MessageFlags.Ephemeral }); return; }
+            }
             const reason = interaction.options.getString('reason') || 'Channel unlocked';
             const ch = interaction.channel;
             try {
@@ -16982,6 +17115,10 @@ client.on('interactionCreate', async interaction => {
         // ── /timeout ──────────────────────────────────────────────────────────
         case 'timeout': {
             if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            {
+                const _toPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ModerateMembers, 'Timeout Members');
+                if (_toPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _toPermErr }); return; }
+            }
             const user = interaction.options.getUser('user');
             if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot timeout a bot.' }); return; }
             if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot timeout yourself.' }); return; }
@@ -17128,6 +17265,10 @@ client.on('interactionCreate', async interaction => {
         // ── /kick ─────────────────────────────────────────────────────────────
         case 'kick': {
             if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            {
+                const _kickPermErr = checkModPermission(interaction.member, PermissionFlagsBits.KickMembers, 'Kick Members');
+                if (_kickPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _kickPermErr }); return; }
+            }
             const user   = interaction.options.getUser('user');
             if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot kick a bot.' }); return; }
             if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot kick yourself.' }); return; }
@@ -17178,6 +17319,10 @@ client.on('interactionCreate', async interaction => {
         // ── /ban ──────────────────────────────────────────────────────────────
         case 'ban': {
             if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            {
+                const _banPermErr = checkModPermission(interaction.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+                if (_banPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _banPermErr }); return; }
+            }
             const user = interaction.options.getUser('user');
             if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot ban a bot.' }); return; }
             if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot ban yourself.' }); return; }
@@ -17269,6 +17414,10 @@ client.on('interactionCreate', async interaction => {
         // ── /unban ────────────────────────────────────────────────────────────
         case 'unban': {
             if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            {
+                const _ubanPermErr = checkModPermission(interaction.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+                if (_ubanPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _ubanPermErr }); return; }
+            }
             await interaction.deferReply();
             const input  = interaction.options.getString('user') || '';
             const userId = (input.match(/<@!?(\d+)>/) || input.match(/^(\d{15,20})$/) || [])[1] || input.trim();
@@ -17303,6 +17452,10 @@ client.on('interactionCreate', async interaction => {
         // ── /hardban ──────────────────────────────────────────────────────────
         case 'hardban': {
             if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            {
+                const _hbanPermErr = checkModPermission(interaction.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+                if (_hbanPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _hbanPermErr }); return; }
+            }
             const user = interaction.options.getUser('user');
             if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot hardban a bot.' }); return; }
             if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot hardban yourself.' }); return; }
@@ -17370,6 +17523,10 @@ client.on('interactionCreate', async interaction => {
         // ── /softban ──────────────────────────────────────────────────────────
         case 'softban': {
             if (!isAdmin) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ Admins and bot managers only.' }); return; }
+            {
+                const _sbanPermErr = checkModPermission(interaction.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+                if (_sbanPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _sbanPermErr }); return; }
+            }
             const user = interaction.options.getUser('user');
             if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot softban a bot.' }); return; }
             if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot softban yourself.' }); return; }
@@ -17788,6 +17945,10 @@ client.on('interactionCreate', async interaction => {
         // ══════════════════════════════════════════════════════════════════════
         case 'newrole': {
             if (!isMod && !isAdmin) { await safeReply(interaction, { content: '❌ Manage Roles permission required.', flags: MessageFlags.Ephemeral }); return; }
+            {
+                const _nrPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageRoles, 'Manage Roles');
+                if (_nrPermErr) { await safeReply(interaction, { content: _nrPermErr, flags: MessageFlags.Ephemeral }); return; }
+            }
             await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
             const roleName  = interaction.options.getString('name');
             const roleColor = interaction.options.getString('color');
@@ -17802,6 +17963,10 @@ client.on('interactionCreate', async interaction => {
                 none:  [],
             };
             const perms = PERM_PRESETS[permPreset] || [];
+            if (perms.length > 0) {
+                const _nrElevErr = checkPermissionElevation(interaction.member, perms);
+                if (_nrElevErr) { await interaction.editReply({ content: _nrElevErr }); return; }
+            }
             let color = 0;
             if (roleColor) {
                 const hex = roleColor.replace('#', '');
@@ -17846,6 +18011,10 @@ client.on('interactionCreate', async interaction => {
             if (raRole.managed) { await safeReply(interaction, { content: '❌ Cannot mass-assign integration-managed roles.', flags: MessageFlags.Ephemeral }); return; }
             const raHierErr = checkRoleHierarchy(interaction.member, raRole);
             if (raHierErr) { await safeReply(interaction, { content: raHierErr, flags: MessageFlags.Ephemeral }); return; }
+            if (raSub === 'add') {
+                const _raElevErr = checkPermissionElevation(interaction.member, raRole.permissions);
+                if (_raElevErr) { await safeReply(interaction, { content: _raElevErr, flags: MessageFlags.Ephemeral }); return; }
+            }
             await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
             const members = await interaction.guild.members.fetch();
             let ok = 0, fail = 0;
@@ -17877,6 +18046,10 @@ client.on('interactionCreate', async interaction => {
         // ══════════════════════════════════════════════════════════════════════
         case 'roledelete': {
             if (!isAdmin) { await safeReply(interaction, { content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            {
+                const _rdPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageRoles, 'Manage Roles');
+                if (_rdPermErr) { await safeReply(interaction, { content: _rdPermErr, flags: MessageFlags.Ephemeral }); return; }
+            }
             const rdRole   = interaction.options.getRole('role');
             const rdReason = interaction.options.getString('reason') || `Deleted by ${interaction.user.tag}`;
             const rdHierErr = checkRoleHierarchy(interaction.member, rdRole);
@@ -17980,6 +18153,10 @@ client.on('interactionCreate', async interaction => {
             if (arSub === 'add') {
                 const arRole = interaction.options.getRole('role');
                 if (arRole.managed) { await safeReply(interaction, { content: '❌ Cannot use integration-managed roles.', flags: MessageFlags.Ephemeral }); return; }
+                const _arHierErr = checkRoleHierarchy(interaction.member, arRole);
+                if (_arHierErr) { await safeReply(interaction, { content: _arHierErr, flags: MessageFlags.Ephemeral }); return; }
+                const _arElevErr = checkPermissionElevation(interaction.member, arRole.permissions);
+                if (_arElevErr) { await safeReply(interaction, { content: _arElevErr, flags: MessageFlags.Ephemeral }); return; }
                 if (gs.autoroleIds.includes(arRole.id)) { await safeReply(interaction, { content: `⚠️ <@&${arRole.id}> is already in the autorole list.`, flags: MessageFlags.Ephemeral }); return; }
                 gs.autoroleIds.push(arRole.id);
                 saveData(data);
@@ -18144,6 +18321,13 @@ client.on('interactionCreate', async interaction => {
                 const rrEmoji = interaction.options.getString('emoji').trim();
                 const rrRole  = interaction.options.getRole('role');
                 if (!/^\d{15,20}$/.test(rrMsgId)) { await safeReply(interaction, { content: '❌ Invalid message ID.', flags: MessageFlags.Ephemeral }); return; }
+                if (rrRole.managed) { await safeReply(interaction, { content: '❌ Cannot use integration-managed roles.', flags: MessageFlags.Ephemeral }); return; }
+                const _rrHierErr = checkRoleHierarchy(interaction.member, rrRole);
+                if (_rrHierErr) { await safeReply(interaction, { content: _rrHierErr, flags: MessageFlags.Ephemeral }); return; }
+                // Reaction roles are self-service — ANY member can click to get rrRole.
+                // If the actor lacks a permission the role grants, block the mapping entirely.
+                const _rrElevErr = checkPermissionElevation(interaction.member, rrRole.permissions);
+                if (_rrElevErr) { await safeReply(interaction, { content: _rrElevErr, flags: MessageFlags.Ephemeral }); return; }
                 if (!gs.reactionRoles[rrMsgId]) gs.reactionRoles[rrMsgId] = [];
                 if (gs.reactionRoles[rrMsgId].some(r => r.emoji === rrEmoji)) { await safeReply(interaction, { content: `❌ That emoji is already mapped on this message.`, flags: MessageFlags.Ephemeral }); return; }
                 gs.reactionRoles[rrMsgId].push({ emoji: rrEmoji, roleId: rrRole.id });
@@ -21237,6 +21421,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !exile [mention | id] [duration] [reason...]
     else if (cmd === 'exile' && isAdmin) {
+        {
+            const _exilePermErr = checkModPermission(message.member, PermissionFlagsBits.ManageRoles, 'Manage Roles');
+            if (_exilePermErr) return message.channel.send({ embeds: [modEmbed(_exilePermErr)] });
+        }
         if (isExileChannel(message.channel.id, message.guild, gs)) return message.channel.send({ embeds: [modEmbed('❌ Exile commands cannot be used inside the exile channel.')] });
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found. Provide a @mention or Discord ID.')] });
@@ -21843,6 +22031,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !warn [mention|id] [reason...]
     else if (cmd === 'warn' && (isAdmin || isMod)) {
+        {
+            const _warnPermErr = checkModPermission(message.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+            if (_warnPermErr) return message.channel.send({ embeds: [modEmbed(_warnPermErr)] });
+        }
         const target = await resolveMember(args[0]);
         if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found. Provide a @mention or Discord ID.')] });
         if (target.id === message.author.id) return message.channel.send({ embeds: [modEmbed('❌ You cannot warn yourself.')] });
@@ -21901,6 +22093,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !purge [count]  OR  !purge user [@mention|id] [count]
     else if (cmd === 'purge' && (isAdmin || isMod)) {
+        {
+            const _purgePermErr = checkModPermission(message.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+            if (_purgePermErr) return message.channel.send({ embeds: [modEmbed(_purgePermErr)] });
+        }
         if (!message.channel.isTextBased()) return;
         const sub = (args[0] || '').toLowerCase();
 
@@ -21944,6 +22140,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !lock [#channel|id] [reason...]
     else if (cmd === 'lock' && isAdmin) {
+        {
+            const _lockPermErr = checkModPermission(message.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+            if (_lockPermErr) return message.channel.send({ embeds: [modEmbed(_lockPermErr)] });
+        }
         const chArg = args[0] ? await resolveChannel(args[0]) : null;
         const targetCh = chArg || message.channel;
         const reasonStart = chArg ? 1 : 0;
@@ -21959,6 +22159,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // !unlock [#channel|id] [reason...]
     else if (cmd === 'unlock' && isAdmin) {
+        {
+            const _unlockPermErr = checkModPermission(message.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+            if (_unlockPermErr) return message.channel.send({ embeds: [modEmbed(_unlockPermErr)] });
+        }
         const chArg = args[0] ? await resolveChannel(args[0]) : null;
         const targetCh = chArg || message.channel;
         const reasonStart = chArg ? 1 : 0;
@@ -22647,6 +22851,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // ── !slowmode ─────────────────────────────────────────────────────────────
     else if (cmd === 'slowmode' && (isAdmin || isMod)) {
+        {
+            const _smPermErr = checkModPermission(message.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+            if (_smPermErr) return message.channel.send({ embeds: [modEmbed(_smPermErr)] });
+        }
         const rawDur = args[0]?.toLowerCase();
         if (!rawDur) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!slowmode <duration|off> [#channel]`  e.g. `!slowmode 5s`, `!slowmode off`')] });
         const smCh = message.mentions.channels.first() || message.channel;
@@ -22693,6 +22901,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const rHierErr = checkRoleHierarchy(message.member, rObj);
         if (rHierErr) return message.channel.send({ embeds: [modEmbed(rHierErr)] });
         if (rObj.managed) return message.channel.send({ embeds: [modEmbed('❌ That role is managed by an integration and cannot be assigned manually.')] });
+        if (sub === 'add') {
+            const _rElevErr = checkPermissionElevation(message.member, rObj.permissions);
+            if (_rElevErr) return message.channel.send({ embeds: [modEmbed(_rElevErr)] });
+        }
         const rReason = args.slice(2).join(' ') || `Role action by ${message.author.tag || message.author.username}`;
         try {
             if (sub === 'add') {
@@ -22711,6 +22923,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // ── !massban <id1> <id2> ... [reason text] ───────────────────────────────
     else if (cmd === 'massban' && isAdmin) {
+        {
+            const _mbanPermErr = checkModPermission(message.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+            if (_mbanPermErr) return message.channel.send({ embeds: [modEmbed(_mbanPermErr)] });
+        }
         const rawIds = args.filter(a => /^\d{15,20}$/.test(a));
         const reason = args.filter(a => !/^\d{15,20}$/.test(a)).join(' ') || 'Mass ban action';
         if (rawIds.length === 0)
@@ -22777,6 +22993,12 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // ── !ticketsetup <#panel_channel> <#category> [@staff_role] [#log_channel] ─
     else if (cmd === 'ticketsetup' && isAdmin) {
+        {
+            const _tsPermErr = checkModPermission(message.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+            if (_tsPermErr) return message.channel.send({ embeds: [modEmbed(_tsPermErr)] });
+            const _tsPermErr2 = checkModPermission(message.member, PermissionFlagsBits.ManageRoles, 'Manage Roles');
+            if (_tsPermErr2) return message.channel.send({ embeds: [modEmbed(_tsPermErr2)] });
+        }
         const panelCh = await resolveChannel(args[0]);
         const cat     = await resolveChannel(args[1]);
         if (!panelCh || !cat) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!ticketsetup <#panel_channel> <#category> [@staff_role] [#log_channel]`')] });
@@ -22827,6 +23049,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // ── !ticketpanel [#channel] — post/refresh the panel ─────────────────────
     else if (cmd === 'ticketpanel' && (isAdmin || isMod)) {
+        {
+            const _tpPermErr = checkModPermission(message.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+            if (_tpPermErr) return message.channel.send({ embeds: [modEmbed(_tpPermErr)] });
+        }
         if (!gs.ticketEnabled) return message.channel.send({ embeds: [modEmbed('❌ Ticket system not set up. Run `!ticketsetup` or `/ticket setup` first.')] });
         const panelCh = (await resolveChannel(args[0])) || message.channel;
         const panelEmbed = new EmbedBuilder()
@@ -22849,6 +23075,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
 
     // ── !ticketadd <@user|@role> — add to the current ticket ─────────────────
     else if (cmd === 'ticketadd' && (isAdmin || isMod)) {
+        {
+            const _taPermErr = checkModPermission(message.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+            if (_taPermErr) return message.channel.send({ embeds: [modEmbed(_taPermErr)] });
+        }
         const tickets = getTickets(data, message.guild.id);
         if (!tickets[message.channel.id]) return message.channel.send({ embeds: [modEmbed('❌ This command must be used inside a ticket channel.')] });
         const resolved = await resolveUserOrRole(args[0]);
