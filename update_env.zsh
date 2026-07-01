@@ -56,17 +56,32 @@ if [[ -z "$MATH_MODULES_DIR" ]]; then
     mkdir -p "$MATH_MODULES_DIR"
 fi
 
-# ── 0b. Fetch & Deploy True Latest Qalculate! ─────────────────────────────────
+# ── 0b. Fetch & Deploy True Latest Qalculate! (best-effort, non-fatal) ────────
 info "Detecting latest Qalculate! release from GitHub..."
 (
     cd /tmp
 
-    QALC_TAG=$(wget -qO- \
-        "https://api.github.com/repos/Qalculate/libqalculate/releases/latest" \
-        | grep -m1 '"tag_name"' \
-        | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+    # NOTE: every step below that can fail is guarded with `|| true`.
+    # Without it, a failure here (e.g. GitHub's 403 on rate limit, with -q
+    # swallowing the error text) trips `set -e` on THIS line, before the
+    # "$QALC_TAG is empty" check ever runs — killing the script silently.
+    API_JSON=$(wget -qO- "https://api.github.com/repos/Qalculate/libqalculate/releases/latest") || true
 
-    [[ -z "$QALC_TAG" ]] && fail "GitHub API returned no tag — check rate limits or connectivity."
+    if [[ -z "$API_JSON" ]]; then
+        warn "Couldn't reach the GitHub API — no response body. Most likely GitHub's unauthenticated rate limit (60 requests/hour per IP, resets on a rolling 1hr window), could also be a network/DNS issue. Skipping the Qalculate! update for this run."
+        exit 1
+    fi
+
+    QALC_TAG=$(print -r -- "$API_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/') || true
+
+    if [[ -z "$QALC_TAG" ]]; then
+        if print -r -- "$API_JSON" | grep -qi "rate limit"; then
+            warn "GitHub API rate limit hit. Skipping the Qalculate! update for this run — re-run 'upgrade' in a bit to retry."
+        else
+            warn "GitHub API responded but no tag_name was found in it. Skipping the Qalculate! update for this run."
+        fi
+        exit 1
+    fi
 
     QALC_VERSION="${QALC_TAG#v}"   # v5.11.0 → 5.11.0
     QALC_ARCHIVE="qalculate-${QALC_VERSION}-x86_64.tar.xz"
@@ -81,9 +96,10 @@ info "Detecting latest Qalculate! release from GitHub..."
         success "Qalculate! ${QALC_TAG} deployed → $MATH_MODULES_DIR/qalc"
     else
         rm -f "$QALC_ARCHIVE"
-        fail "Download failed for ${QALC_TAG} — URL was: $QALC_URL"
+        warn "Download failed for ${QALC_TAG} — URL was: $QALC_URL"
+        exit 1
     fi
-)
+) || warn "Continuing without a Qalculate! update this run."
 
 # ── 1. Activate venv ──────────────────────────────────────────────────────────
 VENV_ACTIVATED=0
@@ -100,7 +116,7 @@ _try_activate() {
     return 1
 }
 
-[[ -n "$1" ]] && _try_activate "$1" "venv from arg"
+[[ -n "$1" ]] && _try_activate "$1" "venv from arg" || true
 [[ $VENV_ACTIVATED -eq 0 ]] && _try_activate "$HOME/venvs/advikmathlib_env" "advikmathlib_env" || true
 [[ $VENV_ACTIVATED -eq 0 ]] && _try_activate "$SCRIPT_DIR/.venv" ".venv (script dir)" || true
 [[ $VENV_ACTIVATED -eq 0 ]] && _try_activate ".venv" ".venv (cwd)" || true
