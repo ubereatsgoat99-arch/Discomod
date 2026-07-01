@@ -795,6 +795,7 @@ GEN     FpXQE_order(GEN z, GEN o, GEN a4, GEN T, GEN p);
 GEN     FpXQE_sub(GEN P, GEN Q, GEN a4, GEN T, GEN p);
 GEN     FpXQE_tatepairing(GEN t, GEN s, GEN m, GEN a4, GEN T, GEN p);
 GEN     FpXQE_weilpairing(GEN t, GEN s, GEN m, GEN a4, GEN T, GEN p);
+GEN     FpXQV_ellcharpoly(GEN x, GEN T, GEN p);
 int     Fq_elljissupersingular(GEN j, GEN T, GEN p);
 GEN     Fq_ellcard_supersingular(GEN a4, GEN a6, GEN T, GEN p);
 int     RgE_is_FpE(GEN x, GEN *pp);
@@ -3351,6 +3352,7 @@ GEN     vecpowug(long N, GEN B, long prec);
 GEN     ellanalyticrank(GEN e, GEN eps, long prec);
 GEN     ellanal_globalred_all(GEN e, GEN *N, GEN *cb, GEN *tam);
 GEN     ellheegner(GEN e);
+GEN     ellheegner_z(GEN E, long prec);
 GEN     ellL1(GEN E, long r, long prec);
 
 /* elldata.c */
@@ -4014,7 +4016,9 @@ long    ZX_lvalrem(GEN x, ulong p, GEN *px);
 long    ZX_lval(GEN x, ulong p);
 long    ZX_pval(GEN x, GEN p);
 long    ZX_pvalrem(GEN x, GEN p, GEN *px);
+long    ZXV_pval(GEN x, GEN p);
 long    ZXV_pvalrem(GEN x, GEN p, GEN *px);
+long    ZXX_pval(GEN x, GEN p);
 long    ZXX_pvalrem(GEN x, GEN p, GEN *px);
 void    affgc(GEN x, GEN y);
 GEN     cvstop2(long s, GEN y);

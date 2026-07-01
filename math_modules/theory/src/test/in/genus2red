@@ -4,7 +4,14 @@
 \\ t is to be substituted with a prime number bigger or equal to 7
 \\ and can be taken to be 5 most of the time...
 \\ a, b, c are generic integers (to be changed if unexpected output)
-do(P, s) = print("Type: ", s); my(Q= subst(P,'t,7)); [genus2red(Q, 7), genus2charpoly(Q,7)];
+do(P, s) =
+{
+   print("Type: ", s); my(Q= subst(P,'t,7), Q2 = subst(P,'t,2));
+   print(genus2red(Q, 7));
+   print(genus2charpoly(Q, 7));
+   print(genus2red(Q, 2));
+   print(genus2charpoly(Q, 2));
+}
 
 P0=x^5+a*x^3+b*x^2+c*x+1;
 do(substvec(P0, [a,b,c], [1,-2,3]), "[I{0-0-0}], p. 155")
@@ -715,3 +722,6 @@ genus2red(150*x^6+180*x^5-270*x^4+2040*x^3-1350*x^2+3060*x+270, 3)
 genus2red(-3*x^6-36*x^5-72*x^4+270*x^3+3,3)
 
 genus2charpoly([48*x^5+56*x^4+41*x^3+14*x^2+3*x,8*x^3-1],2)
+genus2charpoly(-26564204*x^6+6252844*x^5-574636*x^4+25460*x^3-532*x^2+4*x,2)
+genus2charpoly(50015190*x^6+84266478*x^5+59157945*x^4+22150536*x^3+4665411*x^2+524088*x+24531,2)
+genus2charpoly(-470443136821*x^6+1321758322194*x^5-1547338169452*x^4+966087946092*x^3-339289271620*x^2+63550918650*x-4959773125,2)

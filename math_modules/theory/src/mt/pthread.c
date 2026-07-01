@@ -288,21 +288,17 @@ mtpthread_queue_submit(struct mt_state *junk, long workid, GEN work)
   }
   LOCK(&mq->mut)
   {
+    pari_sp av = avma;
+    struct pari_mainstack *st = pari_mainstack;
     mq->output = NULL;
     mq->workid = workid;
-    BLOCK_SIGINT_START
-    {
-      pari_sp av = avma;
-      struct pari_mainstack *st = pari_mainstack;
-      pari_mainstack = mq->mainstack;
-      set_avma(mq->avma);
-      mq->input = gcopy(work);
-      mq->avma = avma;
-      mq->mainstack = pari_mainstack;
-      pari_mainstack = st;
-      set_avma(av);
-    }
-    BLOCK_SIGINT_END
+    pari_mainstack = mq->mainstack;
+    set_avma(mq->avma);
+    mq->input = gcopy(work);
+    mq->avma = avma;
+    mq->mainstack = pari_mainstack;
+    pari_mainstack = st;
+    set_avma(av);
     pthread_cond_signal(&mq->cond);
   } UNLOCK(&mq->mut);
   mt->pending++;

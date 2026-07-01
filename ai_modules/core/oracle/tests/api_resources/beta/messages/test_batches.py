@@ -100,7 +100,7 @@ class TestBatches:
                         "fallback_credit_token": "x",
                         "fallbacks": [
                             {
-                                "model": "claude-fable-5",
+                                "model": "claude-sonnet-5",
                                 "max_tokens": 0,
                                 "output_config": {
                                     "effort": "low",
@@ -211,11 +211,11 @@ class TestBatches:
                         ],
                         "top_k": 5,
                         "top_p": 0.7,
-                        "user_profile_id": "user_profile_id",
                     },
                 }
             ],
             betas=["string"],
+            user_profile_id="anthropic-user-profile-id",
         )
         assert_matches_type(BetaMessageBatch, batch, path=["response"])
 
@@ -590,7 +590,7 @@ class TestAsyncBatches:
                         "fallback_credit_token": "x",
                         "fallbacks": [
                             {
-                                "model": "claude-fable-5",
+                                "model": "claude-sonnet-5",
                                 "max_tokens": 0,
                                 "output_config": {
                                     "effort": "low",
@@ -701,11 +701,11 @@ class TestAsyncBatches:
                         ],
                         "top_k": 5,
                         "top_p": 0.7,
-                        "user_profile_id": "user_profile_id",
                     },
                 }
             ],
             betas=["string"],
+            user_profile_id="anthropic-user-profile-id",
         )
         assert_matches_type(BetaMessageBatch, batch, path=["response"])
 

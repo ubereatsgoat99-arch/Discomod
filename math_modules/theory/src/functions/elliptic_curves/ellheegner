@@ -22,3 +22,6 @@ Doc: Let $E$ be an elliptic curve over the rationals, assumed to be of
   ***                 ^--------------------
   *** ellheegner: The curve has even analytic rank.
  @eprog
+ Variant: \fun{GEN}{ellheegner_z}{GEN E, long prec} return \kbd{[z, idx]} where $z$
+ is the lattice point corresponding to $idx$ time the Heegner point, where $idx$ is
+ a positive integer.

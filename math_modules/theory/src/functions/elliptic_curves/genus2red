@@ -110,6 +110,7 @@ Doc: Let $PQ$ be a polynomial $P$, resp. a vector $[P,Q]$ of polynomials, with
  The component $\var{pic}$ is \typ{VECSMALL} with $3$ components
  $[r_a,r_t,r_u]$ describing the Picard group of the curve: $r_a$ is the Abelian
  rank, $r_t$ is the toric rank, and $r_u$ is the unipotent rank.
+ If $p = 2$, the \var{pic} component is currently omitted.
 
  \misctitle{Notes about Namikawa-Ueno types}
 

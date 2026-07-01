@@ -2269,3 +2269,113 @@ FpXQ_ellgens(GEN a4, GEN a6, GEN ch, GEN D, GEN m, GEN T, GEN p)
   }
   return gc_GEN(av, P);
 }
+
+GEN
+ell_to_a4a6_FpXQ(GEN E, GEN T, GEN p)
+{
+  GEN a1, a3, b2, c4, c6;
+  a1 = Rg_to_FpXQ(ell_get_a1(E),T,p);
+  a3 = Rg_to_FpXQ(ell_get_a3(E),T,p);
+  b2 = Rg_to_FpXQ(ell_get_b2(E),T,p);
+  c4 = Rg_to_FpXQ(ell_get_c4(E),T,p);
+  c6 = Rg_to_FpXQ(ell_get_c6(E),T,p);
+  retmkvec3(FpX_neg(FpX_mulu(c4, 27, p), p), FpX_neg(FpX_mulu(c6, 54, p), p),
+            mkvec4(Z_to_FpX(utoi(6),p,varn(T)),FpX_mulu(b2,3,p),
+                   FpX_mulu(a1,3,p),FpX_mulu(a3,108,p)));
+}
+
+/* [a1,a2,a3,a4,a6] */
+static GEN
+FpXQV_initsmall5(GEN x, GEN T, GEN p)
+{
+  GEN a1 = gel(x,1), a2 = gel(x,2), a3 = gel(x,3);
+  GEN a4 = gel(x,4), a6 = gel(x,5);
+  GEN b2, b4, b6, b8, c4, c6, a11, a13, a33, b22, D;
+  a11= FpXQ_sqr(a1, T, p);
+  b2 = FpX_add(a11, FpX_mulu(a2, 4, p), p);
+  a13= FpXQ_mul(a1, a3, T, p);
+  b4 = FpX_add(a13, FpX_mulu(a4, 2, p), p);
+  a33= FpXQ_sqr(a3, T, p);
+  b6 = FpX_add(a33, FpX_mulu(a6, 4, p), p);
+  b8 = FpX_sub(FpX_add(FpXQ_mul(a11,a6, T, p), FpXQ_mul(b6, a2, T, p), p), FpXQ_mul(a4, FpX_add(a4,a13, p), T, p), p);
+  b22= FpXQ_sqr(b2, T, p);
+  c4 = FpX_sub(b22, FpX_mulu(b4, 24, p), p);
+  c6 = FpX_sub(FpXQ_mul(b2, FpX_sub(FpX_mulu(b4, 36, p), b22, p), T, p), FpX_mulu(b6, 216, p), p);
+  D  = FpX_sub(FpXQ_mul(b4, FpX_sub(FpX_mulu(FpXQ_mul(b2, b6, T, p), 9, p), FpX_mulu(FpXQ_sqr(b4, T, p), 8, p), p), T, p),
+            FpX_add(FpXQ_mul(b22,b8, T, p),FpX_mulu(FpXQ_sqr(b6, T, p), 27, p), p), p);
+  return mkvecn(12, a1, a2, a3, a4, a6, b2, b4, b6, b8, c4, c6, D);
+}
+
+static GEN
+FpXQV_ell_to_a4a6(GEN E, GEN *T, GEN p, ulong *pp)
+{
+  *pp = itou_or_0(p);
+  switch(*pp)
+  {
+    case 0:
+      return ell_to_a4a6_FpXQ(E, *T, p);
+    case 2:
+      *T = ZX_to_F2x(get_FpX_mod(*T));
+      return ell_to_a4a6_F2xq(E, *T);
+    default:
+      *T = ZXT_to_FlxT(*T, *pp);
+      return ell_to_a4a6_Flxq(E, *T, *pp);
+  }
+}
+
+static GEN
+FpXQV_ellcard(GEN x, GEN T, GEN p)
+{
+  ulong pp;
+  GEN v = FpXQV_ell_to_a4a6(x, &T, p, &pp);
+  switch(pp)
+  {
+    case 0:
+      return FpXQ_ellcard(gel(v,1), gel(v,2), T, p);
+    case 2:
+      return F2xq_ellcard(gel(v,1), gel(v,2), T);
+    default:
+      return Flxq_ellcard(gel(v,1), gel(v,2), T, pp);
+  }
+}
+
+GEN
+FpXQV_ellcharpoly(GEN e, GEN T, GEN p)
+{
+  pari_sp av = avma;
+  GEN E = FpXQV_initsmall5(e, T, p);
+  GEN q = powiu(p, get_FpX_degree(T));
+  GEN D = FpXQ_red(ell_get_disc(E),T,p);
+  if (signe(D))
+  {
+    GEN C = FpXQV_ellcard(E, T, p);
+    return gc_GEN(av, deg2pol_shallow(gen_1, subii(C, addiu(q, 1)), q, 0));
+  } else
+  {
+    long ap;
+    switch (itou_or_0(p))
+    {
+    case 2:
+      {
+        GEN T2 = ZX_to_F2x(T);
+        GEN v = ell_to_a4a6_F2xq(E, T2), a2 = gel(v,1);
+        ap = typ(a2)==t_VECSMALL ? F2xq_trace(a2, T2)==0 ? 1 : -1: 0;
+        break;
+      }
+    case 3:
+      {
+        GEN T3 = ZX_to_Flx(T,3);
+        GEN v = ell_to_a4a6_Flxq(E, T3, 3), a2 = gel(v,1);
+        ap = typ(a2)==t_VEC ? lgpol(gel(a2,1))==0 ? 1 : -1: 0;
+        break;
+      }
+    default:
+      {
+        GEN c6 = FpXQ_red(ell_get_c6(E),T,p);
+        ap = signe(c6) ? FpXQ_issquare(gneg(c6), T, p) ? 1: -1: 0;
+        break;
+      }
+    }
+    return ap ? gc_GEN(av, deg1pol_shallow(gen_1, stoi(-ap), 0)): gc_upto(av, pol_1(0));
+  }
+}

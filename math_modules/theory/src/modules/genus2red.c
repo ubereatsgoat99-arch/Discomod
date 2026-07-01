@@ -2321,7 +2321,10 @@ genus2red(GEN PQ, GEN p)
       }
     }
     red = f >= 0? mkvec2(strtoGENstr(Ip.type), N): cgetg(1, t_VEC);
-    gel(V, i) = mkvec4(q, Ip.stable, red, mkvecsmall3(Ip.abe,Ip.tor,2-(Ip.tor+Ip.abe)));
+    if (equaliu(q, 2))
+      gel(V, i) = mkvec3(q, Ip.stable, red);
+    else
+      gel(V, i) = mkvec4(q, Ip.stable, red, mkvecsmall3(Ip.abe,Ip.tor,2-(Ip.tor+Ip.abe)));
   }
   if (p) V = gel(V,1);
   cond = factorback(facto);

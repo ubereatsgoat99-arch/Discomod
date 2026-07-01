@@ -701,8 +701,8 @@ where \kbd{ch} is the \kbd{Flv} $[u,r,s,t]$.
 \subsec{Elliptic curves over $\F_{2^n}$}
 Let $T$ be an irreducible \kbd{F2x} and $E$ the
 elliptic curve given by either the equation
-$E:y^2+x*y=x^3+a_2\*x^2+a_6$, where $a_2, a_6$ are \kbd{F2x} in
-$\F_2[X]/(T)$ (ordinary case) or $E:y^2+a_3*y=x^3+a_4\*x+a_6$, where
+$E:y^2+x\*y=x^3+a_2\*x^2+a_6$, where $a_2, a_6$ are \kbd{F2x} in
+$\F_2[X]/(T)$ (ordinary case) or $E:y^2+a_3\*y=x^3+a_4\*x+a_6$, where
 $a_3, a_4, a_6$ are \kbd{F2x} in $\F_2[X]/(T)$ (supersingular case).
 
 A \kbd{F2xqE} is a point of $E(\F_2[X]/(T))$.  In the supersingular case, the
@@ -881,6 +881,12 @@ algorithm.
 Assume $p\neq 2,3$, and $q$ is the cardinality of $\F_p[X]/(T)$.
 The parameter $s$ has the same meaning as in \kbd{Fp\_ellcard\_SEA}.
 If the \kbd{seadata} package is installed, the function will be faster.
+
+\fun{GEN}{FpXQV_ellcharpoly}{GEN E, GEN T, GEN p}
+Let $E$ be a vector $[a_1,a_2,a_3,a_4,a_6]$ defining the plane curve
+$y^2+a_1\*x\*y+a_3\*y = x^3+a_2\*x^2+a_4\*x+a_6$ over $\F_p[X]/(T)$,
+returns the characteristic polynomial of the Frobenius acting on its
+first $l$-adic cohomology group (which can be of degree $0$, $1$ or $2$.)
 
 \fun{GEN}{FpXQ_ellgroup}{GEN a4, GEN a6, GEN N, GEN T, GEN p, GEN *pm}
 Return the group structure $D$ of the group $E(\F_p[X]/(T))$,

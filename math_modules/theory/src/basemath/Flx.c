@@ -3245,7 +3245,7 @@ get_Flx_algebra(void **E, ulong p, long v)
   ulong pi = SMALL_ULONG(p)? 0: get_Fl_red(p);
   GEN z = new_chunk(sizeof(struct _Flx));
   struct _Flx *e = (struct _Flx *) z;
-  e->p  = p; e->pi = pi;
+  e->p  = p; e->pi = pi; e->v = v;
   *E = (void*)e; return &Flx_algebra;
 }
 

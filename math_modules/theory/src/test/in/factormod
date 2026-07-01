@@ -1,4 +1,4 @@
-default(parisize, 350M);
+default(parisize, "272M"); \\ fail with 270M
 print(lift(factorcantor(x^1024+1,12289)))
 check(P,p)=
 {

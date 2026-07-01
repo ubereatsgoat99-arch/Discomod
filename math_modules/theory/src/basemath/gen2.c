@@ -1908,6 +1908,22 @@ ZX_gen_pvalrem(GEN x, GEN p, GEN *px, long imin)
 }
 
 long
+ZXX_pval(GEN x, GEN p)
+{
+  pari_sp av = avma;
+  GEN px;
+  return gc_long(av, ZX_gen_pvalrem(x,p,&px, 2));
+}
+
+long
+ZXV_pval(GEN x, GEN p)
+{
+  pari_sp av = avma;
+  GEN px;
+  return gc_long(av, ZX_gen_pvalrem(x,p,&px, 1));
+}
+
+long
 ZXX_pvalrem(GEN x, GEN p, GEN *px) { return ZX_gen_pvalrem(x,p,px, 2); }
 long
 ZXV_pvalrem(GEN x, GEN p, GEN *px) { return ZX_gen_pvalrem(x,p,px, 1); }

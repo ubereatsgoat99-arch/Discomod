@@ -539,6 +539,42 @@ Flxq_ellgens(GEN a4, GEN a6, GEN ch, GEN D, GEN m, GEN T, ulong p)
   }
   return gc_GEN(av, P);
 }
+
+static GEN
+ell_to_a4a6_F3xq(GEN E, GEN T)
+{
+  GEN a1, a3, b2, b4, b6;
+  a1 = Rg_to_Flxq(ell_get_a1(E),T,3);
+  a3 = Rg_to_Flxq(ell_get_a3(E),T,3);
+  b2 = Rg_to_Flxq(ell_get_b2(E),T,3);
+  b4 = Rg_to_Flxq(ell_get_b4(E),T,3);
+  b6 = Rg_to_Flxq(ell_get_b6(E),T,3);
+  if(lgpol(b2)) /* ordinary case */
+  {
+    GEN b4b2 = Flxq_div(b4,b2,T,3);
+    GEN a6 = Flx_sub(b6,Flxq_mul(b4b2,Flx_add(b4,Flxq_sqr(b4b2,T,3),3),T,3),3);
+    retmkvec3(mkvec(b2), a6,
+       mkvec4(Fl_to_Flx(1,T[1]),b4b2,Flx_neg(a1,3),Flx_neg(a3,3)));
+  }
+  else /* super-singular case */
+    retmkvec3(Flx_neg(b4, 3), b6,
+       mkvec4(Fl_to_Flx(1,T[1]),zero_Flx(T[1]), Flx_neg(a1,3), Flx_neg(a3,3)));
+}
+
+GEN
+ell_to_a4a6_Flxq(GEN E, GEN T, ulong p)
+{
+  GEN a1, a3, b2, c4, c6;
+  if(p==3) return ell_to_a4a6_F3xq(E, T);
+  a1 = Rg_to_Flxq(ell_get_a1(E),T,p);
+  a3 = Rg_to_Flxq(ell_get_a3(E),T,p);
+  b2 = Rg_to_Flxq(ell_get_b2(E),T,p);
+  c4 = Rg_to_Flxq(ell_get_c4(E),T,p);
+  c6 = Rg_to_Flxq(ell_get_c6(E),T,p);
+  retmkvec3(Flx_neg(Flx_mulu(c4, 27, p), p), Flx_neg(Flx_mulu(c6, 54, p), p),
+            mkvec4(Fl_to_Flx(6%p,T[1]), Flx_triple(b2,p), Flx_triple(a1,p),
+                   Flx_mulu(a3,108,p)));
+}
 /***********************************************************************/
 /**                          Point counting                           **/
 /***********************************************************************/

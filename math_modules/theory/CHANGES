@@ -160,7 +160,9 @@ BA  83- [libpari] FlxqXn_div, FlxqXn_div_pre
 BA  84- [libpari] gen_parpairwiseop, gen_parpairwiseop_percent
 BA  85- [libpari] ZMV_prod
 BA  86- [libpari] get_Flx_algebra, get_Flxq_algebra
-BA  87- [libpari] ZXX_shifti
+BA  87- [libpari] ZXX_shifti, ZXX_pval, ZXV_pval
+BA  88- [libpari] FpXQV_ellcharpoly
+BA  89- [libpari] ellheegner_z
 
   Changed
      1- subst: use fast RgX_affine function to compute P(a*x+b) + RgX_deflate

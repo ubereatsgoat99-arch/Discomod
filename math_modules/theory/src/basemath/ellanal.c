@@ -1357,6 +1357,41 @@ makenfA(GEN sel, GEN A, GEN cb)
 }
 
 GEN
+ellheegner_z(GEN E, long prec)
+{
+  pari_sp av = avma;
+  GEN z, points, coefs, s, om, indmult;
+  long ind, indx, lint, k, l, wtor, etor, ndisc;
+  pari_timer ti;
+  GEN N, cb, tam, torsion;
+  E = ellanal_globalred_all(E, &cb, &N, &tam);
+  if (ellrootno_global(E) == 1)
+    pari_err_DOMAIN("ellheegner", "(analytic rank)%2","=",gen_0,E);
+  torsion = elltors(E);
+  wtor = itos( gel(torsion,1) ); /* #E(Q)_tor */
+  etor = wtor > 1? itou(gmael(torsion, 2, 1)): 1; /* exponent of E(Q)_tor */
+  om = ellR_omega(E,prec);
+  indmult = heegner_indexmult(om, wtor, tam, prec);
+  ndisc = maxss(10, (long) (prec*M_LN2/10));
+  heegner_find_disc(&points, &coefs, &ind, E, indmult, ndisc, prec);
+  if (DEBUGLEVEL) timer_start(&ti);
+  s = heegner_psi(E, N, points, prec);
+  if (DEBUGLEVEL) timer_printf(&ti,"heegner_psi");
+  l = lg(points);
+  z = mulsr(coefs[1], gel(s, 1));
+  for (k = 2; k < l; ++k) z = addrr(z, mulsr(coefs[k], gel(s, k)));
+  z = gsub(z, gmul(gel(om,1), ground(gdiv(z, gel(om,1)))));
+  lint = wtor > 1 ? ugcd(ind, etor): 1;
+  z = gmulsg(2*lint, z);
+  if (DEBUGLEVEL)
+    err_printf("z=%.*Pg\n",nbits2ndec(prec), z);
+  indx = lint*2*ind;
+  if (DEBUGLEVEL)
+    err_printf("lint = %ld, ind = %ld, indx = %ld",lint,ind,indx);
+  return gerepilecopy(av, mkvec2(z, stoi(indx)));
+}
+
+GEN
 ellheegner(GEN E)
 {
   pari_sp av = avma;

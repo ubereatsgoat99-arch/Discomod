@@ -251,8 +251,11 @@ Leading_is_neg(GEN x)
   return is_real_t(typ(x))? gsigne(x) < 0: 0;
 }
 
+/* x = Rg_get_1(something); shall we use it for base change ?
+ * Not if gen_1 (over Z) or t_PADIC (over Zp, padic prec is independent in
+ * each coefficient) */
 static int
-transtype(GEN x) { return x != gen_1 && typ(x) != t_PADIC; }
+base_change(GEN x) { return x != gen_1 && typ(x) != t_PADIC; }
 
 /* d a t_POL, n a coprime t_POL of same var or "scalar". Not memory clean */
 GEN
@@ -268,11 +271,11 @@ gred_rfrac_simple(GEN n, GEN d)
     if (typ(n) != t_POL || varn(n) != varn(d)) n = scalarpol(n, varn(d));
     return n;
   }
-  if (Leading_is_neg(d)) { d = gneg(d); n = gneg(n); }
   _1n = Rg_get_1(n);
   _1d = Rg_get_1(d);
-  if (transtype(_1n) && !gidentical(_1n, _1d)) d = gmul(d, _1n);
-  if (transtype(_1d) && !gidentical(_1n, _1d)) n = gmul(n, _1d);
+  if (base_change(_1n) && !gidentical(_1n, _1d)) d = gmul(d, _1n);
+  if (base_change(_1d) && !gidentical(_1n, _1d)) n = gmul(n, _1d);
+  if (Leading_is_neg(d)) { d = gneg(d); n = gneg(n); }
   cd = content(d);
   while (typ(n) == t_POL && !degpol(n)) n = gel(n,2);
   cn = (typ(n) == t_POL && varn(n) == varn(d))? content(n): n;
@@ -348,9 +351,9 @@ fix_rfrac(GEN x, long d)
   return z;
 }
 
-/* assume d != 0 */
+/* d a t_POL; simplify the rational function n / d */
 static GEN
-gred_rfrac2(GEN n, GEN d)
+gred_rfrac(GEN n, GEN d)
 {
   GEN y, z, _1n, _1d;
   long v, vd, vn;
@@ -364,16 +367,23 @@ gred_rfrac2(GEN n, GEN d)
   {
     if (varncmp(vd, gvar(n)) >= 0) return gdiv(n,d);
     if (varncmp(vd, gvar2(n)) < 0) return gred_rfrac_simple(n,d);
-    pari_err_BUG("gred_rfrac2 [incompatible variables]");
+    pari_err_BUG("gred_rfrac [incompatible variables]");
   }
   vn = varn(n);
   if (varncmp(vd, vn) < 0) return gred_rfrac_simple(n,d);
   if (varncmp(vd, vn) > 0) return RgX_Rg_div(n,d);
   _1n = Rg_get_1(n);
   _1d = Rg_get_1(d);
-  if (transtype(_1n) && !gidentical(_1n, _1d)) d = gmul(d, _1n);
-  if (transtype(_1d) && !gidentical(_1n, _1d)) n = gmul(n, _1d);
-
+  if (base_change(_1n) && !gidentical(_1n, _1d))
+  {
+    d = gmul(d, _1n);
+    if (!signe(d)) pari_err_INV("gdiv",d);
+  }
+  if (base_change(_1d) && !gidentical(_1n, _1d))
+  {
+    n = gmul(n, _1d);
+    if (!signe(n)) return gdiv(simplify_shallow(n),d);
+  }
   /* now n and d are t_POLs in the same variable */
   v = RgX_valrem(n, &n) - RgX_valrem(d, &d);
   if (!degpol(d))
@@ -1383,7 +1393,7 @@ mul_rfrac_scal(GEN n, GEN d, GEN x)
       d = gmul(d, gmodulo(gen_1, gel(x,1)));
       return gc_upto(av, gdiv(n,d));
   }
-  z = gred_rfrac2(x, d);
+  z = gred_rfrac(x, d);
   n = simplify_shallow(n);
   if (typ(z) == t_RFRAC)
   {
@@ -1433,8 +1443,8 @@ mul_rfrac(GEN x1, GEN x2, GEN y1, GEN y2)
   GEN z, X, Y;
   pari_sp av = avma;
 
-  X = gred_rfrac2(x1, y2);
-  Y = gred_rfrac2(y1, x2);
+  X = gred_rfrac(x1, y2);
+  Y = gred_rfrac(y1, x2);
   if (typ(X) == t_RFRAC)
   {
     if (typ(Y) == t_RFRAC) {
@@ -1457,7 +1467,7 @@ static GEN
 div_rfrac_pol(GEN x1, GEN x2, GEN y2)
 {
   pari_sp av = avma;
-  GEN X = gred_rfrac2(x1, y2);
+  GEN X = gred_rfrac(x1, y2);
   if (typ(X) == t_RFRAC && varn(gel(X,2)) == varn(x2))
   {
     x2 = RgX_mul(gel(X,2), x2);
@@ -2294,7 +2304,7 @@ div_scal_rfrac(GEN x, GEN y)
     {
       pari_sp av = avma;
       GEN _1 = Rg_get_1(x);
-      if (transtype(_1)) y1 = gmul(y1, _1);
+      if (base_change(_1)) y1 = gmul(y1, _1);
       return gc_upto(av, gred_rfrac_simple(gmul(x, y2), y1));
     }
     y1 = gel(y1,2);
@@ -2349,7 +2359,7 @@ div_scal_pol(GEN x, GEN y) {
   if (ly == 3) return scalarpol(gdiv(x,gel(y,2)), varn(y));
   if (isrationalzero(x)) return zeropol(varn(y));
   av = avma;
-  _1 = Rg_get_1(x); if (transtype(_1)) y = gmul(y, _1);
+  _1 = Rg_get_1(x); if (base_change(_1)) y = gmul(y, _1);
   return gc_upto(av, gred_rfrac_simple(x,y));
 }
 static GEN
@@ -2357,7 +2367,7 @@ div_scal_ser(GEN x, GEN y)
 {
   pari_sp av = avma;
   GEN _1 = Rg_get_1(x);
-  if (transtype(_1)) y = gmul(y, _1);
+  if (base_change(_1)) y = gmul(y, _1);
   return gc_upto(av, gmul(x, ser_inv(y)));
 }
 static GEN
@@ -2527,7 +2537,7 @@ gdiv(GEN x, GEN y)
       if (!signe(y)) pari_err_INV("gdiv",y);
       if (lg(y) == 3) return RgX_Rg_div(x,gel(y,2));
       av = avma;
-      return gc_upto(av, gred_rfrac2(x,y));
+      return gc_upto(av, gred_rfrac(x,y));
 
     case t_SER:
       vx = varn(x);

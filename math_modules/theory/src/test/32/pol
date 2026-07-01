@@ -119,6 +119,11 @@ E-38*I, 26.466020671197515570740051488474260276 + 0.E-38*I, 27.0934735492647
 0
 Mod(Mod(1, 3), Mod(1, 3)*a^2 + Mod(2, 3))*x^3
 Mod(Mod(0, 3), Mod(1, 3)*a^2 + Mod(2, 3))*x^-2 + O(x^-1)
+(Mod(1, 2)*a4 + Mod(1, 2)*a3^2/(Mod(1, 2)*a1^2))*x + (Mod(1, 2)*a3^2/(Mod(1,
+ 2)*a1^2)*a2 + (Mod(1, 2)*a6 + Mod(0, 2)))
+  ***   at top-level: ...+a2*x^2+a4*x+a6)*Mod(1,2)%(2*x)
+  ***                                             ^------
+  *** _%_: impossible inverse in Fl_inv: Mod(0, 2).
   ***   at top-level: polrootsbound(Pol(0))
   ***                 ^---------------------
   *** polrootsbound: zero polynomial in roots.

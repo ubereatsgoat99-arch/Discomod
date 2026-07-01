@@ -714,6 +714,10 @@ GEN     F2m_gauss_pivot(GEN x, long *rr);
 GEN     F2m_gauss_sp(GEN a, GEN b);
 GEN     F2m_invimage_i(GEN A, GEN B);
 
+/* F2xqE.c */
+
+GEN     ell_to_a4a6_F2xq(GEN E, GEN T);
+
 /* Fle.c */
 
 void    FleV_add_pre_inplace(GEN P, GEN Q, GEN a4, ulong p, ulong pi);
@@ -736,8 +740,13 @@ int     Flxq_log_use_index(GEN m, GEN T0, ulong p);
 
 /* FlxqE.c */
 
+GEN     ell_to_a4a6_Flxq(GEN E, GEN T, ulong p);
 GEN     ZpXQ_norm_pcyc(GEN x, GEN T, GEN q, GEN p);
 long    zx_is_pcyc(GEN T);
+
+/* FpE.c */
+
+GEN     ell_to_a4a6_FpXQ(GEN E, GEN T, GEN p);
 
 /* FpV.c */
 

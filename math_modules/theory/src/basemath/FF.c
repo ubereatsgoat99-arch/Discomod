@@ -1147,89 +1147,6 @@ to_FFE_vec(GEN x, GEN ff)
 }
 
 static GEN
-FpXQ_ell_to_a4a6(GEN E, GEN T, GEN p)
-{
-  GEN a1, a3, b2, c4, c6;
-  a1 = Rg_to_FpXQ(ell_get_a1(E),T,p);
-  a3 = Rg_to_FpXQ(ell_get_a3(E),T,p);
-  b2 = Rg_to_FpXQ(ell_get_b2(E),T,p);
-  c4 = Rg_to_FpXQ(ell_get_c4(E),T,p);
-  c6 = Rg_to_FpXQ(ell_get_c6(E),T,p);
-  retmkvec3(FpX_neg(FpX_mulu(c4, 27, p), p), FpX_neg(FpX_mulu(c6, 54, p), p),
-            mkvec4(Z_to_FpX(utoi(6),p,varn(T)),FpX_mulu(b2,3,p),
-                   FpX_mulu(a1,3,p),FpX_mulu(a3,108,p)));
-}
-
-static GEN
-F3xq_ell_to_a4a6(GEN E, GEN T)
-{
-  GEN a1, a3, b2, b4, b6;
-  a1 = Rg_to_Flxq(ell_get_a1(E),T,3);
-  a3 = Rg_to_Flxq(ell_get_a3(E),T,3);
-  b2 = Rg_to_Flxq(ell_get_b2(E),T,3);
-  b4 = Rg_to_Flxq(ell_get_b4(E),T,3);
-  b6 = Rg_to_Flxq(ell_get_b6(E),T,3);
-  if(lgpol(b2)) /* ordinary case */
-  {
-    GEN b4b2 = Flxq_div(b4,b2,T,3);
-    GEN a6 = Flx_sub(b6,Flxq_mul(b4b2,Flx_add(b4,Flxq_sqr(b4b2,T,3),3),T,3),3);
-    retmkvec3(mkvec(b2), a6,
-       mkvec4(Fl_to_Flx(1,T[1]),b4b2,Flx_neg(a1,3),Flx_neg(a3,3)));
-  }
-  else /* super-singular case */
-    retmkvec3(Flx_neg(b4, 3), b6,
-       mkvec4(Fl_to_Flx(1,T[1]),zero_Flx(T[1]), Flx_neg(a1,3), Flx_neg(a3,3)));
-}
-
-static GEN
-Flxq_ell_to_a4a6(GEN E, GEN T, ulong p)
-{
-  GEN a1, a3, b2, c4, c6;
-  if(p==3) return F3xq_ell_to_a4a6(E, T);
-  a1 = Rg_to_Flxq(ell_get_a1(E),T,p);
-  a3 = Rg_to_Flxq(ell_get_a3(E),T,p);
-  b2 = Rg_to_Flxq(ell_get_b2(E),T,p);
-  c4 = Rg_to_Flxq(ell_get_c4(E),T,p);
-  c6 = Rg_to_Flxq(ell_get_c6(E),T,p);
-  retmkvec3(Flx_neg(Flx_mulu(c4, 27, p), p), Flx_neg(Flx_mulu(c6, 54, p), p),
-            mkvec4(Fl_to_Flx(6%p,T[1]), Flx_triple(b2,p), Flx_triple(a1,p),
-                   Flx_mulu(a3,108,p)));
-}
-
-static GEN
-F2xq_ell_to_a4a6(GEN E, GEN T)
-{
-  long v = T[1];
-  GEN a1 = Rg_to_F2xq(ell_get_a1(E),T);
-  GEN a2 = Rg_to_F2xq(ell_get_a2(E),T);
-  GEN a3 = Rg_to_F2xq(ell_get_a3(E),T);
-  GEN a4 = Rg_to_F2xq(ell_get_a4(E),T);
-  GEN a6 = Rg_to_F2xq(ell_get_a6(E),T);
-  if (lgpol(a1))
-  {
-    GEN a1i = F2xq_inv(a1,T);
-    GEN a1i2 = F2xq_sqr(a1i,T);
-    GEN a1i3 = F2xq_mul(a1i,a1i2,T);
-    GEN a1i6 = F2xq_sqr(a1i3,T);
-    GEN d  = F2xq_mul(a3,a1i,T);
-    GEN dd = F2xq_mul(d,a1i2,T);
-    GEN e  = F2xq_mul(F2x_add(a4,F2xq_sqr(d,T)),a1i,T);
-    GEN ee = F2xq_mul(e,a1i3,T);
-    GEN da2 = F2x_add(a2,d);
-    GEN d2 = F2xq_mul(da2,a1i2,T);
-    GEN d6 = F2xq_mul(F2x_add(F2x_add(F2xq_mul(F2x_add(F2xq_mul(da2,d,T),a4),d,T),a6),F2xq_sqr(e,T)),a1i6,T);
-    retmkvec3(d2, d6, mkvec4(a1i,dd,pol0_F2x(v),ee));
-  }
-  else
-  { /* allow a1 = a3 = 0: singular curve */
-    GEN d4 = F2x_add(F2xq_sqr(a2,T),a4);
-    GEN d6 = F2x_add(F2xq_mul(a2,a4,T),a6);
-    GEN a3i = lgpol(a3)? F2xq_inv(a3,T): a3;
-    retmkvec3(mkvec3(a3,d4,a3i), d6, mkvec4(pol1_F2x(v),a2,pol0_F2x(T[1]),pol0_F2x(T[1])));
-  }
-}
-
-static GEN
 FqV_to_FpXQV(GEN x, GEN T)
 {
   pari_sp av = avma;
@@ -1349,11 +1266,11 @@ FF_elldata(GEN E, GEN fg)
   switch(fg[1])
   {
   case t_FF_FpXQ:
-    e = FpXQ_ell_to_a4a6(E,T,p); break;
+    e = ell_to_a4a6_FpXQ(E,T,p); break;
   case t_FF_F2xq:
-    e = F2xq_ell_to_a4a6(E,T); break;
+    e = ell_to_a4a6_F2xq(E,T); break;
   default:
-    e = Flxq_ell_to_a4a6(E,T,pp); break;
+    e = ell_to_a4a6_Flxq(E,T,pp); break;
   }
   return mkvec2(fg,e);
 }
@@ -1369,15 +1286,15 @@ FF_ellinit(GEN E, GEN fg)
   switch(fg[1])
   {
   case t_FF_FpXQ:
-    e = FpXQ_ell_to_a4a6(E,T,p);
+    e = ell_to_a4a6_FpXQ(E,T,p);
     for(i=1;i<=12;i++) gel(y,i) = mkFF_i(fg,Rg_to_FpXQ(gel(E,i),T,p));
     break;
   case t_FF_F2xq:
-    e = F2xq_ell_to_a4a6(E,T);
+    e = ell_to_a4a6_F2xq(E,T);
     for(i=1;i<=12;i++) gel(y,i) = mkFF_i(fg,Rg_to_F2xq(gel(E,i),T));
     break;
   default:
-    e = Flxq_ell_to_a4a6(E,T,pp);
+    e = ell_to_a4a6_Flxq(E,T,pp);
     for(i=1;i<=12;i++) gel(y,i) = mkFF_i(fg,Rg_to_Flxq(gel(E,i),T,pp));
     break;
   }

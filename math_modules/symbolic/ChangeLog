@@ -1,3 +1,53 @@
+2026-06-30  Qian Yun <oldk1331@gmail.com>
+
+	* src/interp/i-coerfn.boot: Fix a polynomial coercion bug
+	in interpreter exposed by previous commit
+
+2026-06-30  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/multpoly.spad: Simplify '*' in SMP
+
+2026-06-29  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/multpoly.spad: Fixup previous commit
+
+2026-06-29  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/multpoly.spad: Optimize '*' in SMP
+
+2026-06-28  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/multpoly.spad:
+	Optimize and simplify 'variables' in SMP
+
+2026-06-28  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/catdef.spad, src/algebra/oct.spad: Better
+	propagate CharacteristicZero
+
+2026-06-28  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/cattable.boot: Better handle self conditions
+
+2026-06-27  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/i-funsel.boot: Better check for exact
+	signature match
+
+2026-06-25  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/expr.spad:
+	Optimize '=' in Expression Integer further
+
+2026-06-24  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/i-funsel.boot: Fix use of 1 as signature
+	in a condition
+
+2026-06-22  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/setvars.boot: Minor fix
+
 2026-06-19  Qian Yun <oldk1331@gmail.com>
 
 	* src/algebra/expr.spad: Change evaluation order in 'reduc'

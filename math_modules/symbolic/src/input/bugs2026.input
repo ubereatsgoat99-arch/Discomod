@@ -133,4 +133,17 @@ e2 := (x+sqrt(x^2))/(y+sqrt(y^2))
 testTrue("(e1 = e2)@Boolean")
 testEquals("e1 - e2", "0")
 
+testcase "coercion to CONTFRAC"
+
+testEquals("coerce(2/3)$ContinuedFraction(Integer)",
+           "2/(3::ContinuedFraction(Integer))")
+testTrue("ContinuedFraction(INT) has CharacteristicZero")
+
+testcase "polynomial coercion in interpreter"
+
+p1 : UP(a1, Fraction(Polynomial(Integer))) := -a1+b1/b2
+p2 : Fraction(Polynomial(Integer)) := (-a1*b2+b1)/b2
+p3 := p1::Fraction(Polynomial(Integer))
+testEquals("p2 - p3", "0")
+
 statistics()

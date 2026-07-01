@@ -536,7 +536,6 @@ def test_hyper_2f1():
 def test_hyper_2f1_hard():
     # Singular cases
     assert hyp2f1(2,-1,-1,3).ae(7)
-    pytest.raises(NotImplementedError, lambda: fp.hyp2f1(2,-1,-1,3))
     assert hyp2f1(2,-1,-1,3,eliminate_all=True).ae(0.25)
     assert hyp2f1(2,-2,-2,3).ae(34)
     assert hyp2f1(2,-2,-2,3,eliminate_all=True).ae(0.25)
@@ -2507,3 +2506,32 @@ def test_issue_1099():
     r1 = lerchphi(z, 2, a)
     r2 = extradps(100)(lerchphi)(z, 2, a)
     assert r1.ae(r2)
+
+def test_issue_252():
+    z, s, a = 2.5, 1.5, 4
+    e = 1/mpf(10**10)
+    # N[LerchPhi[5/2, 3/2, 4-10^-10], 17]
+    assert lerchphi(z, s,
+                    a - e).ae(mpc('-0.16723817353102306-0.08686834435129020j'))
+    # N[LerchPhi[5/2, 3/2, 4+10^-10], 17]
+    assert lerchphi(z, s,
+                    a + e).ae(mpc('-0.16723817351940769-0.08686834433537087j'))
+    # N[LerchPhi[5/2, 3/2, 4], 17]
+    assert lerchphi(z, s,
+                    a).ae(mpc('-0.16723817352521537-0.08686834434333054j'))
+    # N[LerchPhi[5/2+I/4, 2, 4], 17]
+    assert lerchphi(2.5+0.25j, 2,
+                    4).ae(mpc('-0.066397419699793568+0.076201248010951803j'))
+    # N[LerchPhi[1/4+I/2, 5/2, 4], 17]
+    assert lerchphi(0.25+0.5j, 2.5,
+                    4).ae(mpc('0.032357329026949928+0.010945877309574764j'))
+    # N[LerchPhi[3/4, 5/2, 4], 17]
+    assert lerchphi(0.75, 2.5, 4).ae(mpf('0.058457869546642472'))
+
+def test_issue_496():
+    assert fp.hyper([0], [0], 0.25) == 1
+    assert fp.hyper([0], [0], 0.5) == 1
+    assert fp.hyper([0], [0], 1.5) == 1
+    assert fp.hyper([2, 0], [0, 1], 2.5) == 1
+    assert fp.hyper([1, -1], [-2], 3) == 2.5
+    assert fp.hyp2f1(2, -1, -1, 3) == 7

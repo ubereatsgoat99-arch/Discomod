@@ -1,4 +1,4 @@
-  ***   Warning: new stack size = 350000000 (333.786 Mbytes).
+  ***   Warning: new stack size = 272000000 (259.399 Mbytes).
 [x + 7, 1; x + 8, 1; x + 20, 1; x + 21, 1; x + 24, 1; x + 50, 1; x + 60, 1; 
 x + 63, 1; x + 68, 1; x + 72, 1; x + 125, 1; x + 139, 1; x + 146, 1; x + 150
 , 1; x + 170, 1; x + 180, 1; x + 189, 1; x + 193, 1; x + 204, 1; x + 212, 1;
@@ -297,4 +297,4 @@ matrix(0,2)
   ***   at top-level: factormod(x^3+1,[y^2+1,5])
   ***                 ^--------------------------
   *** factormod: not an irreducible polynomial in FpX_ffintersect: y^2 + 1.
-Total time spent: 6110
+Total time spent: 6528
