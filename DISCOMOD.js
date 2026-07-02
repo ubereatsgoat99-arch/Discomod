@@ -16054,26 +16054,68 @@ client.on('interactionCreate', async interaction => {
                 if (_mbanPermErr) { await interaction.reply({ content: _mbanPermErr, flags: MessageFlags.Ephemeral }); return; }
             }
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            const rawIds  = interaction.options.getString('ids').split(/[\s,]+/).map(s => s.replace(/[^0-9]/g,'')).filter(s => /^\d{15,20}$/.test(s));
-            const mbReason= interaction.options.getString('reason') || 'Mass ban action';
-            const doPurge = interaction.options.getBoolean('purge') ?? false;
+            const mbSub    = interaction.options.getSubcommand(false) || 'ids';
+            const rawIds   = interaction.options.getString('ids').split(/[\s,]+/).map(s => s.replace(/[^0-9]/g,'')).filter(s => /^\d{15,20}$/.test(s));
+            const mbReason = interaction.options.getString('reason') || 'Mass ban action';
+
+            // ── Message-deletion options ────────────────────────────────────
+            const mbDelTimeRaw    = interaction.options.getString('delete_time');
+            const mbDelCount      = interaction.options.getInteger('delete_count') ?? 0;
+            const mbDelSecs       = parseDeleteDuration(mbDelTimeRaw) || 0;
+            const mbChannelTarget = mbSub === 'channel' ? interaction.options.getChannel('channel') : null;
+            const mbPlan = resolveDeletePlan({
+                seconds:   mbDelSecs,
+                count:     mbDelCount,
+                channelId: mbChannelTarget ? mbChannelTarget.id : null,
+            });
+
             if (rawIds.length === 0) { await interaction.editReply('❌ No valid user IDs found.'); return; }
             if (rawIds.length > 50)  { await interaction.editReply('❌ Maximum 50 IDs per massban.'); return; }
-            let banned = 0, failed = 0;
+
+            let banned = 0, failed = 0, totalDeleted = 0;
             for (const uid of rawIds) {
                 try {
-                    await interaction.guild.bans.create(uid, { deleteMessageSeconds: doPurge ? 604800 : 0, reason: mbReason });
+                    await interaction.guild.bans.create(uid, {
+                        deleteMessageSeconds: mbPlan.needsManualPurge ? 0 : mbPlan.nativeSeconds,
+                        reason: mbReason,
+                    });
                     if (!data.bans) data.bans = {};
                     if (!data.bans[interaction.guild.id]) data.bans[interaction.guild.id] = {};
                     data.bans[interaction.guild.id][uid] = { reason: mbReason, by: interaction.user.id, bannedAt: Date.now(), hardBan: false };
                     banned++;
+
+                    // Manual per-user purge when channel-scoped or count-constrained
+                    if (mbPlan.needsManualPurge) {
+                        const pr = await tryPurgeMemberMessages(interaction.guild, uid, {
+                            seconds:   mbPlan.seconds,
+                            count:     mbPlan.count,
+                            channelId: mbPlan.channelId,
+                        });
+                        if (pr) totalDeleted += pr.deletedCount;
+                    }
                 } catch { failed++; }
             }
             saveData(data);
-            await interaction.editReply(`✅ Banned **${banned}** user(s). Failed: **${failed}**.`);
+
+            // Build deletion summary
+            let mbDelStr = 'None';
+            if (mbPlan.needsManualPurge) {
+                mbDelStr = `${totalDeleted} msg(s) total` +
+                    (mbChannelTarget ? ` in <#${mbChannelTarget.id}>` : ' (all channels)');
+            } else if (mbPlan.nativeSeconds > 0) {
+                mbDelStr = `Last ${formatDeleteDuration(mbPlan.nativeSeconds)} per user (Discord-native)`;
+            }
+
+            await interaction.editReply(
+                `✅ Banned **${banned}** user(s). Failed: **${failed}**.\n🗑️ Messages deleted: ${mbDelStr}` +
+                (mbPlan.cappedNote ? `\n⚠️ ${mbPlan.cappedNote}` : '')
+            );
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('🔨 Mass Ban')
-                .setDescription(`**Banned:** ${banned}/${rawIds.length}\n**By:** <@${interaction.user.id}>\n**Reason:** ${mbReason}\n**IDs:** ${rawIds.slice(0,20).join(', ')}${rawIds.length > 20 ? '...' : ''}`)
+                .setDescription(
+                    `**Banned:** ${banned}/${rawIds.length}\n**By:** <@${interaction.user.id}>\n**Reason:** ${mbReason}\n` +
+                    `**Msgs Deleted:** ${mbDelStr}\n**IDs:** ${rawIds.slice(0,20).join(', ')}${rawIds.length > 20 ? '...' : ''}`
+                )
                 .setColor(0xFF0000).setTimestamp());
             break;
         }
@@ -17624,6 +17666,7 @@ client.on('interactionCreate', async interaction => {
                 const _kickPermErr = checkModPermission(interaction.member, PermissionFlagsBits.KickMembers, 'Kick Members');
                 if (_kickPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _kickPermErr }); return; }
             }
+            const kickSub = interaction.options.getSubcommand(false) || 'user';
             const user   = interaction.options.getUser('user');
             if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot kick a bot.' }); return; }
             if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot kick yourself.' }); return; }
@@ -17633,6 +17676,17 @@ client.on('interactionCreate', async interaction => {
             if (hierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: hierErr }); return; }
             await interaction.deferReply();
             const reason = interaction.options.getString('reason') || 'No reason provided';
+
+            // ── Message-deletion options ────────────────────────────────────
+            const kickDelTimeRaw    = interaction.options.getString('delete_time');
+            const kickDelCount      = interaction.options.getInteger('delete_count') ?? 0;
+            const kickDelSecs       = parseDeleteDuration(kickDelTimeRaw) || 0;
+            const kickChannelTarget = kickSub === 'channel' ? interaction.options.getChannel('channel') : null;
+            const kickPlan = resolveDeletePlan({
+                seconds:   kickDelSecs,
+                count:     kickDelCount,
+                channelId: kickChannelTarget ? kickChannelTarget.id : null,
+            });
 
             // DM before kicking (they'll be removed after)
             const guildIcon = interaction.guild.iconURL({ dynamic: true });
@@ -17650,13 +17704,32 @@ client.on('interactionCreate', async interaction => {
 
             await target.kick(reason).catch(() => {});
 
+            // Kicks have no native Discord purge — always use the manual path
+            let kickPurgeResult = null;
+            if (kickPlan.seconds > 0 || kickPlan.count > 0) {
+                kickPurgeResult = await tryPurgeMemberMessages(interaction.guild, user.id, {
+                    seconds:   kickPlan.seconds,
+                    count:     kickPlan.count,
+                    channelId: kickPlan.channelId,
+                });
+            }
+
+            // Build a human-readable deletion summary
+            let kickDelStr = 'None';
+            if (kickPurgeResult) {
+                kickDelStr = `${kickPurgeResult.deletedCount} msg(s)` +
+                    (kickChannelTarget ? ` in <#${kickChannelTarget.id}>` : ' (all channels)');
+            }
+
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('👢 Manual Kick')
                 .setColor(0xFF6600)
                 .addFields(
-                    { name: 'User',   value: `<@${user.id}> (${user.id})`, inline: true },
-                    { name: 'By',     value: `<@${interaction.user.id}>`,  inline: true },
-                    { name: 'Reason', value: reason.slice(0, 1024),        inline: false },
+                    { name: 'User',         value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',           value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Reason',       value: reason.slice(0, 1024),        inline: false },
+                    { name: '🗑️ Msgs Del',  value: kickDelStr,                   inline: true },
+                    ...(kickPlan.cappedNote ? [{ name: '⚠️ Note', value: kickPlan.cappedNote, inline: false }] : []),
                 ).setTimestamp());
 
             await interaction.editReply({ embeds: [new EmbedBuilder()
@@ -17667,6 +17740,8 @@ client.on('interactionCreate', async interaction => {
                     { name: '👤 User',      value: `<@${user.id}>`,             inline: true },
                     { name: '🛡️ By',        value: `<@${interaction.user.id}>`, inline: true },
                     { name: '📝 Reason',    value: reason.slice(0, 1024),        inline: false },
+                    { name: '🗑️ Msgs Del',  value: kickDelStr,                   inline: true },
+                    ...(kickPlan.cappedNote ? [{ name: '⚠️ Note', value: kickPlan.cappedNote, inline: false }] : []),
                 ).setTimestamp()] });
             break;
         }
@@ -17678,6 +17753,7 @@ client.on('interactionCreate', async interaction => {
                 const _banPermErr = checkModPermission(interaction.member, PermissionFlagsBits.BanMembers, 'Ban Members');
                 if (_banPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _banPermErr }); return; }
             }
+            const banSub = interaction.options.getSubcommand(false) || 'user';
             const user = interaction.options.getUser('user');
             if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot ban a bot.' }); return; }
             if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot ban yourself.' }); return; }
@@ -17693,6 +17769,17 @@ client.on('interactionCreate', async interaction => {
             const durMs   = durMins ? durMins * 60 * 1000 : null;
             const banId   = `ban_${Date.now()}_${user.id}`;
             const bannedAt = Date.now();
+
+            // ── Message-deletion options ────────────────────────────────────
+            const banDelTimeRaw    = interaction.options.getString('delete_time');
+            const banDelCount      = interaction.options.getInteger('delete_count') ?? 0;
+            const banDelSecs       = parseDeleteDuration(banDelTimeRaw) || 0;
+            const banChannelTarget = banSub === 'channel' ? interaction.options.getChannel('channel') : null;
+            const banPlan = resolveDeletePlan({
+                seconds:   banDelSecs,
+                count:     banDelCount,
+                channelId: banChannelTarget ? banChannelTarget.id : null,
+            });
 
             // Store ban record
             data.bans            = data.bans || {};
@@ -17739,17 +17826,43 @@ client.on('interactionCreate', async interaction => {
                 if (fetchedUser) await fetchedUser.send({ embeds: [dmEmbed], components: [appealRow] }).catch(() => {});
             }
 
-            await interaction.guild.bans.create(user.id, { reason: reason.slice(0, 512), deleteMessageSeconds: 0 }).catch(() => {});
+            // Execute the ban — use Discord-native deleteMessageSeconds when possible
+            // (channel-scoped or count-limited requests must go through manual purge instead)
+            await interaction.guild.bans.create(user.id, {
+                reason: reason.slice(0, 512),
+                deleteMessageSeconds: banPlan.needsManualPurge ? 0 : banPlan.nativeSeconds,
+            }).catch(() => {});
+
+            // Manual purge when channel-scoped or count-constrained
+            let banPurgeResult = null;
+            if (banPlan.needsManualPurge) {
+                banPurgeResult = await tryPurgeMemberMessages(interaction.guild, user.id, {
+                    seconds:   banPlan.seconds,
+                    count:     banPlan.count,
+                    channelId: banPlan.channelId,
+                });
+            }
+
+            // Build a human-readable deletion summary
+            let banDelStr = 'None';
+            if (banPlan.needsManualPurge && banPurgeResult) {
+                banDelStr = `${banPurgeResult.deletedCount} msg(s)` +
+                    (banChannelTarget ? ` in <#${banChannelTarget.id}>` : ' (all channels)');
+            } else if (banPlan.nativeSeconds > 0) {
+                banDelStr = `Last ${formatDeleteDuration(banPlan.nativeSeconds)} (Discord-native)`;
+            }
 
             let durStr = durMs ? (durMins < 1440 ? `${Math.round(durMins/60)}h` : `${Math.round(durMins/1440)}d`) : 'Permanent';
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('🔨 Manual Ban')
                 .setColor(0xFF0000)
                 .addFields(
-                    { name: 'User',     value: `<@${user.id}> (${user.id})`, inline: true },
-                    { name: 'By',       value: `<@${interaction.user.id}>`,  inline: true },
-                    { name: 'Duration', value: durStr,                        inline: true },
-                    { name: 'Reason',   value: reason.slice(0, 1024),        inline: false },
+                    { name: 'User',         value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',           value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Duration',     value: durStr,                        inline: true },
+                    { name: 'Reason',       value: reason.slice(0, 1024),        inline: false },
+                    { name: '🗑️ Msgs Del',  value: banDelStr,                    inline: true },
+                    ...(banPlan.cappedNote ? [{ name: '⚠️ Note', value: banPlan.cappedNote, inline: false }] : []),
                 ).setFooter({ text: `Ban ID: ${banId}` }).setTimestamp());
 
             await interaction.editReply({ embeds: [new EmbedBuilder()
@@ -17761,6 +17874,8 @@ client.on('interactionCreate', async interaction => {
                     { name: '🛡️ By',        value: `<@${interaction.user.id}>`, inline: true },
                     { name: '⏱️ Duration',  value: durStr,                       inline: true },
                     { name: '📝 Reason',    value: reason.slice(0, 1024),        inline: false },
+                    { name: '🗑️ Msgs Del',  value: banDelStr,                    inline: true },
+                    ...(banPlan.cappedNote ? [{ name: '⚠️ Note', value: banPlan.cappedNote, inline: false }] : []),
                     { name: '📩 Appeal',    value: `User may appeal after <t:${appealUnlockTs}:R>`, inline: false },
                 ).setFooter({ text: `Ban ID: ${banId}` }).setTimestamp()] });
             break;
@@ -17811,6 +17926,7 @@ client.on('interactionCreate', async interaction => {
                 const _hbanPermErr = checkModPermission(interaction.member, PermissionFlagsBits.BanMembers, 'Ban Members');
                 if (_hbanPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _hbanPermErr }); return; }
             }
+            const hbanSub = interaction.options.getSubcommand(false) || 'user';
             const user = interaction.options.getUser('user');
             if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot hardban a bot.' }); return; }
             if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot hardban yourself.' }); return; }
@@ -17822,6 +17938,17 @@ client.on('interactionCreate', async interaction => {
             await interaction.deferReply();
             const reason = interaction.options.getString('reason') || 'No reason provided';
             const banId  = `hban_${Date.now()}_${user.id}`;
+
+            // ── Message-deletion options ────────────────────────────────────
+            const hbanDelTimeRaw    = interaction.options.getString('delete_time');
+            const hbanDelCount      = interaction.options.getInteger('delete_count') ?? 0;
+            const hbanDelSecs       = parseDeleteDuration(hbanDelTimeRaw) || 0;
+            const hbanChannelTarget = hbanSub === 'channel' ? interaction.options.getChannel('channel') : null;
+            const hbanPlan = resolveDeletePlan({
+                seconds:   hbanDelSecs,
+                count:     hbanDelCount,
+                channelId: hbanChannelTarget ? hbanChannelTarget.id : null,
+            });
 
             // Store hardban record (no appeal flag)
             data.bans          = data.bans || {};
@@ -17851,15 +17978,40 @@ client.on('interactionCreate', async interaction => {
             if (target) await target.send(dmPayload).catch(() => {});
             else { const fu = await client.users.fetch(user.id).catch(() => null); if (fu) await fu.send(dmPayload).catch(() => {}); }
 
-            await interaction.guild.bans.create(user.id, { reason: reason.slice(0, 512), deleteMessageSeconds: 0 }).catch(() => {});
+            // Execute the ban — use Discord-native deleteMessageSeconds when possible
+            await interaction.guild.bans.create(user.id, {
+                reason: reason.slice(0, 512),
+                deleteMessageSeconds: hbanPlan.needsManualPurge ? 0 : hbanPlan.nativeSeconds,
+            }).catch(() => {});
+
+            // Manual purge when channel-scoped or count-constrained
+            let hbanPurgeResult = null;
+            if (hbanPlan.needsManualPurge) {
+                hbanPurgeResult = await tryPurgeMemberMessages(interaction.guild, user.id, {
+                    seconds:   hbanPlan.seconds,
+                    count:     hbanPlan.count,
+                    channelId: hbanPlan.channelId,
+                });
+            }
+
+            // Build a human-readable deletion summary
+            let hbanDelStr = 'None';
+            if (hbanPlan.needsManualPurge && hbanPurgeResult) {
+                hbanDelStr = `${hbanPurgeResult.deletedCount} msg(s)` +
+                    (hbanChannelTarget ? ` in <#${hbanChannelTarget.id}>` : ' (all channels)');
+            } else if (hbanPlan.nativeSeconds > 0) {
+                hbanDelStr = `Last ${formatDeleteDuration(hbanPlan.nativeSeconds)} (Discord-native)`;
+            }
 
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('🔒 Hardban (Permanent)')
                 .setColor(0x800000)
                 .addFields(
-                    { name: 'User',   value: `<@${user.id}> (${user.id})`, inline: true },
-                    { name: 'By',     value: `<@${interaction.user.id}>`,  inline: true },
-                    { name: 'Reason', value: reason.slice(0, 1024),        inline: false },
+                    { name: 'User',         value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',           value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Reason',       value: reason.slice(0, 1024),        inline: false },
+                    { name: '🗑️ Msgs Del',  value: hbanDelStr,                   inline: true },
+                    ...(hbanPlan.cappedNote ? [{ name: '⚠️ Note', value: hbanPlan.cappedNote, inline: false }] : []),
                 ).setFooter({ text: 'HARDBAN — No appeal allowed.' }).setTimestamp());
 
             await interaction.editReply({ embeds: [new EmbedBuilder()
@@ -17870,6 +18022,8 @@ client.on('interactionCreate', async interaction => {
                     { name: '👤 User',      value: `<@${user.id}>`,             inline: true },
                     { name: '🛡️ By',        value: `<@${interaction.user.id}>`, inline: true },
                     { name: '📝 Reason',    value: reason.slice(0, 1024),        inline: false },
+                    { name: '🗑️ Msgs Del',  value: hbanDelStr,                   inline: true },
+                    ...(hbanPlan.cappedNote ? [{ name: '⚠️ Note', value: hbanPlan.cappedNote, inline: false }] : []),
                     { name: '🔒 Appeal',    value: 'None — permanent ban.',       inline: false },
                 ).setTimestamp()] });
             break;
@@ -17882,6 +18036,7 @@ client.on('interactionCreate', async interaction => {
                 const _sbanPermErr = checkModPermission(interaction.member, PermissionFlagsBits.BanMembers, 'Ban Members');
                 if (_sbanPermErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: _sbanPermErr }); return; }
             }
+            const sbanSub = interaction.options.getSubcommand(false) || 'user';
             const user = interaction.options.getUser('user');
             if (user.bot) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot softban a bot.' }); return; }
             if (user.id === interaction.user.id) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: '❌ You cannot softban yourself.' }); return; }
@@ -17892,6 +18047,22 @@ client.on('interactionCreate', async interaction => {
             }
             await interaction.deferReply();
             const reason = interaction.options.getString('reason') || 'No reason provided';
+
+            // ── Message-deletion options ────────────────────────────────────
+            // Default for softban is 7d (604800s) unless the user overrides.
+            // 0 explicitly means no delete; omitting uses the 7d default.
+            const sbanDelTimeRaw    = interaction.options.getString('delete_time');
+            const sbanDelCount      = interaction.options.getInteger('delete_count') ?? 0;
+            const sbanChannelTarget = sbanSub === 'channel' ? interaction.options.getChannel('channel') : null;
+            // parseDeleteDuration returns 0 for "0"/"none", null on parse failure, or seconds
+            const sbanDelSecsRaw = sbanDelTimeRaw !== null ? parseDeleteDuration(sbanDelTimeRaw) : undefined;
+            // If user omitted delete_time entirely (undefined), fall back to 7d default
+            const sbanDelSecs = (sbanDelSecsRaw === undefined) ? NATIVE_BAN_DELETE_MAX_SECONDS : (sbanDelSecsRaw || 0);
+            const sbanPlan = resolveDeletePlan({
+                seconds:   sbanDelSecs,
+                count:     sbanDelCount,
+                channelId: sbanChannelTarget ? sbanChannelTarget.id : null,
+            });
 
             // DM before banning
             const guildIcon = interaction.guild.iconURL({ dynamic: true });
@@ -17912,18 +18083,44 @@ client.on('interactionCreate', async interaction => {
             if (target) await target.send(dmPayload).catch(() => {});
             else { const fu = await client.users.fetch(user.id).catch(() => null); if (fu) await fu.send(dmPayload).catch(() => {}); }
 
-            // Ban (purge last 7 days of messages), then immediately unban
-            await interaction.guild.bans.create(user.id, { reason: `[SOFTBAN] ${reason}`.slice(0, 512), deleteMessageSeconds: 604800 }).catch(() => {});
+            // Ban then immediately unban.
+            // When no channel/count constraint: use Discord-native deleteMessageSeconds (fast, atomic).
+            // When channel-scoped or count-limited: ban+unban with no native delete, then manual purge.
+            await interaction.guild.bans.create(user.id, {
+                reason: `[SOFTBAN] ${reason}`.slice(0, 512),
+                deleteMessageSeconds: sbanPlan.needsManualPurge ? 0 : sbanPlan.nativeSeconds,
+            }).catch(() => {});
             await new Promise(r => setTimeout(r, 1500));
             await interaction.guild.bans.remove(user.id, `[SOFTBAN unban] ${reason}`.slice(0, 512)).catch(() => {});
+
+            // Manual purge when channel-scoped or count-constrained
+            let sbanPurgeResult = null;
+            if (sbanPlan.needsManualPurge) {
+                sbanPurgeResult = await tryPurgeMemberMessages(interaction.guild, user.id, {
+                    seconds:   sbanPlan.seconds,
+                    count:     sbanPlan.count,
+                    channelId: sbanPlan.channelId,
+                });
+            }
+
+            // Build a human-readable deletion summary
+            let sbanDelStr = 'None';
+            if (sbanPlan.needsManualPurge && sbanPurgeResult) {
+                sbanDelStr = `${sbanPurgeResult.deletedCount} msg(s)` +
+                    (sbanChannelTarget ? ` in <#${sbanChannelTarget.id}>` : ' (all channels)');
+            } else if (sbanPlan.nativeSeconds > 0) {
+                sbanDelStr = `Last ${formatDeleteDuration(sbanPlan.nativeSeconds)} (Discord-native)`;
+            }
 
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('🧹 Softban')
                 .setColor(0xFFA500)
                 .addFields(
-                    { name: 'User',   value: `<@${user.id}> (${user.id})`, inline: true },
-                    { name: 'By',     value: `<@${interaction.user.id}>`,  inline: true },
-                    { name: 'Reason', value: reason.slice(0, 1024),        inline: false },
+                    { name: 'User',         value: `<@${user.id}> (${user.id})`, inline: true },
+                    { name: 'By',           value: `<@${interaction.user.id}>`,  inline: true },
+                    { name: 'Reason',       value: reason.slice(0, 1024),        inline: false },
+                    { name: '🗑️ Msgs Del',  value: sbanDelStr,                   inline: true },
+                    ...(sbanPlan.cappedNote ? [{ name: '⚠️ Note', value: sbanPlan.cappedNote, inline: false }] : []),
                 ).setFooter({ text: 'User was banned and immediately unbanned (message purge).' }).setTimestamp());
 
             await interaction.editReply({ embeds: [new EmbedBuilder()
@@ -17934,6 +18131,8 @@ client.on('interactionCreate', async interaction => {
                     { name: '👤 User',      value: `<@${user.id}>`,             inline: true },
                     { name: '🛡️ By',        value: `<@${interaction.user.id}>`, inline: true },
                     { name: '📝 Reason',    value: reason.slice(0, 1024),        inline: false },
+                    { name: '🗑️ Msgs Del',  value: sbanDelStr,                   inline: true },
+                    ...(sbanPlan.cappedNote ? [{ name: '⚠️ Note', value: sbanPlan.cappedNote, inline: false }] : []),
                     { name: 'ℹ️ Note',      value: 'User was banned then immediately unbanned. They may rejoin freely.', inline: false },
                 ).setTimestamp()] });
             break;
