@@ -4736,7 +4736,11 @@ function resolveDeletePlan({ seconds = 0, count = 0, channelId = null } = {}) {
         return { nativeSeconds: 0, needsManualPurge: false, seconds: 0, count: 0, channelId: null, cappedNote: null };
     }
     if (!channelId && c <= 0) {
-        return { nativeSeconds: Math.min(s, NATIVE_BAN_DELETE_MAX_SECONDS), needsManualPurge: false, seconds: s, count: 0, channelId: null, cappedNote };
+        const native = Math.min(s, NATIVE_BAN_DELETE_MAX_SECONDS);
+        const noteText = native < s
+            ? 'Discord only auto-deletes messages up to 7 days old on ban — capped at 7d.'
+            : cappedNote;
+        return { nativeSeconds: native, needsManualPurge: false, seconds: s, count: 0, channelId: null, cappedNote: noteText };
     }
     return { nativeSeconds: 0, needsManualPurge: true, seconds: s, count: c, channelId: channelId || null, cappedNote };
 }
@@ -4755,7 +4759,7 @@ function resolveDeletePlan({ seconds = 0, count = 0, channelId = null } = {}) {
  * erroring the whole action out.
  *
  * @param {import('discord.js').Guild} guild
- * @param {string} userId
+ * @param {string|null} userId - author to filter by; null/falsy matches messages from ANY author (used by /purge's optional user filter)
  * @param {{seconds?:number, count?:number, channelId?:string|null}} opts
  * @returns {Promise<{deletedCount:number, channelsScanned:number, channelsSkipped:number}>}
  */
@@ -4794,7 +4798,7 @@ async function purgeMemberMessages(guild, userId, { seconds = 0, count = 0, chan
             for (const msg of batch.values()) {
                 scanned++;
                 if (msg.createdTimestamp < cutoffMs) { stop = true; break; }
-                if (msg.author.id === userId) candidates.push(msg);
+                if (!userId || msg.author.id === userId) candidates.push(msg);
             }
             const lastMsg = batch.last();
             before = lastMsg ? lastMsg.id : undefined;
@@ -4825,6 +4829,21 @@ async function purgeMemberMessages(guild, userId, { seconds = 0, count = 0, chan
     }
 
     return result;
+}
+
+/**
+ * Thin wrapper around purgeMemberMessages() that never throws — used by the
+ * /kick, /ban, /hardban, /softban and /massban handlers so a purge failure
+ * (which runs AFTER the primary action already succeeded) can never leave
+ * an interaction stuck without a final reply.
+ * @returns {Promise<{deletedCount:number, channelsScanned:number, channelsSkipped:number}|null>} null on failure
+ */
+async function tryPurgeMemberMessages(guild, userId, opts) {
+    try {
+        return await purgeMemberMessages(guild, userId, opts);
+    } catch {
+        return null;
+    }
 }
 
 async function applyConfiguredAction(message, data, gs, opts) {
@@ -16541,6 +16560,83 @@ client.on('interactionCreate', async interaction => {
                     }
                     const deleted = await interaction.channel.bulkDelete(toDelete, true).catch(() => null);
                     await interaction.editReply({ content: `✅ Purged **${deleted ? deleted.size : 0}** messages from <@${targetUser.id}>.` });
+                } catch (e) {
+                    await interaction.editReply({ content: `❌ Purge failed: ${e.message}` });
+                }
+            } else if (purgeSub === 'time') {
+                const durRaw      = interaction.options.getString('duration');
+                const userFilter  = interaction.options.getUser('user');
+                const delSecs     = parseDeleteDuration(durRaw);
+                if (delSecs === null) {
+                    await interaction.editReply({ content: `❌ Couldn't parse duration \`${durRaw}\`. Try something like \`30s\`, \`10m\`, \`2h\`, \`1d\`, \`1w\`.` });
+                    break;
+                }
+                if (delSecs <= 0) {
+                    await interaction.editReply({ content: '✅ Duration resolved to **0** — nothing to delete.' });
+                    break;
+                }
+                const plan = resolveDeletePlan({ seconds: delSecs, count: 0, channelId: interaction.channel.id });
+                try {
+                    const result = await purgeMemberMessages(interaction.guild, userFilter ? userFilter.id : null, {
+                        seconds: plan.seconds, count: plan.count, channelId: plan.channelId,
+                    });
+                    const who = userFilter ? ` from <@${userFilter.id}>` : '';
+                    await interaction.editReply({ content:
+                        `✅ Purged **${result.deletedCount}** message(s)${who} from the last **${formatDeleteDuration(plan.seconds)}** in <#${interaction.channel.id}>.` +
+                        (plan.cappedNote ? `\n⚠️ ${plan.cappedNote}` : '')
+                    });
+                    await sendLog(interaction.guild, data, new EmbedBuilder()
+                        .setTitle('🧹 Purge (by time)')
+                        .setColor(0x5865F2)
+                        .addFields(
+                            { name: 'Channel', value: `<#${interaction.channel.id}>`, inline: true },
+                            { name: 'Window',  value: formatDeleteDuration(plan.seconds), inline: true },
+                            { name: 'Deleted', value: `${result.deletedCount}`, inline: true },
+                            { name: 'Filter',  value: userFilter ? `<@${userFilter.id}>` : 'Any author', inline: true },
+                            { name: 'By',      value: `<@${interaction.user.id}>`, inline: true },
+                        ).setTimestamp());
+                } catch (e) {
+                    await interaction.editReply({ content: `❌ Purge failed: ${e.message}` });
+                }
+            } else if (purgeSub === 'channel') {
+                const targetChannel = interaction.options.getChannel('channel');
+                const durRaw        = interaction.options.getString('duration');
+                const amount        = interaction.options.getInteger('amount') || 0;
+                const userFilter    = interaction.options.getUser('user');
+                if (!targetChannel || !targetChannel.isTextBased || !targetChannel.isTextBased()) {
+                    await interaction.editReply({ content: '❌ That channel is not a text channel I can purge.' });
+                    break;
+                }
+                const delSecs = parseDeleteDuration(durRaw);
+                if (delSecs === null) {
+                    await interaction.editReply({ content: `❌ Couldn't parse duration \`${durRaw}\`. Try something like \`30s\`, \`10m\`, \`2h\`, \`1d\`, \`1w\`.` });
+                    break;
+                }
+                if (delSecs <= 0 && amount <= 0) {
+                    await interaction.editReply({ content: '❌ Provide a `duration` and/or an `amount` — both were left at 0, so there is nothing to delete.' });
+                    break;
+                }
+                const plan = resolveDeletePlan({ seconds: delSecs, count: amount, channelId: targetChannel.id });
+                try {
+                    const result = await purgeMemberMessages(interaction.guild, userFilter ? userFilter.id : null, {
+                        seconds: plan.seconds, count: plan.count, channelId: plan.channelId,
+                    });
+                    const who = userFilter ? ` from <@${userFilter.id}>` : '';
+                    await interaction.editReply({ content:
+                        `✅ Purged **${result.deletedCount}** message(s)${who} in <#${targetChannel.id}>.` +
+                        (plan.cappedNote ? `\n⚠️ ${plan.cappedNote}` : '')
+                    });
+                    await sendLog(interaction.guild, data, new EmbedBuilder()
+                        .setTitle('🧹 Purge (by channel)')
+                        .setColor(0x5865F2)
+                        .addFields(
+                            { name: 'Channel', value: `<#${targetChannel.id}>`, inline: true },
+                            { name: 'Window',  value: formatDeleteDuration(plan.seconds), inline: true },
+                            { name: 'Amount',  value: amount > 0 ? `${amount}` : 'No limit', inline: true },
+                            { name: 'Deleted', value: `${result.deletedCount}`, inline: true },
+                            { name: 'Filter',  value: userFilter ? `<@${userFilter.id}>` : 'Any author', inline: true },
+                            { name: 'By',      value: `<@${interaction.user.id}>`, inline: true },
+                        ).setTimestamp());
                 } catch (e) {
                     await interaction.editReply({ content: `❌ Purge failed: ${e.message}` });
                 }
