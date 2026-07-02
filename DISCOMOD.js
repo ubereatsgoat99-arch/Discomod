@@ -4647,6 +4647,186 @@ async function tryTimeout(member, minutes, reason) {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  MESSAGE-DELETE-ON-ACTION HELPERS
+//  Shared by /kick, /ban, /hardban, /softban, /massban (+ prefix equivalents)
+//  and /purge's "time"/"channel" subcommands.
+// ══════════════════════════════════════════════════════════════════════════
+const NATIVE_BAN_DELETE_MAX_SECONDS     = 604800;   // Discord's own cap on guild.bans.create({ deleteMessageSeconds })
+const MANUAL_PURGE_MAX_AGE_SECONDS      = 1209600;  // Discord's bulkDelete hard cap — messages older than 14d can't be bulk-deleted
+const MANUAL_PURGE_MAX_COUNT            = 300;      // sane ceiling on delete_count so one command can't run forever
+const MANUAL_PURGE_PER_CHANNEL_SCAN_CAP = 500;      // safety valve: max messages scanned per channel during a manual purge
+
+/**
+ * Flexible duration parser for the delete_time option (message deletion window).
+ * Distinct from parseDuration() above: this returns SECONDS (not minutes, for finer
+ * granularity), and explicitly treats "0" / "off" / "none" / empty / omitted as a
+ * valid "don't delete anything" signal instead of an error.
+ * Supports every unit: s/sec/seconds, m/min/minutes, h/hr/hours, d/day/days, w/week/weeks.
+ * Bare numbers default to MINUTES, matching parseDuration()'s convention elsewhere.
+ * Returns null only when given a non-empty string that could not be parsed at all.
+ */
+function parseDeleteDuration(str) {
+    if (str == null) return 0;
+    const s = String(str).trim().toLowerCase();
+    if (s === '' || s === '0' || s === 'off' || s === 'none') return 0;
+    const m = s.match(/^(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/);
+    if (!m) return null;
+    const val = parseFloat(m[1]);
+    if (!isFinite(val) || val < 0) return null;
+    if (val === 0) return 0;
+    const unit = m[2] || 'm';
+    switch (unit) {
+        case 's': case 'sec': case 'secs': case 'second': case 'seconds':
+            return Math.max(1, Math.round(val));
+        case 'm': case 'min': case 'mins': case 'minute': case 'minutes':
+            return Math.max(1, Math.round(val * 60));
+        case 'h': case 'hr': case 'hrs': case 'hour': case 'hours':
+            return Math.max(1, Math.round(val * 3600));
+        case 'd': case 'day': case 'days':
+            return Math.max(1, Math.round(val * 86400));
+        case 'w': case 'week': case 'weeks':
+            return Math.max(1, Math.round(val * 604800));
+        default:
+            return Math.max(1, Math.round(val));
+    }
+}
+
+/** Human-readable rendering of a delete_time window, e.g. 90061 -> "1d 1h 1m 1s". */
+function formatDeleteDuration(seconds) {
+    seconds = Math.max(0, Math.floor(Number(seconds)) || 0);
+    if (seconds === 0) return 'None';
+    let rem = seconds;
+    const w = Math.floor(rem / 604800); rem %= 604800;
+    const d = Math.floor(rem / 86400);  rem %= 86400;
+    const h = Math.floor(rem / 3600);   rem %= 3600;
+    const mnt = Math.floor(rem / 60);   rem %= 60;
+    const s = rem;
+    const parts = [];
+    if (w) parts.push(`${w}w`);
+    if (d) parts.push(`${d}d`);
+    if (h) parts.push(`${h}h`);
+    if (mnt) parts.push(`${mnt}m`);
+    if (s || parts.length === 0) parts.push(`${s}s`);
+    return parts.join(' ');
+}
+
+/**
+ * Decides HOW a requested message-deletion should be carried out, given that
+ * Discord's native `deleteMessageSeconds` (passed straight into guild.bans.create)
+ * only supports a time window, applies guild-wide across every channel, and caps
+ * out at 7 days — it has no concept of "just this channel" or "just N messages".
+ *
+ *  - time-only, guild-wide  → native path (fast, atomic with the ban itself)
+ *  - channel-scoped, and/or count-based → manual path via purgeMemberMessages()
+ *    (must run as a separate step, since kicks have no native purge at all and
+ *    a channel/count constraint can't be expressed to Discord's ban endpoint)
+ *
+ * @returns {{nativeSeconds:number, needsManualPurge:boolean, seconds:number, count:number, channelId:string|null, cappedNote:string|null}}
+ */
+function resolveDeletePlan({ seconds = 0, count = 0, channelId = null } = {}) {
+    let s = Math.max(0, Math.floor(Number(seconds)) || 0);
+    let c = Math.max(0, Math.floor(Number(count)) || 0);
+    let cappedNote = null;
+
+    if (c > MANUAL_PURGE_MAX_COUNT) { c = MANUAL_PURGE_MAX_COUNT; cappedNote = `Message-delete count capped at ${MANUAL_PURGE_MAX_COUNT}.`; }
+    if (s > MANUAL_PURGE_MAX_AGE_SECONDS) { s = MANUAL_PURGE_MAX_AGE_SECONDS; cappedNote = 'Message-delete window capped at 14 days (Discord limitation).'; }
+
+    if (s <= 0 && c <= 0) {
+        return { nativeSeconds: 0, needsManualPurge: false, seconds: 0, count: 0, channelId: null, cappedNote: null };
+    }
+    if (!channelId && c <= 0) {
+        return { nativeSeconds: Math.min(s, NATIVE_BAN_DELETE_MAX_SECONDS), needsManualPurge: false, seconds: s, count: 0, channelId: null, cappedNote };
+    }
+    return { nativeSeconds: 0, needsManualPurge: true, seconds: s, count: c, channelId: channelId || null, cappedNote };
+}
+
+/**
+ * Manually finds and bulk-deletes a member's messages. Used whenever the native
+ * ban-time deletion can't express what was asked for: kicks have no built-in
+ * purge at all, and neither kicks nor bans can natively scope deletion to one
+ * channel or cap it to a specific message count.
+ *
+ * seconds/count follow the same "0 = no constraint on this axis" convention as
+ * the rest of this feature; if both are 0 this is a no-op. If both are set,
+ * messages must fall within the time window AND are capped to the most recent
+ * `count` of those. Only channels the bot can actually view/read-history/manage
+ * are searched; others are silently counted in channelsSkipped rather than
+ * erroring the whole action out.
+ *
+ * @param {import('discord.js').Guild} guild
+ * @param {string} userId
+ * @param {{seconds?:number, count?:number, channelId?:string|null}} opts
+ * @returns {Promise<{deletedCount:number, channelsScanned:number, channelsSkipped:number}>}
+ */
+async function purgeMemberMessages(guild, userId, { seconds = 0, count = 0, channelId = null } = {}) {
+    const result = { deletedCount: 0, channelsScanned: 0, channelsSkipped: 0 };
+    if (seconds <= 0 && count <= 0) return result;
+
+    const windowSeconds = seconds > 0 ? Math.min(seconds, MANUAL_PURGE_MAX_AGE_SECONDS) : MANUAL_PURGE_MAX_AGE_SECONDS;
+    const cutoffMs = Date.now() - windowSeconds * 1000;
+
+    let targetChannels = [];
+    if (channelId) {
+        const ch = guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null);
+        if (ch) targetChannels = [ch];
+    } else {
+        targetChannels = [...guild.channels.cache.filter(ch => ch && ch.isTextBased && ch.isTextBased() && typeof ch.bulkDelete === 'function').values()];
+    }
+
+    const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
+    const candidates = []; // Message objects authored by userId, across all scanned channels
+
+    for (const ch of targetChannels) {
+        if (!ch || !ch.isTextBased || !ch.isTextBased() || typeof ch.messages?.fetch !== 'function') { result.channelsSkipped++; continue; }
+        const perms = me ? ch.permissionsFor(me) : null;
+        if (!perms || !perms.has(PermissionFlagsBits.ViewChannel) || !perms.has(PermissionFlagsBits.ReadMessageHistory) || !perms.has(PermissionFlagsBits.ManageMessages)) {
+            result.channelsSkipped++;
+            continue;
+        }
+        result.channelsScanned++;
+        let before;
+        let scanned = 0;
+        let stop = false;
+        while (!stop && scanned < MANUAL_PURGE_PER_CHANNEL_SCAN_CAP) {
+            const batch = await ch.messages.fetch({ limit: 100, before }).catch(() => null);
+            if (!batch || batch.size === 0) break;
+            for (const msg of batch.values()) {
+                scanned++;
+                if (msg.createdTimestamp < cutoffMs) { stop = true; break; }
+                if (msg.author.id === userId) candidates.push(msg);
+            }
+            const lastMsg = batch.last();
+            before = lastMsg ? lastMsg.id : undefined;
+            if (batch.size < 100) break; // exhausted this channel's history
+        }
+    }
+
+    candidates.sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+    const toDelete = count > 0 ? candidates.slice(0, count) : candidates;
+
+    const byChannel = new Map();
+    for (const msg of toDelete) {
+        if (!byChannel.has(msg.channelId)) byChannel.set(msg.channelId, []);
+        byChannel.get(msg.channelId).push(msg);
+    }
+    for (const [chId, msgs] of byChannel) {
+        const ch = guild.channels.cache.get(chId);
+        if (!ch) continue;
+        for (let i = 0; i < msgs.length; i += 100) {
+            const chunk = msgs.slice(i, i + 100);
+            if (chunk.length === 1) {
+                try { await chunk[0].delete(); result.deletedCount += 1; } catch {}
+            } else if (chunk.length >= 2) {
+                const deleted = await ch.bulkDelete(chunk, true).catch(() => null);
+                result.deletedCount += deleted ? deleted.size : 0;
+            }
+        }
+    }
+
+    return result;
+}
+
 async function applyConfiguredAction(message, data, gs, opts) {
     const action = String(opts?.action || 'warn').toLowerCase();
     const reason = String(opts?.reason || '');
@@ -11795,7 +11975,7 @@ const slashCommands = [
 
     new SlashCommandBuilder()
         .setName('purge')
-        .setDescription('Bulk delete messages in the current channel')
+        .setDescription('Bulk delete messages')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
         .addSubcommand(sub => sub
             .setName('count')
@@ -11807,6 +11987,20 @@ const slashCommands = [
             .setDescription('Delete the last N messages from a specific user in this channel')
             .addUserOption(o => o.setName('user').setDescription('The user whose messages to purge').setRequired(true))
             .addIntegerOption(o => o.setName('amount').setDescription('Max messages to scan (1–100, default 50)').setRequired(false).setMinValue(1).setMaxValue(100))
+        )
+        .addSubcommand(sub => sub
+            .setName('time')
+            .setDescription('Delete messages from this channel sent in the last X time')
+            .addStringOption(o => o.setName('duration').setDescription('e.g. 30s, 10m, 1h, 2d, 1w — supports every unit').setRequired(true))
+            .addUserOption(o => o.setName('user').setDescription('Only delete messages from this user').setRequired(false))
+        )
+        .addSubcommand(sub => sub
+            .setName('channel')
+            .setDescription('Delete messages from a specific channel (by time and/or count) without needing to be in it')
+            .addChannelOption(o => o.setName('channel').setDescription('The channel to purge').setRequired(true))
+            .addStringOption(o => o.setName('duration').setDescription('e.g. 30s, 10m, 1h, 2d, 1w (omit/0 = no time limit)').setRequired(false))
+            .addIntegerOption(o => o.setName('amount').setDescription('Max messages to delete (omit/0 = no count limit, max 300)').setRequired(false).setMinValue(0).setMaxValue(300))
+            .addUserOption(o => o.setName('user').setDescription('Only delete messages from this user').setRequired(false))
         ),
 
     new SlashCommandBuilder()
@@ -12117,16 +12311,43 @@ const slashCommands = [
         .setName('kick')
         .setDescription('Kick a member from the server (no appeal)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.KickMembers)
-        .addUserOption(o => o.setName('user').setDescription('Member to kick').setRequired(true))
-        .addStringOption(o => o.setName('reason').setDescription('Reason for kick').setRequired(false)),
+        .addSubcommand(sub => sub
+            .setName('user')
+            .setDescription('Kick a member')
+            .addUserOption(o => o.setName('user').setDescription('Member to kick').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason for kick').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300)))
+        .addSubcommand(sub => sub
+            .setName('channel')
+            .setDescription('Kick a member, deleting their messages from one specific channel only')
+            .addUserOption(o => o.setName('user').setDescription('Member to kick').setRequired(true))
+            .addChannelOption(o => o.setName('channel').setDescription('Only delete messages from this channel').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason for kick').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
 
     new SlashCommandBuilder()
         .setName('ban')
         .setDescription('Ban a member (appealable after 14 days; optional duration)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
-        .addUserOption(o => o.setName('user').setDescription('Member to ban').setRequired(true))
-        .addStringOption(o => o.setName('duration').setDescription('Optional ban duration e.g. 30d, 1w (leave blank = permanent until unban)').setRequired(false))
-        .addStringOption(o => o.setName('reason').setDescription('Reason for ban').setRequired(false)),
+        .addSubcommand(sub => sub
+            .setName('user')
+            .setDescription('Ban a member')
+            .addUserOption(o => o.setName('user').setDescription('Member to ban').setRequired(true))
+            .addStringOption(o => o.setName('duration').setDescription('Optional ban duration e.g. 30d, 1w (leave blank = permanent until unban)').setRequired(false))
+            .addStringOption(o => o.setName('reason').setDescription('Reason for ban').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300)))
+        .addSubcommand(sub => sub
+            .setName('channel')
+            .setDescription('Ban a member, deleting their messages from one specific channel only')
+            .addUserOption(o => o.setName('user').setDescription('Member to ban').setRequired(true))
+            .addChannelOption(o => o.setName('channel').setDescription('Only delete messages from this channel').setRequired(true))
+            .addStringOption(o => o.setName('duration').setDescription('Optional ban duration e.g. 30d, 1w (leave blank = permanent until unban)').setRequired(false))
+            .addStringOption(o => o.setName('reason').setDescription('Reason for ban').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
 
     new SlashCommandBuilder()
         .setName('unban')
@@ -12139,15 +12360,41 @@ const slashCommands = [
         .setName('hardban')
         .setDescription('Permanently ban a member — no appeal ever')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
-        .addUserOption(o => o.setName('user').setDescription('Member to permanently ban').setRequired(true))
-        .addStringOption(o => o.setName('reason').setDescription('Reason for hardban').setRequired(false)),
+        .addSubcommand(sub => sub
+            .setName('user')
+            .setDescription('Permanently ban a member')
+            .addUserOption(o => o.setName('user').setDescription('Member to permanently ban').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason for hardban').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300)))
+        .addSubcommand(sub => sub
+            .setName('channel')
+            .setDescription('Permanently ban a member, deleting their messages from one specific channel only')
+            .addUserOption(o => o.setName('user').setDescription('Member to permanently ban').setRequired(true))
+            .addChannelOption(o => o.setName('channel').setDescription('Only delete messages from this channel').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason for hardban').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
 
     new SlashCommandBuilder()
         .setName('softban')
         .setDescription('Softban: ban then immediately unban (purges recent messages, no lasting ban)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
-        .addUserOption(o => o.setName('user').setDescription('Member to softban').setRequired(true))
-        .addStringOption(o => o.setName('reason').setDescription('Reason for softban').setRequired(false)),
+        .addSubcommand(sub => sub
+            .setName('user')
+            .setDescription('Softban a member')
+            .addUserOption(o => o.setName('user').setDescription('Member to softban').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason for softban').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (default: 7d, the max Discord allows; 0 = none)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300)))
+        .addSubcommand(sub => sub
+            .setName('channel')
+            .setDescription('Softban a member, deleting their messages from one specific channel only')
+            .addUserOption(o => o.setName('user').setDescription('Member to softban').setRequired(true))
+            .addChannelOption(o => o.setName('channel').setDescription('Only delete messages from this channel').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason for softban').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (default: 7d, the max Discord allows; 0 = none)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
 
     // ── /regex — enable or disable regex-based detection ────────────────────
     new SlashCommandBuilder()
@@ -12227,9 +12474,21 @@ const slashCommands = [
         .setName('massban')
         .setDescription('Ban multiple users by ID in one action (space or comma separated)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers)
-        .addStringOption(o => o.setName('ids').setDescription('Space or comma separated list of user IDs').setRequired(true))
-        .addStringOption(o => o.setName('reason').setDescription('Reason applied to all bans').setRequired(false))
-        .addBooleanOption(o => o.setName('purge').setDescription('Delete 7 days of messages (hardban mode). Default: false').setRequired(false)),
+        .addSubcommand(sub => sub
+            .setName('ids')
+            .setDescription('Ban a list of user IDs')
+            .addStringOption(o => o.setName('ids').setDescription('Space or comma separated list of user IDs').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason applied to all bans').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete each user\'s messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of each user\'s most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300)))
+        .addSubcommand(sub => sub
+            .setName('channel')
+            .setDescription('Ban a list of user IDs, deleting their messages from one specific channel only')
+            .addStringOption(o => o.setName('ids').setDescription('Space or comma separated list of user IDs').setRequired(true))
+            .addChannelOption(o => o.setName('channel').setDescription('Only delete messages from this channel').setRequired(true))
+            .addStringOption(o => o.setName('reason').setDescription('Reason applied to all bans').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete each user\'s messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of each user\'s most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
 
     // ── /dm ──────────────────────────────────────────────────────────────────
     new SlashCommandBuilder()
