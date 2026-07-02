@@ -12335,7 +12335,7 @@ const slashCommands = [
             .setDescription('Kick a member')
             .addUserOption(o => o.setName('user').setDescription('Member to kick').setRequired(true))
             .addStringOption(o => o.setName('reason').setDescription('Reason for kick').setRequired(false))
-            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time').setRequired(false))
             .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300)))
         .addSubcommand(sub => sub
             .setName('channel')
@@ -12343,8 +12343,8 @@ const slashCommands = [
             .addUserOption(o => o.setName('user').setDescription('Member to kick').setRequired(true))
             .addChannelOption(o => o.setName('channel').setDescription('Only delete messages from this channel').setRequired(true))
             .addStringOption(o => o.setName('reason').setDescription('Reason for kick').setRequired(false))
-            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
-            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
+            .addStringOption(o => o.setName('delete_time').setDescription('Delete messages on time (0 = none, default)').setRequired(false))
+            .addIntegerOption(o => o.setName('delete_count').setDescription('Delete messages on count (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
 
     new SlashCommandBuilder()
         .setName('ban')
@@ -12356,7 +12356,7 @@ const slashCommands = [
             .addUserOption(o => o.setName('user').setDescription('Member to ban').setRequired(true))
             .addStringOption(o => o.setName('duration').setDescription('Optional ban duration e.g. 30d, 1w (leave blank = permanent until unban)').setRequired(false))
             .addStringOption(o => o.setName('reason').setDescription('Reason for ban').setRequired(false))
-            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Message deleter').setRequired(false))
             .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300)))
         .addSubcommand(sub => sub
             .setName('channel')
@@ -12365,7 +12365,7 @@ const slashCommands = [
             .addChannelOption(o => o.setName('channel').setDescription('Only delete messages from this channel').setRequired(true))
             .addStringOption(o => o.setName('duration').setDescription('Optional ban duration e.g. 30d, 1w (leave blank = permanent until unban)').setRequired(false))
             .addStringOption(o => o.setName('reason').setDescription('Reason for ban').setRequired(false))
-            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Message deleter').setRequired(false))
             .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
 
     new SlashCommandBuilder()
@@ -12384,7 +12384,7 @@ const slashCommands = [
             .setDescription('Permanently ban a member')
             .addUserOption(o => o.setName('user').setDescription('Member to permanently ban').setRequired(true))
             .addStringOption(o => o.setName('reason').setDescription('Reason for hardban').setRequired(false))
-            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Message deleter').setRequired(false))
             .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300)))
         .addSubcommand(sub => sub
             .setName('channel')
@@ -12392,7 +12392,7 @@ const slashCommands = [
             .addUserOption(o => o.setName('user').setDescription('Member to permanently ban').setRequired(true))
             .addChannelOption(o => o.setName('channel').setDescription('Only delete messages from this channel').setRequired(true))
             .addStringOption(o => o.setName('reason').setDescription('Reason for hardban').setRequired(false))
-            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (0 = none, default)').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Message deleter').setRequired(false))
             .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
 
     new SlashCommandBuilder()
@@ -12404,7 +12404,7 @@ const slashCommands = [
             .setDescription('Softban a member')
             .addUserOption(o => o.setName('user').setDescription('Member to softban').setRequired(true))
             .addStringOption(o => o.setName('reason').setDescription('Reason for softban').setRequired(false))
-            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (default: 7d, the max Discord allows; 0 = none)').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Message deleter').setRequired(false))
             .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300)))
         .addSubcommand(sub => sub
             .setName('channel')
@@ -12412,7 +12412,7 @@ const slashCommands = [
             .addUserOption(o => o.setName('user').setDescription('Member to softban').setRequired(true))
             .addChannelOption(o => o.setName('channel').setDescription('Only delete messages from this channel').setRequired(true))
             .addStringOption(o => o.setName('reason').setDescription('Reason for softban').setRequired(false))
-            .addStringOption(o => o.setName('delete_time').setDescription('Delete their messages from the last X time — e.g. 30s, 1h, 2d, 1w (default: 7d, the max Discord allows; 0 = none)').setRequired(false))
+            .addStringOption(o => o.setName('delete_time').setDescription('Message deleter').setRequired(false))
             .addIntegerOption(o => o.setName('delete_count').setDescription('Delete up to this many of their most recent messages (0 = none, default)').setRequired(false).setMinValue(0).setMaxValue(300))),
 
     // ── /regex — enable or disable regex-based detection ────────────────────
