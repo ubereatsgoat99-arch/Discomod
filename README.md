@@ -68,11 +68,15 @@ Oh yea also this bot can be hosted using GitHub codespace easily so you can abus
 
 ## 🛠️ Installation
 
-This project has a bunch of paths, so do the follwoing:
+This project has a bunch of paths, so do the follwoing(no need to if ur in github codespace with my forked repo):
 
 ```bash
 git clone https://github.com/xenostopic-cyber/Discomod
 cd Discomod
+```
+After that just do this:
+
+```
 chmod +x setup.sh
 ./setup.sh
 ```
