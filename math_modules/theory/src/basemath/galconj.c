@@ -3019,7 +3019,7 @@ galoisconj4_main(GEN T, GEN den, long flag)
 
   if (den)
   {
-    if (typ(den) != t_INT) pari_err_TYPE("galoisconj4 [2nd arg integer]", den);
+    if (typ(den) != t_INT) pari_err_TYPE("galoisinit", den);
     den = absi_shallow(den);
   }
   gb.l = utoipos(ga.l);

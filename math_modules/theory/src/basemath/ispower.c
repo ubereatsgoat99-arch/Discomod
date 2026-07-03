@@ -1147,3 +1147,21 @@ uisprimepower(ulong n, ulong *pp)
   return 0;
 }
 
+long
+uisnilpotent(ulong n)
+{
+  pari_sp av = avma;
+  long i, l;
+  GEN F, P, E;
+  if (n <= 5) return 1;
+  F = factoru(n); P = gel(F,1); E = gel(F,2);
+  l = lg(P);
+  if (l==2) return gc_long(av, 1);
+  for (i=1; i < l; i++)
+  {
+    ulong j, p = uel(P,i), e = uel(E,i), q = p%n;
+    for (j = 1; j <= e; j++, q = Fl_mul(q, p, n))
+      if (ugcd(q-1, n) > 1) return gc_long(av, 0);
+  }
+  return gc_long(av, 1);
+}

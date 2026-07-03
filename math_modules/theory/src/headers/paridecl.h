@@ -4637,6 +4637,7 @@ long    issquare(GEN x);
 long    issquareall(GEN x, GEN *pt);
 GEN     sqrtint(GEN a);
 GEN     sqrtint0(GEN a, GEN *r);
+long    uisnilpotent(ulong n);
 long    uisprimepower(ulong n, ulong *p);
 long    uissquare(ulong A);
 long    uissquareall(ulong A, ulong *sqrtA);

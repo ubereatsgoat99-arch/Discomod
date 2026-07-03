@@ -163,6 +163,48 @@ List(S : Type) : Exports == Implementation where
               if s = Qfirst x then return true else x := Qrest x
            false
 
+        merge_unique(f, p, q) ==
+            empty? p => q
+            empty? q => p
+            eq?(p, q) => p
+            r := empty()
+            while not empty? p and not empty? q repeat
+                p1 : S := Qfirst p; q1 : S := Qfirst q
+                p1 = q1 =>
+                    r := cons(p1, r)
+                    p := Qrest p
+                    q := Qrest q
+                if f(p1, q1)
+                    then (r := cons(p1, r); p := Qrest p)
+                    else (r := cons(q1, r); q := Qrest q)
+            if empty? p then p := q
+            empty? p => reverse! r
+            concat!(reverse! r, p)
+
+        merge_unique!(f, p, q) ==
+            empty? p => q
+            empty? q => p
+            eq?(p, q) => p
+            if Qfirst p = Qfirst q then
+                r := t := p
+                p := Qrest p
+                q := Qrest q
+            else
+                if f(Qfirst p, Qfirst q)
+                    then (r := t := p; p := Qrest p)
+                    else (r := t := q; q := Qrest q)
+            while not empty? p and not empty? q repeat
+                p1 : S := Qfirst p; q1 : S := Qfirst q
+                p1 = q1 =>
+                    t := Qrest t
+                    p := Qrest p
+                    q := Qrest q
+                if f(p1, q1)
+                    then (qsetrest!(t, p); t := p; p := Qrest p)
+                    else (qsetrest!(t, q); t := q; q := Qrest q)
+            qsetrest!(t, if empty? p then q else p)
+            r
+
       if S has Hashable then
 
         hashUpdate!(s : HashState, x : %) : HashState ==
