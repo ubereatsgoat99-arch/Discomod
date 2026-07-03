@@ -2,7 +2,7 @@
 
 set -e
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"y
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_DIR"
 
 chmod +x superqalc superqalc_onefile superqalc_tower helper.bin 2>/dev/null || true
