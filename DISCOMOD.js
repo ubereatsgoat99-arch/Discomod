@@ -76,6 +76,9 @@ const CLIENT_ID = process.env.CLIENT_ID || '';
     if (!process.env.GROQ_API_KEY)      warnings.push('GROQ_API_KEY not set — Groq AI disabled');
     if (!process.env.OPENAI_API_KEY)    warnings.push('OPENAI_API_KEY not set — OpenAI AI disabled');
     if (!process.env.GEMINI_API_KEY)    warnings.push('GEMINI_API_KEY not set — Gemini AI disabled');
+    if (!process.env.MISTRAL_API_KEY)   warnings.push('MISTRAL_API_KEY not set — Mistral AI disabled');
+    if (!process.env.DEEPSEEK_API_KEY)  warnings.push('DEEPSEEK_API_KEY not set — DeepSeek AI disabled');
+    if (!process.env.XAI_API_KEY)       warnings.push('XAI_API_KEY not set — xAI Grok AI disabled');
     if (!process.env.WOLFRAM_APPID)     warnings.push('WOLFRAM_APPID not set — /wolf command may fail');
 
     // Required files check
@@ -335,11 +338,14 @@ const ai2State = {
     openaiModel: String(ai2Config?.bot?.openai_model || 'gpt-4o-mini'),
     groqModel: String(ai2Config?.bot?.groq_model || 'llama-3.1-70b-versatile'),
     claudeModel: String(ai2Config?.bot?.claude_model || 'claude-haiku-4-5-20251001'),
-    geminiModel: String(ai2Config?.bot?.gemini_model || 'gemini-1.5-flash'),
+    geminiModel: String(ai2Config?.bot?.gemini_model || 'gemini-2.5-flash'), // NOTE: gemini-1.5-* and gemini-2.0-* have been shut down by Google — 2.5 is the current stable line
+    mistralModel: String(ai2Config?.bot?.mistral_model || 'mistral-large-latest'),
+    deepseekModel: String(ai2Config?.bot?.deepseek_model || 'deepseek-chat'),
+    grokModel: String(ai2Config?.bot?.grok_model || 'grok-4.3'),
     errorWebhook: String(ai2Config?.notifications?.error_webhook || ''),
     ratelimitNotifications: !!ai2Config?.notifications?.ratelimit_notifications,
     paused: false,
-    activeProvider: 'groq', // 'groq' | 'openai' | 'claude' | 'gemini' — configurable via /aimodel
+    activeProvider: 'groq', // 'groq' | 'openai' | 'claude' | 'gemini' | 'mistral' | 'deepseek' | 'grok' — configurable via /aimodel
     instructions: ai2LoadInstructions(),
     activeChannels: new Set(),
     ignoredUsers: new Set(),
@@ -400,6 +406,9 @@ function ai2InitClient(forceProvider) {
     const provider = forceProvider || ai2State.activeProvider || 'groq';
     const openaiKey = process.env.OPENAI_API_KEY || '';
     const groqKey   = process.env.GROQ_API_KEY   || '';
+    const mistralKey  = process.env.MISTRAL_API_KEY  || '';
+    const deepseekKey = process.env.DEEPSEEK_API_KEY || '';
+    const grokKey     = process.env.XAI_API_KEY      || '';
     if (provider === 'claude') {
         // Claude uses Anthropic API via fetch — no OpenAI client needed
         if (ANTHROPIC_KEY) {
@@ -443,6 +452,45 @@ function ai2InitClient(forceProvider) {
             return;
         }
         // fallback to groq
+        if (groqKey) {
+            ai2Client = new OpenAI({ apiKey: groqKey, baseURL: 'https://api.groq.com/openai/v1' });
+            ai2Model  = ai2State.groqModel;
+            ai2State.activeProvider = 'groq';
+            return;
+        }
+    } else if (provider === 'mistral') {
+        if (mistralKey) {
+            ai2Client = new OpenAI({ apiKey: mistralKey, baseURL: 'https://api.mistral.ai/v1' });
+            ai2Model  = ai2State.mistralModel;
+            ai2State.activeProvider = 'mistral';
+            return;
+        }
+        if (groqKey) {
+            ai2Client = new OpenAI({ apiKey: groqKey, baseURL: 'https://api.groq.com/openai/v1' });
+            ai2Model  = ai2State.groqModel;
+            ai2State.activeProvider = 'groq';
+            return;
+        }
+    } else if (provider === 'deepseek') {
+        if (deepseekKey) {
+            ai2Client = new OpenAI({ apiKey: deepseekKey, baseURL: 'https://api.deepseek.com' });
+            ai2Model  = ai2State.deepseekModel;
+            ai2State.activeProvider = 'deepseek';
+            return;
+        }
+        if (groqKey) {
+            ai2Client = new OpenAI({ apiKey: groqKey, baseURL: 'https://api.groq.com/openai/v1' });
+            ai2Model  = ai2State.groqModel;
+            ai2State.activeProvider = 'groq';
+            return;
+        }
+    } else if (provider === 'grok') {
+        if (grokKey) {
+            ai2Client = new OpenAI({ apiKey: grokKey, baseURL: 'https://api.x.ai/v1' });
+            ai2Model  = ai2State.grokModel;
+            ai2State.activeProvider = 'grok';
+            return;
+        }
         if (groqKey) {
             ai2Client = new OpenAI({ apiKey: groqKey, baseURL: 'https://api.groq.com/openai/v1' });
             ai2Model  = ai2State.groqModel;
@@ -658,7 +706,7 @@ async function ai2GenerateResponseClaude(prompt, instructions, history) {
 // ── Gemini (Google) generation ────────────────────────────────────────────────
 async function ai2GenerateResponseGemini(prompt, instructions, history) {
     if (!GEMINI_API_KEY) return "Sorry, GEMINI_API_KEY is not set.";
-    const model = ai2State.geminiModel || 'gemini-1.5-flash';
+    const model = ai2State.geminiModel || 'gemini-2.5-flash';
     const url   = `${GEMINI_API_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`;
     const controller = new AbortController();
     const timeoutId  = setTimeout(() => controller.abort(), 30000);
@@ -1482,6 +1530,7 @@ function buildCommandListEmbeds(title, items, gs) {
 const MESSAGE_COMMANDS_LIST = [
     // ── Info & Status ──────────────────────────────────────────────────────────
     { name: '!botinfo',              desc: 'Show bot ownership / credits.' },
+    { name: '!info [@user|id] (or "?info")', desc: 'Full user lookup: roles, account/join dates, moderation history.' },
     { name: '!botstatus',            desc: 'Show current server configuration (admin).' },
     { name: '!uptime',               desc: 'Show bot uptime information.' },
     { name: '!messagecommandslist',  desc: 'List all ! message commands.' },
@@ -1516,6 +1565,7 @@ const MESSAGE_COMMANDS_LIST = [
     { name: '!lock [#channel] [reason]',        desc: 'Lock a channel — blocks @everyone from sending (admin).' },
     { name: '!unlock [#channel] [reason]',      desc: 'Unlock a channel (admin).' },
     { name: '!unlockdown',                      desc: 'Remove all active channel lockdowns (admin).' },
+    { name: '!lockdown [unlock] [reason]',      desc: 'Lock/unlock EVERY text channel at once — only admins can speak (admin).' },
     { name: '!case view <id>',                  desc: 'View a case by ID (mods/admin).' },
     { name: '!case list [<@user>]',             desc: 'List all cases or cases for a user (mods/admin).' },
     { name: '!case note <id> <text>',           desc: 'Add a note to a case (mods/admin).' },
@@ -3778,6 +3828,7 @@ function makeDefaultData() {
         tickets: {},      // { [guildId]: { [channelId]: { userId, subject, ... } } }
         userTickets: {},  // { [guildId]: { [userId]: channelId } }
         starboard: {},    // { [guildId]: { [sourceId]: sbMsgId } }
+        modActions: {},   // { [guildId]: { [userId]: [ {type, reason, by, at, extra}, ... ] } } — used by /info
     };
 }
 
@@ -4015,6 +4066,48 @@ function voidCase(guildId, data, caseId, actorId, reason) {
     data.cases[guildId] = cases;
     saveData(data);
     return c;
+}
+
+// ── Persistent per-user moderation action log (kicks/bans/timeouts/etc with reasons) ──
+// Separate from the `cases` system above (which is for automated flagged-message
+// cases) and from `violations` (warn history) — this covers the manual hard actions
+// so /info and ?info can show a full moderation history even after e.g. an unban
+// removes the record from `data.bans`.
+function logModAction(data, guildId, userId, opts) {
+    try {
+        data.modActions = data.modActions || {};
+        data.modActions[guildId] = data.modActions[guildId] || {};
+        data.modActions[guildId][userId] = data.modActions[guildId][userId] || [];
+        data.modActions[guildId][userId].push({
+            type:   String(opts?.type || 'action'),
+            reason: String(opts?.reason || 'No reason provided').slice(0, 500),
+            by:     opts?.by ? String(opts.by) : null,
+            at:     Date.now(),
+            extra:  opts?.extra ? String(opts.extra).slice(0, 200) : null,
+        });
+        // Bound per-user history so the data file can't grow without limit
+        if (data.modActions[guildId][userId].length > 200) {
+            data.modActions[guildId][userId] = data.modActions[guildId][userId].slice(-200);
+        }
+    } catch {}
+}
+function getModActionHistory(data, guildId, userId) {
+    try {
+        return (data.modActions?.[guildId]?.[userId] || []).slice().sort((a, b) => b.at - a.at);
+    } catch {
+        return [];
+    }
+}
+
+/** Full-precision date/time string (includes seconds) — Discord's own <t:...> tags
+ *  never render seconds, so account/join dates that need second-level precision are
+ *  formatted here instead. Always UTC so it's a stable, unambiguous reference. */
+function formatFullTimestamp(ms) {
+    if (!ms || !Number.isFinite(ms)) return 'Unknown';
+    const d = new Date(ms);
+    const datePart = d.toLocaleString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' });
+    const timePart = d.toLocaleString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    return `${datePart}, ${timePart} UTC`;
 }
 
 function getGuildStats(guildId, data) {
@@ -4258,6 +4351,14 @@ function getGuildSettings(guildId, data) {
             raidNotifyChannelId: null,
             raidLinkBlockAll:  true,
             raidNewAccountDays: 7,
+
+            // ── Manual server-wide lockdown (/lockdown, !lockdown) — separate from the
+            // automatic raid-lockdown system above; only admins can speak while active.
+            manualLockdownActive:      false,
+            manualLockdownChannelIds:  [],   // channels THIS lockdown newly locked (so unlock only reverts those)
+            manualLockdownBy:          null,
+            manualLockdownAt:          null,
+            manualLockdownReason:      null,
 
             capsSpamEnabled: false,
             capsMaxPercent: 70,
@@ -11355,6 +11456,169 @@ async function unlockGuildTextChannels(guild, gs) {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  MANUAL SERVER-WIDE LOCKDOWN (/lockdown, !lockdown)
+//  Distinct from the automatic raid-lockdown system above. Denies SendMessages
+//  for @everyone across every text channel while explicitly re-granting it to
+//  admin/manager roles (via grantAdminRolesSendMessages), so only admins can
+//  speak anywhere on the server. Channels that were ALREADY locked before the
+//  lockdown started are left untouched on unlock, so a permanently read-only
+//  channel (e.g. #announcements) never gets accidentally opened back up.
+// ══════════════════════════════════════════════════════════════════════════
+async function engageLockdown(guild, gs, data, reason, actorId) {
+    const result = { locked: 0, alreadyLocked: 0, failed: [] };
+    const editReason = `SKYNET V7: Manual lockdown — ${reason}`.slice(0, 512);
+    const newlyLockedIds = [];
+    for (const [, ch] of guild.channels.cache) {
+        if (ch.type !== ChannelType.GuildText) continue;
+        if (gs.logChannelId && ch.id === gs.logChannelId) continue;
+        if (gs.appealsChannelId && ch.id === gs.appealsChannelId) continue;
+        try {
+            const existing = ch.permissionOverwrites.cache.get(guild.id);
+            const alreadyDenied = !!existing?.deny?.has(PermissionFlagsBits.SendMessages);
+            if (alreadyDenied) {
+                result.alreadyLocked++;
+            } else {
+                await ch.permissionOverwrites.edit(guild.id, { SendMessages: false }, { reason: editReason });
+                newlyLockedIds.push(ch.id);
+                result.locked++;
+            }
+            await grantAdminRolesSendMessages(ch, guild, gs);
+        } catch {
+            result.failed.push(ch.id);
+        }
+    }
+    gs.manualLockdownActive     = true;
+    gs.manualLockdownChannelIds = newlyLockedIds;
+    gs.manualLockdownBy         = actorId ? String(actorId) : null;
+    gs.manualLockdownAt         = Date.now();
+    gs.manualLockdownReason     = String(reason || '').slice(0, 300);
+    saveData(data);
+    return result;
+}
+
+async function disengageLockdown(guild, gs, data, reason, actorId) {
+    const result = { unlocked: 0, failed: [] };
+    const editReason = `SKYNET V7: Manual unlock — ${reason}`.slice(0, 512);
+    const ids = Array.isArray(gs.manualLockdownChannelIds) ? gs.manualLockdownChannelIds : [];
+    for (const chId of ids) {
+        const ch = guild.channels.cache.get(chId);
+        if (!ch) continue;
+        try {
+            await revokeAdminRolesSendMessages(ch, guild, gs);
+            await ch.permissionOverwrites.edit(guild.id, { SendMessages: null }, { reason: editReason });
+            result.unlocked++;
+        } catch {
+            result.failed.push(chId);
+        }
+    }
+    gs.manualLockdownActive     = false;
+    gs.manualLockdownChannelIds = [];
+    gs.manualLockdownBy         = actorId ? String(actorId) : null;
+    gs.manualLockdownAt         = Date.now();
+    gs.manualLockdownReason     = String(reason || '').slice(0, 300);
+    saveData(data);
+    return result;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  /info · !info · ?info — full user lookup
+//  Shared by the slash command and both prefix triggers so all three interfaces
+//  stay in sync. Moderation history is only shown to staff, or to someone
+//  looking up their own info — everyone else sees a "staff-only" placeholder.
+// ══════════════════════════════════════════════════════════════════════════
+async function buildUserInfoEmbed(guild, data, gs, targetUser, viewerIsStaff, viewerId) {
+    const member = guild.members.cache.get(targetUser.id) || await guild.members.fetch(targetUser.id).catch(() => null);
+
+    // ── Roles (full list, not capped at 10 like /userinfo — but kept under the
+    // 1024-char embed field limit, with a "+N more" note if it would overflow) ──
+    const roles = member
+        ? [...member.roles.cache.filter(r => r.id !== guild.id).values()].sort((a, b) => b.position - a.position)
+        : [];
+    let rolesStr = '*(none)*';
+    if (roles.length) {
+        const shown = [];
+        let len = 0;
+        for (const r of roles) {
+            const piece = `<@&${r.id}> `;
+            if (len + piece.length > 950) break;
+            shown.push(piece);
+            len += piece.length;
+        }
+        rolesStr = shown.join('').trim() + (shown.length < roles.length ? ` *(+${roles.length - shown.length} more)*` : '');
+    }
+
+    const created = targetUser.createdTimestamp;
+    const createdStr = `${formatFullTimestamp(created)}\n<t:${Math.floor(created / 1000)}:R>`;
+    const joined = member?.joinedTimestamp;
+    const joinedStr = joined ? `${formatFullTimestamp(joined)}\n<t:${Math.floor(joined / 1000)}:R>` : '*(not currently in this server)*';
+
+    const isExiled     = !!data.exiles?.[targetUser.id];
+    const banRecord    = data.bans?.[guild.id]?.[targetUser.id];
+    const timeoutUntil = member?.communicationDisabledUntilTimestamp;
+    const isTimedOut   = timeoutUntil && timeoutUntil > Date.now();
+    const violaCount   = getViolationCount(data, targetUser.id);
+
+    const embed = new EmbedBuilder()
+        .setTitle(`👤 ${targetUser.tag}`)
+        .setColor(member?.displayColor || 0x5865F2)
+        .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 256 }))
+        .addFields(
+            { name: '🆔 User ID',        value: targetUser.id, inline: true },
+            { name: '🤖 Bot Account',    value: targetUser.bot ? 'Yes' : 'No', inline: true },
+            { name: '💬 Nickname',       value: member?.nickname || '*(none)*', inline: true },
+            { name: '📅 Account Created', value: createdStr, inline: false },
+            { name: '📥 Joined Server',   value: joinedStr, inline: false },
+            { name: `🏷️ Roles (${roles.length})`, value: rolesStr, inline: false },
+            { name: '⚠️ Violations',      value: String(violaCount), inline: true },
+            { name: '⛓️ Currently Exiled', value: isExiled ? 'Yes' : 'No', inline: true },
+            { name: '🔇 Timed Out',       value: isTimedOut ? `Until <t:${Math.floor(timeoutUntil / 1000)}:R>` : 'No', inline: true },
+            ...(banRecord ? [{ name: banRecord.hardban ? '🔒 Current Ban' : '🔨 Current Ban', value: `${banRecord.hardban ? 'Permanent hardban' : 'Banned'} — ${String(banRecord.reason || 'No reason provided').slice(0, 200)}`, inline: false }] : []),
+        );
+
+    // ── Moderation history: merges the mod-action log (kick/ban/hardban/softban/
+    // timeout/exile) with existing warn history. Staff-only, or self-lookup. ──
+    const canSeeModHistory = viewerIsStaff || String(viewerId) === String(targetUser.id);
+    if (canSeeModHistory) {
+        const modHistory  = getModActionHistory(data, guild.id, targetUser.id);
+        const warnHistory = getViolationHistory(data, targetUser.id).map(w => ({ type: 'warn', reason: w.reason, by: w.by, at: w.timestamp }));
+        const allEntries  = [...modHistory, ...warnHistory].sort((a, b) => b.at - a.at);
+        const typeLabel   = { kick: '👢 Kick', ban: '🔨 Ban', hardban: '🔒 Hardban', softban: '🧹 Softban', timeout: '🔇 Timeout', exile: '⛓️ Exile', warn: '⚠️ Warn' };
+
+        const modLines = [];
+        let mLen = 0;
+        for (const e of allEntries) {
+            const label = typeLabel[e.type] || `📋 ${e.type}`;
+            const byStr = e.by ? `<@${e.by}>` : 'System/Auto';
+            const line  = `**${label}** — ${String(e.reason || 'No reason provided').slice(0, 150)}\n_by ${byStr}, <t:${Math.floor(e.at / 1000)}:R>_`;
+            if (mLen + line.length + 2 > 1000) break;
+            modLines.push(line);
+            mLen += line.length + 2;
+        }
+        const shownCount = modLines.length;
+        const modValue = shownCount ? modLines.join('\n\n') : 'No recorded moderation actions.';
+        embed.addFields({
+            name: allEntries.length > shownCount ? `📁 Moderation History (showing ${shownCount} of ${allEntries.length})` : `📁 Moderation History (${allEntries.length})`,
+            value: modValue,
+            inline: false,
+        });
+    } else {
+        embed.addFields({ name: '📁 Moderation History', value: '🔒 Staff-only.', inline: false });
+    }
+
+    // ── Mod notes (existing data source, staff-only) ──
+    if (canSeeModHistory) {
+        const notes = getModNotes(data, targetUser.id);
+        if (notes.length) {
+            const noteLines = notes.slice(-5).map(n => `• ${String(n.note).slice(0, 150)} _(${n.byTag || n.by || 'unknown'}, <t:${Math.floor(n.ts / 1000)}:R>)_`);
+            embed.addFields({ name: `📝 Mod Notes (${notes.length})`, value: noteLines.join('\n').slice(0, 1024), inline: false });
+        }
+    }
+
+    embed.setFooter({ text: 'Moderation history covers actions taken since this feature was added.' }).setTimestamp();
+    return embed;
+}
+
 // ══════════════════════════════════════════════════════════
 //  AI DETECTION (Claude API)
 // ══════════════════════════════════════════════════════════
@@ -11601,18 +11865,26 @@ const slashCommands = [
                 .setDescription('AI chat model to use')
                 .setRequired(true)
                 .addChoices(
-                    { name: 'Groq — llama-3.3-70b-versatile (default)', value: 'groq' },
-                    { name: 'Groq — llama-3.1-70b-versatile', value: 'groq-llama31' },
-                    { name: 'Groq — mixtral-8x7b-32768', value: 'groq-mixtral' },
-                    { name: 'Groq — openai/gpt-oss-120b', value: 'groq-gpt-oss' },
+                    { name: 'Claude — Haiku 4.5 (fast, default)', value: 'claude' },
+                    { name: 'Claude — Sonnet 5 (balanced)', value: 'claude-sonnet' },
+                    { name: 'Claude — Opus 4.8 (powerful)', value: 'claude-opus' },
+                    { name: 'Claude — Fable 5 (frontier)', value: 'claude-fable' },
                     { name: 'OpenAI — gpt-4o', value: 'openai-gpt4o' },
                     { name: 'OpenAI — gpt-4o-mini', value: 'openai-gpt4omini' },
-                    { name: 'Claude — claude-haiku-4-5 (fast, default)', value: 'claude' },
-                    { name: 'Claude — claude-sonnet-4-6 (balanced)', value: 'claude-sonnet' },
-                    { name: 'Claude — claude-opus-4-6 (powerful)', value: 'claude-opus' },
-                    { name: 'Gemini — gemini-2.0-flash (latest, fast)', value: 'gemini' },
-                    { name: 'Gemini — gemini-1.5-pro (powerful)', value: 'gemini-pro' },
-                    { name: 'Gemini — gemini-2.5-flash (preview)', value: 'gemini-flash2' },
+                    { name: 'OpenAI — GPT-5.5 (flagship)', value: 'openai-gpt55' },
+                    { name: 'Gemini — 2.5 Flash (fast, default)', value: 'gemini' },
+                    { name: 'Gemini — 2.5 Pro (powerful)', value: 'gemini-pro' },
+                    { name: 'Gemini — 3.5 Flash (latest)', value: 'gemini-flash2' },
+                    { name: 'Groq — GPT-OSS 120B (default, recommended)', value: 'groq' },
+                    { name: 'Groq — Llama 3.1 70B Versatile', value: 'groq-llama31' },
+                    { name: 'Groq — Mixtral 8x7B', value: 'groq-mixtral' },
+                    { name: 'Groq — GPT-OSS 20B (fast, small)', value: 'groq-gpt-oss' },
+                    { name: 'Groq — Qwen3.6 27B', value: 'groq-qwen' },
+                    { name: 'Mistral — Large (flagship)', value: 'mistral' },
+                    { name: 'Mistral — Small (fast)', value: 'mistral-small' },
+                    { name: 'DeepSeek — Chat (V3)', value: 'deepseek' },
+                    { name: 'DeepSeek — Reasoner (R1)', value: 'deepseek-reasoner' },
+                    { name: 'xAI — Grok 4.3 (flagship)', value: 'grok' },
                 ))),
 
     new SlashCommandBuilder()
@@ -11934,18 +12206,26 @@ const slashCommands = [
             .setDescription('AI provider to use (default: Groq)')
             .setRequired(true)
             .addChoices(
-                { name: 'Groq — llama-3.3-70b-versatile (default)', value: 'groq' },
-                { name: 'Groq — llama-3.1-70b-versatile', value: 'groq-llama31' },
-                { name: 'Groq — mixtral-8x7b-32768', value: 'groq-mixtral' },
-                { name: 'Groq — openai/gpt-oss-120b', value: 'groq-gpt-oss' },
+                { name: 'Claude — Haiku 4.5 (fast, default)', value: 'claude' },
+                { name: 'Claude — Sonnet 5 (balanced)', value: 'claude-sonnet' },
+                { name: 'Claude — Opus 4.8 (powerful)', value: 'claude-opus' },
+                { name: 'Claude — Fable 5 (frontier)', value: 'claude-fable' },
                 { name: 'OpenAI — gpt-4o', value: 'openai-gpt4o' },
                 { name: 'OpenAI — gpt-4o-mini', value: 'openai-gpt4omini' },
-                { name: 'Claude — claude-haiku-4-5 (fast, default)', value: 'claude' },
-                { name: 'Claude — claude-sonnet-4-6 (balanced)', value: 'claude-sonnet' },
-                { name: 'Claude — claude-opus-4-6 (powerful)', value: 'claude-opus' },
-                { name: 'Gemini — gemini-1.5-flash (fast)', value: 'gemini' },
-                { name: 'Gemini — gemini-1.5-pro (powerful)', value: 'gemini-pro' },
-                { name: 'Gemini — gemini-2.0-flash (latest)', value: 'gemini-flash2' },
+                { name: 'OpenAI — GPT-5.5 (flagship)', value: 'openai-gpt55' },
+                { name: 'Gemini — 2.5 Flash (fast, default)', value: 'gemini' },
+                { name: 'Gemini — 2.5 Pro (powerful)', value: 'gemini-pro' },
+                { name: 'Gemini — 3.5 Flash (latest)', value: 'gemini-flash2' },
+                { name: 'Groq — GPT-OSS 120B (default, recommended)', value: 'groq' },
+                { name: 'Groq — Llama 3.1 70B Versatile', value: 'groq-llama31' },
+                { name: 'Groq — Mixtral 8x7B', value: 'groq-mixtral' },
+                { name: 'Groq — GPT-OSS 20B (fast, small)', value: 'groq-gpt-oss' },
+                { name: 'Groq — Qwen3.6 27B', value: 'groq-qwen' },
+                { name: 'Mistral — Large (flagship)', value: 'mistral' },
+                { name: 'Mistral — Small (fast)', value: 'mistral-small' },
+                { name: 'DeepSeek — Chat (V3)', value: 'deepseek' },
+                { name: 'DeepSeek — Reasoner (R1)', value: 'deepseek-reasoner' },
+                { name: 'xAI — Grok 4.3 (flagship)', value: 'grok' },
             )),
 
     new SlashCommandBuilder()
@@ -12740,6 +13020,23 @@ const slashCommands = [
                 ))
             .addBooleanOption(o => o.setName('enabled').setDescription('On or off').setRequired(true)))
         .addSubcommand(s => s.setName('status').setDescription('Show the current logging configuration')),
+
+    // ── /lockdown — server-wide lock, distinct from the single-channel /lock ──
+    new SlashCommandBuilder()
+        .setName('lockdown')
+        .setDescription('Lock or unlock EVERY text channel at once — only admins can speak while locked')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('lock').setDescription('Lock every text channel server-wide')
+            .addStringOption(o => o.setName('reason').setDescription('Reason for the lockdown').setRequired(false)))
+        .addSubcommand(s => s.setName('unlock').setDescription('Undo the server-wide lockdown')
+            .addStringOption(o => o.setName('reason').setDescription('Reason for lifting the lockdown').setRequired(false))),
+
+    // ── /info — full user lookup (roles, timestamps to the second, mod history) ──
+    new SlashCommandBuilder()
+        .setName('info')
+        .setDescription('Show full information about a user: roles, account/join dates, moderation history')
+        .addUserOption(o => o.setName('user').setDescription('Member to look up (defaults to you)').setRequired(false))
+        .addStringOption(o => o.setName('id').setDescription('Or provide a raw user ID').setRequired(false)),
 
     // Math computation commands (grouped into a single /math command, see math_commands.js)
     ...mathMod.mathSlashCommandBuilders,
@@ -15404,22 +15701,37 @@ client.on('interactionCreate', async interaction => {
             if (sub === 'model') {
                 const providerChoice = interaction.options.getString('provider');
                 const providerMap = {
-                    'groq':           { provider: 'groq',   model: 'llama-3.3-70b-versatile',   label: 'Groq — llama-3.3-70b-versatile' },
-                    'groq-llama31':   { provider: 'groq',   model: 'llama-3.1-70b-versatile',   label: 'Groq — llama-3.1-70b-versatile' },
-                    'groq-mixtral':   { provider: 'groq',   model: 'mixtral-8x7b-32768',        label: 'Groq — mixtral-8x7b-32768' },
-                    'groq-gpt-oss':   { provider: 'groq',   model: 'openai/gpt-oss-120b',       label: 'Groq — openai/gpt-oss-120b' },
-                    'openai-gpt4o':   { provider: 'openai', model: 'gpt-4o',                    label: 'OpenAI — gpt-4o' },
-                    'openai-gpt4omini':{ provider: 'openai',model: 'gpt-4o-mini',               label: 'OpenAI — gpt-4o-mini' },
-                    'claude':         { provider: 'claude', model: 'claude-haiku-4-5-20251001', label: 'Claude — claude-haiku-4-5 (fast)' },
-                    'claude-sonnet':  { provider: 'claude', model: 'claude-sonnet-4-6',         label: 'Claude — claude-sonnet-4-6 (balanced)' },
-                    'claude-opus':    { provider: 'claude', model: 'claude-opus-4-6',           label: 'Claude — claude-opus-4-6 (powerful)' },
+                    'claude':            { provider: 'claude',   model: 'claude-haiku-4-5-20251001', label: 'Claude — Haiku 4.5 (fast)' },
+                    'claude-sonnet':     { provider: 'claude',   model: 'claude-sonnet-5',            label: 'Claude — Sonnet 5 (balanced)' },
+                    'claude-opus':       { provider: 'claude',   model: 'claude-opus-4-8',            label: 'Claude — Opus 4.8 (powerful)' },
+                    'claude-fable':      { provider: 'claude',   model: 'claude-fable-5',              label: 'Claude — Fable 5 (frontier)' },
+                    'openai-gpt4o':      { provider: 'openai',   model: 'gpt-4o',                     label: 'OpenAI — gpt-4o' },
+                    'openai-gpt4omini':  { provider: 'openai',   model: 'gpt-4o-mini',                label: 'OpenAI — gpt-4o-mini' },
+                    'openai-gpt55':      { provider: 'openai',   model: 'gpt-5.5',                    label: 'OpenAI — GPT-5.5 (flagship)' },
+                    'gemini':            { provider: 'gemini',   model: 'gemini-2.5-flash',           label: 'Gemini — 2.5 Flash (fast)' },
+                    'gemini-pro':        { provider: 'gemini',   model: 'gemini-2.5-pro',             label: 'Gemini — 2.5 Pro (powerful)' },
+                    'gemini-flash2':     { provider: 'gemini',   model: 'gemini-3.5-flash',           label: 'Gemini — 3.5 Flash (latest)' },
+                    'groq':              { provider: 'groq',     model: 'openai/gpt-oss-120b',        label: 'Groq — GPT-OSS 120B (recommended)' },
+                    'groq-llama31':      { provider: 'groq',     model: 'llama-3.1-70b-versatile',    label: 'Groq — Llama 3.1 70B Versatile' },
+                    'groq-mixtral':      { provider: 'groq',     model: 'mixtral-8x7b-32768',         label: 'Groq — Mixtral 8x7B' },
+                    'groq-gpt-oss':      { provider: 'groq',     model: 'openai/gpt-oss-20b',         label: 'Groq — GPT-OSS 20B (fast, small)' },
+                    'groq-qwen':         { provider: 'groq',     model: 'qwen/qwen3.6-27b',           label: 'Groq — Qwen3.6 27B' },
+                    'mistral':           { provider: 'mistral',  model: 'mistral-large-latest',       label: 'Mistral — Large (flagship)' },
+                    'mistral-small':     { provider: 'mistral',  model: 'mistral-small-latest',       label: 'Mistral — Small (fast)' },
+                    'deepseek':          { provider: 'deepseek', model: 'deepseek-chat',              label: 'DeepSeek — Chat (V3)' },
+                    'deepseek-reasoner': { provider: 'deepseek', model: 'deepseek-reasoner',          label: 'DeepSeek — Reasoner (R1)' },
+                    'grok':              { provider: 'grok',     model: 'grok-4.3',                   label: 'xAI — Grok 4.3 (flagship)' },
                 };
                 const chosen = providerMap[providerChoice];
                 if (chosen) {
                     ai2State.activeProvider = chosen.provider;
-                    if (chosen.provider === 'claude') ai2State.claudeModel = chosen.model;
-                    if (chosen.provider === 'openai') ai2State.openaiModel = chosen.model;
-                    if (chosen.provider === 'groq')   ai2State.groqModel   = chosen.model;
+                    if (chosen.provider === 'claude')   ai2State.claudeModel   = chosen.model;
+                    if (chosen.provider === 'openai')   ai2State.openaiModel   = chosen.model;
+                    if (chosen.provider === 'groq')     ai2State.groqModel     = chosen.model;
+                    if (chosen.provider === 'gemini')   ai2State.geminiModel   = chosen.model;
+                    if (chosen.provider === 'mistral')  ai2State.mistralModel  = chosen.model;
+                    if (chosen.provider === 'deepseek') ai2State.deepseekModel = chosen.model;
+                    if (chosen.provider === 'grok')     ai2State.grokModel     = chosen.model;
                     ai2InitClient(chosen.provider);
                     ai2Model = chosen.model;
                     modelLine = `\n🤖 Chat model set to: **${chosen.label}**`;
@@ -15850,7 +16162,7 @@ client.on('interactionCreate', async interaction => {
                 const exileHierErr = checkHierarchy(interaction.member, target);
                 if (exileHierErr) { await interaction.reply({ flags: MessageFlags.Ephemeral, content: exileHierErr }); return; }
                 await interaction.deferReply();
-                await performExile(target, interaction.guild, duration, reason, data);
+                await performExile(target, interaction.guild, duration, reason, data, interaction.user.id);
                 saveData(data);
                 await sendLog(interaction.guild, data, new EmbedBuilder()
                     .setTitle('⛓️ Manual Exile')
@@ -16082,6 +16394,7 @@ client.on('interactionCreate', async interaction => {
                     if (!data.bans) data.bans = {};
                     if (!data.bans[interaction.guild.id]) data.bans[interaction.guild.id] = {};
                     data.bans[interaction.guild.id][uid] = { reason: mbReason, by: interaction.user.id, bannedAt: Date.now(), hardBan: false };
+                    logModAction(data, interaction.guild.id, uid, { type: 'ban', reason: mbReason, by: interaction.user.id, extra: 'massban' });
                     banned++;
 
                     // Manual per-user purge when channel-scoped or count-constrained
@@ -16148,14 +16461,13 @@ client.on('interactionCreate', async interaction => {
             if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
             const caseIdRaw = interaction.options.getString('caseid').trim().toUpperCase().replace(/^C-?/, '');
             const caseNum   = parseInt(caseIdRaw, 10);
-            const cases     = getCases(data, interaction.guild.id);
+            const cases     = getGuildCases(interaction.guild.id, data);
             const caseKey   = Object.keys(cases).find(k => parseInt(k, 10) === caseNum || k === caseIdRaw);
             if (!caseKey || !cases[caseKey]) { await interaction.reply({ content: `❌ Case C-${caseIdRaw} not found.`, flags: MessageFlags.Ephemeral }); return; }
             const newReason = interaction.options.getString('reason');
             cases[caseKey].reason    = newReason;
             cases[caseKey].updatedBy = interaction.user.id;
             cases[caseKey].updatedAt = Date.now();
-            setCases(data, interaction.guild.id, cases);
             saveData(data);
             await interaction.reply({ content: `✅ Reason updated for case **C-${caseKey}**.`, flags: MessageFlags.Ephemeral });
             await sendLog(interaction.guild, data, new EmbedBuilder()
@@ -16262,18 +16574,26 @@ client.on('interactionCreate', async interaction => {
 
             // Map slash choice values → internal provider + model
             const providerMap = {
-                'groq':           { provider: 'groq',   model: 'llama-3.3-70b-versatile',            label: 'Groq — llama-3.3-70b-versatile' },
-                'groq-llama31':   { provider: 'groq',   model: 'llama-3.1-70b-versatile',            label: 'Groq — llama-3.1-70b-versatile' },
-                'groq-mixtral':   { provider: 'groq',   model: 'mixtral-8x7b-32768',                 label: 'Groq — mixtral-8x7b-32768' },
-                'groq-gpt-oss':   { provider: 'groq',   model: 'openai/gpt-oss-120b',                label: 'Groq — openai/gpt-oss-120b' },
-                'openai-gpt4o':   { provider: 'openai', model: 'gpt-4o',                             label: 'OpenAI — gpt-4o' },
-                'openai-gpt4omini':{ provider: 'openai',model: 'gpt-4o-mini',                        label: 'OpenAI — gpt-4o-mini' },
-                'claude':         { provider: 'claude', model: 'claude-haiku-4-5-20251001',          label: 'Claude — claude-haiku-4-5 (fast)' },
-                'claude-sonnet':  { provider: 'claude', model: 'claude-sonnet-4-6',                  label: 'Claude — claude-sonnet-4-6 (balanced)' },
-                'claude-opus':    { provider: 'claude', model: 'claude-opus-4-6',                    label: 'Claude — claude-opus-4-6 (powerful)' },
-                'gemini':         { provider: 'gemini', model: 'gemini-1.5-flash',                   label: 'Gemini — gemini-1.5-flash (fast)' },
-                'gemini-pro':     { provider: 'gemini', model: 'gemini-1.5-pro',                     label: 'Gemini — gemini-1.5-pro (powerful)' },
-                'gemini-flash2':  { provider: 'gemini', model: 'gemini-2.0-flash-exp',               label: 'Gemini — gemini-2.0-flash (latest)' },
+                'claude':            { provider: 'claude',   model: 'claude-haiku-4-5-20251001', label: 'Claude — Haiku 4.5 (fast)' },
+                'claude-sonnet':     { provider: 'claude',   model: 'claude-sonnet-5',            label: 'Claude — Sonnet 5 (balanced)' },
+                'claude-opus':       { provider: 'claude',   model: 'claude-opus-4-8',            label: 'Claude — Opus 4.8 (powerful)' },
+                'claude-fable':      { provider: 'claude',   model: 'claude-fable-5',              label: 'Claude — Fable 5 (frontier)' },
+                'openai-gpt4o':      { provider: 'openai',   model: 'gpt-4o',                     label: 'OpenAI — gpt-4o' },
+                'openai-gpt4omini':  { provider: 'openai',   model: 'gpt-4o-mini',                label: 'OpenAI — gpt-4o-mini' },
+                'openai-gpt55':      { provider: 'openai',   model: 'gpt-5.5',                    label: 'OpenAI — GPT-5.5 (flagship)' },
+                'gemini':            { provider: 'gemini',   model: 'gemini-2.5-flash',           label: 'Gemini — 2.5 Flash (fast)' },
+                'gemini-pro':        { provider: 'gemini',   model: 'gemini-2.5-pro',             label: 'Gemini — 2.5 Pro (powerful)' },
+                'gemini-flash2':     { provider: 'gemini',   model: 'gemini-3.5-flash',           label: 'Gemini — 3.5 Flash (latest)' },
+                'groq':              { provider: 'groq',     model: 'openai/gpt-oss-120b',        label: 'Groq — GPT-OSS 120B (recommended)' },
+                'groq-llama31':      { provider: 'groq',     model: 'llama-3.1-70b-versatile',    label: 'Groq — Llama 3.1 70B Versatile' },
+                'groq-mixtral':      { provider: 'groq',     model: 'mixtral-8x7b-32768',         label: 'Groq — Mixtral 8x7B' },
+                'groq-gpt-oss':      { provider: 'groq',     model: 'openai/gpt-oss-20b',         label: 'Groq — GPT-OSS 20B (fast, small)' },
+                'groq-qwen':         { provider: 'groq',     model: 'qwen/qwen3.6-27b',           label: 'Groq — Qwen3.6 27B' },
+                'mistral':           { provider: 'mistral',  model: 'mistral-large-latest',       label: 'Mistral — Large (flagship)' },
+                'mistral-small':     { provider: 'mistral',  model: 'mistral-small-latest',       label: 'Mistral — Small (fast)' },
+                'deepseek':          { provider: 'deepseek', model: 'deepseek-chat',              label: 'DeepSeek — Chat (V3)' },
+                'deepseek-reasoner': { provider: 'deepseek', model: 'deepseek-reasoner',          label: 'DeepSeek — Reasoner (R1)' },
+                'grok':              { provider: 'grok',     model: 'grok-4.3',                   label: 'xAI — Grok 4.3 (flagship)' },
             };
 
             const prev = ai2State.activeProvider || 'groq';
@@ -16282,24 +16602,29 @@ client.on('interactionCreate', async interaction => {
             if (!chosen) { await interaction.reply({ content: '❌ Unknown provider choice.', flags: MessageFlags.Ephemeral }); return; }
 
             ai2State.activeProvider = chosen.provider;
-            ai2State.claudeModel    = chosen.provider === 'claude'  ? chosen.model : ai2State.claudeModel;
-            ai2State.openaiModel    = chosen.provider === 'openai'  ? chosen.model : ai2State.openaiModel;
-            ai2State.groqModel      = chosen.provider === 'groq'    ? chosen.model : ai2State.groqModel;
-            ai2State.geminiModel    = chosen.provider === 'gemini'  ? chosen.model : ai2State.geminiModel;
+            ai2State.claudeModel    = chosen.provider === 'claude'   ? chosen.model : ai2State.claudeModel;
+            ai2State.openaiModel    = chosen.provider === 'openai'   ? chosen.model : ai2State.openaiModel;
+            ai2State.groqModel      = chosen.provider === 'groq'     ? chosen.model : ai2State.groqModel;
+            ai2State.geminiModel    = chosen.provider === 'gemini'   ? chosen.model : ai2State.geminiModel;
+            ai2State.mistralModel   = chosen.provider === 'mistral'  ? chosen.model : ai2State.mistralModel;
+            ai2State.deepseekModel  = chosen.provider === 'deepseek' ? chosen.model : ai2State.deepseekModel;
+            ai2State.grokModel      = chosen.provider === 'grok'     ? chosen.model : ai2State.grokModel;
             ai2InitClient(chosen.provider);
 
             // Override ai2Model with the exact chosen model
-            if (['groq','openai'].includes(chosen.provider)) ai2Model = chosen.model;
-            if (chosen.provider === 'claude')  ai2Model = chosen.model;
-            if (chosen.provider === 'gemini')  ai2Model = chosen.model;
+            ai2Model = chosen.model;
 
-            const keyCheck = chosen.provider === 'claude'
-                ? (ANTHROPIC_KEY ? '✅ ANTHROPIC_API_KEY found' : '❌ ANTHROPIC_API_KEY missing')
-                : chosen.provider === 'openai'
-                    ? ((process.env.OPENAI_API_KEY) ? '✅ OPENAI_API_KEY found' : '❌ OPENAI_API_KEY missing')
-                    : chosen.provider === 'gemini'
-                        ? (GEMINI_API_KEY ? '✅ GEMINI_API_KEY found' : '❌ GEMINI_API_KEY missing')
-                        : ((process.env.GROQ_API_KEY) ? '✅ GROQ_API_KEY found' : '❌ GROQ_API_KEY missing');
+            const keyCheckMap = {
+                claude:   ['ANTHROPIC_API_KEY', ANTHROPIC_KEY],
+                openai:   ['OPENAI_API_KEY',    process.env.OPENAI_API_KEY],
+                gemini:   ['GEMINI_API_KEY',    GEMINI_API_KEY],
+                groq:     ['GROQ_API_KEY',      process.env.GROQ_API_KEY],
+                mistral:  ['MISTRAL_API_KEY',   process.env.MISTRAL_API_KEY],
+                deepseek: ['DEEPSEEK_API_KEY',  process.env.DEEPSEEK_API_KEY],
+                grok:     ['XAI_API_KEY',       process.env.XAI_API_KEY],
+            };
+            const [keyName, keyVal] = keyCheckMap[chosen.provider] || ['GROQ_API_KEY', process.env.GROQ_API_KEY];
+            const keyCheck = keyVal ? `✅ ${keyName} found` : `❌ ${keyName} missing (falling back to Groq if unset)`;
 
             await interaction.reply({ embeds: [new EmbedBuilder()
                 .setTitle('🤖 AI Chat Model Updated')
@@ -16720,6 +17045,68 @@ client.on('interactionCreate', async interaction => {
             } catch(e) {
                 await interaction.reply({ content: `❌ Unlock failed: ${e.message}`, flags: MessageFlags.Ephemeral });
             }
+            break;
+        }
+
+        // ── /lockdown — server-wide lock/unlock (all text channels at once) ─────
+        case 'lockdown': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ This command is restricted to admins only.', flags: MessageFlags.Ephemeral }); return; }
+            {
+                const _ldPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+                if (_ldPermErr) { await interaction.reply({ content: _ldPermErr, flags: MessageFlags.Ephemeral }); return; }
+            }
+            const ldSub = interaction.options.getSubcommand();
+            await interaction.deferReply();
+            if (ldSub === 'lock') {
+                if (gs.manualLockdownActive) {
+                    await interaction.editReply({ content: '⚠️ A server-wide lockdown is already active. Use `/lockdown unlock` first if you want to re-engage it.' });
+                    return;
+                }
+                const reason = interaction.options.getString('reason') || 'Server-wide lockdown';
+                const result = await engageLockdown(interaction.guild, gs, data, reason, interaction.user.id);
+                await interaction.editReply({ embeds: [new EmbedBuilder()
+                    .setTitle('🔒 Server-Wide Lockdown Engaged')
+                    .setColor(0xFF0000)
+                    .setDescription('Every text channel is now locked — only admins can send messages anywhere on the server.')
+                    .addFields(
+                        { name: 'Channels Locked', value: String(result.locked), inline: true },
+                        { name: 'Already Locked',  value: String(result.alreadyLocked), inline: true },
+                        { name: 'Failed',          value: String(result.failed.length), inline: true },
+                        { name: 'Reason',          value: reason, inline: false },
+                    ).setFooter({ text: 'Use /lockdown unlock to lift it.' }).setTimestamp()] });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🔒 Server-Wide Lockdown Engaged', [`Channels locked: **${result.locked}** (already locked: ${result.alreadyLocked})`, `Reason: ${reason}`]);
+            } else {
+                if (!gs.manualLockdownActive) {
+                    await interaction.editReply({ content: 'ℹ️ There is no active server-wide lockdown to lift.' });
+                    return;
+                }
+                const reason = interaction.options.getString('reason') || 'Lockdown lifted';
+                const result = await disengageLockdown(interaction.guild, gs, data, reason, interaction.user.id);
+                await interaction.editReply({ embeds: [new EmbedBuilder()
+                    .setTitle('🔓 Server-Wide Lockdown Lifted')
+                    .setColor(0x2ECC71)
+                    .setDescription('Channels this lockdown had locked are back to normal. Channels that were already locked beforehand were left untouched.')
+                    .addFields(
+                        { name: 'Channels Unlocked', value: String(result.unlocked), inline: true },
+                        { name: 'Failed',            value: String(result.failed.length), inline: true },
+                        { name: 'Reason',            value: reason, inline: false },
+                    ).setTimestamp()] });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🔓 Server-Wide Lockdown Lifted', [`Channels unlocked: **${result.unlocked}**`, `Reason: ${reason}`]);
+            }
+            break;
+        }
+
+        // ── /info — full user lookup ─────────────────────────────────────────────
+        case 'info': {
+            await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+            let infoUser = interaction.options.getUser('user');
+            const infoIdArg = interaction.options.getString('id');
+            if (!infoUser && infoIdArg) infoUser = await client.users.fetch(infoIdArg.replace(/\D/g, '')).catch(() => null);
+            if (!infoUser) infoUser = interaction.user;
+            if (!infoUser) { await interaction.editReply({ content: '❌ Could not find that user.' }); return; }
+            const viewerIsStaff = isAdmin || isMod;
+            const infoEmbed = await buildUserInfoEmbed(interaction.guild, data, gs, infoUser, viewerIsStaff, interaction.user.id);
+            await interaction.editReply({ embeds: [infoEmbed] });
             break;
         }
 
@@ -17576,6 +17963,8 @@ client.on('interactionCreate', async interaction => {
                 .setTimestamp();
             await interaction.editReply({ embeds: [replyEmbed] });
 
+            logModAction(data, guildId, user.id, { type: 'timeout', reason, by: interaction.user.id, extra: durStr });
+            saveData(data);
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('🔇 Manual Timeout')
                 .setColor(0xFF8C00)
@@ -17721,6 +18110,8 @@ client.on('interactionCreate', async interaction => {
                     (kickChannelTarget ? ` in <#${kickChannelTarget.id}>` : ' (all channels)');
             }
 
+            logModAction(data, guildId, user.id, { type: 'kick', reason, by: interaction.user.id });
+            saveData(data);
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('👢 Manual Kick')
                 .setColor(0xFF6600)
@@ -17853,6 +18244,8 @@ client.on('interactionCreate', async interaction => {
             }
 
             let durStr = durMs ? (durMins < 1440 ? `${Math.round(durMins/60)}h` : `${Math.round(durMins/1440)}d`) : 'Permanent';
+            logModAction(data, guildId, user.id, { type: 'ban', reason, by: interaction.user.id, extra: durStr });
+            saveData(data);
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('🔨 Manual Ban')
                 .setColor(0xFF0000)
@@ -18003,6 +18396,8 @@ client.on('interactionCreate', async interaction => {
                 hbanDelStr = `Last ${formatDeleteDuration(hbanPlan.nativeSeconds)} (Discord-native)`;
             }
 
+            logModAction(data, guildId, user.id, { type: 'hardban', reason, by: interaction.user.id });
+            saveData(data);
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('🔒 Hardban (Permanent)')
                 .setColor(0x800000)
@@ -18112,6 +18507,8 @@ client.on('interactionCreate', async interaction => {
                 sbanDelStr = `Last ${formatDeleteDuration(sbanPlan.nativeSeconds)} (Discord-native)`;
             }
 
+            logModAction(data, guildId, user.id, { type: 'softban', reason, by: interaction.user.id });
+            saveData(data);
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('🧹 Softban')
                 .setColor(0xFFA500)
@@ -21565,7 +21962,7 @@ function scheduleLongTimeout(botClient, guildId, userId, data) {
     _activeTimeoutTimers.set(key, handle);
 }
 
-async function performExile(userOrMember, guild, minutes, reason, data) {
+async function performExile(userOrMember, guild, minutes, reason, data, actorId = null) {
     let member = userOrMember.roles
         ? userOrMember
         : (guild.members.cache.get(userOrMember.id) || await guild.members.fetch(userOrMember.id).catch(()=>null));
@@ -21588,6 +21985,7 @@ async function performExile(userOrMember, guild, minutes, reason, data) {
     exiledAt:    Date.now(),
     reason,
 };
+    logModAction(data, guild.id, member.id, { type: 'exile', reason, by: actorId, extra: `${minutes}m` });
     saveData(data);
 
     const exRole = guild.roles.cache.get(gs.exiledRoleId);
@@ -21677,8 +22075,14 @@ async function performUnexile(member, guild, data) {
 // ══════════════════════════════════════════════════════════
 async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     const guildPrefix = (gs?.commandPrefix) || '!';
-    if (!message.content.startsWith(guildPrefix)) return;
-    const args = message.content.slice(guildPrefix.length).trim().split(/\s+/);
+    const rawContent = message.content;
+    // "?info" always works as a fixed trigger for the user-info lookup, no matter
+    // what the guild's configurable prefix is set to — in addition to "<prefix>info".
+    const fixedInfoTrigger = !rawContent.startsWith(guildPrefix) && /^\?info\b/i.test(rawContent);
+    if (!rawContent.startsWith(guildPrefix) && !fixedInfoTrigger) return;
+    const args = fixedInfoTrigger
+        ? rawContent.slice(1).trim().split(/\s+/)
+        : rawContent.slice(guildPrefix.length).trim().split(/\s+/);
     const cmd  = args.shift().toLowerCase();
     logCmdStats('message', '!' + cmd);
     const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
@@ -21751,40 +22155,41 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     }
     if (ai2State.enabled && cmd === 'aimodel' && ai2OwnerOk) {
         const providerArg = (args[0] || '').toLowerCase();
-        const modelArg    = (args[1] || '').toLowerCase();
+        const modelArg    = args[1] || '';
         const validProviders = {
-            groq:   'Groq (llama-3.3-70b-versatile)',
-            openai: 'OpenAI (gpt-4o-mini)',
-            claude: `Claude (${ai2State.claudeModel})`,
+            groq:     `Groq (${ai2State.groqModel})`,
+            openai:   `OpenAI (${ai2State.openaiModel})`,
+            claude:   `Claude (${ai2State.claudeModel})`,
+            gemini:   `Gemini (${ai2State.geminiModel})`,
+            mistral:  `Mistral (${ai2State.mistralModel})`,
+            deepseek: `DeepSeek (${ai2State.deepseekModel})`,
+            grok:     `xAI Grok (${ai2State.grokModel})`,
+        };
+        const modelFieldMap = {
+            claude: 'claudeModel', openai: 'openaiModel', groq: 'groqModel', gemini: 'geminiModel',
+            mistral: 'mistralModel', deepseek: 'deepseekModel', grok: 'grokModel',
         };
         if (!providerArg) {
             const cur = ai2State.activeProvider || 'groq';
             await message.channel.send(
                 `🤖 Current AI provider: **${validProviders[cur] || cur}** | Model: \`${ai2Model || 'none'}\`` +
-                `\nUse \`!aimodel groq\`, \`!aimodel openai\`, or \`!aimodel claude\` to switch.` +
-                `\nFor Claude, optionally specify model: \`!aimodel claude claude-sonnet-4-6\``
+                `\nUse \`!aimodel <${Object.keys(validProviders).join('|')}> [model]\` to switch.` +
+                `\nExample: \`!aimodel claude claude-opus-4-8\``
             );
             return;
         }
         if (!validProviders[providerArg]) {
-            await message.channel.send(`❌ Unknown provider. Use: \`groq\` | \`openai\` | \`claude\``);
+            await message.channel.send(`❌ Unknown provider. Use: ${Object.keys(validProviders).map(p => `\`${p}\``).join(' | ')}`);
             return;
         }
-        if (providerArg === 'claude' && modelArg) {
-            const allowed = ['claude-haiku-4-5-20251001','claude-sonnet-4-6','claude-opus-4-6'];
-            if (allowed.includes(modelArg)) {
-                ai2State.claudeModel = modelArg;
-            } else {
-                await message.channel.send(`❌ Unknown Claude model. Valid: ${allowed.join(' | ')}`);
-                return;
-            }
+        if (modelArg && modelFieldMap[providerArg]) {
+            ai2State[modelFieldMap[providerArg]] = modelArg;
         }
         const prev = ai2State.activeProvider || 'groq';
+        const prevLabel = validProviders[prev] || prev;
         ai2State.activeProvider = providerArg;
         ai2InitClient(providerArg);
-        if (providerArg !== 'claude') {} else { ai2Model = ai2State.claudeModel; }
-        validProviders.claude = `Claude (${ai2State.claudeModel})`;
-        await message.channel.send(`✅ AI provider switched from **${validProviders[prev] || prev}** → **${validProviders[providerArg]}**\nModel: \`${ai2Model || 'none (no API key?)'}\``);
+        await message.channel.send(`✅ AI provider switched from **${prevLabel}** → **${validProviders[providerArg]}**\nModel: \`${ai2Model || 'none (no API key?)'}\``);
         return;
     }
     // !bloxmode [on|off] — toggle Blox Fruits-specific system prompt
@@ -21990,7 +22395,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const duration = (durArg ? parseDuration(durArg) : null) ?? EXILE_DURATION_MINS;
         const reason   = args.slice(1).filter(a => a !== durArg).join(' ') || 'Manual admin action';
         const fd = loadData();
-        await performExile(target, message.guild, duration, reason, fd);
+        await performExile(target, message.guild, duration, reason, fd, message.author.id);
         saveData(fd);
         await message.channel.send({ embeds: [modEmbed(`🔨 Exiled ${target} (${target.id}) for **${duration}m**. Reason: ${reason}`)] });
     }
@@ -22731,6 +23136,47 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
     }
 
     // !setgameshub [channelId]
+    // !lockdown [lock|unlock|on|off] [reason...] — locks/unlocks EVERY text channel
+    else if (cmd === 'lockdown' && isAdmin) {
+        {
+            const _ldPermErr = checkModPermission(message.member, PermissionFlagsBits.ManageChannels, 'Manage Channels');
+            if (_ldPermErr) return message.channel.send({ embeds: [modEmbed(_ldPermErr)] });
+        }
+        const action0 = (args[0] || '').toLowerCase();
+        const isUnlockAction = ['unlock', 'off', 'end', 'lift'].includes(action0);
+        const isLockAction   = ['lock', 'on', 'engage'].includes(action0);
+        const reasonStart = (isUnlockAction || isLockAction) ? 1 : 0;
+        const reason = args.slice(reasonStart).join(' ') || (isUnlockAction ? 'Lockdown lifted' : 'Server-wide lockdown');
+
+        if (isUnlockAction) {
+            if (!gs.manualLockdownActive) return message.channel.send({ embeds: [modEmbed('ℹ️ There is no active server-wide lockdown to lift.')] });
+            const result = await disengageLockdown(message.guild, gs, data, reason, message.author.id);
+            await message.channel.send({ embeds: [modEmbed(`🔓 Lockdown lifted. Unlocked **${result.unlocked}** channel(s). Reason: ${reason}`, 0x2ECC71)] });
+            await sendConfigLog(message.guild, data, message.author.id, '🔓 Server-Wide Lockdown Lifted', [`Channels unlocked: **${result.unlocked}**`, `Reason: ${reason}`]);
+        } else {
+            if (gs.manualLockdownActive) return message.channel.send({ embeds: [modEmbed('⚠️ A server-wide lockdown is already active. Use `!lockdown unlock` first if you want to re-engage it.')] });
+            const result = await engageLockdown(message.guild, gs, data, reason, message.author.id);
+            await message.channel.send({ embeds: [modEmbed(`🔒 Server-wide lockdown engaged. Locked **${result.locked}** channel(s) (${result.alreadyLocked} were already locked). Only admins can speak. Reason: ${reason}`, 0xFF0000)] });
+            await sendConfigLog(message.guild, data, message.author.id, '🔒 Server-Wide Lockdown Engaged', [`Channels locked: **${result.locked}** (already locked: ${result.alreadyLocked})`, `Reason: ${reason}`]);
+        }
+    }
+    // !info [@user|id] — also reachable as "?info" regardless of the guild's configured prefix (see top of this function)
+    else if (cmd === 'info') {
+        const token = args[0] || null;
+        const mention = token && token.match(/^<@!?(\d+)>$/);
+        const rawId = mention ? mention[1] : (token && token.match(/^\d{15,20}$/) ? token : null);
+        let infoUser = null;
+        if (rawId) {
+            const member = message.guild.members.cache.get(rawId) || await message.guild.members.fetch(rawId).catch(() => null);
+            infoUser = member ? member.user : await client.users.fetch(rawId).catch(() => null);
+        } else if (message.mentions.users?.first()) {
+            infoUser = message.mentions.users.first();
+        }
+        if (!infoUser) infoUser = message.author;
+        const viewerIsStaff = isAdmin || isMod;
+        const infoEmbed = await buildUserInfoEmbed(message.guild, data, gs, infoUser, viewerIsStaff, message.author.id);
+        await message.channel.send({ embeds: [infoEmbed] });
+    }
     else if (cmd === 'setgameshub' && isAdmin) {
         const ch = await resolveChannel(args[0]);
         if (!ch) return message.channel.send({ embeds: [modEmbed('❌ Provide a channel mention or channel ID.')] });
@@ -23528,7 +23974,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const caseIdRaw = args[0]?.toUpperCase().replace(/^C-?/, '');
         const caseNum   = parseInt(caseIdRaw, 10);
         if (!caseNum) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!reason <caseId> <new reason>` e.g. `!reason C-42 Corrected reason`')] });
-        const cases   = getCases(data, message.guild.id);
+        const cases   = getGuildCases(message.guild.id, data);
         const caseKey = Object.keys(cases).find(k => parseInt(k, 10) === caseNum);
         if (!caseKey || !cases[caseKey]) return message.channel.send({ embeds: [modEmbed(`❌ Case C-${caseIdRaw} not found.`)] });
         const newReason = args.slice(1).join(' ');
@@ -23536,7 +23982,6 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         cases[caseKey].reason    = newReason;
         cases[caseKey].updatedBy = message.author.id;
         cases[caseKey].updatedAt = Date.now();
-        setCases(data, message.guild.id, cases);
         saveData(data);
         return message.channel.send({ embeds: [modEmbed(`✅ Reason updated for case **C-${caseKey}**.`)] });
     }
