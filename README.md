@@ -84,8 +84,8 @@ chmod +x setup.sh
 Fill out your shit which it asks you to do, and go mad!
 Occasionally also upgrade your system pip in case stuff breaks and if it's serious jst ask AI to set up your stuff 🥀
 
-Have a lovely moderation bot hosting, dm me at my discord user: 1427299411049840640 for bugs that you found, and with that have a lovely day!
-Send me friend request to my discord: https://www.discord.com/users/1427299411049840640 for discussing, constructive feedback is very much welcomed!
+Have a lovely moderation bot hosting, dm me at my discord user: 1350576056393797743 for bugs that you found, and with that have a lovely day!
+Send me friend request to my discord: https://www.discord.com/users/1350576056393797743 for discussing, constructive feedback is very much welcomed!
 
 ## Credit
 
