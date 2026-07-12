@@ -304,6 +304,9 @@ print -P "   %F{white}  core     → openai-python       oracle   → anthropic-
 print -P "   %F{white}  stinger  → roastedbyai         velocity → groq-python%f"
 print -P "   %F{white}  wolfram  → WolframClientForPython%f"
 print -P "   %F{white}  genesis  → python-genai%f"
+print -P "   %F{white}  mistress → client-python (Mistral AI)%f"
+print -P "   %F{white}  paradox  → xai-sdk-python (xAI Grok)%f"
+print -P "   %F{white}  (DeepSeek has no dedicated SDK repo — it's OpenAI-SDK-compatible; nothing to clone)%f"
 print -n "\n   Clone now? [y/N] → "
 read -r _DLAI </dev/tty
 
@@ -322,6 +325,11 @@ if [[ "${_DLAI:l}" == "y" ]]; then
             velocity "https://github.com/groq/groq-python"                        # [GH] Groq Python SDK
             wolfram  "https://github.com/WolframResearch/WolframClientForPython"  # [GH] Wolfram Client for Python
             genesis  "https://github.com/googleapis/python-genai"                 # [GH] Google Gemini Python SDK
+            mistress "https://github.com/mistralai/client-python"                 # [GH] Mistral AI Python SDK
+            paradox  "https://github.com/xai-org/xai-sdk-python"                  # [GH] xAI (Grok) Python SDK
+            # DeepSeek intentionally omitted: no official SDK repo exists — their
+            # API is OpenAI-SDK-compatible (see api-docs.deepseek.com), so the
+            # `core` (openai-python) clone above already covers it.
         )
 
         _AI_CLONE_OK=0
