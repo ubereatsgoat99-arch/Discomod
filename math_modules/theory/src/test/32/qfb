@@ -20,6 +20,10 @@ Qfb(1, 1, 6)
 [Qfb(1, 1, 6), [22479, 76177; -39508, -133885]]
 Qfb(749, 2207, -1712)
 [Qfb(749, 2207, -1712), [-1, 3; -2, 5]]
+1
+1490647441829131457
+Qfb(1, 3, -3)
+Qfb(1, 3, -3)
 [Qfb(4, 3, -3), [127327, -416128; -148995, 486943]]
 Qfb(4, 3, -3)
 4
@@ -92,4 +96,4 @@ test qfbredsl2, large coefs
   ***   at top-level: ...18,-18);g=Qfb(11,52,-41);qfbcomp([f,1.],g)
   ***                                             ^-----------------
   *** qfbcomp: sorry, Shanks's distance in general composition is not yet implemented.
-Total time spent: 126
+Total time spent: 139

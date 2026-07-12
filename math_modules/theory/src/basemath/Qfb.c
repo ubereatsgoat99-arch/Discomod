@@ -914,28 +914,25 @@ qfbredsl2(GEN q, GEN isD)
 static GEN
 qfr_red_i(GEN Q, long flag, GEN isqrtD, GEN sqrtD)
 {
-  if (typ(Q) != t_QFB || !qfi_red_fast(Q))
-    return qfr_red_basecase_i(Q, flag, isqrtD, sqrtD);
-  else
+  if (typ(Q) == t_QFB && !(flag & qf_STEP) && qfi_red_fast(Q))
   {
-    GEN a = gel(Q,1), b = gel(Q,2), c = gel(Q,3), d = gel(Q,4);
-    GEN Qr, W, U, t = NULL;
+    GEN U, a = gel(Q,1), b = gel(Q,2), c = gel(Q,3), d = gel(Q,4);
     long sa = signe(a);
     if (sa < 0) { a = negi(a); b = negi(b); c = negi(c); }
     if (signe(c) < 0)
     {
-      GEN at;
+      GEN at, t;
+      if (!isqrtD) isqrtD = sqrti(d);
       t  = addiu(truedivii(subii(isqrtD,b),shifti(a,1)),1);
       at = mulii(a,t);
       c = addii(subii(c, mulii(b, t)), mulii(at, t));
       b = subii(b, shifti(at,1));
     }
-    Qr = pqfbred_rec(mkqfb(a, absi_shallow(b), c, d), 0, &U);
+    Q = pqfbred_rec(mkqfb(a, absi_shallow(b), c, d), 0, &U);
     if (sa < 0)
-      Qr = mkqfb(negi(gel(Qr,1)), negi(gel(Qr,2)), negi(gel(Qr,3)), gel(Qr,4));
-    W = qfr_red_basecase_i(Qr, flag, isqrtD, sqrtD);
-    return gel(W,1);
+      Q = mkqfb(negi(gel(Q,1)), negi(gel(Q,2)), negi(gel(Q,3)), gel(Q,4));
   }
+  return qfr_red_basecase_i(Q, flag, isqrtD, sqrtD);
 }
 
 static GEN

@@ -895,7 +895,7 @@ void
 varstate_restore(struct pari_varstate *s)
 {
   long i;
-  for (i = nvar; i >= s->nvar; i--)
+  for (i = nvar-1; i >= s->nvar; i--)
   {
     varentries_unset(i);
     varpriority[i] = -i;

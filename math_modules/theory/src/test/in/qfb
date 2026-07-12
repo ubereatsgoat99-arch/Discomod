@@ -25,6 +25,13 @@ qfbredsl2(q)
 q=Qfb(33947,-39899,11650);
 qfbred(q)
 qfbredsl2(q)
+Q=Qfb(3^20000+1,3^10000+1,-3^2000+5);
+qfbred(Q) == qfbred(qfbred(Q))
+fingerprint(qfbred(Q,1))
+a=random(2^20000);b=random(2^20000);[u,v,d]=gcdext(a,b);
+Q=qfeval(Qfb(1,1,-5),[a/d,b/d;-v,u]);
+qfbred(Q)
+qfbred(qfbred(Q,1))
 q=Qfb(1099511627776,1879224363605,802966544317);
 [qr,U]=qfbredsl2(q)
 qfeval(q,U)

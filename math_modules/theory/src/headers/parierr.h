@@ -36,7 +36,7 @@ enum err_list {
 
   e_FILEDESC,
 /* NO ERROR */
-  e_NONE
+  e_NONE, e_STOP
 };
 
 enum { warner, warnprec, warnfile, warnmem, warnuser, warnstack, warnstackthread };

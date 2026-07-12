@@ -1,0 +1,6 @@
+pyproject.toml
+examples/*
+/utils/*
+src/mistralai/extra/*
+pylintrc
+scripts/prepare_readme.py

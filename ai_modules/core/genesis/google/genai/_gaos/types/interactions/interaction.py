@@ -18,9 +18,11 @@
 
 from __future__ import annotations
 from .. import BaseModel, UNSET_SENTINEL, UnrecognizedStr
+from ...utils import serialize_int, validate_int
 from ...utils.unions import parse_open_union
 from .agentoption import AgentOption
 from .audiocontent import AudioContent, AudioContentParam
+from .codemenderagentconfig import CodeMenderAgentConfig, CodeMenderAgentConfigParam
 from .deepresearchagentconfig import (
     DeepResearchAgentConfig,
     DeepResearchAgentConfigParam,
@@ -33,6 +35,7 @@ from .interactionsinput import InteractionsInput, InteractionsInputParam
 from .model import Model
 from .responseformat import ResponseFormat, ResponseFormatParam
 from .responsemodality import ResponseModality
+from .safetysetting import SafetySetting, SafetySettingParam
 from .servicetier import ServiceTier
 from .step import Step, StepParam
 from .tool import Tool, ToolParam
@@ -42,8 +45,9 @@ from .webhookconfig import WebhookConfig, WebhookConfigParam
 from functools import partial
 import pydantic
 from pydantic import ConfigDict, model_serializer, model_validator
+from pydantic.functional_serializers import PlainSerializer
 from pydantic.functional_validators import BeforeValidator
-from typing import Any, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 from typing_extensions import Annotated, NotRequired, TypeAliasType, TypedDict
 
 
@@ -89,7 +93,11 @@ r"""The environment configuration for the interaction. Can be an object specifyi
 
 InteractionAgentConfigTypedDict = TypeAliasType(
     "InteractionAgentConfigTypedDict",
-    Union[DynamicAgentConfigParam, DeepResearchAgentConfigParam],
+    Union[
+        DynamicAgentConfigParam,
+        DeepResearchAgentConfigParam,
+        CodeMenderAgentConfigParam,
+    ],
 )
 r"""Configuration parameters for the agent interaction."""
 
@@ -107,11 +115,17 @@ class UnknownInteractionAgentConfig(BaseModel):
 _INTERACTION_AGENT_CONFIG_VARIANTS: dict[str, Any] = {
     "dynamic": DynamicAgentConfig,
     "deep-research": DeepResearchAgentConfig,
+    "code-mender": CodeMenderAgentConfig,
 }
 
 
 InteractionAgentConfig = Annotated[
-    Union[DynamicAgentConfig, DeepResearchAgentConfig, UnknownInteractionAgentConfig],
+    Union[
+        DynamicAgentConfig,
+        DeepResearchAgentConfig,
+        CodeMenderAgentConfig,
+        UnknownInteractionAgentConfig,
+    ],
     BeforeValidator(
         partial(
             parse_open_union,
@@ -181,6 +195,12 @@ class InteractionTypedDict(TypedDict):
     """
     agent_config: NotRequired[InteractionAgentConfigTypedDict]
     r"""Configuration parameters for the agent interaction."""
+    max_total_tokens: NotRequired[int]
+    r"""Max total tokens for the agent run."""
+    safety_settings: NotRequired[List[SafetySettingParam]]
+    r"""Safety settings for the interaction."""
+    labels: NotRequired[Dict[str, str]]
+    r"""The labels with user-defined metadata for the request."""
     input: NotRequired[InteractionsInputParam]
     r"""The input for the interaction."""
     output_text: NotRequired[str]
@@ -277,6 +297,19 @@ class Interaction(BaseModel):
     agent_config: Optional[InteractionAgentConfig] = None
     r"""Configuration parameters for the agent interaction."""
 
+    max_total_tokens: Annotated[
+        Optional[int],
+        BeforeValidator(validate_int),
+        PlainSerializer(serialize_int(True)),
+    ] = None
+    r"""Max total tokens for the agent run."""
+
+    safety_settings: Optional[List[SafetySetting]] = None
+    r"""Safety settings for the interaction."""
+
+    labels: Optional[Dict[str, str]] = None
+    r"""The labels with user-defined metadata for the request."""
+
     input: Optional[InteractionsInput] = None
     r"""The input for the interaction."""
 
@@ -319,6 +352,9 @@ class Interaction(BaseModel):
                 "generation_config",
                 "cached_content",
                 "agent_config",
+                "max_total_tokens",
+                "safety_settings",
+                "labels",
                 "input",
                 "output_text",
                 "output_image",

@@ -1,0 +1,761 @@
+
+
+## 2024-08-07 14:25:13
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.356.0 (2.388.1) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.0.0] .
+### Releases
+- [PyPI v1.0.0] https://pypi.org/project/mistralai/1.0.0 - .
+
+## 2024-08-08 18:12:16
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.357.4 (2.390.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.0.1] .
+### Releases
+- [PyPI v1.0.1] https://pypi.org/project/mistralai/1.0.1 - .
+
+## 2024-08-20 08:36:28
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.376.0 (2.402.5) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.0.2] .
+### Releases
+- [PyPI v1.0.2] https://pypi.org/project/mistralai/1.0.2 - .
+
+## 2024-08-29 09:09:05
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.382.0 (2.404.11) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.0.3] .
+### Releases
+- [PyPI v1.0.3] https://pypi.org/project/mistralai/1.0.3 - .
+
+## 2024-09-13 16:21:24
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.396.7 (2.415.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.1.0] .
+### Releases
+- [PyPI v1.1.0] https://pypi.org/project/mistralai/1.1.0 - .
+
+## 2024-11-07 19:52:56
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.434.3 (2.452.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.2.0] .
+### Releases
+- [PyPI v1.2.0] https://pypi.org/project/mistralai/1.2.0 - .
+
+## 2024-11-08 13:41:24
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.434.7 (2.452.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.2.1] .
+### Releases
+- [PyPI v1.2.1] https://pypi.org/project/mistralai/1.2.1 - .
+
+## 2024-11-12 18:04:16
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.438.1 (2.457.2) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.2.2] .
+### Releases
+- [PyPI v1.2.2] https://pypi.org/project/mistralai/1.2.2 - .
+
+## 2024-11-15 18:37:23
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.440.1 (2.460.1) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.2.3] .
+### Releases
+- [PyPI v1.2.3] https://pypi.org/project/mistralai/1.2.3 - .
+
+## 2024-12-02 14:25:56
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.440.1 (2.460.1) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.2.4] .
+### Releases
+- [PyPI v1.2.4] https://pypi.org/project/mistralai/1.2.4 - .
+
+## 2024-12-04 15:14:08
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.451.1 (2.470.1) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.2.5] .
+### Releases
+- [PyPI v1.2.5] https://pypi.org/project/mistralai/1.2.5 - .
+
+## 2025-01-06 09:57:47
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.462.2 (2.486.1) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.2.6] .
+### Releases
+- [PyPI v1.2.6] https://pypi.org/project/mistralai/1.2.6 - .
+
+## 2025-01-14 09:35:05
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.468.5 (2.493.11) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.3.0] .
+### Releases
+- [PyPI v1.3.0] https://pypi.org/project/mistralai/1.3.0 - .
+
+## 2025-01-15 10:44:07
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.462.2 (2.486.1) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.3.1] .
+### Releases
+- [PyPI v1.3.1] https://pypi.org/project/mistralai/1.3.1 - .
+
+## 2025-01-21 11:09:53
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.469.11 (2.493.32) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.4.0] .
+### Releases
+- [PyPI v1.4.0] https://pypi.org/project/mistralai/1.4.0 - .
+
+## 2025-01-27 13:57:39
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.476.2 (2.495.1) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.5.0] .
+### Releases
+- [PyPI v1.5.0] https://pypi.org/project/mistralai/1.5.0 - .
+
+## 2025-03-06 16:38:57
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.477.0 (2.497.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.5.1] .
+### Releases
+- [PyPI v1.5.1] https://pypi.org/project/mistralai/1.5.1 - .
+
+## 2025-03-19 18:09:29
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.477.0 (2.497.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.5.2] .
+### Releases
+- [PyPI v1.5.2] https://pypi.org/project/mistralai/1.5.2 - .
+
+## 2025-03-20 10:34:02
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.517.3 (2.548.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.6.0] .
+### Releases
+- [PyPI v1.6.0] https://pypi.org/project/mistralai/1.6.0 - .
+
+## 2025-04-16 18:35:19
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.517.3 (2.548.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.7.0] .
+### Releases
+- [PyPI v1.7.0] https://pypi.org/project/mistralai/1.7.0 - .
+
+## 2025-05-22 15:03:08
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.517.3 (2.548.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.7.1] .
+### Releases
+- [PyPI v1.7.1] https://pypi.org/project/mistralai/1.7.1 - .
+
+## 2025-05-26 11:05:08
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.517.3 (2.548.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.8.0] .
+### Releases
+- [PyPI v1.8.0] https://pypi.org/project/mistralai/1.8.0 - .
+
+## 2025-05-28 15:38:22
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.517.3 (2.548.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.8.1] .
+### Releases
+- [PyPI v1.8.1] https://pypi.org/project/mistralai/1.8.1 - .
+
+## 2025-06-10 16:42:28
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.517.3 (2.548.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.8.2] .
+### Releases
+- [PyPI v1.8.2] https://pypi.org/project/mistralai/1.8.2 - .
+
+## 2025-06-30 17:56:20
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.568.2 (2.634.2) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.9.1] .
+### Releases
+- [PyPI v1.9.1] https://pypi.org/project/mistralai/1.9.1 - .
+
+## 2025-07-10 12:22:52
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.568.2 (2.634.2) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.9.2] .
+### Releases
+- [PyPI v1.9.2] https://pypi.org/project/mistralai/1.9.2 - .
+
+## 2025-07-23 17:06:32
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.568.2 (2.634.2) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.9.3] .
+### Releases
+- [PyPI v1.9.3] https://pypi.org/project/mistralai/1.9.3 - .
+
+## 2025-08-13 07:21:11
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.568.2 (2.634.2) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.9.6] .
+### Releases
+- [PyPI v1.9.6] https://pypi.org/project/mistralai/1.9.6 - .
+
+## 2025-08-20 08:28:00
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.568.2 (2.634.2) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.9.7] .
+### Releases
+- [PyPI v1.9.7] https://pypi.org/project/mistralai/1.9.7 - .
+
+## 2025-08-25 14:54:06
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.568.2 (2.634.2) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.9.8] .
+### Releases
+- [PyPI v1.9.8] https://pypi.org/project/mistralai/1.9.8 - .
+
+## 2025-08-26 17:34:05
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.568.2 (2.634.2) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.9.9] .
+### Releases
+- [PyPI v1.9.9] https://pypi.org/project/mistralai/1.9.9 - .
+
+## 2025-09-02 07:02:26
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.568.2 (2.634.2) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.9.10] .
+### Releases
+- [PyPI v1.9.10] https://pypi.org/project/mistralai/1.9.10 - .
+
+## 2025-10-02 15:48:02
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.606.10 (2.687.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.9.11] .
+### Releases
+- [PyPI v1.9.11] https://pypi.org/project/mistralai/1.9.11 - .
+
+## 2025-12-16 19:44:09
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.606.10 (2.687.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.10.0] .
+### Releases
+- [PyPI v1.10.0] https://pypi.org/project/mistralai/1.10.0 - .
+
+## 2026-01-15 18:39:22
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.606.10 (2.687.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.10.1] .
+### Releases
+- [PyPI v1.10.1] https://pypi.org/project/mistralai/1.10.1 - .
+
+## 2026-01-22 11:16:25
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.685.0 (2.794.1) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.11.1] .
+### Releases
+- [PyPI v1.11.1] https://pypi.org/project/mistralai/1.11.1 - .
+
+## 2026-02-01 21:20:42
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.685.0 (2.794.1) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v1.12.0] .
+### Releases
+- [PyPI v1.12.0] https://pypi.org/project/mistralai/1.12.0 - .
+
+## 2026-02-25 17:32:05
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.729.0 (2.841.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.0.0b1] .
+### Releases
+- [PyPI v2.0.0b1] https://pypi.org/project/mistralai/2.0.0b1 - .
+
+## 2026-02-27 15:12:59
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.729.0 (2.841.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.0.0rc1] .
+### Releases
+- [PyPI v2.0.0rc1] https://pypi.org/project/mistralai/2.0.0rc1 - .
+
+## 2026-03-09 19:22:03
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.729.0 (2.841.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.0.0] .
+### Releases
+- [PyPI v2.0.0] https://pypi.org/project/mistralai/2.0.0 - .
+
+## 2026-03-11 17:15:32
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.729.0 (2.841.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.0.1] .
+### Releases
+- [PyPI v2.0.1] https://pypi.org/project/mistralai/2.0.1 - .
+
+## 2026-03-13 13:04:52
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.729.0 (2.841.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.0.2] .
+### Releases
+- [PyPI v2.0.2] https://pypi.org/project/mistralai/2.0.2 - .
+
+## 2026-03-13 19:33:58
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.0.3] .
+### Releases
+- [PyPI v2.0.3] https://pypi.org/project/mistralai/2.0.3 - .
+
+## 2026-03-16 15:21:10
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.729.0 (2.841.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.0.4] .
+### Releases
+- [PyPI v2.0.4] https://pypi.org/project/mistralai/2.0.4 - .
+
+## 2026-03-18 15:16:05
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.0.5] .
+### Releases
+- [PyPI v2.0.5] https://pypi.org/project/mistralai/2.0.5 - .
+
+## 2026-03-20 08:07:05
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.1.0] .
+### Releases
+- [PyPI v2.1.0] https://pypi.org/project/mistralai/2.1.0 - .
+
+## 2026-03-20 12:16:07
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.1.1] .
+### Releases
+- [PyPI v2.1.1] https://pypi.org/project/mistralai/2.1.1 - .
+
+## 2026-03-20 14:40:56
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.1.2] .
+### Releases
+- [PyPI v2.1.2] https://pypi.org/project/mistralai/2.1.2 - .
+
+## 2026-03-23 14:35:45
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.1.3] .
+### Releases
+- [PyPI v2.1.3] https://pypi.org/project/mistralai/2.1.3 - .
+
+## 2026-03-30 14:56:34
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.2.0rc1] .
+### Releases
+- [PyPI v2.2.0rc1] https://pypi.org/project/mistralai/2.2.0rc1 - .
+
+## 2026-03-30 15:55:53
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.2.0rc2] .
+### Releases
+- [PyPI v2.2.0rc2] https://pypi.org/project/mistralai/2.2.0rc2 - .
+
+## 2026-03-30 17:24:31
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.2.0rc3] .
+### Releases
+- [PyPI v2.2.0rc3] https://pypi.org/project/mistralai/2.2.0rc3 - .
+
+## 2026-03-31 11:09:18
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.754.0 (2.862.0) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.2.0] .
+### Releases
+- [PyPI v2.2.0] https://pypi.org/project/mistralai/2.2.0 - .
+
+## 2026-04-03 12:19:06
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.3.0] .
+### Releases
+- [PyPI v2.3.0] https://pypi.org/project/mistralai/2.3.0 - .
+
+## 2026-04-07 13:52:53
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.3.1] .
+### Releases
+- [PyPI v2.3.1] https://pypi.org/project/mistralai/2.3.1 - .
+
+## 2026-04-10 13:42:26
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.3.2] .
+### Releases
+- [PyPI v2.3.2] https://pypi.org/project/mistralai/2.3.2 - .
+
+## 2026-04-14 12:16:24
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.0rc1] .
+### Releases
+- [PyPI v2.4.0rc1] https://pypi.org/project/mistralai/2.4.0rc1 - .
+
+## 2026-04-14 15:44:42
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.0rc2] .
+### Releases
+- [PyPI v2.4.0rc2] https://pypi.org/project/mistralai/2.4.0rc2 - .
+
+## 2026-04-16 10:13:01
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.0] .
+### Releases
+- [PyPI v2.4.0] https://pypi.org/project/mistralai/2.4.0 - .
+
+## 2026-04-21 13:15:47
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.1] .
+### Releases
+- [PyPI v2.4.1] https://pypi.org/project/mistralai/2.4.1 - .
+
+## 2026-04-23 14:15:34
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.2] .
+### Releases
+- [PyPI v2.4.2] https://pypi.org/project/mistralai/2.4.2 - .
+
+## 2026-04-27 12:18:00
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.3] .
+### Releases
+- [PyPI v2.4.3] https://pypi.org/project/mistralai/2.4.3 - .
+
+## 2026-04-30 12:00:09
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.4] .
+### Releases
+- [PyPI v2.4.4] https://pypi.org/project/mistralai/2.4.4 - .
+
+## 2026-05-07 11:13:37
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.761.1 (2.879.6) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.5] .
+### Releases
+- [PyPI v2.4.5] https://pypi.org/project/mistralai/2.4.5 - .
+
+## 2026-05-22 14:12:57
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.7] .
+### Releases
+- [PyPI v2.4.7] https://pypi.org/project/mistralai/2.4.7 - .
+
+## 2026-05-27 16:56:58
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.8] .
+### Releases
+- [PyPI v2.4.8] https://pypi.org/project/mistralai/2.4.8 - .
+
+## 2026-06-03 11:09:54
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.9] .
+### Releases
+- [PyPI v2.4.9] https://pypi.org/project/mistralai/2.4.9 - .
+
+## 2026-06-15 12:49:25
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.10] .
+### Releases
+- [PyPI v2.4.10] https://pypi.org/project/mistralai/2.4.10 - .
+
+## 2026-06-16 13:00:09
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.11] .
+### Releases
+- [PyPI v2.4.11] https://pypi.org/project/mistralai/2.4.11 - .
+
+## 2026-06-17 12:47:32
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.12] .
+### Releases
+- [PyPI v2.4.12] https://pypi.org/project/mistralai/2.4.12 - .
+
+## 2026-06-19 11:26:36
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.4.13] .
+### Releases
+- [PyPI v2.4.13] https://pypi.org/project/mistralai/2.4.13 - .
+
+## 2026-06-23 09:09:54
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.5.0] .
+### Releases
+- [PyPI v2.5.0] https://pypi.org/project/mistralai/2.5.0 - .
+
+## 2026-06-23 15:35:29
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.5.0] .
+### Releases
+- [PyPI v2.5.0] https://pypi.org/project/mistralai/2.5.0 - .
+
+## 2026-06-29 15:07:29
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.5.1] .
+### Releases
+- [PyPI v2.5.1] https://pypi.org/project/mistralai/2.5.1 - .
+
+## 2026-07-03 09:56:12
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.5.2] .
+### Releases
+- [PyPI v2.5.2] https://pypi.org/project/mistralai/2.5.2 - .
+
+## 2026-07-06 14:27:15
+### Changes
+Based on:
+- OpenAPI Doc  
+- Speakeasy CLI 1.763.6 (2.884.13) https://github.com/speakeasy-api/speakeasy
+### Generated
+- [python v2.6.0] .
+### Releases
+- [PyPI v2.6.0] https://pypi.org/project/mistralai/2.6.0 - .

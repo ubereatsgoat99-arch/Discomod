@@ -22,13 +22,18 @@ echo ""
 echo "=== Required Configuration ==="
 
 read -p "Discord Token: " DISCORD_TOKEN
-read -p "Anthropic API Key: " ANTHROPIC_API_KEY
-read -p "Wolfram API: " WOLFRAM_APPID
-read -p "Groq API Key: " GROQ_API_KEY
 read -p "Client ID: " CLIENT_ID
-read -p "OpenAI Key: " OPENAI_API_KEY
-read -p "Gemini Key: " GEMINI_API_KEY
 read -p "Bot Owner: " SUPERUSER_ID
+
+read -p "Anthropic API Key: " ANTHROPIC_API_KEY
+read -p "OpenAI API Key: " OPENAI_API_KEY
+read -p "Groq API Key: " GROQ_API_KEY
+read -p "DeepSeek API Key: " DEEPSEEK_API_KEY
+read -p "Gemini API Key: " GEMINI_API_KEY
+read -p "Mistral API Key: " MISTRAL_API_KEY
+read -p "xAI API Key: " XAI_API_KEY
+
+read -p "Wolfram App ID: " WOLFRAM_APPID
 
 # Optional inputs
 echo ""

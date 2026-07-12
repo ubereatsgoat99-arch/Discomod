@@ -68,23 +68,29 @@ Doc: \idx{LLL} algorithm applied to the
  If $\fl=8$, same as $\fl=0$, but $x$ may have polynomial coefficients.
 
  \bprog
- ? \p500
-   realprecision = 500 significant digits
+ ? \p712
+   realprecision = 712 significant digits
  ? a = 2*cos(2*Pi/97);
- ? C = 10^450;
- ? v = powers(a,48); b = round(matconcat([matid(48),C*v]~));
+ ? C = 10^700;
+ ? v = powers(a,48); b = round(matconcat([matid(48), C*v]~));
  ? p = b * qflll(b)[,1]; \\ tiny linear combination of powers of 'a'
-    time = 4,470 ms.
+    time = 692 ms.
  ? exponent(v * p / C)
- %5 = -1418
- ? p3 = qflll(b,3)[,1]; \\ compute in place, faster
-    time = 3,790 ms.
- ? p3 == p \\ same result
+ %5 = -2249
+
+ ? q = qflll(b,3)[,1]; \\ compute in place, a little faster
+    time = 628 ms.
+ ? q == p \\ same result
  %7 = 1
- ? p2 = b * qflll(b,2)[,1]; \\ partial reduction: faster, not as good
-    time = 343 ms.
- ? exponent(v * p2 / C)
- %9 = -1190
+
+ ? q = b * qflll(b,2)[,1]; \\ partial reduction: faster
+    time = 443 ms.
+ ? exponent(v * q / C) \\ ... but worse reduction
+ %9 = -1878
+
+ ? q = b * qflll(b,2)[,1]; \\ disable flatter, stock LLL
+    time = 1,995 ms. \\ much slower
+ ? exponent(v * q / C) \\ ... same quality
  @eprog
 
 Variant: Also available are \fun{GEN}{lll}{GEN x} ($\fl=0$),

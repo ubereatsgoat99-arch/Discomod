@@ -1,0 +1,18 @@
+# UpdateConnectorRequest
+
+
+## Fields
+
+| Field                                                                | Type                                                                 | Required                                                             | Description                                                          |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `title`                                                              | *OptionalNullable[str]*                                              | :heavy_minus_sign:                                                   | Optional human-readable title for the connector.                     |
+| `name`                                                               | *OptionalNullable[str]*                                              | :heavy_minus_sign:                                                   | The name of the connector.                                           |
+| `description`                                                        | *OptionalNullable[str]*                                              | :heavy_minus_sign:                                                   | The description of the connector.                                    |
+| `icon_url`                                                           | *OptionalNullable[str]*                                              | :heavy_minus_sign:                                                   | The optional url of the icon you want to associate to the connector. |
+| `system_prompt`                                                      | *OptionalNullable[str]*                                              | :heavy_minus_sign:                                                   | Optional system prompt for the connector.                            |
+| `connection_config`                                                  | Dict[str, *Any*]                                                     | :heavy_minus_sign:                                                   | Optional new connection config.                                      |
+| `connection_secrets`                                                 | Dict[str, *Any*]                                                     | :heavy_minus_sign:                                                   | Optional new connection secrets                                      |
+| `protocol`                                                           | *Optional[Literal["mcp"]]*                                           | :heavy_minus_sign:                                                   | N/A                                                                  |
+| `server`                                                             | *OptionalNullable[str]*                                              | :heavy_minus_sign:                                                   | New server url for your mcp connector.                               |
+| `headers`                                                            | Dict[str, *Any*]                                                     | :heavy_minus_sign:                                                   | New headers for your mcp connector.                                  |
+| `auth_data`                                                          | [OptionalNullable[models.AuthData]](../models/authdata.md)           | :heavy_minus_sign:                                                   | New authentication data for your mcp connector.                      |

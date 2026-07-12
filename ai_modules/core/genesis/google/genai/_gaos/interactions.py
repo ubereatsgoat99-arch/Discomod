@@ -24,7 +24,7 @@ from .utils import get_security_from_env, response_helpers
 from .utils.eventstreaming import AsyncStream, Stream
 from .utils.unmarshal_json_response import unmarshal_json_response
 import httpx
-from typing import Any, List, Literal, Mapping, Optional, Union, cast, overload
+from typing import Any, Dict, List, Literal, Mapping, Optional, Union, cast, overload
 
 
 class Interactions(BaseSDK):
@@ -80,6 +80,8 @@ class Interactions(BaseSDK):
         environment: interactions.CreateModelInteractionEnvironmentParam = ...,
         generation_config: interactions.GenerationConfigParam = ...,
         cached_content: str = ...,
+        safety_settings: List[interactions.SafetySettingParam] = ...,
+        labels: Dict[str, str] = ...,
         input: interactions.InteractionsInputParam,
         extra_headers: Optional[Mapping[str, str]] = None,
         extra_query: Optional[Mapping[str, Any]] = None,
@@ -110,6 +112,8 @@ class Interactions(BaseSDK):
             caching (e.g. what content to cache) and enjoy guaranteed cost savings.
             Format:
             `projects/{project}/locations/{location}/cachedContents/{cachedContent}`
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
@@ -137,6 +141,8 @@ class Interactions(BaseSDK):
         environment: interactions.CreateModelInteractionEnvironmentParam = ...,
         generation_config: interactions.GenerationConfigParam = ...,
         cached_content: str = ...,
+        safety_settings: List[interactions.SafetySettingParam] = ...,
+        labels: Dict[str, str] = ...,
         input: interactions.InteractionsInputParam,
         extra_headers: Optional[Mapping[str, str]] = None,
         extra_query: Optional[Mapping[str, Any]] = None,
@@ -167,6 +173,8 @@ class Interactions(BaseSDK):
             caching (e.g. what content to cache) and enjoy guaranteed cost savings.
             Format:
             `projects/{project}/locations/{location}/cachedContents/{cachedContent}`
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
@@ -193,6 +201,9 @@ class Interactions(BaseSDK):
         response_format: interactions.CreateAgentInteractionResponseFormatParam = ...,
         environment: interactions.CreateAgentInteractionEnvironmentParam = ...,
         agent_config: interactions.CreateAgentInteractionAgentConfigParam = ...,
+        max_total_tokens: int = ...,
+        safety_settings: List[interactions.SafetySettingParam] = ...,
+        labels: Dict[str, str] = ...,
         input: interactions.InteractionsInputParam,
         extra_headers: Optional[Mapping[str, str]] = None,
         extra_query: Optional[Mapping[str, Any]] = None,
@@ -218,6 +229,9 @@ class Interactions(BaseSDK):
         :param response_format: Enforces that the generated response is a JSON object that complies with the JSON schema specified in this field.
         :param environment: The environment configuration for the interaction. Can be an object specifying remote environment sources or a string referencing an existing environment ID.
         :param agent_config: Configuration parameters for the agent interaction.
+        :param max_total_tokens: Max total tokens for the agent run.
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
@@ -244,6 +258,9 @@ class Interactions(BaseSDK):
         response_format: interactions.CreateAgentInteractionResponseFormatParam = ...,
         environment: interactions.CreateAgentInteractionEnvironmentParam = ...,
         agent_config: interactions.CreateAgentInteractionAgentConfigParam = ...,
+        max_total_tokens: int = ...,
+        safety_settings: List[interactions.SafetySettingParam] = ...,
+        labels: Dict[str, str] = ...,
         input: interactions.InteractionsInputParam,
         extra_headers: Optional[Mapping[str, str]] = None,
         extra_query: Optional[Mapping[str, Any]] = None,
@@ -269,6 +286,9 @@ class Interactions(BaseSDK):
         :param response_format: Enforces that the generated response is a JSON object that complies with the JSON schema specified in this field.
         :param environment: The environment configuration for the interaction. Can be an object specifying remote environment sources or a string referencing an existing environment ID.
         :param agent_config: Configuration parameters for the agent interaction.
+        :param max_total_tokens: Max total tokens for the agent run.
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
@@ -314,9 +334,12 @@ class Interactions(BaseSDK):
             caching (e.g. what content to cache) and enjoy guaranteed cost savings.
             Format:
             `projects/{project}/locations/{location}/cachedContents/{cachedContent}`
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param agent: The agent to interact with.
         :param agent_config: Configuration parameters for the agent interaction.
+        :param max_total_tokens: Max total tokens for the agent run.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
         :param extra_body: Additional JSON object fields to merge into request bodies.
@@ -360,9 +383,12 @@ class Interactions(BaseSDK):
             caching (e.g. what content to cache) and enjoy guaranteed cost savings.
             Format:
             `projects/{project}/locations/{location}/cachedContents/{cachedContent}`
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param agent: The agent to interact with.
         :param agent_config: Configuration parameters for the agent interaction.
+        :param max_total_tokens: Max total tokens for the agent run.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
         :param extra_body: Additional JSON object fields to merge into request bodies.
@@ -372,16 +398,26 @@ class Interactions(BaseSDK):
             raise ValueError("Cannot supply both 'model' and 'agent'.")
         if "model" in body_kwargs and "agent_config" in body_kwargs:
             raise ValueError("Cannot supply both 'model' and 'agent_config'.")
+        if "model" in body_kwargs and "max_total_tokens" in body_kwargs:
+            raise ValueError("Cannot supply both 'model' and 'max_total_tokens'.")
         if "generation_config" in body_kwargs and "agent" in body_kwargs:
             raise ValueError("Cannot supply both 'generation_config' and 'agent'.")
         if "generation_config" in body_kwargs and "agent_config" in body_kwargs:
             raise ValueError(
                 "Cannot supply both 'generation_config' and 'agent_config'."
             )
+        if "generation_config" in body_kwargs and "max_total_tokens" in body_kwargs:
+            raise ValueError(
+                "Cannot supply both 'generation_config' and 'max_total_tokens'."
+            )
         if "cached_content" in body_kwargs and "agent" in body_kwargs:
             raise ValueError("Cannot supply both 'cached_content' and 'agent'.")
         if "cached_content" in body_kwargs and "agent_config" in body_kwargs:
             raise ValueError("Cannot supply both 'cached_content' and 'agent_config'.")
+        if "cached_content" in body_kwargs and "max_total_tokens" in body_kwargs:
+            raise ValueError(
+                "Cannot supply both 'cached_content' and 'max_total_tokens'."
+            )
         base_url = None
         url_variables = None
         retries: OptionalNullable[utils.RetryConfig] = UNSET
@@ -1484,6 +1520,8 @@ class AsyncInteractions(AsyncBaseSDK):
         environment: interactions.CreateModelInteractionEnvironmentParam = ...,
         generation_config: interactions.GenerationConfigParam = ...,
         cached_content: str = ...,
+        safety_settings: List[interactions.SafetySettingParam] = ...,
+        labels: Dict[str, str] = ...,
         input: interactions.InteractionsInputParam,
         extra_headers: Optional[Mapping[str, str]] = None,
         extra_query: Optional[Mapping[str, Any]] = None,
@@ -1514,6 +1552,8 @@ class AsyncInteractions(AsyncBaseSDK):
             caching (e.g. what content to cache) and enjoy guaranteed cost savings.
             Format:
             `projects/{project}/locations/{location}/cachedContents/{cachedContent}`
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
@@ -1541,6 +1581,8 @@ class AsyncInteractions(AsyncBaseSDK):
         environment: interactions.CreateModelInteractionEnvironmentParam = ...,
         generation_config: interactions.GenerationConfigParam = ...,
         cached_content: str = ...,
+        safety_settings: List[interactions.SafetySettingParam] = ...,
+        labels: Dict[str, str] = ...,
         input: interactions.InteractionsInputParam,
         extra_headers: Optional[Mapping[str, str]] = None,
         extra_query: Optional[Mapping[str, Any]] = None,
@@ -1571,6 +1613,8 @@ class AsyncInteractions(AsyncBaseSDK):
             caching (e.g. what content to cache) and enjoy guaranteed cost savings.
             Format:
             `projects/{project}/locations/{location}/cachedContents/{cachedContent}`
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
@@ -1597,6 +1641,9 @@ class AsyncInteractions(AsyncBaseSDK):
         response_format: interactions.CreateAgentInteractionResponseFormatParam = ...,
         environment: interactions.CreateAgentInteractionEnvironmentParam = ...,
         agent_config: interactions.CreateAgentInteractionAgentConfigParam = ...,
+        max_total_tokens: int = ...,
+        safety_settings: List[interactions.SafetySettingParam] = ...,
+        labels: Dict[str, str] = ...,
         input: interactions.InteractionsInputParam,
         extra_headers: Optional[Mapping[str, str]] = None,
         extra_query: Optional[Mapping[str, Any]] = None,
@@ -1622,6 +1669,9 @@ class AsyncInteractions(AsyncBaseSDK):
         :param response_format: Enforces that the generated response is a JSON object that complies with the JSON schema specified in this field.
         :param environment: The environment configuration for the interaction. Can be an object specifying remote environment sources or a string referencing an existing environment ID.
         :param agent_config: Configuration parameters for the agent interaction.
+        :param max_total_tokens: Max total tokens for the agent run.
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
@@ -1648,6 +1698,9 @@ class AsyncInteractions(AsyncBaseSDK):
         response_format: interactions.CreateAgentInteractionResponseFormatParam = ...,
         environment: interactions.CreateAgentInteractionEnvironmentParam = ...,
         agent_config: interactions.CreateAgentInteractionAgentConfigParam = ...,
+        max_total_tokens: int = ...,
+        safety_settings: List[interactions.SafetySettingParam] = ...,
+        labels: Dict[str, str] = ...,
         input: interactions.InteractionsInputParam,
         extra_headers: Optional[Mapping[str, str]] = None,
         extra_query: Optional[Mapping[str, Any]] = None,
@@ -1673,6 +1726,9 @@ class AsyncInteractions(AsyncBaseSDK):
         :param response_format: Enforces that the generated response is a JSON object that complies with the JSON schema specified in this field.
         :param environment: The environment configuration for the interaction. Can be an object specifying remote environment sources or a string referencing an existing environment ID.
         :param agent_config: Configuration parameters for the agent interaction.
+        :param max_total_tokens: Max total tokens for the agent run.
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
@@ -1718,9 +1774,12 @@ class AsyncInteractions(AsyncBaseSDK):
             caching (e.g. what content to cache) and enjoy guaranteed cost savings.
             Format:
             `projects/{project}/locations/{location}/cachedContents/{cachedContent}`
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param agent: The agent to interact with.
         :param agent_config: Configuration parameters for the agent interaction.
+        :param max_total_tokens: Max total tokens for the agent run.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
         :param extra_body: Additional JSON object fields to merge into request bodies.
@@ -1764,9 +1823,12 @@ class AsyncInteractions(AsyncBaseSDK):
             caching (e.g. what content to cache) and enjoy guaranteed cost savings.
             Format:
             `projects/{project}/locations/{location}/cachedContents/{cachedContent}`
+        :param safety_settings: Safety settings for the interaction.
+        :param labels: The labels with user-defined metadata for the request.
         :param input: The input for the interaction.
         :param agent: The agent to interact with.
         :param agent_config: Configuration parameters for the agent interaction.
+        :param max_total_tokens: Max total tokens for the agent run.
         :param extra_headers: Additional headers to set or replace on requests.
         :param extra_query: Additional query parameters to append to requests.
         :param extra_body: Additional JSON object fields to merge into request bodies.
@@ -1776,16 +1838,26 @@ class AsyncInteractions(AsyncBaseSDK):
             raise ValueError("Cannot supply both 'model' and 'agent'.")
         if "model" in body_kwargs and "agent_config" in body_kwargs:
             raise ValueError("Cannot supply both 'model' and 'agent_config'.")
+        if "model" in body_kwargs and "max_total_tokens" in body_kwargs:
+            raise ValueError("Cannot supply both 'model' and 'max_total_tokens'.")
         if "generation_config" in body_kwargs and "agent" in body_kwargs:
             raise ValueError("Cannot supply both 'generation_config' and 'agent'.")
         if "generation_config" in body_kwargs and "agent_config" in body_kwargs:
             raise ValueError(
                 "Cannot supply both 'generation_config' and 'agent_config'."
             )
+        if "generation_config" in body_kwargs and "max_total_tokens" in body_kwargs:
+            raise ValueError(
+                "Cannot supply both 'generation_config' and 'max_total_tokens'."
+            )
         if "cached_content" in body_kwargs and "agent" in body_kwargs:
             raise ValueError("Cannot supply both 'cached_content' and 'agent'.")
         if "cached_content" in body_kwargs and "agent_config" in body_kwargs:
             raise ValueError("Cannot supply both 'cached_content' and 'agent_config'.")
+        if "cached_content" in body_kwargs and "max_total_tokens" in body_kwargs:
+            raise ValueError(
+                "Cannot supply both 'cached_content' and 'max_total_tokens'."
+            )
         base_url = None
         url_variables = None
         retries: OptionalNullable[utils.RetryConfig] = UNSET

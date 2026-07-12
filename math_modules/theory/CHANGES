@@ -67,6 +67,8 @@ LGr 56- psi(1+O(x^5)) -> wrong result [#2677]
         but zeta(s,x) is small and relative error is large) [#2673]
 BA  58- ellcard(ellinit([ffgen([53,36]),1])) -> wrong result
     59- polcyclofactors(((x^6+x^3+1)*(3*x^3+1))^2) -> oo loop [#2680]
+BA  60- [pthread] ^C could cause a SEGV [#2665]
+BA  61- qfbred(large real QFB) could SEGV
 
   Added
      1- [libpari] prodprimes, prodprimeslim

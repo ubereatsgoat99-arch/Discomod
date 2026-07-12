@@ -138,11 +138,13 @@ sqru(ulong x)
 static GEN
 mulur_2(ulong x, GEN y, long s)
 {
-  long m, sh, i, lx = lg(y), e = expo(y);
-  GEN z = cgetg(lx, t_REAL);
+  long m, sh, i, lx, e;
+  GEN z;
   ulong garde;
   LOCAL_HIREMAINDER;
 
+  if (!(x & (x-1))) { z = shiftr(y, expu(x)); setsigne(z, s); return z; }
+  lx = lg(y); z = cgetg(lx, t_REAL); e = expo(y);
   y--; garde = mulll(x,y[lx]);
   for (i=lx-1; i>=3; i--) z[i]=addmul(x,y[i]);
   z[2]=hiremainder; /* != 0 since y normalized and |x| > 1 */
@@ -579,6 +581,12 @@ divur(ulong x, GEN y)
 
   if (p == 0) pari_err_INV("divur",y);
   if (!x) return div0r(y);
+  if (x == 1) return invr(y);
+  if (!(x & (x-1))) /* power of 2 */
+  {
+    z = invr(y);
+    shiftr_inplace(z, expu(x)); return z;
+  }
   if (p > INVNEWTON_LIMIT) {
     av = avma; z = invr(y);
     if (x == 1) return z;
@@ -592,21 +600,8 @@ divur(ulong x, GEN y)
 GEN
 divsr(long x, GEN y)
 {
-  pari_sp av;
-  long p = realprec(y);
-  GEN z;
-
-  if (p == 0) pari_err_INV("divsr",y);
-  if (!x) return div0r(y);
-  if (p > INVNEWTON_LIMIT) {
-    av = avma; z = invr(y);
-    if (x == 1) return z;
-    if (x ==-1) { togglesign(z); return z; }
-    return gc_leaf(av, mulsr(x, z));
-  }
-  z = cgetr(p); av = avma;
-  affrr(divrr(stor(x,p + BITS_IN_LONG), y), z);
-  set_avma(av); return z;
+  if (x >= 0) return divur((ulong)x, y);
+  y = divur((ulong)(-x), y); togglesign(y); return y;
 }
 
 /* returns 1/y, assume y != 0 */

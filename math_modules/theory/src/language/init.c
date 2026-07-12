@@ -1731,7 +1731,7 @@ pari_err2str(GEN e)
       return pari_sprintf("inconsistent moduli in %Ps: %s != %s",
                           gel(e,2), gdisplay(x), gdisplay(y));
     }
-  case e_NONE: return NULL;
+  case e_NONE: case e_STOP: return NULL;
   case e_NOTFUNC:
     return pari_strdup("not a function in function call");
   case e_OP: case e_TYPE2:
@@ -1929,6 +1929,7 @@ numerr_name(long numerr)
   case e_STACK:    return "e_STACK";
   case e_SYNTAX:   return "e_SYNTAX";
   case e_STACKTHREAD:   return "e_STACKTHREAD";
+  case e_STOP:     return "e_STOP";
   case e_TYPE2:    return "e_TYPE2";
   case e_TYPE:     return "e_TYPE";
   case e_USER:     return "e_USER";

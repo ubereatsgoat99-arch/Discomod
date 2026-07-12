@@ -18,7 +18,9 @@
 
 from __future__ import annotations
 from .. import BaseModel, UNSET_SENTINEL
+from ...utils import serialize_int, validate_int
 from .agentoption import AgentOption
+from .codemenderagentconfig import CodeMenderAgentConfig, CodeMenderAgentConfigParam
 from .deepresearchagentconfig import (
     DeepResearchAgentConfig,
     DeepResearchAgentConfigParam,
@@ -28,12 +30,15 @@ from .environment import Environment, EnvironmentParam
 from .interactionsinput import InteractionsInput, InteractionsInputParam
 from .responseformat import ResponseFormat, ResponseFormatParam
 from .responsemodality import ResponseModality
+from .safetysetting import SafetySetting, SafetySettingParam
 from .servicetier import ServiceTier
 from .tool import Tool, ToolParam
 from .webhookconfig import WebhookConfig, WebhookConfigParam
 import pydantic
 from pydantic import Field, model_serializer
-from typing import List, Optional, Union
+from pydantic.functional_serializers import PlainSerializer
+from pydantic.functional_validators import BeforeValidator
+from typing import Dict, List, Optional, Union
 from typing_extensions import Annotated, NotRequired, TypeAliasType, TypedDict
 
 
@@ -64,13 +69,18 @@ r"""The environment configuration for the interaction. Can be an object specifyi
 
 CreateAgentInteractionAgentConfigParam = TypeAliasType(
     "CreateAgentInteractionAgentConfigParam",
-    Union[DynamicAgentConfigParam, DeepResearchAgentConfigParam],
+    Union[
+        DynamicAgentConfigParam,
+        DeepResearchAgentConfigParam,
+        CodeMenderAgentConfigParam,
+    ],
 )
 r"""Configuration parameters for the agent interaction."""
 
 
 CreateAgentInteractionAgentConfig = Annotated[
-    Union[DynamicAgentConfig, DeepResearchAgentConfig], Field(discriminator="type")
+    Union[DynamicAgentConfig, DeepResearchAgentConfig, CodeMenderAgentConfig],
+    Field(discriminator="type"),
 ]
 r"""Configuration parameters for the agent interaction."""
 
@@ -107,6 +117,12 @@ class CreateAgentInteractionParam(TypedDict):
     r"""The environment configuration for the interaction. Can be an object specifying remote environment sources or a string referencing an existing environment ID."""
     agent_config: NotRequired[CreateAgentInteractionAgentConfigParam]
     r"""Configuration parameters for the agent interaction."""
+    max_total_tokens: NotRequired[int]
+    r"""Max total tokens for the agent run."""
+    safety_settings: NotRequired[List[SafetySettingParam]]
+    r"""Safety settings for the interaction."""
+    labels: NotRequired[Dict[str, str]]
+    r"""The labels with user-defined metadata for the request."""
 
 
 class CreateAgentInteraction(BaseModel):
@@ -161,6 +177,19 @@ class CreateAgentInteraction(BaseModel):
     agent_config: Optional[CreateAgentInteractionAgentConfig] = None
     r"""Configuration parameters for the agent interaction."""
 
+    max_total_tokens: Annotated[
+        Optional[int],
+        BeforeValidator(validate_int),
+        PlainSerializer(serialize_int(True)),
+    ] = None
+    r"""Max total tokens for the agent run."""
+
+    safety_settings: Optional[List[SafetySetting]] = None
+    r"""Safety settings for the interaction."""
+
+    labels: Optional[Dict[str, str]] = None
+    r"""The labels with user-defined metadata for the request."""
+
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
         optional_fields = set(
@@ -178,6 +207,9 @@ class CreateAgentInteraction(BaseModel):
                 "response_format",
                 "environment",
                 "agent_config",
+                "max_total_tokens",
+                "safety_settings",
+                "labels",
             ]
         )
         serialized = handler(self)

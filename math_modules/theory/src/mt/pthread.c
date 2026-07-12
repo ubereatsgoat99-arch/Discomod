@@ -189,6 +189,7 @@ mt_queue_run(void *arg)
     pari_mainstack = mq->mainstack;
     set_avma(mq->avma);
     work = mq->input;
+    if (typ(work)==t_ERROR && err_get_num(work)==e_STOP) break;
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,NULL);
     done = closure_callgenvec(mq->worker,work);
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED,NULL);
@@ -305,20 +306,13 @@ mtpthread_queue_submit(struct mt_state *junk, long workid, GEN work)
   BLOCK_SIGINT_END
 }
 
-void
-mt_queue_reset(void)
+static void
+mtpthread_queue_cleanup(struct mt_pstate *mt)
 {
-  struct mt_pstate *mt = pari_mt;
   long i;
-  BLOCK_SIGINT_START
-  for (i=0; i<mt->n; i++)
-    pthread_cancel(mt->th[i]);
-  for (i=0; i<mt->n; i++)
-    pthread_join(mt->th[i],NULL);
-  pari_mt = NULL;
-  BLOCK_SIGINT_END
   if (DEBUGLEVEL) pari_warn(warner,"stopping %ld threads", mt->n);
   BLOCK_SIGINT_START
+  pari_mt = NULL;
   for (i=0;i<mt->n;i++)
   {
     struct mt_queue *mq = mt->mq+i;
@@ -333,6 +327,44 @@ mt_queue_reset(void)
   pari_free(mt->pth);
   pari_free(mt->th);
   pari_free(mt);
+}
+
+static void
+mtpthread_queue_end(void)
+{
+  const long err_e_STOP[] = { evaltyp(t_ERROR) | _evallg(2), e_STOP};
+  struct mt_pstate *mt = pari_mt;
+  long i;
+  BLOCK_SIGINT_START
+  for (i=0; i<mt->n; i++)
+  {
+    struct mt_queue *mq = mt->mq+i;
+    LOCK(&mq->mut)
+    {
+      mq->output = NULL;
+      mq->workid = 0;
+      mq->input = (GEN) err_e_STOP;
+      pthread_cond_signal(&mq->cond);
+    } UNLOCK(&mq->mut);
+  }
+  for (i=0; i<mt->n; i++)
+    pthread_join(mt->th[i],NULL);
+  mtpthread_queue_cleanup(mt);
+  BLOCK_SIGINT_END
+}
+
+void
+mt_queue_reset(void)
+{
+  struct mt_pstate *mt = pari_mt;
+  long i;
+  BLOCK_SIGINT_START
+  for (i=0; i<mt->n; i++)
+    pthread_cancel(mt->th[i]);
+  for (i=0; i<mt->n; i++)
+    pthread_join(mt->th[i],NULL);
+  mtpthread_queue_cleanup(mt);
+  BLOCK_SIGINT_END
 }
 
 static long
@@ -396,12 +428,18 @@ mt_queue_start_lim(struct pari_mt *pt, GEN worker, long lim)
     }
     if (DEBUGLEVEL) pari_warn(warner,"starting %ld threads", lim);
     BLOCK_SIGINT_START
-    for (i=0;i<lim;i++)
-      pthread_create(&mt->th[i],NULL, &mt_queue_run, (void*)&mt->pth[i]);
-    pari_mt = mt;
+    {
+      sigset_t set, oldset;
+      sigfillset(&set);
+      pthread_sigmask(SIG_SETMASK, &set, &oldset);
+      for (i = 0; i < lim; i++)
+        pthread_create(&mt->th[i], NULL, &mt_queue_run, (void*)&mt->pth[i]);
+      pthread_sigmask(SIG_SETMASK, &oldset, NULL);
+      pari_mt = mt;
+    }
     BLOCK_SIGINT_END
     pt->get=&mtpthread_queue_get;
     pt->submit=&mtpthread_queue_submit;
-    pt->end=&mt_queue_reset;
+    pt->end=&mtpthread_queue_end;
   }
 }

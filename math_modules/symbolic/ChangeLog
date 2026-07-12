@@ -1,3 +1,39 @@
+2026-07-12  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/ffcat.spad, src/algebra/gaussian.spad,
+	src/algebra/integer.spad:
+	Fix caching mechanism in 'solveLinearPolynomialEquation'
+
+2026-07-11  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/expr.spad, src/input/rsimp.input:
+	Change the ordering in EXPR to be lexicographical.
+	this fixes unsoundness of ordering in EXPR(COMPLEX(INT));
+	this change can give measurable speedup for some computation;
+	the ordering of EXPR/Kernel matters in factorization
+	and 'rischNormalize$EFSTRUC';
+	this change may affect the display order of some expression,
+	or change some expression to equivalent or simpler form
+
+2026-07-10  Waldek Hebisch  <cas@fricas.org>
+
+	* src/interp/functor.boot: Better support 'not' in
+	conditions
+
+2026-07-08  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/gaussian.spad:
+	Improve accuracy for numeric complex sqrt
+
+2026-07-07  Qian Yun <oldk1331@gmail.com>
+
+	* src/algebra/aggcat.spad: Do not return shared data
+	structure from 'merge$A1AGG'
+
+2026-07-07  Waldek Hebisch  <cas@fricas.org>
+
+	* src/algebra/gaussian.spad: Fix numeric complex sqrt
+
 2026-07-02  Qian Yun <oldk1331@gmail.com>
 
 	* src/algebra/fspace.spad, src/algebra/multpoly.spad,
@@ -15,7 +51,7 @@
 	* src/algebra/aggcat.spad, src/algebra/list.spad:
 	Add new function 'merge_unique', 'merge_unique!'
 
-2026-07-2  Waldek Hebisch  <cas@fricas.org>
+2026-07-02  Waldek Hebisch  <cas@fricas.org>
 
 	* src/algebra/numarr.spad: Remove unimplemented export
 

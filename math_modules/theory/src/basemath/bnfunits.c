@@ -214,20 +214,25 @@ bnfsunit(GEN bnf,GEN S,long prec)
   cl = bnf_get_clgp(bnf);
   if (l != 1)
   {
-    GEN u,A, G = bnf_get_gen(bnf), D = ZM_snf_group(H,NULL,&u), h = ZV_prod(D);
+    GEN E, u, A, G = bnf_get_gen(bnf), D = ZM_snf_group(H,NULL,&u);
+    GEN h = ZV_prod(D), P = cgetg(l, t_VEC);
     long lD = lg(D);
     A = cgetg(lD, t_VEC);
     for(i = 1; i < lD; i++) gel(A,i) = idealfactorback(nf, G, gel(u,i), 1);
     cl = mkvec3(h, D, A);
-    R = mpmul(R, h);
+    /* R(S)/R = h * prod log N(S[i]) = h prod f(S[i]) prod log(S[i].p)*/
     for (i = 1; i < l; i++)
     {
-      GEN pr = gel(S,i), p = pr_get_p(pr);
+      GEN pr = gel(S,i);
       long f = pr_get_f(pr);
-      R = mpmul(R, logr_abs(itor(p,prec)));
-      if (f != 1) R = mulru(R, f);
+      gel(P,i) = pr_get_p(pr); if (f != 1) h = muliu(h, f);
       gel(U,i) = nf_to_scalar_or_alg(nf, gel(U,i));
     }
+    /* h = #Cl(K) prod_i f(S[i]) */
+    P = vec_reduce(P, &E);
+    P = factorback2(glog(P, prec), E);
+    R = typ(R)==t_INT? P: mulrr(R,P); /* = R * prod log(S[i].p) */
+    R = mulir(h, R); /* S-regulator R(S) */
   }
   gel(v,4) = R;
   gel(v,5) = cl;
