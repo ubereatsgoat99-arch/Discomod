@@ -15518,8 +15518,6 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    if (!interaction.isChatInputCommand()) return;
-    logCmdStats('slash', interaction.commandName);
     const _isBotOwner_slash = isSuperUser(interaction.user.id);
     const isAdmin = _isBotOwner_slash || interaction.member?.permissions.has(PermissionFlagsBits.Administrator) || isManagerMember(interaction.member, guildId, data);
     const isMod   = _isBotOwner_slash || interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, guildId, data);
@@ -15705,6 +15703,9 @@ client.on('interactionCreate', async interaction => {
         await interaction.update({ embeds: [embed], components });
         return;
     }
+
+    if (!interaction.isChatInputCommand()) return;
+    logCmdStats('slash', interaction.commandName);
 
     switch (interaction.commandName) {
 
