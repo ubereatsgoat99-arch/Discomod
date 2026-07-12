@@ -12251,6 +12251,22 @@ function buildLeaderboardComponents(guildId, period, pageIndex, totalRows) {
 // ══════════════════════════════════════════════════════════
 
 // Returns null if eligible, or a user-facing reason string if not.
+// Only allow real Discord CDN attachment URLs (cdn.discordapp.com / media.discordapp.net)
+// pointing at an image file, to avoid embedding arbitrary/unsafe links as "images".
+function isValidDiscordCdnImageLink(url) {
+    if (!url || typeof url !== 'string') return false;
+    try {
+        const u = new URL(url.trim());
+        const allowedHosts = ['cdn.discordapp.com', 'media.discordapp.net'];
+        if (!allowedHosts.includes(u.hostname)) return false;
+        if (u.protocol !== 'https:') return false;
+        if (!/\.(png|jpe?g|gif|webp)$/i.test(u.pathname)) return false;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 function checkGiveawayEligibility(member, gw, data) {
     if (gw.requiredRoleId && !member.roles.cache.has(gw.requiredRoleId)) {
         return `You need the <@&${gw.requiredRoleId}> role to enter.`;
@@ -12320,12 +12336,14 @@ function buildGiveawayEmbed(gw, ended, winners) {
     if (ended) {
         lines.push(winners && winners.length ? `\n🎉 **Winner${winners.length > 1 ? 's' : ''}:** ${winners.map(w => `<@${w}>`).join(', ')}` : '\n😔 No valid entrants — no winner could be picked.');
     }
-    return new EmbedBuilder()
+    const embed = new EmbedBuilder()
         .setTitle(ended ? '🎉 Giveaway Ended' : '🎉 Giveaway!')
         .setDescription(lines.join('\n'))
         .setColor(ended ? 0x808080 : 0x00D26A)
         .setFooter({ text: `Hosted by ${gw.hostTag || 'a staff member'}` })
         .setTimestamp();
+    if (gw.attachmentLink) embed.setImage(gw.attachmentLink);
+    return embed;
 }
 
 function buildGiveawayComponents(messageId, ended) {
@@ -13866,7 +13884,8 @@ const slashCommands = [
             .addRoleOption(o => o.setName('blacklist_role').setDescription("Role that's blocked from entering (optional)").setRequired(false))
             .addIntegerOption(o => o.setName('min_messages').setDescription('Minimum all-time messages sent to enter (optional)').setRequired(false).setMinValue(1))
             .addIntegerOption(o => o.setName('min_account_age').setDescription('Minimum Discord account age in days to enter (optional)').setRequired(false).setMinValue(1))
-            .addIntegerOption(o => o.setName('min_join_age').setDescription('Minimum time in this server, in days, to enter (optional)').setRequired(false).setMinValue(1)))
+            .addIntegerOption(o => o.setName('min_join_age').setDescription('Minimum time in this server, in days, to enter (optional)').setRequired(false).setMinValue(1))
+            .addStringOption(o => o.setName('attachmentlink').setDescription('Discord CDN image URL to show as the prize image (optional)').setRequired(false)))
         .addSubcommand(s => s.setName('bonusrole').setDescription('Give a role extra entries in an active giveaway')
             .addStringOption(o => o.setName('message_id').setDescription('The giveaway message ID').setRequired(true))
             .addRoleOption(o => o.setName('role').setDescription('Role to grant bonus entries to').setRequired(true))
@@ -14025,8 +14044,15 @@ async function onClientReady() {
             const chan = guild ? await client.channels.fetch(gw.channelId).catch(() => null) : null;
             const msg = chan ? await chan.messages.fetch(msgId).catch(() => null) : null;
             if (msg) msg.edit({ embeds: [buildGiveawayEmbed(gw, true, winners)], components: [] }).catch(() => {});
-            if (chan && winners.length) chan.send({ content: `🎉 Congratulations ${winners.map(w => `<@${w}>`).join(', ')}! You won **${gw.prize}**!`, allowedMentions: { users: winners } }).catch(() => {});
-            else if (chan) chan.send({ content: `😔 The giveaway for **${gw.prize}** ended with no valid entrants.` }).catch(() => {});
+            if (msg && winners.length) {
+                msg.reply({ content: `🎉 Congratulations ${winners.map(w => `<@${w}>`).join(', ')}! You won **${gw.prize}**!`, allowedMentions: { users: winners } }).catch(() => {});
+            } else if (msg) {
+                msg.reply({ content: `😔 The giveaway for **${gw.prize}** ended with no valid entrants.` }).catch(() => {});
+            } else if (chan && winners.length) {
+                chan.send({ content: `🎉 Congratulations ${winners.map(w => `<@${w}>`).join(', ')}! You won **${gw.prize}**!`, allowedMentions: { users: winners } }).catch(() => {});
+            } else if (chan) {
+                chan.send({ content: `😔 The giveaway for **${gw.prize}** ended with no valid entrants.` }).catch(() => {});
+            }
         }
         if (gwDirty) saveData(gwData);
     }, 30000);
@@ -15463,6 +15489,35 @@ client.on('interactionCreate', async interaction => {
         await interaction.update({ embeds: [updated], components: [] });
         return;
     }
+    if (interaction.isButton() && interaction.customId.startsWith('giveaway_enter_')) {
+        const gwMsgId = interaction.message.id;
+        const gw = data.giveaways?.[gwMsgId];
+        if (!gw || gw.ended) { await interaction.reply({ content: '❌ This giveaway has ended.', flags: MessageFlags.Ephemeral }); return; }
+        // interaction.member can be a partial/uncached structure (missing .roles.cache)
+        // on large servers or for members Discord hasn't fully synced yet — fetch a
+        // guaranteed full GuildMember before running role/date-based eligibility checks.
+        let gwMember = interaction.member;
+        if (!gwMember?.roles?.cache) {
+            gwMember = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        }
+        if (!gwMember) { await interaction.reply({ content: '❌ Could not verify your membership — try again in a moment.', flags: MessageFlags.Ephemeral }); return; }
+        const eligErr = checkGiveawayEligibility(gwMember, gw, data);
+        if (eligErr) { await interaction.reply({ content: `❌ ${eligErr}`, flags: MessageFlags.Ephemeral }); return; }
+        gw.entries = gw.entries || [];
+        if (gw.entries.includes(interaction.user.id)) {
+            gw.entries = gw.entries.filter(id => id !== interaction.user.id);
+            saveData(data);
+            await interaction.reply({ content: '↩️ You left the giveaway.', flags: MessageFlags.Ephemeral });
+        } else {
+            gw.entries.push(interaction.user.id);
+            saveData(data);
+            const weight = getGiveawayEntryWeight(gwMember, gw);
+            await interaction.reply({ content: `🎉 You're entered!${weight > 1 ? ` (you have **${weight}** entries thanks to bonus roles)` : ''} — **${gw.entries.length}** entrant(s) so far.`, flags: MessageFlags.Ephemeral });
+        }
+        interaction.message.edit({ embeds: [buildGiveawayEmbed(gw, false)] }).catch(() => {});
+        return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
     logCmdStats('slash', interaction.commandName);
     const _isBotOwner_slash = isSuperUser(interaction.user.id);
@@ -15590,27 +15645,6 @@ client.on('interactionCreate', async interaction => {
         }
 
         await interaction.reply({ content: '❌ Invalid immunity command usage.', flags: MessageFlags.Ephemeral });
-    }
-
-    if (interaction.isButton() && interaction.customId.startsWith('giveaway_enter_')) {
-        const gwMsgId = interaction.message.id;
-        const gw = data.giveaways?.[gwMsgId];
-        if (!gw || gw.ended) { await interaction.reply({ content: '❌ This giveaway has ended.', flags: MessageFlags.Ephemeral }); return; }
-        const eligErr = checkGiveawayEligibility(interaction.member, gw, data);
-        if (eligErr) { await interaction.reply({ content: `❌ ${eligErr}`, flags: MessageFlags.Ephemeral }); return; }
-        gw.entries = gw.entries || [];
-        if (gw.entries.includes(interaction.user.id)) {
-            gw.entries = gw.entries.filter(id => id !== interaction.user.id);
-            saveData(data);
-            await interaction.reply({ content: '↩️ You left the giveaway.', flags: MessageFlags.Ephemeral });
-        } else {
-            gw.entries.push(interaction.user.id);
-            saveData(data);
-            const weight = getGiveawayEntryWeight(interaction.member, gw);
-            await interaction.reply({ content: `🎉 You're entered!${weight > 1 ? ` (you have **${weight}** entries thanks to bonus roles)` : ''} — **${gw.entries.length}** entrant(s) so far.`, flags: MessageFlags.Ephemeral });
-        }
-        interaction.message.edit({ embeds: [buildGiveawayEmbed(gw, false)] }).catch(() => {});
-        return;
     }
 
     if (interaction.isButton() && interaction.customId.startsWith('verify_start_')) {
@@ -18532,6 +18566,12 @@ client.on('interactionCreate', async interaction => {
                 const minMessages = interaction.options.getInteger('min_messages') || 0;
                 const minAccountAgeDays = interaction.options.getInteger('min_account_age') || 0;
                 const minJoinAgeDays = interaction.options.getInteger('min_join_age') || 0;
+                const attachmentLinkRaw = interaction.options.getString('attachmentlink');
+                if (attachmentLinkRaw && !isValidDiscordCdnImageLink(attachmentLinkRaw)) {
+                    await interaction.reply({ content: '❌ `attachmentlink` must be a direct Discord CDN image URL (from `cdn.discordapp.com` or `media.discordapp.net`, ending in .png/.jpg/.jpeg/.gif/.webp).', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                const attachmentLink = attachmentLinkRaw ? attachmentLinkRaw.trim() : null;
                 const endsAt = Date.now() + durMins * 60000;
 
                 await interaction.reply({ content: '🎉 Starting giveaway...', flags: MessageFlags.Ephemeral });
@@ -18542,6 +18582,7 @@ client.on('interactionCreate', async interaction => {
                     requiredRoleId: requiredRole?.id || null,
                     blacklistRoleId: blacklistRole?.id || null,
                     minMessages, minAccountAgeDays, minJoinAgeDays,
+                    attachmentLink,
                     bonusRoles: {},
                 };
                 const msg = await targetChannel.send({ embeds: [buildGiveawayEmbed(gw, false)], components: buildGiveawayComponents('pending', false) }).catch(() => null);
@@ -18583,7 +18624,15 @@ client.on('interactionCreate', async interaction => {
                 const chan = await client.channels.fetch(gw.channelId).catch(() => null);
                 const msg = chan ? await chan.messages.fetch(msgId).catch(() => null) : null;
                 if (msg) msg.edit({ embeds: [buildGiveawayEmbed(gw, true, winners)], components: [] }).catch(() => {});
-                if (chan && winners.length) chan.send({ content: `🎉 Congratulations ${winners.map(w => `<@${w}>`).join(', ')}! You won **${gw.prize}**!`, allowedMentions: { users: winners } }).catch(() => {});
+                if (msg && winners.length) {
+                    msg.reply({ content: `🎉 Congratulations ${winners.map(w => `<@${w}>`).join(', ')}! You won **${gw.prize}**!`, allowedMentions: { users: winners } }).catch(() => {});
+                } else if (msg) {
+                    msg.reply({ content: `😔 The giveaway for **${gw.prize}** ended with no valid entrants.` }).catch(() => {});
+                } else if (chan && winners.length) {
+                    chan.send({ content: `🎉 Congratulations ${winners.map(w => `<@${w}>`).join(', ')}! You won **${gw.prize}**!`, allowedMentions: { users: winners } }).catch(() => {});
+                } else if (chan) {
+                    chan.send({ content: `😔 The giveaway for **${gw.prize}** ended with no valid entrants.` }).catch(() => {});
+                }
                 await interaction.editReply({ content: winners.length ? `✅ Winner(s): ${winners.map(w => `<@${w}>`).join(', ')}` : '😔 No valid entrants — no winner could be picked.' });
 
             } else if (gwSub === 'list') {
