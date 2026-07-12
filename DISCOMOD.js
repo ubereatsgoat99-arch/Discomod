@@ -3,6 +3,20 @@
 const roastBattles = new Map();
 const slashSessions = new Map();
 
+// ── Snipe caches ──────────────────────────────────────────────────────────────
+// Per-channel ring buffers, newest first. Capped to avoid unbounded memory growth.
+const SNIPE_CACHE_LIMIT = 25;
+const snipeDeleteCache  = new Map(); // channelId -> [{ author, content, attachments, timestamp }]
+const snipeEditCache    = new Map(); // channelId -> [{ author, before, after, timestamp }]
+const snipeReactionCache = new Map(); // channelId -> [{ user, emoji, messageId, messageUrl, messageAuthor, timestamp }]
+
+function pushSnipe(cache, channelId, entry) {
+    const arr = cache.get(channelId) || [];
+    arr.unshift(entry);
+    if (arr.length > SNIPE_CACHE_LIMIT) arr.length = SNIPE_CACHE_LIMIT;
+    cache.set(channelId, arr);
+}
+
 // ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║  SKYNET V7 — BLOX FRUITS ULTRA GUARDIAN                                     ║
 // ║  Professional-grade Discord moderation bot                                   ║
@@ -3439,7 +3453,7 @@ const client = new Client({
     // BUG FIX: Partials are required for the bot to receive DMs and DM-based
     // button interactions (appeal buttons sent to exiled users).
     // Without these, Discord silently drops DM events.
-    partials: [Partials.Channel, Partials.Message],
+    partials: [Partials.Channel, Partials.Message, Partials.Reaction],
 });
 
 function detectTrialsOrTrialsRecruitment(cleanText) {
@@ -13541,7 +13555,17 @@ const slashCommands = [
         .addSubcommandGroup(g => g.setName('emoji').setDescription('Steal/clone emojis into this server')
             .addSubcommand(s => s.setName('steal').setDescription('Clone an emoji (paste a custom emoji or an image URL) into this server')
                 .addStringOption(o => o.setName('emoji').setDescription('Paste the custom emoji (e.g. <:name:id>) or a direct image URL').setRequired(true))
-                .addStringOption(o => o.setName('name').setDescription('Name for the new emoji (defaults to source name)').setRequired(false)))),
+                .addStringOption(o => o.setName('name').setDescription('Name for the new emoji (defaults to source name)').setRequired(false))))
+        .addSubcommandGroup(g => g.setName('snipe').setDescription('Recover recently deleted/edited messages and reactions')
+            .addSubcommand(s => s.setName('snipe').setDescription('Show a recently deleted message')
+                .addChannelOption(o => o.setName('channel').setDescription('Channel to snipe (default: here)').setRequired(false))
+                .addIntegerOption(o => o.setName('num').setDescription('How far back to go (default 1)').setRequired(false).setMinValue(1).setMaxValue(25)))
+            .addSubcommand(s => s.setName('esnipe').setDescription('Show a recently edited message')
+                .addChannelOption(o => o.setName('channel').setDescription('Channel to snipe (default: here)').setRequired(false))
+                .addIntegerOption(o => o.setName('num').setDescription('How far back to go (default 1)').setRequired(false).setMinValue(1).setMaxValue(25)))
+            .addSubcommand(s => s.setName('rsnipe').setDescription('Show a recently removed reaction')
+                .addChannelOption(o => o.setName('channel').setDescription('Channel to snipe (default: here)').setRequired(false))
+                .addIntegerOption(o => o.setName('num').setDescription('How far back to go (default 1)').setRequired(false).setMinValue(1).setMaxValue(25)))),
 
     // ══════════════════════════════════════════════════════════════════════════
     //  TICKET SYSTEM
@@ -21482,6 +21506,64 @@ client.on('interactionCreate', async interaction => {
                 break;
             }
 
+            // ── SNIPE ────────────────────────────────────────────────────────
+            if (tGroup === 'snipe') {
+                const snipeChannel = interaction.options.getChannel('channel') || interaction.channel;
+                const num = interaction.options.getInteger('num') || 1;
+
+                if (tSub === 'snipe') {
+                    const list = snipeDeleteCache.get(snipeChannel.id) || [];
+                    const entry = list[num - 1];
+                    if (!entry) { await interaction.reply({ content: `❌ Nothing to snipe in <#${snipeChannel.id}> at position ${num}. (${list.length} deleted message(s) cached)`, flags: MessageFlags.Ephemeral }); return; }
+                    const embed = new EmbedBuilder()
+                        .setTitle('🗑️ Sniped Message')
+                        .setColor(0xFF6B6B)
+                        .addFields(
+                            { name: 'Author',  value: entry.authorId ? `<@${entry.authorId}> (${entry.authorTag})` : entry.authorTag, inline: true },
+                            { name: 'Channel', value: `<#${snipeChannel.id}>`, inline: true },
+                            { name: 'Content', value: (entry.content || '*(empty)*').slice(0, 1024), inline: false },
+                        )
+                        .setFooter({ text: `${num} of ${list.length} cached` })
+                        .setTimestamp(entry.timestamp);
+                    if (entry.attachments?.length) embed.addFields({ name: 'Attachments', value: entry.attachments.join('\n').slice(0, 1024), inline: false });
+                    await interaction.reply({ embeds: [embed] });
+                } else if (tSub === 'esnipe') {
+                    const list = snipeEditCache.get(snipeChannel.id) || [];
+                    const entry = list[num - 1];
+                    if (!entry) { await interaction.reply({ content: `❌ Nothing to snipe in <#${snipeChannel.id}> at position ${num}. (${list.length} edited message(s) cached)`, flags: MessageFlags.Ephemeral }); return; }
+                    const embed = new EmbedBuilder()
+                        .setTitle('✏️ Sniped Edit')
+                        .setColor(0xFFA500)
+                        .setURL(entry.url)
+                        .addFields(
+                            { name: 'Author',  value: `<@${entry.authorId}> (${entry.authorTag})`, inline: true },
+                            { name: 'Channel', value: `<#${snipeChannel.id}>`, inline: true },
+                            { name: 'Before',  value: (entry.before || '*(empty)*').slice(0, 1024), inline: false },
+                            { name: 'After',   value: (entry.after || '*(empty)*').slice(0, 1024), inline: false },
+                        )
+                        .setFooter({ text: `${num} of ${list.length} cached` })
+                        .setTimestamp(entry.timestamp);
+                    await interaction.reply({ embeds: [embed] });
+                } else if (tSub === 'rsnipe') {
+                    const list = snipeReactionCache.get(snipeChannel.id) || [];
+                    const entry = list[num - 1];
+                    if (!entry) { await interaction.reply({ content: `❌ Nothing to snipe in <#${snipeChannel.id}> at position ${num}. (${list.length} removed reaction(s) cached)`, flags: MessageFlags.Ephemeral }); return; }
+                    const embed = new EmbedBuilder()
+                        .setTitle('💢 Sniped Reaction Removal')
+                        .setColor(0x5865F2)
+                        .addFields(
+                            { name: 'User',    value: `<@${entry.userId}> (${entry.userTag})`, inline: true },
+                            { name: 'Emoji',   value: String(entry.emoji), inline: true },
+                            { name: 'Channel', value: `<#${snipeChannel.id}>`, inline: true },
+                            { name: 'Message', value: entry.messageUrl ? `[Jump to message](${entry.messageUrl}) (by ${entry.messageAuthorTag})` : 'Unknown', inline: false },
+                        )
+                        .setFooter({ text: `${num} of ${list.length} cached` })
+                        .setTimestamp(entry.timestamp);
+                    await interaction.reply({ embeds: [embed] });
+                }
+                break;
+            }
+
             break;
         }
 
@@ -21538,6 +21620,13 @@ client.on('guildMemberRemove', async member => {
 // ── Message Delete ────────────────────────────────────────────────────────────
 client.on('messageDelete', async message => {
     if (!message.guild || message.author?.bot) return;
+    pushSnipe(snipeDeleteCache, message.channelId, {
+        authorId: message.author?.id || null,
+        authorTag: message.author?.tag || 'Unknown',
+        content: message.content || '',
+        attachments: [...message.attachments.values()].map(a => a.url),
+        timestamp: Date.now(),
+    });
     const data = loadData();
     const gs   = getGuildSettings(message.guild.id, data);
     const content = message.content || (message.attachments.size ? '[attachment]' : '[embed/component]');
@@ -21555,6 +21644,16 @@ client.on('messageDelete', async message => {
 // ── Message Bulk Delete (purge) ───────────────────────────────────────────────
 client.on('messageDeleteBulk', async (messages, channel) => {
     if (!channel?.guild) return;
+    for (const m of messages.values()) {
+        if (m.author?.bot) continue;
+        pushSnipe(snipeDeleteCache, channel.id, {
+            authorId: m.author?.id || null,
+            authorTag: m.author?.tag || 'Unknown',
+            content: m.content || '',
+            attachments: [...(m.attachments?.values() || [])].map(a => a.url),
+            timestamp: Date.now(),
+        });
+    }
     const data = loadData();
     const gs   = getGuildSettings(channel.guild.id, data);
     const real = [...messages.values()].filter(m => !m.author?.bot);
@@ -21578,6 +21677,14 @@ client.on('messageDeleteBulk', async (messages, channel) => {
 client.on('messageUpdate', async (oldMsg, newMsg) => {
     if (!newMsg.guild || newMsg.author?.bot) return;
     if (oldMsg.content === newMsg.content) return; // only log actual content changes
+    pushSnipe(snipeEditCache, newMsg.channelId, {
+        authorId: newMsg.author.id,
+        authorTag: newMsg.author.tag,
+        before: oldMsg.content || '',
+        after: newMsg.content || '',
+        url: newMsg.url,
+        timestamp: Date.now(),
+    });
     const data = loadData();
     const gs   = getGuildSettings(newMsg.guild.id, data);
     await universalLog(newMsg.guild, data, gs, 'messageEdit', new EmbedBuilder()
@@ -22231,6 +22338,16 @@ client.on('messageReactionRemove', async (reaction, user) => {
     } catch { return; }
     const msg = reaction.message;
     if (!msg.guild) return;
+    const emojiDisplay = reaction.emoji.id ? `<${reaction.emoji.animated?'a':''}:${reaction.emoji.name}:${reaction.emoji.id}>` : reaction.emoji.name;
+    pushSnipe(snipeReactionCache, msg.channelId, {
+        userId: user.id,
+        userTag: user.tag,
+        emoji: emojiDisplay,
+        messageId: msg.id,
+        messageUrl: msg.url,
+        messageAuthorTag: msg.author?.tag || 'Unknown',
+        timestamp: Date.now(),
+    });
     const data = loadData();
     const gs   = getGuildSettings(msg.guild.id, data);
     const rrList = gs.reactionRoles?.[msg.id];
