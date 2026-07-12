@@ -43,7 +43,7 @@ const {
     ActionRowBuilder, ButtonBuilder, ButtonStyle,
     ModalBuilder, TextInputBuilder, TextInputStyle,
     ChannelType, Collection, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
-    MessageFlags,
+    MessageFlags, AuditLogEvent,
     Partials,
 } = require('discord.js');
 const fs   = require('fs');
@@ -340,7 +340,7 @@ const ai2State = {
     claudeModel: String(ai2Config?.bot?.claude_model || 'claude-haiku-4-5-20251001'),
     geminiModel: String(ai2Config?.bot?.gemini_model || 'gemini-2.5-flash'), // NOTE: gemini-1.5-* and gemini-2.0-* have been shut down by Google — 2.5 is the current stable line
     mistralModel: String(ai2Config?.bot?.mistral_model || 'mistral-large-latest'),
-    deepseekModel: String(ai2Config?.bot?.deepseek_model || 'deepseek-chat'),
+    deepseekModel: String(ai2Config?.bot?.deepseek_model || 'deepseek-v4-flash'),
     grokModel: String(ai2Config?.bot?.grok_model || 'grok-4.3'),
     errorWebhook: String(ai2Config?.notifications?.error_webhook || ''),
     ratelimitNotifications: !!ai2Config?.notifications?.ratelimit_notifications,
@@ -1678,7 +1678,7 @@ const SLASH_COMMANDS_LIST = [
     { name: '/exile user [duration] [reason]',desc: 'Exile a member for a specified duration (admin).' },
     { name: '/unexile user',                  desc: 'Lift exile from a member (admin).' },
     { name: '/exilelist',                     desc: 'List all currently exiled members (mods/admin).' },
-    { name: '/exileduration set duration <m>',desc: 'Set default exile duration in minutes (admin).' },
+    { name: '/exileconfig duration set <m>',  desc: 'Set default exile duration in minutes (admin).' },
     { name: '/purge count amount',            desc: 'Bulk-delete N messages in this channel (mods/admin).' },
     { name: '/purge user user [amount]',      desc: 'Bulk-delete messages from a specific user (mods/admin).' },
     { name: '/lock [reason]',                 desc: 'Lock the current channel (admin).' },
@@ -3431,6 +3431,7 @@ const client = new Client({
         GatewayIntentBits.GuildMessageReactions,        // messageReactionAdd/Remove (starboard, reaction roles)
         GatewayIntentBits.GuildInvites,                 // inviteCreate / inviteDelete
         GatewayIntentBits.GuildEmojisAndStickers,        // emojiCreate/Delete + stickerCreate/Update/Delete
+        GatewayIntentBits.GuildWebhooks,                 // webhooksUpdate (anti-nuke webhook-spam detection)
         GatewayIntentBits.GuildScheduledEvents,          // guildScheduledEvent* logging
         GatewayIntentBits.AutoModerationConfiguration,   // autoModerationRule* logging
         GatewayIntentBits.AutoModerationExecution,       // autoModerationActionExecution logging
@@ -3972,12 +3973,17 @@ function getViolationHistory(data, uid) {
     if (!v || typeof v === 'number') return [];
     return Array.isArray(v.history) ? v.history : [];
 }
-function addViolationEntry(data, uid, { reason = 'Rule violation', category = 'unknown', by = null } = {}) {
+function addViolationEntry(data, uid, { reason = 'Rule violation', category = 'unknown', by = null, expiresAt = null, guildId = null } = {}) {
     const count = getViolationCount(data, uid);
     const history = getViolationHistory(data, uid);
     const newCount = count + 1;
     const warnId = `w_${Date.now()}_${uid}`;
-    history.push({ warnId, reason: String(reason).slice(0, 300), category: String(category).slice(0, 80), timestamp: Date.now(), by: by ? String(by) : null });
+    history.push({
+        warnId, reason: String(reason).slice(0, 300), category: String(category).slice(0, 80),
+        timestamp: Date.now(), by: by ? String(by) : null,
+        expiresAt: (typeof expiresAt === 'number' && expiresAt > Date.now()) ? expiresAt : null,
+        guildId: guildId ? String(guildId) : null,
+    });
     data.violations[uid] = { count: newCount, history };
     return newCount;
 }
@@ -5120,7 +5126,7 @@ function detectObfuscatedDomains(rawText, extraAllowed) {
         // false positives like "more. feel" → "more.feel" where "feel" isn't a TLD.
         if (!REAL_TLDS.has(tld)) return false;
         // Guard: skip pure version/numeric strings like v1.0, 2.5.1, 4k, 60fps, etc.
-        if (/^v?\d+(?:[._]\d+)*[a-z]{0,3}$/i.test(candidate.trim())) return false;
+        if (/^v?\d+(?:[._]\d+)*[a-z]{0,3}$/i.test(cleaned.trim())) return false;
         // ── Sentence-boundary guard ───────────────────────────────────────────
         // Even if "word.tld" passes the TLD check (e.g. "today.it", "pretty.me"),
         // verify that in the ORIGINAL raw text the dot is actually attached to the
@@ -5173,6 +5179,49 @@ function isCategoryImmune(member, guildId, data, category) {
     return false;
 }
 
+// Parses a free-text option value ("#general, 123456789012345678 <#987654321098765432>")
+// into an array of unique channel-ID strings. Accepts raw IDs and <#id> mentions.
+function parseChannelIdsFromText(raw) {
+    if (!raw) return [];
+    const ids = new Set();
+    const mentionRe = /<#(\d{15,20})>/g;
+    let m;
+    while ((m = mentionRe.exec(raw)) !== null) ids.add(m[1]);
+    for (const tok of raw.split(/[\s,]+/)) {
+        if (/^\d{15,20}$/.test(tok)) ids.add(tok);
+    }
+    return Array.from(ids);
+}
+
+const CHECK_CATEGORIES = ['spam', 'scam', 'command', 'trade', 'service', 'beg', 'acctrade'];
+
+// Returns the check-override bucket for a category, creating it if needed.
+function getCheckOverride(gs, category) {
+    if (!gs.checkOverrides) gs.checkOverrides = {};
+    if (!gs.checkOverrides[category]) {
+        gs.checkOverrides[category] = { disabledUntil: null, disabledChannels: {} };
+    }
+    return gs.checkOverrides[category];
+}
+
+// Returns true if `category` is currently suppressed in `channelId`, either
+// server-wide or for that specific channel, accounting for expiry.
+function isCheckDisabled(gs, category, channelId) {
+    const ov = gs.checkOverrides?.[category];
+    if (!ov) return false;
+    const now = Date.now();
+    // Server-wide disable
+    if (ov.disabledUntil !== undefined && ov.disabledUntil !== null) {
+        if (ov.disabledUntil === 0 || ov.disabledUntil > now) return true;
+    }
+    // Per-channel disable
+    const chUntil = ov.disabledChannels?.[channelId];
+    if (chUntil !== undefined && chUntil !== null) {
+        if (chUntil === 0 || chUntil > now) return true;
+    }
+    return false;
+}
+
 // ══════════════════════════════════════════════════════════
 //  MANAGER SYSTEM — grants full bot access to specific roles/users
 // ══════════════════════════════════════════════════════════
@@ -5182,6 +5231,11 @@ function isCategoryImmune(member, guildId, data, category) {
  */
 function isManagerMember(member, guildId, data) {
     if (!member) return false;
+    // The server owner always has full manager-level access to the bot --
+    // the same access bot managers and administrators have -- regardless of
+    // roles, permission overwrites, or whether they were ever explicitly
+    // added to the manager list.
+    if (member.guild && String(member.guild.ownerId) === String(member.id)) return true;
     const gs = getGuildSettings(guildId, data);
     const managerUsers = Array.isArray(gs.managerUsers) ? gs.managerUsers : [];
     const managerRoles = Array.isArray(gs.managerRoles) ? gs.managerRoles : [];
@@ -6590,6 +6644,26 @@ const COMMON_WORD_WHITELIST = new Set([
     "dev","developer","developers","admin","admins","mod","mods","staff",
     "support","help","faq","guide","tutorial","tips","tricks","strategy",
     "walkthrough","howto","explain","taught","showing","demonstrating",
+
+    // ── Common everyday words that are ALSO FRUITS/category entries ───────────
+    // (the perm-context rescan comment further down already assumed these were
+    // here; without them, ordinary sentences like "ice cream", "gas station",
+    // "in good spirits" were being counted as fruit-name hits by genericScan)
+    "ice","gas","sand","smoke","flame","spirit","ghost","pain","spring","bomb",
+    "spike","rubber","rocket","spin","chop","gravity","quake","dough","tiger",
+    "eagle","lightning","creation","portal","shadow","venom","kilo","spider",
+
+    // ── More common-word collisions found by testing the full FRUITS list
+    // against an English dictionary (fuzzy-match false positives) ─────────────
+    "trouble","honest","honesty","blame","blamed","blaming","finger","fingers",
+    "bigger","higher","ginger","singer","ground","found","pound","pounds",
+    "bound","mound","hound","around","background","shirt","shirts","skirt",
+    "fighting","fight","fights","gray","grey","cavity","gravy","grit","gritty",
+    "caption","captions","bought","cough","drought","duh","drag","drags",
+    "dragging","angle","angles","angled","mocked","mocking","monkey","monkeys",
+    "picked","pickle","pickles","pride","sprint","sprinting","inspiring",
+    "gasping","rocky","robber","robbery","robbed","rubbed","crumble","crumbs",
+    "shade","shady","controller","controllers","controls","controlled",
 ]);
 
 // ══════════════════════════════════════════════════════════
@@ -9184,7 +9258,7 @@ function tokenize(text) {
 
 function tokenMatchesList(token, list, aliasMap, threshold = FUZZY_THRESHOLD) {
     if (token.length < 2) return null;
-    if (aliasMap[token]) return aliasMap[token];
+    if (aliasMap && Object.prototype.hasOwnProperty.call(aliasMap, token)) return aliasMap[token];
     for (const entry of list) {
         const ec = entry.replace(/[\s\-'\/]/g, '');
         if (ec.length < SHORT_MIN_LEN) { if (token === ec) return entry; continue; }
@@ -9207,7 +9281,7 @@ function genericScan(cleanText, list, aliasMap, threshold = FUZZY_THRESHOLD) {
     }
     for (const tok of compound) {
         if (tok.length < 3) continue;
-        if (aliasMap[tok] && !found.includes(aliasMap[tok])) { found.push(aliasMap[tok]); continue; }
+        if (aliasMap && Object.prototype.hasOwnProperty.call(aliasMap, tok) && !found.includes(aliasMap[tok])) { found.push(aliasMap[tok]); continue; }
         for (const entry of list) {
             const ec = entry.replace(/[\s\-'\/]/g, '');
             if (ec === tok && !found.includes(entry)) { found.push(entry); break; }
@@ -9441,9 +9515,9 @@ function detectBegging(cleanText) {
     }
     if (!hasBeg) return false;
     const fruits = scanForFruits(cleanText);
-    for (const f of FRUITS) {
-        const fc = f.replace(/[\s\-]/g,'');
-        if (ns.includes(fc) && !fruits.includes(f)) fruits.push(f);
+    for (const tok of toks) {
+        const m = tokenMatchesList(tok, FRUITS, FRUIT_ALIASES);
+        if (m && !fruits.includes(m)) fruits.push(m);
     }
     if (!fruits.length) return false;
     if (toks.length <= 10) return true;
@@ -9452,9 +9526,9 @@ function detectBegging(cleanText) {
         let m;
         while ((m = pat.exec(cleanText)) !== null) {
             const win = cleanText.slice(Math.max(0,m.index-60), Math.min(cleanText.length, m.index+beg.length+60));
-            for (const f of FRUITS) {
-                const fc = f.replace(/[\s\-]/g,'');
-                if (fc.length >= 3 && win.includes(fc)) return true;
+            const winToks = (win.match(/[a-z0-9]+/g) || []);
+            for (const tok of winToks) {
+                if (tokenMatchesList(tok, FRUITS, FRUIT_ALIASES)) return true;
             }
         }
     }
@@ -11247,6 +11321,155 @@ const COMMON_ALLOWED_DOMAINS = [
     'eldorado.gg',
     'z2u.com',
     'igvault.com',
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MASSIVE EXTRA ALLOWLIST — added for broader false-positive coverage
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // ── Social media / messaging (global) ──────────────────────────────────────
+    'facebook.com','fb.com','fb.watch','messenger.com','instagram.com',
+    'threads.net','whatsapp.com','wa.me','snapchat.com','pinterest.com',
+    'pinterest.co.uk','tumblr.com','linkedin.com','lnkd.in','mastodon.social',
+    'mastodon.online','bsky.app','bsky.social','nextdoor.com','myspace.com',
+    'vk.com','weibo.com','line.me','kakao.com','viber.com','signal.org',
+    'telegram.me','clubhouse.com','bereal.com','lemon8-app.com','vsco.co',
+    'flickr.com','500px.com','deviantart.com','artstation.com','behance.net',
+    'dribbble.com','tiktok.com','douyin.com','kuaishou.com',
+
+    // ── Video / streaming platforms ────────────────────────────────────────────
+    'netflix.com','hulu.com','disneyplus.com','disney.com','max.com','hbomax.com',
+    'peacocktv.com','paramountplus.com','crunchyroll.com','funimation.com',
+    'vimeo.com','dailymotion.com','rumble.com','odysee.com','streamable.com',
+    'kick.com','trovo.live','vlive.tv','bilibili.com','niconico.jp',
+    'ted.com','viki.com','plex.tv','tubitv.com','pluto.tv','archive.org',
+
+    // ── Image / GIF / screenshot hosting ────────────────────────────────────────
+    'ibb.co','postimg.cc','postimages.org','imgbb.com','prnt.sc','lightshot.com',
+    'imageshack.com','tinypic.com','photobucket.com','unsplash.com','pexels.com',
+    'pixabay.com','giphy.com','tenor.com','imgflip.com','9gag.com','knowyourmeme.com',
+    'redd.it','i.redd.it','v.redd.it','preview.redd.it',
+
+    // ── Cloud storage / file sharing ────────────────────────────────────────────
+    'dropbox.com','db.tt','onedrive.live.com','1drv.ms','icloud.com',
+    'mega.nz','mega.io','mediafire.com','wetransfer.com','we.tl','box.com',
+    'pcloud.com','sync.com','filemail.com','sendspace.com','zippyshare.com',
+    'transfernow.net','swisstransfer.com','gofile.io',
+
+    // ── Developer / code hosting & deployment ───────────────────────────────────
+    'gitlab.com','bitbucket.org','sourceforge.net','npmjs.com','pypi.org',
+    'rubygems.org','packagist.org','crates.io','nuget.org','replit.com',
+    'repl.it','glitch.com','jsfiddle.net','codepen.io','stackblitz.com',
+    'vercel.app','vercel.com','netlify.app','netlify.com','herokuapp.com',
+    'heroku.com','render.com','railway.app','fly.io','pages.dev','workers.dev',
+    'firebaseapp.com','web.app','pythonanywhere.com','ngrok.io','ngrok-free.app',
+    'gitpod.io','sourcehut.org','gitea.io','gitee.com','readthedocs.io',
+    'readthedocs.org','npm.im','jsdelivr.net','unpkg.com','skypack.dev',
+    'observablehq.com','kaggle.com','huggingface.co','colab.research.google.com',
+
+    // ── Gaming platforms / storefronts / launchers ──────────────────────────────
+    'steampowered.com','steamcommunity.com','store.steampowered.com',
+    'epicgames.com','store.epicgames.com','unrealengine.com','itch.io',
+    'gog.com','ea.com','origin.com','ubisoft.com','ubi.com','battle.net',
+    'xbox.com','playstation.com','nintendo.com','nintendo.co.uk',
+    'minecraft.net','curseforge.com','modrinth.com','nexusmods.com',
+    'ign.com','gamespot.com','polygon.com','kotaku.com','pcgamer.com',
+    'eurogamer.net','gamesradar.com','metacritic.com','howlongtobeat.com',
+    'speedrun.com','twitchcon.com','humblebundle.com','fanatical.com',
+
+    // ── Roblox-adjacent fan tools & trading (Blox Fruits community specific) ────
+    'rolimons.com','rblx.trade','rbxutil.com','bloxlink.com','rblx.gg',
+    'rblxtrade.com','robloxian.com','ugc.roblox.com','thumbnails.roblox.com',
+    'assetdelivery.roblox.com','games.roblox.com','avatar.roblox.com',
+    'inventory.roblox.com','friends.roblox.com','groups.roblox.com',
+    'catalog.roblox.com','economy.roblox.com','badges.roblox.com',
+    'gamejolt.com','robloxdb.com','rtrack.gg',
+
+    // ── Marketplaces / e-commerce ───────────────────────────────────────────────
+    'ebay.com','ebay.co.uk','etsy.com','walmart.com','target.com','bestbuy.com',
+    'aliexpress.com','alibaba.com','shopify.com','newegg.com','costco.com',
+    'wish.com','mercari.com','poshmark.com','depop.com','stockx.com',
+    'goat.com','facebook.com/marketplace','offerup.com','craigslist.org',
+    'shein.com','temu.com','g2a.com','kinguin.net','cdkeys.com',
+
+    // ── Payment processors / financial ──────────────────────────────────────────
+    'paypal.com','paypal.me','venmo.com','cash.app','stripe.com','skrill.com',
+    'payoneer.com','wise.com','revolut.com','zellepay.com','apple.com/apple-pay',
+    'squareup.com','klarna.com','afterpay.com','coinbase.com','binance.com',
+    'kraken.com','robinhood.com','chime.com','xe.com',
+
+    // ── News & media (major, reputable outlets) ─────────────────────────────────
+    'bbc.com','bbc.co.uk','cnn.com','reuters.com','apnews.com','nytimes.com',
+    'washingtonpost.com','theguardian.com','npr.org','forbes.com','bloomberg.com',
+    'wsj.com','usatoday.com','time.com','newsweek.com','abcnews.go.com',
+    'cbsnews.com','nbcnews.com','foxnews.com','aljazeera.com','dw.com',
+    'techcrunch.com','theverge.com','engadget.com','arstechnica.com',
+    'wired.com','cnet.com','mashable.com','buzzfeed.com','vice.com',
+
+    // ── Reference / wikis ────────────────────────────────────────────────────────
+    'wikipedia.org','wiktionary.org','wikimedia.org','wikihow.com',
+    'britannica.com','dictionary.com','merriam-webster.com','thesaurus.com',
+    'fandom.com','wikia.org','archiveofourown.org','goodreads.com',
+
+    // ── Education / learning ────────────────────────────────────────────────────
+    'quizlet.com','codecademy.com','freecodecamp.org','edpuzzle.com',
+    'khan.academy','ck12.org','ixl.com','chegg.com','coursehero.com',
+    'ocw.mit.edu','udacity.com','skillshare.com','masterclass.com',
+    'brainly.com','studocu.com','scholar.google.com',
+
+    // ── Productivity / communication / office tools ─────────────────────────────
+    'zoom.us','meet.google.com','teams.microsoft.com','slack.com',
+    'notion.so','trello.com','asana.com','monday.com','clickup.com',
+    'airtable.com','docs.google.com','sheets.google.com','slides.google.com',
+    'forms.google.com','office.com','office365.com','live.com','outlook.com',
+    'protonmail.com','proton.me','tutanota.com','zoho.com','basecamp.com',
+    'evernote.com','todoist.com','miro.com','figma.com','canva.com',
+    'grammarly.com','loom.com','calendly.com',
+
+    // ── Search engines ───────────────────────────────────────────────────────────
+    'bing.com','duckduckgo.com','yahoo.com','baidu.com','yandex.com','ecosia.org',
+
+    // ── Music / audio streaming ──────────────────────────────────────────────────
+    'music.apple.com','music.amazon.com','tidal.com','deezer.com',
+    'bandcamp.com','audiomack.com','mixcloud.com','last.fm','genius.com',
+    'shazam.com','anchor.fm','podcasts.apple.com','overcast.fm',
+
+    // ── Forums / community platforms ─────────────────────────────────────────────
+    'quora.com','stackexchange.com','superuser.com','askubuntu.com',
+    'producthunt.com','indiehackers.com','hackernews.com','ycombinator.com',
+    'digg.com','metafilter.com','neogaf.com','resetera.com',
+
+    // ── Browser / OS / software vendors ──────────────────────────────────────────
+    'mozilla.org','firefox.com','apple.com','microsoft.com','windows.com',
+    'ubuntu.com','debian.org','fedoraproject.org','linuxmint.com','opera.com',
+    'brave.com','vivaldi.com','adobe.com','autodesk.com','vlc.org',
+    'winrar.com','7-zip.org','virustotal.com','malwarebytes.com','avast.com',
+    'norton.com','mcafee.com','kaspersky.com',
+
+    // ── CDN / infrastructure / cloud providers ───────────────────────────────────
+    'cloudflare.com','cloudflare-dns.com','akamaized.net','fastly.net',
+    'amazonaws.com','cloudfront.net','googleusercontent.com','googleapis.com',
+    'azureedge.net','azurewebsites.net','digitalocean.com','linode.com',
+    'vultr.com','ovh.com','godaddy.com','namecheap.com','cloudinary.com',
+
+    // ── Link-in-bio / creator tools commonly seen in Discord profiles ────────────
+    'linktr.ee','linktree.com','beacons.ai','carrd.co','bio.link','solo.to',
+    'komi.io','withkoji.com','stan.store','buymeacoffee.com','ko-fi.com',
+    'patreon.com','opencollective.com','gofundme.com','kickstarter.com',
+    'indiegogo.com',
+
+    // ── Weather / maps / utility ──────────────────────────────────────────────────
+    'weather.com','accuweather.com','maps.google.com','goo.gl/maps',
+    'openstreetmap.org','wolframalpha.com','speedtest.net','fast.com',
+    'whatismyip.com','down.com','downdetector.com','translate.google.com',
+    'deepl.com',
+
+    // ── Sports ────────────────────────────────────────────────────────────────────
+    'espn.com','nba.com','nfl.com','mlb.com','fifa.com','uefa.com',
+    'formula1.com','olympics.com',
+
+    // ── Government / official (generic, non-country-specific patterns handled
+    //    by domainInList's subdomain match; a few common ones added explicitly) ──
+    'usa.gov','irs.gov','usps.com','fbi.gov','who.int','un.org','europa.eu',
 ];
 
 function classifyLinkDomains(domains, gs) {
@@ -11696,6 +11919,421 @@ function clearPartial(uid) { _partial.delete(uid); }
 setInterval(() => { const now=Date.now()/1000; for(const[uid,v] of _partial) if(now-v.timestamp>SPLIT_MESSAGE_TTL) _partial.delete(uid); }, 120000);
 
 // ══════════════════════════════════════════════════════════
+//  MESSAGE STATS — in-memory buffer, flushed to disk periodically
+//  (never saveData() per-message: that does a full backup + JSON
+//  rewrite and would badly bottleneck a busy server)
+// ══════════════════════════════════════════════════════════
+const _msgStatsBuffer = new Map(); // `${guildId}:${uid}` -> count since last flush
+// ══════════════════════════════════════════════════════════
+//  CAPTCHA VERIFICATION
+// ══════════════════════════════════════════════════════════
+const _verifyCodes = new Map(); // userId -> { code, expiresAt, guildId }
+// ══════════════════════════════════════════════════════════
+//  LEVELING SYSTEM — fully customizable XP curve
+// ══════════════════════════════════════════════════════════
+function getLevelingConfig(gs) {
+    const lc = gs.leveling || {};
+    return {
+        enabled: !!lc.enabled,
+        curveType: lc.curveType || 'linear',       // 'linear' | 'quadratic' | 'exponential'
+        baseXp: Number.isFinite(lc.baseXp) ? lc.baseXp : 100,
+        growthFactor: Number.isFinite(lc.growthFactor) ? lc.growthFactor : 50,
+        xpMin: Number.isFinite(lc.xpMin) ? lc.xpMin : 15,
+        xpMax: Number.isFinite(lc.xpMax) ? lc.xpMax : 25,
+        cooldownSec: Number.isFinite(lc.cooldownSec) ? lc.cooldownSec : 60,
+        levelUpChannelId: lc.levelUpChannelId || null,
+        levelUpMessage: lc.levelUpMessage || '🎉 {user} just reached **Level {level}**!',
+        roles: lc.roles || {}, // { [level]: roleId }
+    };
+}
+
+// XP required to go from `level` to `level+1`, per the configured curve.
+function xpNeededForLevel(cfg, level) {
+    if (cfg.curveType === 'quadratic') return Math.round(cfg.baseXp + cfg.growthFactor * level * level);
+    if (cfg.curveType === 'exponential') return Math.round(cfg.baseXp * Math.pow(1 + Math.max(0, cfg.growthFactor) / 100, level));
+    return Math.round(cfg.baseXp + cfg.growthFactor * level); // linear
+}
+
+// Total cumulative XP required to REACH `level` from 0.
+function totalXpForLevel(cfg, level) {
+    let total = 0;
+    for (let l = 0; l < level; l++) total += xpNeededForLevel(cfg, l);
+    return total;
+}
+
+function computeLevelFromXp(cfg, totalXp) {
+    let level = 0, used = 0;
+    while (level < 10000) {
+        const need = xpNeededForLevel(cfg, level);
+        if (used + need > totalXp) break;
+        used += need;
+        level++;
+    }
+    return { level, xpIntoLevel: totalXp - used, xpForNextLevel: xpNeededForLevel(cfg, level) };
+}
+
+const _xpBuffer = new Map();    // `${guildId}:${uid}` -> buffered XP since last flush
+const _lastXpGainAt = new Map(); // `${guildId}:${uid}` -> timestamp (cooldown only, never persisted)
+
+function getTotalXp(data, guildId, uid) {
+    const persisted = data.levels?.[guildId]?.[uid]?.xp || 0;
+    return persisted + (_xpBuffer.get(`${guildId}:${uid}`) || 0);
+}
+
+function flushXpBuffer() {
+    if (_xpBuffer.size === 0) return;
+    const d = loadData();
+    d.levels = d.levels || {};
+    for (const [key, amount] of _xpBuffer) {
+        const sep = key.indexOf(':');
+        const gId = key.slice(0, sep), uId = key.slice(sep + 1);
+        d.levels[gId] = d.levels[gId] || {};
+        const rec = d.levels[gId][uId] || (d.levels[gId][uId] = { xp: 0 });
+        rec.xp = (rec.xp || 0) + amount;
+    }
+    _xpBuffer.clear();
+    saveData(d);
+}
+setInterval(flushXpBuffer, 60000);
+
+// ══════════════════════════════════════════════════════════
+//  ANTI-NUKE — rate-limits destructive actions per actor and auto-punishes
+// ══════════════════════════════════════════════════════════
+const DEFAULT_ANTINUKE_THRESHOLDS = {
+    channelDelete: { count: 3, windowSec: 30 },
+    roleDelete:    { count: 3, windowSec: 30 },
+    ban:           { count: 3, windowSec: 30 },
+    kick:          { count: 5, windowSec: 30 },
+    webhookCreate: { count: 3, windowSec: 60 },
+    memberPrune:   { count: 1, windowSec: 30 }, // mass-prune is always suspicious
+};
+const _antiNukeActions = new Map(); // `${guildId}:${actorId}:${actionType}` -> [timestamps]
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, arr] of _antiNukeActions) {
+        const kept = arr.filter(t => now - t < 5 * 60000);
+        if (kept.length) _antiNukeActions.set(key, kept); else _antiNukeActions.delete(key);
+    }
+}, 60000);
+
+function getAntiNukeConfig(gs) {
+    const an = gs.antinuke || {};
+    return {
+        enabled: !!an.enabled,
+        punishment: an.punishment || 'strip_roles', // 'strip_roles' | 'kick' | 'ban'
+        whitelistUserIds: an.whitelistUserIds || [],
+        whitelistRoleIds: an.whitelistRoleIds || [],
+        thresholds: { ...DEFAULT_ANTINUKE_THRESHOLDS, ...(an.thresholds || {}) },
+    };
+}
+
+// Looks up the most recent audit-log entry for `actionType` targeting `targetId`,
+// within the last ~10 seconds, and returns the executor's user ID (or null).
+async function findAuditLogActor(guild, auditLogEventType, targetId) {
+    try {
+        const logs = await guild.fetchAuditLogs({ type: auditLogEventType, limit: 5 });
+        const entry = logs.entries.find(e => (!targetId || e.targetId === targetId) && (Date.now() - e.createdTimestamp) < 10000);
+        return entry ? entry.executorId : null;
+    } catch { return null; }
+}
+
+async function isAntiNukeExempt(guild, gs, actorId) {
+    if (!actorId) return true;
+    if (actorId === guild.ownerId) return true;
+    if (actorId === client.user.id) return true;
+    if (isSuperUser(actorId)) return true;
+    const an = getAntiNukeConfig(gs);
+    if (an.whitelistUserIds.includes(actorId)) return true;
+    if (an.whitelistRoleIds.length) {
+        const member = await guild.members.fetch(actorId).catch(() => null);
+        if (member && an.whitelistRoleIds.some(r => member.roles.cache.has(r))) return true;
+    }
+    return false;
+}
+
+// Records one occurrence of `actionType` by `actorId` and punishes if the
+// configured threshold is hit within its time window. Call this from every
+// destructive-event listener once the actor has been identified.
+async function recordAntiNukeAction(guild, data, actorId, actionType) {
+    const gs = getGuildSettings(guild.id, data);
+    const an = getAntiNukeConfig(gs);
+    if (!an.enabled) return;
+    if (await isAntiNukeExempt(guild, gs, actorId)) return;
+
+    const threshold = an.thresholds[actionType];
+    if (!threshold) return;
+    const key = `${guild.id}:${actorId}:${actionType}`;
+    const now = Date.now();
+    const timestamps = (_antiNukeActions.get(key) || []).filter(t => now - t < threshold.windowSec * 1000);
+    timestamps.push(now);
+    if (timestamps.length >= threshold.count) {
+        _antiNukeActions.delete(key);
+        await punishAntiNukeActor(guild, data, actorId, actionType, timestamps.length, an);
+    } else {
+        _antiNukeActions.set(key, timestamps);
+    }
+}
+
+async function punishAntiNukeActor(guild, data, actorId, actionType, count, an) {
+    const member = await guild.members.fetch(actorId).catch(() => null);
+    const reason = `[ANTI-NUKE] ${actionType} threshold exceeded (${count} in window)`;
+    let actionTaken = 'none (member not found)';
+    if (member) {
+        try {
+            if (an.punishment === 'ban') { await guild.bans.create(actorId, { reason }); actionTaken = 'banned'; }
+            else if (an.punishment === 'kick') { await member.kick(reason); actionTaken = 'kicked'; }
+            else { await member.roles.set([], reason); actionTaken = 'all roles stripped'; }
+        } catch (e) { actionTaken = `failed (${e.message})`; }
+    }
+    await sendLog(guild, data, new EmbedBuilder().setTitle('🛡️ ANTI-NUKE TRIGGERED').setColor(0xFF0000)
+        .setDescription(`**${actionType}** threshold exceeded by <@${actorId}> (${count} actions in the configured window).`)
+        .addFields({ name: 'Action taken', value: actionTaken, inline: true }).setTimestamp()).catch(() => {});
+    const owner = await guild.fetchOwner().catch(() => null);
+    if (owner) owner.send({ embeds: [new EmbedBuilder().setTitle('🚨 Anti-Nuke Alert').setColor(0xFF0000)
+        .setDescription(`In **${guild.name}**, <@${actorId}> (\`${actorId}\`) triggered anti-nuke protection for **${actionType}** (${count} actions). I took action: **${actionTaken}**. Review immediately.`)] }).catch(() => {});
+}
+
+// ══════════════════════════════════════════════════════════
+//  STICKY NOTES — a message that's re-posted at the bottom of a
+//  channel whenever new messages push it up.
+// ══════════════════════════════════════════════════════════
+const _stickyDebounce = new Map(); // channelId -> timestamp of last repost
+const STICKY_DEBOUNCE_MS = 4000;   // don't repost more than once every 4s in a busy channel
+
+function buildStickyEmbed(sticky) {
+    return new EmbedBuilder().setTitle('📌 Sticky Note').setDescription(sticky.content.slice(0, 4000)).setColor(0xFFD700).setFooter({ text: 'This message stays at the bottom of the channel' });
+}
+
+async function repostSticky(channel, data) {
+    const sticky = data.stickies?.[channel.id];
+    if (!sticky) return;
+    const last = _stickyDebounce.get(channel.id) || 0;
+    if (Date.now() - last < STICKY_DEBOUNCE_MS) return;
+    _stickyDebounce.set(channel.id, Date.now());
+    if (sticky.messageId) {
+        const old = await channel.messages.fetch(sticky.messageId).catch(() => null);
+        if (old) old.delete().catch(() => {});
+    }
+    const posted = await channel.send({ embeds: [buildStickyEmbed(sticky)] }).catch(() => null);
+    if (posted) { sticky.messageId = posted.id; saveData(data); }
+}
+
+function buildLevelLeaderboard(data, guildId) {
+    const guildLevels = data.levels?.[guildId] || {};
+    const uids = new Set(Object.keys(guildLevels));
+    for (const key of _xpBuffer.keys()) if (key.startsWith(`${guildId}:`)) uids.add(key.slice(guildId.length + 1));
+    const rows = [];
+    for (const uid of uids) {
+        const xp = getTotalXp(data, guildId, uid);
+        if (xp > 0) rows.push({ uid, xp });
+    }
+    rows.sort((a, b) => b.xp - a.xp);
+    return rows;
+}
+
+function generateCaptchaCode() {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L — avoids ambiguous chars
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+}
+setInterval(() => { const now = Date.now(); for (const [uid, v] of _verifyCodes) if (now > v.expiresAt) _verifyCodes.delete(uid); }, 120000);
+
+function bufferMessageStat(guildId, uid) {
+    const key = `${guildId}:${uid}`;
+    _msgStatsBuffer.set(key, (_msgStatsBuffer.get(key) || 0) + 1);
+}
+function todayKeyUTC() { return new Date().toISOString().slice(0, 10); }
+function flushMessageStats() {
+    if (_msgStatsBuffer.size === 0) return;
+    const d = loadData();
+    d.msgStats = d.msgStats || {};
+    const tKey = todayKeyUTC();
+    for (const [key, count] of _msgStatsBuffer) {
+        const sep = key.indexOf(':');
+        const gId = key.slice(0, sep), uId = key.slice(sep + 1);
+        d.msgStats[gId] = d.msgStats[gId] || {};
+        const ms = d.msgStats[gId][uId] || (d.msgStats[gId][uId] = { allTime: 0, daily: {} });
+        ms.allTime = (ms.allTime || 0) + count;
+        ms.daily[tKey] = (ms.daily[tKey] || 0) + count;
+        ms.lastMessageAt = Date.now();
+    }
+    _msgStatsBuffer.clear();
+    // Prune daily buckets older than ~400 days so this can't grow forever
+    const cutoff = Date.now() - 400 * 24 * 60 * 60 * 1000;
+    for (const gStats of Object.values(d.msgStats)) {
+        for (const ms of Object.values(gStats)) {
+            for (const dk of Object.keys(ms.daily || {})) {
+                if (new Date(dk + 'T00:00:00Z').getTime() < cutoff) delete ms.daily[dk];
+            }
+        }
+    }
+    saveData(d);
+}
+setInterval(flushMessageStats, 60000);
+
+// Sums a user's message-count buckets over the last `days` days (inclusive of
+// today). Pass days=null for all-time. Includes the current in-memory buffer
+// so counts feel real-time even between flush cycles.
+function getMessageCount(data, guildId, uid, days) {
+    const ms = data.msgStats?.[guildId]?.[uid];
+    let total = 0;
+    if (ms) {
+        if (days == null) {
+            total = ms.allTime || 0;
+        } else {
+            const now = Date.now();
+            for (const [dk, c] of Object.entries(ms.daily || {})) {
+                const age = (now - new Date(dk + 'T00:00:00Z').getTime()) / (24 * 60 * 60 * 1000);
+                if (age >= -1 && age < days) total += c;
+            }
+        }
+    }
+    total += _msgStatsBuffer.get(`${guildId}:${uid}`) || 0;
+    return total;
+}
+
+// Builds a full leaderboard array [{ uid, count }] sorted descending, for the
+// given period ('daily'|'weekly'|'monthly'|'yearly'|'alltime').
+function buildMessageLeaderboard(data, guildId, period) {
+    const days = { daily: 1, weekly: 7, monthly: 30, yearly: 365, alltime: null }[period] ?? null;
+    const guildStats = data.msgStats?.[guildId] || {};
+    const uids = new Set(Object.keys(guildStats));
+    for (const key of _msgStatsBuffer.keys()) {
+        if (key.startsWith(`${guildId}:`)) uids.add(key.slice(guildId.length + 1));
+    }
+    const rows = [];
+    for (const uid of uids) {
+        const count = getMessageCount(data, guildId, uid, days);
+        if (count > 0) rows.push({ uid, count });
+    }
+    rows.sort((a, b) => b.count - a.count);
+    return rows;
+}
+
+// Page 0 = ranks 1-10. Every page after that is 20 entries (11-30, 31-50, ...).
+function getLeaderboardPageBounds(pageIndex) {
+    if (pageIndex <= 0) return { start: 0, end: 10 };
+    return { start: 10 + (pageIndex - 1) * 20, end: 10 + pageIndex * 20 };
+}
+
+const MSG_PERIOD_LABELS = { daily: 'Today', weekly: 'This Week', monthly: 'This Month', yearly: 'This Year', alltime: 'All-Time' };
+
+function buildLeaderboardEmbed(rows, pageIndex, period) {
+    const { start, end } = getLeaderboardPageBounds(pageIndex);
+    const pageRows = rows.slice(start, end);
+    const lines = pageRows.map((r, i) => {
+        const rank = start + i + 1;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
+        return `${medal} <@${r.uid}> — **${r.count.toLocaleString()}** message${r.count === 1 ? '' : 's'}`;
+    });
+    return new EmbedBuilder()
+        .setTitle(`💬 Message Leaderboard — ${MSG_PERIOD_LABELS[period] || period}`)
+        .setDescription(lines.length ? lines.join('\n') : 'No messages recorded yet for this period.')
+        .setColor(0x5865F2)
+        .setFooter({ text: rows.length ? `Showing ${start + 1}–${Math.min(end, rows.length)} of ${rows.length}` : 'No data' })
+        .setTimestamp();
+}
+
+function buildLeaderboardComponents(guildId, period, pageIndex, totalRows) {
+    const { end } = getLeaderboardPageBounds(pageIndex);
+    const hasPrev = pageIndex > 0;
+    const hasNext = end < totalRows;
+    if (!hasPrev && !hasNext) return [];
+    const buttons = [];
+    if (hasPrev) buttons.push(new ButtonBuilder().setCustomId(`msglb_${guildId}_${period}_${pageIndex - 1}`).setLabel('◀ Previous').setStyle(ButtonStyle.Secondary));
+    if (hasNext) buttons.push(new ButtonBuilder().setCustomId(`msglb_${guildId}_${period}_${pageIndex + 1}`).setLabel('Next ▶').setStyle(ButtonStyle.Primary));
+    return [new ActionRowBuilder().addComponents(...buttons)];
+}
+
+// ══════════════════════════════════════════════════════════
+//  GIVEAWAYS — Giveaway Boat-style requirements & weighted entries
+// ══════════════════════════════════════════════════════════
+
+// Returns null if eligible, or a user-facing reason string if not.
+function checkGiveawayEligibility(member, gw, data) {
+    if (gw.requiredRoleId && !member.roles.cache.has(gw.requiredRoleId)) {
+        return `You need the <@&${gw.requiredRoleId}> role to enter.`;
+    }
+    if (gw.blacklistRoleId && member.roles.cache.has(gw.blacklistRoleId)) {
+        return `Members with the <@&${gw.blacklistRoleId}> role can't enter this giveaway.`;
+    }
+    if (gw.minAccountAgeDays) {
+        const ageDays = (Date.now() - member.user.createdTimestamp) / (24 * 60 * 60 * 1000);
+        if (ageDays < gw.minAccountAgeDays) return `Your Discord account must be at least **${gw.minAccountAgeDays}** day(s) old to enter.`;
+    }
+    if (gw.minJoinAgeDays) {
+        const joinedAt = member.joinedTimestamp || Date.now();
+        const joinDays = (Date.now() - joinedAt) / (24 * 60 * 60 * 1000);
+        if (joinDays < gw.minJoinAgeDays) return `You must have been in this server for at least **${gw.minJoinAgeDays}** day(s) to enter.`;
+    }
+    if (gw.minMessages) {
+        const count = getMessageCount(data, gw.guildId, member.id, null);
+        if (count < gw.minMessages) return `You need at least **${gw.minMessages}** messages sent in this server to enter (you have ${count}).`;
+    }
+    return null;
+}
+
+// Weight = 1 base entry + sum of extra_entries for every bonus role the member has.
+function getGiveawayEntryWeight(member, gw) {
+    let weight = 1;
+    for (const [roleId, extra] of Object.entries(gw.bonusRoles || {})) {
+        if (member.roles.cache.has(roleId)) weight += (extra || 0);
+    }
+    return weight;
+}
+
+// Picks `count` unique winners from entries, weighted by role bonuses.
+// `guild` is used to resolve members for weighting; entrants who've left are skipped.
+async function pickGiveawayWinners(guild, gw, count) {
+    const pool = [];
+    for (const uid of gw.entries || []) {
+        const member = await guild.members.fetch(uid).catch(() => null);
+        if (!member) continue;
+        const weight = getGiveawayEntryWeight(member, gw);
+        for (let i = 0; i < weight; i++) pool.push(uid);
+    }
+    const winners = [];
+    const seen = new Set();
+    let guard = 0;
+    while (winners.length < count && pool.length && guard < 10000) {
+        guard++;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        if (!seen.has(pick)) { seen.add(pick); winners.push(pick); }
+        // Remove all copies of this pick so they can't win twice
+        for (let i = pool.length - 1; i >= 0; i--) if (pool[i] === pick) pool.splice(i, 1);
+    }
+    return winners;
+}
+
+function buildGiveawayEmbed(gw, ended, winners) {
+    const lines = [`🎁 **Prize:** ${gw.prize}`, `🏆 **Winners:** ${gw.winnerCount}`, `🎟️ **Entrants:** ${(gw.entries || []).length}`];
+    if (gw.requiredRoleId) lines.push(`✅ **Required role:** <@&${gw.requiredRoleId}>`);
+    if (gw.blacklistRoleId) lines.push(`🚫 **Blocked role:** <@&${gw.blacklistRoleId}>`);
+    if (gw.minMessages) lines.push(`💬 **Min. messages:** ${gw.minMessages}`);
+    if (gw.minAccountAgeDays) lines.push(`📅 **Min. account age:** ${gw.minAccountAgeDays}d`);
+    if (gw.minJoinAgeDays) lines.push(`📅 **Min. time in server:** ${gw.minJoinAgeDays}d`);
+    if (gw.bonusRoles && Object.keys(gw.bonusRoles).length) {
+        lines.push(`⭐ **Bonus entries:** ${Object.entries(gw.bonusRoles).map(([r, e]) => `<@&${r}> +${e}`).join(', ')}`);
+    }
+    lines.push(ended ? '🔒 **This giveaway has ended.**' : `⏰ **Ends:** <t:${Math.floor(gw.endsAt / 1000)}:R>`);
+    if (ended) {
+        lines.push(winners && winners.length ? `\n🎉 **Winner${winners.length > 1 ? 's' : ''}:** ${winners.map(w => `<@${w}>`).join(', ')}` : '\n😔 No valid entrants — no winner could be picked.');
+    }
+    return new EmbedBuilder()
+        .setTitle(ended ? '🎉 Giveaway Ended' : '🎉 Giveaway!')
+        .setDescription(lines.join('\n'))
+        .setColor(ended ? 0x808080 : 0x00D26A)
+        .setFooter({ text: `Hosted by ${gw.hostTag || 'a staff member'}` })
+        .setTimestamp();
+}
+
+function buildGiveawayComponents(messageId, ended) {
+    if (ended) return [];
+    return [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`giveaway_enter_${messageId}`).setLabel('🎉 Enter Giveaway').setStyle(ButtonStyle.Success))];
+}
+
+// ══════════════════════════════════════════════════════════
 //  TEXT PREPARATION
 // ══════════════════════════════════════════════════════════
 
@@ -11788,7 +12426,11 @@ const slashCommands = [
         .addSubcommand(sub => sub.setName('appealschannel').setDescription('Set the appeals channel')
             .addChannelOption(o => o.setName('channel').setDescription('Appeals channel').setRequired(true)))
         .addSubcommand(sub => sub.setName('prefix').setDescription('Set the message command prefix (e.g. g!, A!, §, ,)')
-            .addStringOption(o => o.setName('prefix').setDescription('New prefix — any string up to 5 chars').setRequired(true))),
+            .addStringOption(o => o.setName('prefix').setDescription('New prefix — any string up to 5 chars').setRequired(true)))
+        .addSubcommand(sub => sub.setName('strictness').setDescription('Set detection strictness level (1=least, 10=most)')
+            .addIntegerOption(o => o.setName('level').setDescription('1-10').setRequired(true)))
+        .addSubcommand(sub => sub.setName('crashtimeout').setDescription('Set the kill timeout for hung math processes. 0 = no timeout.')
+            .addStringOption(o => o.setName('duration').setDescription('e.g. 30s, 1m, 2h — or 0 to disable').setRequired(true))),
 
     new SlashCommandBuilder()
         .setName('clear')
@@ -11798,21 +12440,7 @@ const slashCommands = [
         .addSubcommand(sub => sub.setName('serviceschannel').setDescription('Clear the services channel override'))
         .addSubcommand(sub => sub.setName('commandchannel').setDescription('Clear the commands/games hub channel override')),
 
-    // Exile channel create
-    new SlashCommandBuilder()
-        .setName('exilechannel')
-        .setDescription('Create and configure an exile channel')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(sub => sub.setName('create').setDescription('Auto-create an exile channel')),
-
-    // Exile role create
-    new SlashCommandBuilder()
-        .setName('exilerole')
-        .setDescription('Create and configure the exile role')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(sub => sub.setName('create').setDescription('Auto-create an exile role')),
-
-    // Exile config
+    // Exile config (also covers exile channel/role auto-creation, folded in to save command slots)
     new SlashCommandBuilder()
         .setName('exileconfig')
         .setDescription('Configure exile system settings')
@@ -11830,7 +12458,22 @@ const slashCommands = [
             .setName('removerole')
             .setDescription('ON: remove roles on exile & restore after. OFF: only add/remove exile role.')
             .addStringOption(o => o.setName('toggle').setDescription('on or off').setRequired(true)
-                .addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' }))),
+                .addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })))
+        .addSubcommand(sub => sub.setName('createchannel').setDescription('Auto-create an exile channel'))
+        .addSubcommand(sub => sub.setName('createrole').setDescription('Auto-create the exile role'))
+        .addSubcommandGroup(g => g
+            .setName('duration')
+            .setDescription('Manage the default exile duration')
+            .addSubcommand(s => s
+                .setName('set')
+                .setDescription('Set the default exile duration (supports 30s, 10m, 2h, 1d, 1w)')
+                .addStringOption(o => o
+                    .setName('duration')
+                    .setDescription('e.g. 45m, 2h, 1d, 30s — no limit enforced')
+                    .setRequired(true)))
+            .addSubcommand(s => s
+                .setName('status')
+                .setDescription('Show the current default exile duration'))),
 
     // Immunity (all sub-commands merged into one)
     new SlashCommandBuilder()
@@ -11874,6 +12517,7 @@ const slashCommands = [
                     { name: 'OpenAI — GPT-5.5 (flagship)', value: 'openai-gpt55' },
                     { name: 'Gemini — 2.5 Flash (fast, default)', value: 'gemini' },
                     { name: 'Gemini — 2.5 Pro (powerful)', value: 'gemini-pro' },
+                    { name: 'Gemini — 3.1 Pro (reasoning flagship)', value: 'gemini-31pro' },
                     { name: 'Gemini — 3.5 Flash (latest)', value: 'gemini-flash2' },
                     { name: 'Groq — GPT-OSS 120B (default, recommended)', value: 'groq' },
                     { name: 'Groq — Llama 3.1 70B Versatile', value: 'groq-llama31' },
@@ -11882,17 +12526,42 @@ const slashCommands = [
                     { name: 'Groq — Qwen3.6 27B', value: 'groq-qwen' },
                     { name: 'Mistral — Large (flagship)', value: 'mistral' },
                     { name: 'Mistral — Small (fast)', value: 'mistral-small' },
-                    { name: 'DeepSeek — Chat (V3)', value: 'deepseek' },
-                    { name: 'DeepSeek — Reasoner (R1)', value: 'deepseek-reasoner' },
+                    { name: 'DeepSeek — V4 Flash (fast, cheap)', value: 'deepseek' },
+                    { name: 'DeepSeek — V4 Pro (reasoning)', value: 'deepseek-reasoner' },
                     { name: 'xAI — Grok 4.3 (flagship)', value: 'grok' },
                 ))),
 
     new SlashCommandBuilder()
         .setName('check')
-        .setDescription('Enable or disable ALL moderation checks for this server')
+        .setDescription('Enable or disable moderation checks for this server')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(s => s.setName('enable').setDescription('Enable all moderation checks'))
-        .addSubcommand(s => s.setName('disable').setDescription('Disable all moderation checks'))
+        .addSubcommand(s => s.setName('enable').setDescription('Re-enable moderation check(s)')
+            .addStringOption(o => o.setName('category').setDescription('Which check to enable (default: all)').setRequired(false)
+                .addChoices(
+                    { name: 'All', value: 'all' },
+                    { name: 'Spam', value: 'spam' },
+                    { name: 'Scam', value: 'scam' },
+                    { name: 'Command redirect', value: 'command' },
+                    { name: 'Trade redirect', value: 'trade' },
+                    { name: 'Service redirect', value: 'service' },
+                    { name: 'Begging', value: 'beg' },
+                    { name: 'Account trading', value: 'acctrade' },
+                ))
+            .addStringOption(o => o.setName('channels').setDescription('Channels to re-enable in (mentions or IDs, space/comma-separated). Omit for server-wide').setRequired(false)))
+        .addSubcommand(s => s.setName('disable').setDescription('Disable moderation check(s)')
+            .addStringOption(o => o.setName('category').setDescription('Which check to disable (default: all)').setRequired(false)
+                .addChoices(
+                    { name: 'All', value: 'all' },
+                    { name: 'Spam', value: 'spam' },
+                    { name: 'Scam', value: 'scam' },
+                    { name: 'Command redirect', value: 'command' },
+                    { name: 'Trade redirect', value: 'trade' },
+                    { name: 'Service redirect', value: 'service' },
+                    { name: 'Begging', value: 'beg' },
+                    { name: 'Account trading', value: 'acctrade' },
+                ))
+            .addStringOption(o => o.setName('channels').setDescription('Channels to disable in (mentions or IDs, space/comma-separated). Omit for server-wide').setRequired(false))
+            .addStringOption(o => o.setName('duration').setDescription('How long to disable for, e.g. 30m, 2h, 1d. Omit for indefinite').setRequired(false)))
         .addSubcommand(s => s.setName('status').setDescription('Show whether checks are on or off')),
 
     new SlashCommandBuilder()
@@ -11912,21 +12581,6 @@ const slashCommands = [
         .setDescription('Apply a policy preset strict|balanced|soft|monitor')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addStringOption(o => o.setName('preset').setDescription('strict|balanced|soft|monitor').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('strictness')
-        .setDescription('Set detection strictness level (1=least, 10=most)')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addIntegerOption(o => o.setName('level').setDescription('1-10').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('crashtimeout')
-        .setDescription('Set the kill timeout for hung math processes (qalc, superqalc, PyWorker). 0 = no timeout.')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addStringOption(o => o
-            .setName('duration')
-            .setDescription('e.g. 30s, 1m, 2h — or 0 to disable the timeout entirely')
-            .setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('case')
@@ -11986,10 +12640,6 @@ const slashCommands = [
         .setDescription('Show every bot command, split across multiple embeds')
         .addSubcommand(s => s.setName('slash').setDescription('List every / slash command'))
         .addSubcommand(s => s.setName('message').setDescription('List every ! message command')),
-    new SlashCommandBuilder()
-        .setName('uptime')
-        .setDescription('Show bot uptime and process info'),
-
     new SlashCommandBuilder()
         .setName('calc')
         .setDescription('Calc CLI calculation (multi-line: send more, then Evaluate)')
@@ -12215,6 +12865,7 @@ const slashCommands = [
                 { name: 'OpenAI — GPT-5.5 (flagship)', value: 'openai-gpt55' },
                 { name: 'Gemini — 2.5 Flash (fast, default)', value: 'gemini' },
                 { name: 'Gemini — 2.5 Pro (powerful)', value: 'gemini-pro' },
+                { name: 'Gemini — 3.1 Pro (reasoning flagship)', value: 'gemini-31pro' },
                 { name: 'Gemini — 3.5 Flash (latest)', value: 'gemini-flash2' },
                 { name: 'Groq — GPT-OSS 120B (default, recommended)', value: 'groq' },
                 { name: 'Groq — Llama 3.1 70B Versatile', value: 'groq-llama31' },
@@ -12223,8 +12874,8 @@ const slashCommands = [
                 { name: 'Groq — Qwen3.6 27B', value: 'groq-qwen' },
                 { name: 'Mistral — Large (flagship)', value: 'mistral' },
                 { name: 'Mistral — Small (fast)', value: 'mistral-small' },
-                { name: 'DeepSeek — Chat (V3)', value: 'deepseek' },
-                { name: 'DeepSeek — Reasoner (R1)', value: 'deepseek-reasoner' },
+                { name: 'DeepSeek — V4 Flash (fast, cheap)', value: 'deepseek' },
+                { name: 'DeepSeek — V4 Pro (reasoning)', value: 'deepseek-reasoner' },
                 { name: 'xAI — Grok 4.3 (flagship)', value: 'grok' },
             )),
 
@@ -12263,7 +12914,8 @@ const slashCommands = [
         .setDescription('Add a violation strike to a member')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
         .addUserOption(o => o.setName('user').setDescription('Member to warn').setRequired(true))
-        .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)),
+        .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false))
+        .addStringOption(o => o.setName('duration').setDescription('Auto-remove this warn after this long (e.g. 30m, 12h, 7d) — leave blank to keep it permanently').setRequired(false)),
 
     new SlashCommandBuilder()
         .setName('unwarn')
@@ -12319,21 +12971,6 @@ const slashCommands = [
         .setDescription('Set the violation threshold before exile (admin only)')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .addIntegerOption(o => o.setName('count').setDescription('Threshold (1-10)').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('exileduration')
-        .setDescription('Manage the default exile duration')
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .addSubcommand(s => s
-            .setName('set')
-            .setDescription('Set the default exile duration (supports 30s, 10m, 2h, 1d, 1w)')
-            .addStringOption(o => o
-                .setName('duration')
-                .setDescription('e.g. 45m, 2h, 1d, 30s — no limit enforced')
-                .setRequired(true)))
-        .addSubcommand(s => s
-            .setName('status')
-            .setDescription('Show the current default exile duration')),
 
     new SlashCommandBuilder()
         .setName('togglescam')
@@ -13041,6 +13678,205 @@ const slashCommands = [
     // Math computation commands (grouped into a single /math command, see math_commands.js)
     ...mathMod.mathSlashCommandBuilders,
 
+    // ── /assets (emoji / sticker / webhook management) ───────────────────────
+    new SlashCommandBuilder()
+        .setName('assets')
+        .setDescription('Create and manage emojis, stickers, webhooks, and threads')
+        .addSubcommandGroup(g => g.setName('emoji').setDescription('Manage custom emojis')
+            .addSubcommand(s => s.setName('create').setDescription('Create a new emoji')
+                .addStringOption(o => o.setName('name').setDescription('Emoji name (2-32 chars, letters/numbers/underscore)').setRequired(true))
+                .addStringOption(o => o.setName('image_url').setDescription('Direct image URL (png/jpg/gif)').setRequired(false))
+                .addAttachmentOption(o => o.setName('image').setDescription('Upload an image instead of a URL').setRequired(false)))
+            .addSubcommand(s => s.setName('delete').setDescription('Delete an emoji')
+                .addStringOption(o => o.setName('name').setDescription('Emoji name').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List all custom emojis')))
+        .addSubcommandGroup(g => g.setName('sticker').setDescription('Manage custom stickers')
+            .addSubcommand(s => s.setName('create').setDescription('Create a new sticker')
+                .addStringOption(o => o.setName('name').setDescription('Sticker name (2-30 chars)').setRequired(true))
+                .addAttachmentOption(o => o.setName('image').setDescription('PNG/APNG/GIF image, max 512KB').setRequired(true))
+                .addStringOption(o => o.setName('tags').setDescription('Related emoji/tags, e.g. :wave:').setRequired(true))
+                .addStringOption(o => o.setName('description').setDescription('Short description').setRequired(false)))
+            .addSubcommand(s => s.setName('delete').setDescription('Delete a sticker')
+                .addStringOption(o => o.setName('name').setDescription('Sticker name').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List all custom stickers')))
+        .addSubcommandGroup(g => g.setName('webhook').setDescription('Manage channel webhooks')
+            .addSubcommand(s => s.setName('create').setDescription('Create a webhook')
+                .addStringOption(o => o.setName('name').setDescription('Webhook name').setRequired(true))
+                .addChannelOption(o => o.setName('channel').setDescription('Channel (defaults to here)').setRequired(false)))
+            .addSubcommand(s => s.setName('delete').setDescription('Delete a webhook')
+                .addStringOption(o => o.setName('name_or_id').setDescription('Webhook name or ID').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List webhooks in this server'))
+            .addSubcommand(s => s.setName('send').setDescription('Send a message through a webhook')
+                .addStringOption(o => o.setName('name_or_id').setDescription('Webhook name or ID').setRequired(true))
+                .addStringOption(o => o.setName('message').setDescription('Message content to send').setRequired(true))
+                .addStringOption(o => o.setName('username').setDescription('Override display name for this message').setRequired(false))))
+        .addSubcommandGroup(g => g.setName('thread').setDescription('Manage threads')
+            .addSubcommand(s => s.setName('create').setDescription('Create a new thread')
+                .addStringOption(o => o.setName('name').setDescription('Thread name').setRequired(true))
+                .addChannelOption(o => o.setName('channel').setDescription('Parent channel (defaults to here)').setRequired(false))
+                .addStringOption(o => o.setName('type').setDescription('Thread type').setRequired(false)
+                    .addChoices(
+                        { name: 'Public', value: 'public' },
+                        { name: 'Private', value: 'private' },
+                    ))
+                .addIntegerOption(o => o.setName('auto_archive').setDescription('Auto-archive after inactivity (minutes)').setRequired(false)
+                    .addChoices(
+                        { name: '1 hour', value: 60 },
+                        { name: '24 hours', value: 1440 },
+                        { name: '3 days', value: 4320 },
+                        { name: '1 week', value: 10080 },
+                    )))
+            .addSubcommand(s => s.setName('delete').setDescription('Delete a thread')
+                .addStringOption(o => o.setName('thread_id').setDescription('Thread ID (defaults to current channel if it is a thread)').setRequired(false))
+                .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)))
+            .addSubcommand(s => s.setName('archive').setDescription('Archive (or unarchive) a thread')
+                .addStringOption(o => o.setName('thread_id').setDescription('Thread ID (defaults to current channel if it is a thread)').setRequired(false))
+                .addStringOption(o => o.setName('state').setDescription('archive or unarchive').setRequired(false)
+                    .addChoices({ name: 'Archive', value: 'archive' }, { name: 'Unarchive', value: 'unarchive' })))
+            .addSubcommand(s => s.setName('lock').setDescription('Lock (or unlock) a thread')
+                .addStringOption(o => o.setName('thread_id').setDescription('Thread ID (defaults to current channel if it is a thread)').setRequired(false))
+                .addStringOption(o => o.setName('state').setDescription('lock or unlock').setRequired(false)
+                    .addChoices({ name: 'Lock', value: 'lock' }, { name: 'Unlock', value: 'unlock' })))
+            .addSubcommand(s => s.setName('list').setDescription('List active threads in this server'))),
+
+    // ── /sticky ───────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('sticky')
+        .setDescription('Keep a message stuck to the bottom of a channel')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
+        .addSubcommand(s => s.setName('set').setDescription('Set (or update) the sticky note for this channel')
+            .addStringOption(o => o.setName('text').setDescription('The sticky message content').setRequired(true))
+            .addChannelOption(o => o.setName('channel').setDescription('Channel to sticky in (defaults to here)').setRequired(false)))
+        .addSubcommand(s => s.setName('remove').setDescription('Remove the sticky note from a channel')
+            .addChannelOption(o => o.setName('channel').setDescription('Channel to unsticky (defaults to here)').setRequired(false)))
+        .addSubcommand(s => s.setName('status').setDescription('Show whether this channel has an active sticky')),
+
+    // ── /antinuke ─────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('antinuke')
+        .setDescription('Protect the server from mass-destructive actions (channel/role wipes, mass bans/kicks)')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('toggle').setDescription('Enable or disable anti-nuke protection')
+            .addStringOption(o => o.setName('state').setDescription('on or off').setRequired(true).addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })))
+        .addSubcommand(s => s.setName('punishment').setDescription('What happens to whoever trips a threshold')
+            .addStringOption(o => o.setName('action').setDescription('Punishment to apply').setRequired(true)
+                .addChoices({ name: 'Strip all roles (safest, keeps them in server)', value: 'strip_roles' }, { name: 'Kick', value: 'kick' }, { name: 'Ban', value: 'ban' })))
+        .addSubcommand(s => s.setName('threshold').setDescription('Set how many actions in how many seconds trips protection')
+            .addStringOption(o => o.setName('action_type').setDescription('Which action to configure').setRequired(true)
+                .addChoices(
+                    { name: 'Channel deletions', value: 'channelDelete' }, { name: 'Role deletions', value: 'roleDelete' },
+                    { name: 'Bans', value: 'ban' }, { name: 'Kicks', value: 'kick' },
+                    { name: 'Webhook creations', value: 'webhookCreate' },
+                ))
+            .addIntegerOption(o => o.setName('count').setDescription('Number of actions').setRequired(true).setMinValue(1))
+            .addIntegerOption(o => o.setName('window_seconds').setDescription('Time window in seconds').setRequired(true).setMinValue(1)))
+        .addSubcommandGroup(g => g.setName('whitelist').setDescription('Members/roles exempt from anti-nuke checks')
+            .addSubcommand(s => s.setName('add').setDescription('Whitelist a member or role')
+                .addMentionableOption(o => o.setName('target').setDescription('User or role to whitelist').setRequired(true)))
+            .addSubcommand(s => s.setName('remove').setDescription('Remove a member or role from the whitelist')
+                .addMentionableOption(o => o.setName('target').setDescription('User or role to remove').setRequired(true)))
+            .addSubcommand(s => s.setName('list').setDescription('List whitelisted members/roles')))
+        .addSubcommand(s => s.setName('status').setDescription('Show current anti-nuke configuration')),
+
+    // ── /level ────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('level')
+        .setDescription('Leveling system — XP, ranks, and leaderboards')
+        .addSubcommand(s => s.setName('check').setDescription("Check a member's level")
+            .addUserOption(o => o.setName('user').setDescription('Member to check (defaults to you)').setRequired(false)))
+        .addSubcommand(s => s.setName('leaderboard').setDescription('Show the XP leaderboard'))
+        .addSubcommand(s => s.setName('set').setDescription('Set a member to an exact level')
+            .addUserOption(o => o.setName('user').setDescription('Member').setRequired(true))
+            .addIntegerOption(o => o.setName('level').setDescription('New level').setRequired(true).setMinValue(0)))
+        .addSubcommand(s => s.setName('addxp').setDescription('Give a member bonus XP')
+            .addUserOption(o => o.setName('user').setDescription('Member').setRequired(true))
+            .addIntegerOption(o => o.setName('amount').setDescription('XP to add').setRequired(true).setMinValue(1)))
+        .addSubcommand(s => s.setName('removexp').setDescription('Remove XP from a member')
+            .addUserOption(o => o.setName('user').setDescription('Member').setRequired(true))
+            .addIntegerOption(o => o.setName('amount').setDescription('XP to remove').setRequired(true).setMinValue(1)))
+        .addSubcommandGroup(g => g.setName('config').setDescription('Configure the leveling system')
+            .addSubcommand(s => s.setName('toggle').setDescription('Enable or disable leveling')
+                .addStringOption(o => o.setName('state').setDescription('on or off').setRequired(true).addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })))
+            .addSubcommand(s => s.setName('curve').setDescription('Set the XP curve shape and constants')
+                .addStringOption(o => o.setName('type').setDescription('How XP requirements grow per level').setRequired(true)
+                    .addChoices({ name: 'Linear (steady increase)', value: 'linear' }, { name: 'Quadratic (ramps up faster)', value: 'quadratic' }, { name: 'Exponential (very steep)', value: 'exponential' }))
+                .addIntegerOption(o => o.setName('base_xp').setDescription('XP needed for level 1 (default 100)').setRequired(true).setMinValue(1))
+                .addIntegerOption(o => o.setName('growth_factor').setDescription('How fast it scales — meaning depends on curve type (default 50)').setRequired(true).setMinValue(0)))
+            .addSubcommand(s => s.setName('xprange').setDescription('Set the random XP range awarded per message')
+                .addIntegerOption(o => o.setName('min').setDescription('Minimum XP per message').setRequired(true).setMinValue(1))
+                .addIntegerOption(o => o.setName('max').setDescription('Maximum XP per message').setRequired(true).setMinValue(1)))
+            .addSubcommand(s => s.setName('cooldown').setDescription('Set the seconds between XP-earning messages')
+                .addIntegerOption(o => o.setName('seconds').setDescription('Cooldown in seconds (default 60)').setRequired(true).setMinValue(0)))
+            .addSubcommand(s => s.setName('rolereward').setDescription('Grant a role automatically at a given level')
+                .addIntegerOption(o => o.setName('level').setDescription('Level that triggers this reward').setRequired(true).setMinValue(1))
+                .addRoleOption(o => o.setName('role').setDescription('Role to grant (leave blank to remove this reward)').setRequired(false)))
+            .addSubcommand(s => s.setName('message').setDescription('Customize the level-up announcement (use {user} and {level})')
+                .addStringOption(o => o.setName('text').setDescription('New message template').setRequired(true)))
+            .addSubcommand(s => s.setName('channel').setDescription('Set where level-up messages are posted')
+                .addChannelOption(o => o.setName('channel').setDescription('Leave blank to post in the same channel as the message').setRequired(false)))
+            .addSubcommand(s => s.setName('status').setDescription('Show current leveling configuration'))
+            .addSubcommand(s => s.setName('reset').setDescription('Reset the XP curve to defaults (100 base, 50 growth, linear)'))),
+
+    // ── /verify ───────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('verify')
+        .setDescription('Captcha-based member verification')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand(s => s.setName('setup').setDescription('Set up captcha verification')
+            .addRoleOption(o => o.setName('role').setDescription('Role to grant once verified').setRequired(true))
+            .addChannelOption(o => o.setName('channel').setDescription('Channel to post the Verify button in (defaults to here)').setRequired(false)))
+        .addSubcommand(s => s.setName('disable').setDescription('Disable captcha verification'))
+        .addSubcommand(s => s.setName('status').setDescription('Show current verification settings')),
+
+    // ── /afk ──────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('afk')
+        .setDescription('Set or clear your AFK status')
+        .addSubcommand(s => s.setName('set').setDescription('Mark yourself as AFK')
+            .addStringOption(o => o.setName('reason').setDescription('Why are you AFK?').setRequired(false)))
+        .addSubcommand(s => s.setName('clear').setDescription('Manually clear your AFK status')),
+
+    // ── /messages ─────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('messages')
+        .setDescription('Message activity stats and leaderboards')
+        .addSubcommand(s => s.setName('stats').setDescription("Check a member's message counts")
+            .addUserOption(o => o.setName('user').setDescription('Member to check (defaults to you)').setRequired(false)))
+        .addSubcommand(s => s.setName('leaderboard').setDescription('Show the message leaderboard')
+            .addStringOption(o => o.setName('period').setDescription('Time period').setRequired(false)
+                .addChoices(
+                    { name: 'Today', value: 'daily' },
+                    { name: 'This Week', value: 'weekly' },
+                    { name: 'This Month', value: 'monthly' },
+                    { name: 'This Year', value: 'yearly' },
+                    { name: 'All-Time', value: 'alltime' },
+                ))),
+
+    // ── /giveaway ─────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('giveaway')
+        .setDescription('Run giveaways in this server')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
+        .addSubcommand(s => s.setName('start').setDescription('Start a new giveaway')
+            .addStringOption(o => o.setName('duration').setDescription('How long it runs, e.g. 1h, 30m, 2d').setRequired(true))
+            .addStringOption(o => o.setName('prize').setDescription('What are you giving away?').setRequired(true))
+            .addIntegerOption(o => o.setName('winners').setDescription('Number of winners (default 1)').setRequired(false).setMinValue(1).setMaxValue(20))
+            .addChannelOption(o => o.setName('channel').setDescription('Channel to post in (defaults to here)').setRequired(false))
+            .addRoleOption(o => o.setName('required_role').setDescription('Role required to enter (optional)').setRequired(false))
+            .addRoleOption(o => o.setName('blacklist_role').setDescription("Role that's blocked from entering (optional)").setRequired(false))
+            .addIntegerOption(o => o.setName('min_messages').setDescription('Minimum all-time messages sent to enter (optional)').setRequired(false).setMinValue(1))
+            .addIntegerOption(o => o.setName('min_account_age').setDescription('Minimum Discord account age in days to enter (optional)').setRequired(false).setMinValue(1))
+            .addIntegerOption(o => o.setName('min_join_age').setDescription('Minimum time in this server, in days, to enter (optional)').setRequired(false).setMinValue(1)))
+        .addSubcommand(s => s.setName('bonusrole').setDescription('Give a role extra entries in an active giveaway')
+            .addStringOption(o => o.setName('message_id').setDescription('The giveaway message ID').setRequired(true))
+            .addRoleOption(o => o.setName('role').setDescription('Role to grant bonus entries to').setRequired(true))
+            .addIntegerOption(o => o.setName('extra_entries').setDescription('Extra entries members with this role get (on top of their base 1)').setRequired(true).setMinValue(1).setMaxValue(50)))
+        .addSubcommand(s => s.setName('end').setDescription('End a giveaway immediately and pick winners')
+            .addStringOption(o => o.setName('message_id').setDescription('The giveaway message ID').setRequired(true)))
+        .addSubcommand(s => s.setName('reroll').setDescription('Pick new winner(s) for an already-ended giveaway')
+            .addStringOption(o => o.setName('message_id').setDescription('The giveaway message ID').setRequired(true)))
+        .addSubcommand(s => s.setName('list').setDescription('List all active giveaways in this server')),
+
 ].map(c => c.toJSON());
 
 // ══════════════════════════════════════════════════════════
@@ -13136,6 +13972,64 @@ async function onClientReady() {
             }
         }
     } catch (e) { console.error('[startup] long-timeout restore error:', e); }
+
+    // ── Auto-expire timed warns loop (checks every 30s) ───────────────────────
+    setInterval(async () => {
+        const wData = loadData();
+        const now = Date.now();
+        let wDirty = false;
+        for (const [uid, v] of Object.entries(wData.violations || {})) {
+            if (!v || typeof v === 'number' || !Array.isArray(v.history) || !v.history.length) continue;
+            const kept = [];
+            let changed = false;
+            for (const entry of v.history) {
+                if (entry && entry.expiresAt && now >= entry.expiresAt) {
+                    wDirty = true;
+                    changed = true;
+                    v.count = Math.max(0, (v.count || 0) - 1);
+                    if (entry.guildId) {
+                        const g = client.guilds.cache.get(entry.guildId);
+                        if (g) {
+                            sendLog(g, wData, new EmbedBuilder()
+                                .setTitle('⏳ Warning Expired')
+                                .setColor(0x00FF88)
+                                .addFields(
+                                    { name: 'User',            value: `<@${uid}> (${uid})`, inline: true },
+                                    { name: 'Warn ID',         value: `\`${entry.warnId || 'N/A'}\``, inline: true },
+                                    { name: 'Violations now', value: `${v.count}`, inline: true },
+                                    { name: 'Original reason', value: String(entry.reason || 'N/A').slice(0, 1024), inline: false },
+                                ).setTimestamp()).catch(() => {});
+                        }
+                    }
+                    continue; // drop this (now-expired) entry from history
+                }
+                kept.push(entry);
+            }
+            if (changed) v.history = kept;
+        }
+        if (wDirty) saveData(wData);
+    }, 30000);
+
+    // ── Auto-end expired giveaways loop (checks every 30s) ────────────────────
+    setInterval(async () => {
+        const gwData = loadData();
+        if (!gwData.giveaways) return;
+        const now = Date.now();
+        let gwDirty = false;
+        for (const [msgId, gw] of Object.entries(gwData.giveaways)) {
+            if (gw.ended || now < gw.endsAt) continue;
+            gwDirty = true;
+            const guild = client.guilds.cache.get(gw.guildId);
+            const winners = guild ? await pickGiveawayWinners(guild, gw, gw.winnerCount) : [];
+            gw.ended = true;
+            const chan = guild ? await client.channels.fetch(gw.channelId).catch(() => null) : null;
+            const msg = chan ? await chan.messages.fetch(msgId).catch(() => null) : null;
+            if (msg) msg.edit({ embeds: [buildGiveawayEmbed(gw, true, winners)], components: [] }).catch(() => {});
+            if (chan && winners.length) chan.send({ content: `🎉 Congratulations ${winners.map(w => `<@${w}>`).join(', ')}! You won **${gw.prize}**!`, allowedMentions: { users: winners } }).catch(() => {});
+            else if (chan) chan.send({ content: `😔 The giveaway for **${gw.prize}** ended with no valid entrants.` }).catch(() => {});
+        }
+        if (gwDirty) saveData(gwData);
+    }, 30000);
 
     // ── Auto-unban timed bans loop (checks every 60s) ─────────────────────────
     setInterval(async () => {
@@ -14698,6 +15592,86 @@ client.on('interactionCreate', async interaction => {
         await interaction.reply({ content: '❌ Invalid immunity command usage.', flags: MessageFlags.Ephemeral });
     }
 
+    if (interaction.isButton() && interaction.customId.startsWith('giveaway_enter_')) {
+        const gwMsgId = interaction.message.id;
+        const gw = data.giveaways?.[gwMsgId];
+        if (!gw || gw.ended) { await interaction.reply({ content: '❌ This giveaway has ended.', flags: MessageFlags.Ephemeral }); return; }
+        const eligErr = checkGiveawayEligibility(interaction.member, gw, data);
+        if (eligErr) { await interaction.reply({ content: `❌ ${eligErr}`, flags: MessageFlags.Ephemeral }); return; }
+        gw.entries = gw.entries || [];
+        if (gw.entries.includes(interaction.user.id)) {
+            gw.entries = gw.entries.filter(id => id !== interaction.user.id);
+            saveData(data);
+            await interaction.reply({ content: '↩️ You left the giveaway.', flags: MessageFlags.Ephemeral });
+        } else {
+            gw.entries.push(interaction.user.id);
+            saveData(data);
+            const weight = getGiveawayEntryWeight(interaction.member, gw);
+            await interaction.reply({ content: `🎉 You're entered!${weight > 1 ? ` (you have **${weight}** entries thanks to bonus roles)` : ''} — **${gw.entries.length}** entrant(s) so far.`, flags: MessageFlags.Ephemeral });
+        }
+        interaction.message.edit({ embeds: [buildGiveawayEmbed(gw, false)] }).catch(() => {});
+        return;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('verify_start_')) {
+        const code = generateCaptchaCode();
+        _verifyCodes.set(interaction.user.id, { code, expiresAt: Date.now() + 5 * 60000, guildId: interaction.guildId });
+        const modal = new ModalBuilder().setCustomId('verify_modal').setTitle('Server Verification');
+        const input = new TextInputBuilder().setCustomId('verify_input').setLabel(`Type this code: ${code}`).setStyle(TextInputStyle.Short).setRequired(true).setMinLength(6).setMaxLength(6).setPlaceholder(code);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return;
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId === 'verify_modal') {
+        const entry = _verifyCodes.get(interaction.user.id);
+        const typed = interaction.fields.getTextInputValue('verify_input').trim().toUpperCase();
+        if (!entry || Date.now() > entry.expiresAt) { await interaction.reply({ content: '❌ That code expired. Click **Verify** again to get a fresh one.', flags: MessageFlags.Ephemeral }); return; }
+        if (typed !== entry.code) { _verifyCodes.delete(interaction.user.id); await interaction.reply({ content: '❌ Incorrect code. Click **Verify** again to try with a fresh code.', flags: MessageFlags.Ephemeral }); return; }
+        _verifyCodes.delete(interaction.user.id);
+        const vData = loadData();
+        const vGs = getGuildSettings(entry.guildId, vData);
+        if (!vGs.verify?.roleId) { await interaction.reply({ content: '❌ Verification is not configured on this server anymore.', flags: MessageFlags.Ephemeral }); return; }
+        const vGuild = client.guilds.cache.get(entry.guildId);
+        const vMember = vGuild ? await vGuild.members.fetch(interaction.user.id).catch(() => null) : null;
+        if (vMember) await vMember.roles.add(vGs.verify.roleId, 'Passed captcha verification').catch(() => {});
+        await interaction.reply({ content: '✅ Verified! Welcome to the server.', flags: MessageFlags.Ephemeral });
+        return;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('levellb_')) {
+        const parts = interaction.customId.split('_');
+        const gId = parts[1], newPage = parseInt(parts[2], 10) || 0;
+        const lData = loadData();
+        const lGs = getGuildSettings(gId, lData);
+        const lc = getLevelingConfig(lGs);
+        const rows = buildLevelLeaderboard(lData, gId);
+        const { start, end } = getLeaderboardPageBounds(newPage);
+        const lines = rows.slice(start, end).map((r, i) => {
+            const rank = start + i + 1;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
+            return `${medal} <@${r.uid}> — **Level ${computeLevelFromXp(lc, r.xp).level}** (${r.xp.toLocaleString()} XP)`;
+        });
+        const embed = new EmbedBuilder().setTitle('📈 XP Leaderboard').setDescription(lines.length ? lines.join('\n') : 'No XP recorded yet.').setColor(0x5865F2)
+            .setFooter({ text: rows.length ? `Showing ${start + 1}–${Math.min(end, rows.length)} of ${rows.length}` : 'No data' }).setTimestamp();
+        const hasPrev = newPage > 0, hasNext = end < rows.length;
+        const buttons = [];
+        if (hasPrev) buttons.push(new ButtonBuilder().setCustomId(`levellb_${gId}_${newPage - 1}`).setLabel('◀ Previous').setStyle(ButtonStyle.Secondary));
+        if (hasNext) buttons.push(new ButtonBuilder().setCustomId(`levellb_${gId}_${newPage + 1}`).setLabel('Next ▶').setStyle(ButtonStyle.Primary));
+        await interaction.update({ embeds: [embed], components: buttons.length ? [new ActionRowBuilder().addComponents(...buttons)] : [] });
+        return;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('msglb_')) {
+        const parts = interaction.customId.split('_');
+        const gId = parts[1], period = parts[2], newPage = parseInt(parts[3], 10) || 0;
+        const rows = buildMessageLeaderboard(data, gId, period);
+        const embed = buildLeaderboardEmbed(rows, newPage, period);
+        const components = buildLeaderboardComponents(gId, period, newPage, rows.length);
+        await interaction.update({ embeds: [embed], components });
+        return;
+    }
+
     switch (interaction.commandName) {
 
         // ── /setup & /changesetup ─────────────────────────
@@ -14792,88 +15766,6 @@ client.on('interactionCreate', async interaction => {
             saveData(data);
             await interaction.reply({ content: `✅ Policy preset applied: **${gs.policyPreset}**`, flags: MessageFlags.Ephemeral });
             await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Policy Preset Applied', [String(gs.policyPreset)]);
-            break;
-        }
-
-        case 'strictness': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            const lvl = interaction.options.getInteger('level');
-            const before = Number(gs.regexStrictness || 5);
-            gs.regexStrictness = Math.max(1, Math.min(10, Number(lvl || 5)));
-            saveData(data);
-            await interaction.reply({ content: `✅ Strictness updated: **${before}** -> **${gs.regexStrictness}**`, flags: MessageFlags.Ephemeral });
-            await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Strictness Updated', [
-                `regexStrictness: **${before}** -> **${gs.regexStrictness}**`,
-            ]);
-            break;
-        }
-
-        case 'crashtimeout': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            const raw = (interaction.options.getString('duration') || '').trim();
-
-            // Allow bare "0" to mean "disable"
-            let newMs;
-            if (raw === '0') {
-                newMs = 0;
-            } else {
-                // parseDuration returns minutes; multiply back to ms.
-                // But we also want to support sub-minute values (seconds), so
-                // check if the input is purely seconds first.
-                const secMatch = raw.match(/^(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)$/i);
-                if (secMatch) {
-                    newMs = Math.round(parseFloat(secMatch[1]) * 1000);
-                } else {
-                    const mins = parseDuration(raw);
-                    if (mins === null) {
-                        await interaction.reply({ content: '❌ Invalid duration. Use e.g. `30s`, `2m`, `1h`, or `0` to disable.', flags: MessageFlags.Ephemeral });
-                        return;
-                    }
-                    newMs = mins * 60 * 1000;
-                }
-                // Clamp to a sane range: minimum 1 s, maximum 24 h
-                if (newMs < 1000) {
-                    await interaction.reply({ content: '❌ Minimum timeout is **1s**. Use `0` to disable entirely.', flags: MessageFlags.Ephemeral });
-                    return;
-                }
-                if (newMs > 86400000) {
-                    await interaction.reply({ content: '❌ Maximum timeout is **24h**.', flags: MessageFlags.Ephemeral });
-                    return;
-                }
-            }
-
-            const prevMs = getCrashTimeoutMs(data);
-            const prevLabel = prevMs === 0 ? '∞ (disabled)' : `${prevMs / 1000}s`;
-            const newLabel  = newMs  === 0 ? '∞ (disabled)' : `${newMs  / 1000}s`;
-
-            data.botConfig = data.botConfig || {};
-            data.botConfig.crashTimeoutMs = newMs;
-            saveData(data);
-
-            const warningLine = newMs === 0
-                ? '\n\n⚠️ **Warning:** Timeout is now **disabled**. A hung qalc/superqalc/Python process will block that command forever and pile up zombie processes until the bot is restarted.'
-                : '';
-
-            await interaction.reply({
-                embeds: [new EmbedBuilder()
-                    .setTitle('⏱️ Process Crash Timeout Updated')
-                    .setColor(newMs === 0 ? 0xFF8800 : 0x00CC66)
-                    .addFields(
-                        { name: 'Previous', value: prevLabel, inline: true },
-                        { name: 'New',      value: newLabel,  inline: true },
-                        { name: 'Affects',  value: '`qalc` · `superqalc_onefile` · `superqalc_tower` · `PyWorker` (Python/SymPy/mpmath)', inline: false },
-                    )
-                    .setDescription(newMs === 0
-                        ? '⚠️ **Timeout disabled.** Hung processes will run forever until you restart the bot. Only do this if you know what you\'re doing.'
-                        : `✅ Hung math processes will be killed after **${newLabel}**.`)
-                    .setTimestamp()],
-                flags: MessageFlags.Ephemeral,
-            });
-
-            await sendConfigLog(interaction.guild, data, interaction.user.id, '⏱️ Crash Timeout Updated', [
-                `crashTimeoutMs: **${prevLabel}** -> **${newLabel}**`,
-                newMs === 0 ? '⚠️ Timeout disabled — processes run unchecked' : null,
-            ]);
             break;
         }
 
@@ -15149,24 +16041,6 @@ client.on('interactionCreate', async interaction => {
             break;
         }
 
-        case 'uptime': {
-            const upMs = Date.now() - BOT_START_TS;
-            const embed = new EmbedBuilder()
-                .setTitle('⏱️ Uptime')
-                .setColor(0x5865F2)
-                .addFields(
-                    { name: 'Uptime', value: formatDuration(upMs), inline: true },
-                    { name: 'Started', value: `<t:${Math.floor(BOT_START_TS / 1000)}:F>`, inline: true },
-                    { name: 'Node', value: process.version, inline: true },
-                    { name: 'Memory', value: `${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB RSS`, inline: true },
-                )
-                .setTimestamp();
-            const ft = footerText(gs);
-            if (ft) embed.setFooter({ text: ft });
-            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
-            break;
-        }
-
         case 'calc': {
             await safeDefer(interaction, {  });
             const uid = interaction.user.id;
@@ -15359,32 +16233,44 @@ client.on('interactionCreate', async interaction => {
         }
 
         case 'botstatus': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            const totalExiled     = Object.keys(data.exiles).length;
+            const totalViolations = Object.values(data.violations).reduce((a, v) => a + (typeof v === 'number' ? v : (v?.count || 0)), 0);
+            const tradeIds  = getChannelIds(gs, 'tradeChannelIds');
+            const raidIds   = getChannelIds(gs, 'raidServiceChannelIds');
+            const raceIds   = getChannelIds(gs, 'raceV4ServiceChannelIds');
+            const seaIds    = getChannelIds(gs, 'seaEventsChannelIds');
+            const mirageIds = getChannelIds(gs, 'mirageIslandChannelIds');
+            const preIds    = getChannelIds(gs, 'prehistoricIslandChannelIds');
+            const kitIds    = getChannelIds(gs, 'kitsuneIslandChannelIds');
+            const leviIds   = getChannelIds(gs, 'leviathanChannelIds');
             const embed = new EmbedBuilder()
-                .setTitle('📊 Bot Status / Configuration')
+                .setTitle('🤖 SKYNET V7 — Status')
                 .setColor(0x5865F2)
                 .addFields(
-                    { name: 'Setup',       value: isServerSetup(gs) ? '✅ Complete' : '⚠️ Not Set Up (redirects OFF)', inline: true },
-                    { name: 'Strictness',  value: `${getStrictness(gs)}/10`, inline: true },
-                    { name: 'AI Thresh',   value: `${(getAiConfidenceThreshold(gs)*100).toFixed(0)}%`, inline: true },
-                    { name: 'Checks', value: gs.checksEnabled ? '✅ ON' : '❌ OFF', inline: true },
-                    { name: 'AI', value: gs.aiEnabled ? '✅ ON' : '❌ OFF', inline: true },
-                    { name: 'No-Affiliation', value: gs.noAffiliationEnabled ? '✅ ON' : '❌ OFF', inline: true },
-
-                    { name: 'Link Mode', value: String(gs.linkMode || 'strict'), inline: true },
-                    { name: 'Link Action', value: String(gs.linkAction || 'warn'), inline: true },
-                    { name: 'Auto-Timeouts', value: gs.timeoutEnabled ? '✅ ON' : '❌ OFF', inline: true },
-
-                    { name: 'Verify Gate', value: gs.verifyGateEnabled ? `✅ ON (minDays=${gs.verifyMinAccountAgeDays}, role=${gs.verifyRequiredRoleId || 'None'}, action=${gs.verifyGateAction})` : '❌ OFF', inline: false },
-                    { name: 'Timeout Minutes', value: `spam=${gs.timeoutMinutesSpam} scam=${gs.timeoutMinutesScam} command=${gs.timeoutMinutesCommand} trade=${gs.timeoutMinutesTrade} service=${gs.timeoutMinutesService}`, inline: false },
-                    { name: 'Channels', value:
-                        `trade=${gs.tradeChannelId ? `<#${gs.tradeChannelId}>` : 'None'}\n` +
-                        `services=${gs.servicesChannelId ? `<#${gs.servicesChannelId}>` : 'None'}\n` +
-                        `commands=${(gs.gamesHubId || DEFAULT_GAMES_HUB_ID) ? `<#${gs.gamesHubId || DEFAULT_GAMES_HUB_ID}>` : 'None'}\n` +
-                        `log=${gs.logChannelId ? `<#${gs.logChannelId}>` : 'None'}\n` +
-                        `exile=${gs.exileChannelId ? `<#${gs.exileChannelId}>` : 'None'}`,
-                        inline: false
-                    },
+                    { name: '🧠 Checks',          value: gs.checksEnabled ? '✅ ON' : '🛑 OFF',       inline: true },
+                    { name: '⚙️ Setup',           value: isServerSetup(gs) ? '✅ Complete' : '⚠️ Not Set Up', inline: true },
+                    { name: '🤖 AI Detection',     value: AI_ENABLED ? `✅ ON (${(getAiConfidenceThreshold(gs)*100).toFixed(0)}% thresh)` : '❌ OFF', inline: true },
+                    { name: '📡 Trade Channels',   value: tradeIds.length ? formatChannelIds(tradeIds) : (gs.tradeChannelId ? `<#${gs.tradeChannelId}>` : 'Not set'), inline: false },
+                    { name: '⚔️ Services Channel', value: `<#${gs.servicesChannelId}>`,           inline: true },
+                    { name: '⚔️ Raid/Service',     value: formatChannelIds(raidIds),              inline: true },
+                    { name: '🏁 Race/Trials',      value: formatChannelIds(raceIds),              inline: true },
+                    { name: '🌊 Sea Events',        value: formatChannelIds(seaIds),              inline: true },
+                    { name: '🏝️ Mirage Island',    value: formatChannelIds(mirageIds),           inline: true },
+                    { name: '🦕 Prehistoric Isl.', value: formatChannelIds(preIds),              inline: true },
+                    { name: '🦊 Kitsune Island',   value: formatChannelIds(kitIds),              inline: true },
+                    { name: '🐉 Leviathan/Frozen', value: formatChannelIds(leviIds),            inline: true },
+                    { name: '📋 Log Channel',      value: gs.logChannelId ? `<#${gs.logChannelId}>` : 'Not set', inline: true },
+                    { name: '📩 Appeals Channel',  value: gs.appealsChannelId ? `<#${gs.appealsChannelId}>` : 'Not set', inline: true },
+                    { name: '⛓️ Exile Role',       value: `<@&${gs.exiledRoleId}>`,               inline: true },
+                    { name: '🛡️ Immunity',         value: imm.enabled ? '✅ ON' : '❌ OFF',        inline: true },
+                    { name: '🚨 Scam / Link',      value: `scam=${gs.scamEnabled ? '✅' : '❌'} link=${String(gs.linkMode || 'strict')}/${String(gs.linkAction || 'warn')}`, inline: true },
+                    { name: '✅ No-Affiliation',    value: gs.noAffiliationEnabled ? '✅ ON' : '❌ OFF', inline: true },
+                    { name: '⚙️ Threshold',        value: String(gs.violationThreshold || VIOLATION_THRESHOLD), inline: true },
+                    { name: '⏱️ Exile Duration',   value: `${gs.exileDurationMins || EXILE_DURATION_MINS}m`, inline: true },
+                    { name: '👥 Currently Exiled', value: String(totalExiled),                    inline: true },
+                    { name: '⚠️ Total Violations', value: String(totalViolations),                inline: true },
+                    { name: '🔐 Verify Gate',      value: gs.verifyGateEnabled ? `✅ ON (minDays=${gs.verifyMinAccountAgeDays})` : '❌ OFF', inline: true },
                 )
                 .setTimestamp();
             const ft = footerText(gs);
@@ -15397,6 +16283,44 @@ client.on('interactionCreate', async interaction => {
         case 'set': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const sub = interaction.options.getSubcommand();
+
+            if (sub === 'strictness') {
+                const lvl = interaction.options.getInteger('level');
+                const before = Number(gs.regexStrictness || 5);
+                gs.regexStrictness = Math.max(1, Math.min(10, Number(lvl || 5)));
+                saveData(data);
+                await interaction.reply({ content: `✅ Strictness updated: **${before}** -> **${gs.regexStrictness}**`, flags: MessageFlags.Ephemeral });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Strictness Updated', [`regexStrictness: **${before}** -> **${gs.regexStrictness}**`]);
+                return;
+            }
+            if (sub === 'crashtimeout') {
+                const raw = (interaction.options.getString('duration') || '').trim();
+                let newMs;
+                if (raw === '0') {
+                    newMs = 0;
+                } else {
+                    const secMatch = raw.match(/^(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)$/i);
+                    if (secMatch) {
+                        newMs = Math.round(parseFloat(secMatch[1]) * 1000);
+                    } else {
+                        const mins = parseDuration(raw);
+                        if (mins === null) { await interaction.reply({ content: '❌ Invalid duration. Use e.g. `30s`, `2m`, `1h`, or `0` to disable.', flags: MessageFlags.Ephemeral }); return; }
+                        newMs = mins * 60 * 1000;
+                    }
+                    if (newMs < 1000) { await interaction.reply({ content: '❌ Minimum timeout is **1s**. Use `0` to disable entirely.', flags: MessageFlags.Ephemeral }); return; }
+                    if (newMs > 86400000) { await interaction.reply({ content: '❌ Maximum timeout is **24h**.', flags: MessageFlags.Ephemeral }); return; }
+                }
+                const prevMs = getCrashTimeoutMs(data);
+                const prevLabel = prevMs === 0 ? '∞ (disabled)' : `${prevMs / 1000}s`;
+                const newLabel  = newMs  === 0 ? '∞ (disabled)' : `${newMs  / 1000}s`;
+                data.botConfig = data.botConfig || {};
+                data.botConfig.crashTimeoutMs = newMs;
+                saveData(data);
+                await interaction.reply({ content: `✅ Crash timeout updated: **${prevLabel}** -> **${newLabel}**`, flags: MessageFlags.Ephemeral });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Crash Timeout Updated', [`crashTimeoutMs: **${prevLabel}** -> **${newLabel}**`]);
+                return;
+            }
+
             const beforeTrade = gs.tradeChannelId;
             const beforeServices = gs.servicesChannelId;
             const beforeCommand = gs.gamesHubId;
@@ -15493,9 +16417,73 @@ client.on('interactionCreate', async interaction => {
         }
 
         // ── /exilechannel create ──────────────────────────
-        case 'exilechannel': {
+        // ── /exileconfig ──────────────────────────────────
+        case 'exileconfig': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            if (interaction.options.getSubcommand() === 'create') {
+            const ecGroup = interaction.options.getSubcommandGroup(false);
+            const ecSub = interaction.options.getSubcommand();
+
+            if (ecGroup === 'duration') {
+                if (ecSub === 'status') {
+                    const cur = gs.exileDurationMins || EXILE_DURATION_MINS;
+                    const d = Math.floor(cur / 1440), h = Math.floor((cur % 1440) / 60), m = cur % 60;
+                    const parts = [];
+                    if (d) parts.push(`${d}d`);
+                    if (h) parts.push(`${h}h`);
+                    if (m || !parts.length) parts.push(`${m}m`);
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder()
+                            .setTitle('⏱️ Default Exile Duration')
+                            .setColor(0x5865F2)
+                            .addFields(
+                                { name: 'Current default', value: `**${parts.join(' ')}** (${cur} minutes)`, inline: false },
+                            )
+                            .setFooter({ text: 'Change with /exileconfig duration set <duration>' })
+                            .setTimestamp()],
+                        flags: MessageFlags.Ephemeral,
+                    });
+                    break;
+                }
+
+                if (ecSub === 'set') {
+                    const raw = interaction.options.getString('duration') || '';
+                    const parsed = parseDuration(raw);
+                    if (!parsed || parsed < 1) {
+                        await interaction.reply({ content: '❌ Invalid duration. Examples: `30s`, `10m`, `2h`, `1d`, `1w`', flags: MessageFlags.Ephemeral });
+                        return;
+                    }
+                    const prev = gs.exileDurationMins || EXILE_DURATION_MINS;
+                    gs.exileDurationMins = parsed;
+                    saveData(data);
+
+                    const dd = Math.floor(parsed / 1440), hh = Math.floor((parsed % 1440) / 60), mm = parsed % 60;
+                    const parts = [];
+                    if (dd) parts.push(`${dd}d`);
+                    if (hh) parts.push(`${hh}h`);
+                    if (mm || !parts.length) parts.push(`${mm}m`);
+                    const label = parts.join(' ');
+
+                    await interaction.reply({
+                        embeds: [new EmbedBuilder()
+                            .setTitle('⏱️ Default Exile Duration Updated')
+                            .setColor(0x00FF88)
+                            .addFields(
+                                { name: 'Previous', value: `${prev} minutes`, inline: true },
+                                { name: 'New default', value: `**${label}** (${parsed} minutes)`, inline: true },
+                            )
+                            .setFooter({ text: `Set by ${interaction.user.username}` })
+                            .setTimestamp()],
+                    });
+                    await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Exile Duration Updated', [
+                        `exileDurationMins: **${prev}** → **${parsed}** (${label})`,
+                    ]);
+                    break;
+                }
+                await interaction.reply({ content: '❌ Unknown subcommand.', flags: MessageFlags.Ephemeral });
+                break;
+            }
+
+            if (ecSub === 'createchannel') {
                 await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
                 try {
                     const exRole = interaction.guild.roles.cache.get(gs.exiledRoleId);
@@ -15515,14 +16503,7 @@ client.on('interactionCreate', async interaction => {
                 } catch(e) {
                     await safeEdit(interaction, { content: `❌ Failed to create exile channel: ${e.message}` });
                 }
-            }
-            break;
-        }
-
-        // ── /exilerole create ─────────────────────────────
-        case 'exilerole': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            if (interaction.options.getSubcommand() === 'create') {
+            } else if (ecSub === 'createrole') {
                 await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
                 try {
                     const role = await interaction.guild.roles.create({
@@ -15530,7 +16511,6 @@ client.on('interactionCreate', async interaction => {
                         color: 0x555555,
                         reason: 'SKYNET V7 auto-created exile role',
                     });
-                    // Deny channel access for all text channels
                     for (const [, ch] of interaction.guild.channels.cache) {
                         if (ch.type === ChannelType.GuildText) {
                             await ch.permissionOverwrites.create(role, { SendMessages: false, AddReactions: false }).catch(()=>{});
@@ -15542,15 +16522,7 @@ client.on('interactionCreate', async interaction => {
                 } catch(e) {
                     await safeEdit(interaction, { content: `❌ Failed to create exile role: ${e.message}` });
                 }
-            }
-            break;
-        }
-
-        // ── /exileconfig ──────────────────────────────────
-        case 'exileconfig': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            const ecSub = interaction.options.getSubcommand();
-            if (ecSub === 'setrole') {
+            } else if (ecSub === 'setrole') {
                 const role = interaction.options.getRole('role');
                 const _ecHierErr = checkRoleHierarchy(interaction.member, role);
                 if (_ecHierErr) { await interaction.reply({ content: _ecHierErr, flags: MessageFlags.Ephemeral }); return; }
@@ -15710,6 +16682,7 @@ client.on('interactionCreate', async interaction => {
                     'openai-gpt55':      { provider: 'openai',   model: 'gpt-5.5',                    label: 'OpenAI — GPT-5.5 (flagship)' },
                     'gemini':            { provider: 'gemini',   model: 'gemini-2.5-flash',           label: 'Gemini — 2.5 Flash (fast)' },
                     'gemini-pro':        { provider: 'gemini',   model: 'gemini-2.5-pro',             label: 'Gemini — 2.5 Pro (powerful)' },
+                    'gemini-31pro':      { provider: 'gemini',   model: 'gemini-3.1-pro-preview',     label: 'Gemini — 3.1 Pro (reasoning flagship)' },
                     'gemini-flash2':     { provider: 'gemini',   model: 'gemini-3.5-flash',           label: 'Gemini — 3.5 Flash (latest)' },
                     'groq':              { provider: 'groq',     model: 'openai/gpt-oss-120b',        label: 'Groq — GPT-OSS 120B (recommended)' },
                     'groq-llama31':      { provider: 'groq',     model: 'llama-3.1-70b-versatile',    label: 'Groq — Llama 3.1 70B Versatile' },
@@ -15718,8 +16691,8 @@ client.on('interactionCreate', async interaction => {
                     'groq-qwen':         { provider: 'groq',     model: 'qwen/qwen3.6-27b',           label: 'Groq — Qwen3.6 27B' },
                     'mistral':           { provider: 'mistral',  model: 'mistral-large-latest',       label: 'Mistral — Large (flagship)' },
                     'mistral-small':     { provider: 'mistral',  model: 'mistral-small-latest',       label: 'Mistral — Small (fast)' },
-                    'deepseek':          { provider: 'deepseek', model: 'deepseek-chat',              label: 'DeepSeek — Chat (V3)' },
-                    'deepseek-reasoner': { provider: 'deepseek', model: 'deepseek-reasoner',          label: 'DeepSeek — Reasoner (R1)' },
+                    'deepseek':          { provider: 'deepseek', model: 'deepseek-v4-flash',          label: 'DeepSeek — V4 Flash (fast, cheap)' },
+                    'deepseek-reasoner': { provider: 'deepseek', model: 'deepseek-v4-pro',            label: 'DeepSeek — V4 Pro (reasoning)' },
                     'grok':              { provider: 'grok',     model: 'grok-4.3',                   label: 'xAI — Grok 4.3 (flagship)' },
                 };
                 const chosen = providerMap[providerChoice];
@@ -15757,14 +16730,99 @@ client.on('interactionCreate', async interaction => {
         case 'check': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
             const csub = interaction.options.getSubcommand();
+
             if (csub === 'status') {
-                await interaction.reply({ content: `🛡️ Moderation checks are currently **${gs.checksEnabled !== false ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
-            } else {
-                gs.checksEnabled = (csub === 'enable');
-                saveData(data);
-                await interaction.reply({ content: `${gs.checksEnabled ? '✅' : '🛑'} All moderation checks are now **${gs.checksEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
-                await sendConfigLog(interaction.guild, data, interaction.user.id, gs.checksEnabled ? '✅ Checks Enabled' : '🛑 Checks Disabled', [`Checks: **${gs.checksEnabled ? 'ON' : 'OFF'}**`]);
+                const globalState = gs.checksEnabled !== false ? 'ENABLED' : 'DISABLED';
+                const lines = [`🛡️ Master switch: **${globalState}**`];
+                for (const cat of CHECK_CATEGORIES) {
+                    const ov = gs.checkOverrides?.[cat];
+                    if (!ov) continue;
+                    const now = Date.now();
+                    const bits = [];
+                    if (ov.disabledUntil !== undefined && ov.disabledUntil !== null && (ov.disabledUntil === 0 || ov.disabledUntil > now)) {
+                        bits.push(ov.disabledUntil === 0 ? 'server-wide (indefinite)' : `server-wide until <t:${Math.floor(ov.disabledUntil / 1000)}:R>`);
+                    }
+                    const chEntries = Object.entries(ov.disabledChannels || {}).filter(([, until]) => until === 0 || until > now);
+                    if (chEntries.length) {
+                        bits.push(chEntries.map(([cid, until]) => `<#${cid}>${until === 0 ? '' : ` (until <t:${Math.floor(until / 1000)}:R>)`}`).join(', '));
+                    }
+                    if (bits.length) lines.push(`🛑 **${cat}** disabled — ${bits.join('; ')}`);
+                }
+                if (lines.length === 1) lines.push('✅ No per-category overrides active.');
+                await interaction.reply({ content: lines.join('\n'), flags: MessageFlags.Ephemeral });
+                break;
             }
+
+            const catOpt = interaction.options.getString('category') || 'all';
+            const channelsRaw = interaction.options.getString('channels') || '';
+            const channelIds = parseChannelIdsFromText(channelsRaw);
+            const categories = catOpt === 'all' ? CHECK_CATEGORIES : [catOpt];
+
+            if (csub === 'disable') {
+                const durRaw = interaction.options.getString('duration');
+                let untilTs = 0; // 0 = indefinite
+                if (durRaw) {
+                    const mins = parseDuration(durRaw);
+                    if (!mins || mins < 1) { await interaction.reply({ content: '❌ Invalid duration. Examples: `30m`, `2h`, `1d`', flags: MessageFlags.Ephemeral }); return; }
+                    untilTs = Date.now() + mins * 60 * 1000;
+                }
+
+                if (catOpt === 'all' && channelIds.length === 0) {
+                    // Fall back to the simple master switch for full server-wide "disable everything"
+                    gs.checksEnabled = false;
+                    saveData(data);
+                    await interaction.reply({ content: '🛑 All moderation checks are now **DISABLED** server-wide.', flags: MessageFlags.Ephemeral });
+                    await sendConfigLog(interaction.guild, data, interaction.user.id, '🛑 Checks Disabled', [`Checks: **OFF**`]);
+                    break;
+                }
+
+                for (const cat of categories) {
+                    const ov = getCheckOverride(gs, cat);
+                    if (channelIds.length === 0) {
+                        ov.disabledUntil = untilTs;
+                    } else {
+                        for (const cid of channelIds) ov.disabledChannels[cid] = untilTs;
+                    }
+                }
+                saveData(data);
+
+                const scopeDesc = channelIds.length ? channelIds.map(id => `<#${id}>`).join(', ') : 'server-wide';
+                const durDesc = untilTs === 0 ? 'indefinitely' : `until <t:${Math.floor(untilTs / 1000)}:R>`;
+                await interaction.reply({ content: `🛑 Disabled **${categories.join(', ')}** check(s) ${scopeDesc}, ${durDesc}.`, flags: MessageFlags.Ephemeral });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '🛑 Checks Disabled', [
+                    `Category: **${categories.join(', ')}**`,
+                    `Scope: ${scopeDesc}`,
+                    `Duration: ${durDesc}`,
+                ]);
+                break;
+            }
+
+            // enable
+            if (catOpt === 'all' && channelIds.length === 0) {
+                gs.checksEnabled = true;
+                if (gs.checkOverrides) gs.checkOverrides = {};
+                saveData(data);
+                await interaction.reply({ content: '✅ All moderation checks are now **ENABLED** server-wide.', flags: MessageFlags.Ephemeral });
+                await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Checks Enabled', [`Checks: **ON**`]);
+                break;
+            }
+
+            for (const cat of categories) {
+                const ov = getCheckOverride(gs, cat);
+                if (channelIds.length === 0) {
+                    ov.disabledUntil = null;
+                } else {
+                    for (const cid of channelIds) delete ov.disabledChannels[cid];
+                }
+            }
+            saveData(data);
+
+            const scopeDesc = channelIds.length ? channelIds.map(id => `<#${id}>`).join(', ') : 'server-wide';
+            await interaction.reply({ content: `✅ Enabled **${categories.join(', ')}** check(s) ${scopeDesc}.`, flags: MessageFlags.Ephemeral });
+            await sendConfigLog(interaction.guild, data, interaction.user.id, '✅ Checks Enabled', [
+                `Category: **${categories.join(', ')}**`,
+                `Scope: ${scopeDesc}`,
+            ]);
             break;
         }
 
@@ -15803,12 +16861,16 @@ client.on('interactionCreate', async interaction => {
         case 'botinfo': {
             const ownerStr = gs.botOwnerId ? `<@${gs.botOwnerId}> (${gs.botOwnerId})` : 'Open Source / Community Run';
             const coderStr = `<@${BOT_CODED_BY_ID}> (${BOT_CODED_BY_ID})`;
+            const upMs = Date.now() - BOT_START_TS;
             const embed = new EmbedBuilder()
                 .setTitle('🤖 Bot Info')
                 .setColor(0x5865F2)
                 .addFields(
                     { name: 'Owner', value: ownerStr, inline: false },
                     { name: 'Coded By', value: coderStr, inline: false },
+                    { name: 'Uptime', value: formatDuration(upMs), inline: true },
+                    { name: 'Started', value: `<t:${Math.floor(BOT_START_TS / 1000)}:R>`, inline: true },
+                    { name: 'Memory', value: `${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB RSS`, inline: true },
                 )
                 .setTimestamp();
             const ft = footerText(gs);
@@ -16583,6 +17645,7 @@ client.on('interactionCreate', async interaction => {
                 'openai-gpt55':      { provider: 'openai',   model: 'gpt-5.5',                    label: 'OpenAI — GPT-5.5 (flagship)' },
                 'gemini':            { provider: 'gemini',   model: 'gemini-2.5-flash',           label: 'Gemini — 2.5 Flash (fast)' },
                 'gemini-pro':        { provider: 'gemini',   model: 'gemini-2.5-pro',             label: 'Gemini — 2.5 Pro (powerful)' },
+                'gemini-31pro':      { provider: 'gemini',   model: 'gemini-3.1-pro-preview',     label: 'Gemini — 3.1 Pro (reasoning flagship)' },
                 'gemini-flash2':     { provider: 'gemini',   model: 'gemini-3.5-flash',           label: 'Gemini — 3.5 Flash (latest)' },
                 'groq':              { provider: 'groq',     model: 'openai/gpt-oss-120b',        label: 'Groq — GPT-OSS 120B (recommended)' },
                 'groq-llama31':      { provider: 'groq',     model: 'llama-3.1-70b-versatile',    label: 'Groq — Llama 3.1 70B Versatile' },
@@ -16591,8 +17654,8 @@ client.on('interactionCreate', async interaction => {
                 'groq-qwen':         { provider: 'groq',     model: 'qwen/qwen3.6-27b',           label: 'Groq — Qwen3.6 27B' },
                 'mistral':           { provider: 'mistral',  model: 'mistral-large-latest',       label: 'Mistral — Large (flagship)' },
                 'mistral-small':     { provider: 'mistral',  model: 'mistral-small-latest',       label: 'Mistral — Small (fast)' },
-                'deepseek':          { provider: 'deepseek', model: 'deepseek-chat',              label: 'DeepSeek — Chat (V3)' },
-                'deepseek-reasoner': { provider: 'deepseek', model: 'deepseek-reasoner',          label: 'DeepSeek — Reasoner (R1)' },
+                'deepseek':          { provider: 'deepseek', model: 'deepseek-v4-flash',          label: 'DeepSeek — V4 Flash (fast, cheap)' },
+                'deepseek-reasoner': { provider: 'deepseek', model: 'deepseek-v4-pro',            label: 'DeepSeek — V4 Pro (reasoning)' },
                 'grok':              { provider: 'grok',     model: 'grok-4.3',                   label: 'xAI — Grok 4.3 (flagship)' },
             };
 
@@ -16668,47 +17731,6 @@ client.on('interactionCreate', async interaction => {
         }
 
         // ── /botstatus ────────────────────────────────────
-        case 'botstatus': {
-            if (!isMod && !isAdmin) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
-            const totalExiled     = Object.keys(data.exiles).length;
-            const totalViolations = Object.values(data.violations).reduce((a, v) => a + (typeof v === 'number' ? v : (v?.count || 0)), 0);
-            const tradeIds  = getChannelIds(gs, 'tradeChannelIds');
-            const raidIds   = getChannelIds(gs, 'raidServiceChannelIds');
-            const raceIds   = getChannelIds(gs, 'raceV4ServiceChannelIds');
-            const seaIds    = getChannelIds(gs, 'seaEventsChannelIds');
-            const mirageIds = getChannelIds(gs, 'mirageIslandChannelIds');
-            const preIds    = getChannelIds(gs, 'prehistoricIslandChannelIds');
-            const kitIds    = getChannelIds(gs, 'kitsuneIslandChannelIds');
-            const leviIds   = getChannelIds(gs, 'leviathanChannelIds');
-            await interaction.reply({ embeds: [new EmbedBuilder()
-                .setTitle('🤖 SKYNET V7 — Status')
-                .setColor(0x5865F2)
-                .addFields(
-                    { name: '🧠 Checks',          value: gs.checksEnabled ? '✅ ON' : '🛑 OFF',       inline: true },
-                    { name: '📡 Trade Channels',   value: tradeIds.length ? formatChannelIds(tradeIds) : (gs.tradeChannelId ? `<#${gs.tradeChannelId}>` : 'Not set'), inline: false },
-                    { name: '⚔️ Services Channel', value: `<#${gs.servicesChannelId}>`,           inline: true },
-                    { name: '⚔️ Raid/Service',     value: formatChannelIds(raidIds),              inline: true },
-                    { name: '🏁 Race/Trials',      value: formatChannelIds(raceIds),              inline: true },
-                    { name: '🌊 Sea Events',        value: formatChannelIds(seaIds),              inline: true },
-                    { name: '🏝️ Mirage Island',    value: formatChannelIds(mirageIds),           inline: true },
-                    { name: '🦕 Prehistoric Isl.', value: formatChannelIds(preIds),              inline: true },
-                    { name: '🦊 Kitsune Island',   value: formatChannelIds(kitIds),              inline: true },
-                    { name: '🐉 Leviathan/Frozen', value: formatChannelIds(leviIds),            inline: true },
-                    { name: '📋 Log Channel',      value: gs.logChannelId ? `<#${gs.logChannelId}>` : 'Not set', inline: true },
-                    { name: '📩 Appeals Channel',  value: gs.appealsChannelId ? `<#${gs.appealsChannelId}>` : 'Not set', inline: true },
-                    { name: '⛓️ Exile Role',       value: `<@&${gs.exiledRoleId}>`,               inline: true },
-                    { name: '🛡️ Immunity',         value: imm.enabled ? '✅ ON' : '❌ OFF',        inline: true },
-                    { name: '🚨 Scam Detection',   value: gs.scamEnabled ? '✅ ON' : '❌ OFF',      inline: true },
-                    { name: '⚙️ Threshold',        value: String(gs.violationThreshold || VIOLATION_THRESHOLD), inline: true },
-                    { name: '⏱️ Exile Duration',   value: `${gs.exileDurationMins || EXILE_DURATION_MINS}m`, inline: true },
-                    { name: '👥 Currently Exiled', value: String(totalExiled),                    inline: true },
-                    { name: '⚠️ Total Violations', value: String(totalViolations),                inline: true },
-                    { name: '🤖 AI Detection',     value: AI_ENABLED ? '✅ ON' : '❌ OFF',         inline: true },
-                )
-                .setTimestamp()], flags: MessageFlags.Ephemeral });
-            break;
-        }
-
         // ── /channelconfig ────────────────────────────────
         case 'channelconfig': {
             if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
@@ -16797,11 +17819,16 @@ client.on('interactionCreate', async interaction => {
             await interaction.deferReply();
 
             const reason = interaction.options.getString('reason') || 'Manual warn';
+            const durationOpt = interaction.options.getString('duration');
+            const durationMins = durationOpt ? parseDuration(durationOpt) : null;
+            const expiresAt = durationMins ? Date.now() + durationMins * 60000 : null;
+            if (durationOpt && !durationMins) { await interaction.editReply({ content: `❌ Couldn't understand duration \`${durationOpt}\`. Try something like \`30m\`, \`12h\`, or \`7d\`.` }); return; }
             const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
             const exileMins = Math.max(1, Math.min(1440, gs.exileDurationMins || EXILE_DURATION_MINS));
-            const count = addViolationEntry(data, user.id, { reason, category: 'manual', by: interaction.user.id });
+            const count = addViolationEntry(data, user.id, { reason, category: 'manual', by: interaction.user.id, expiresAt, guildId });
             const warnId = getLastWarnId(data, user.id);
             saveData(data);
+            const expiryLine = expiresAt ? `\n⏳ Auto-removes <t:${Math.floor(expiresAt/1000)}:R>` : '';
 
             await sendLog(interaction.guild, data, new EmbedBuilder()
                 .setTitle('⚠️ Manual Warn')
@@ -16811,6 +17838,7 @@ client.on('interactionCreate', async interaction => {
                     { name: 'By',         value: `<@${interaction.user.id}>`,   inline: true },
                     { name: 'Violations', value: `${count}/${threshold}`,        inline: true },
                     { name: 'Reason',     value: reason.slice(0, 1024),          inline: false },
+                    ...(expiresAt ? [{ name: 'Expires', value: `<t:${Math.floor(expiresAt/1000)}:R>`, inline: true }] : []),
                 ).setTimestamp());
 
             // Build the public reply embed
@@ -16822,7 +17850,7 @@ client.on('interactionCreate', async interaction => {
                     { name: '👤 User',        value: `<@${user.id}>`,             inline: true },
                     { name: '🛡️ Issued by',   value: `<@${interaction.user.id}>`, inline: true },
                     { name: '📊 Violations',  value: `${count}/${threshold}`,      inline: true },
-                    { name: '📝 Reason',      value: reason.slice(0, 1024),        inline: false },
+                    { name: '📝 Reason',      value: reason.slice(0, 1024) + expiryLine, inline: false },
                 )
                 .setFooter({ text: `Warn ID: ${warnId || 'N/A'}` })
                 .setTimestamp();
@@ -16853,6 +17881,7 @@ client.on('interactionCreate', async interaction => {
                             { name: '🛡️ Issued by',    value: `<@${interaction.user.id}>`,  inline: true  },
                             { name: '📊 Strike count', value: `${count} / ${threshold}`,     inline: true  },
                             { name: '🆔 Warn ID',      value: `\`${warnId}\``,              inline: true  },
+                            ...(expiresAt ? [{ name: '⏳ Expires', value: `<t:${Math.floor(expiresAt/1000)}:R>`, inline: true }] : []),
                         )
                         .setFooter({ text: 'You may submit exactly 1 appeal per warning.' })
                         .setTimestamp();
@@ -17097,6 +18126,554 @@ client.on('interactionCreate', async interaction => {
         }
 
         // ── /info — full user lookup ─────────────────────────────────────────────
+        case 'assets': {
+            const asGroup = interaction.options.getSubcommandGroup();
+            const asSub = interaction.options.getSubcommand();
+
+            if (asGroup === 'emoji') {
+                const permErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageEmojisAndStickers, 'Manage Emojis & Stickers');
+                if (permErr) { await interaction.reply({ content: permErr, flags: MessageFlags.Ephemeral }); return; }
+                if (asSub === 'create') {
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const name = interaction.options.getString('name').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 32);
+                    if (name.length < 2) { await safeEdit(interaction, { content: '❌ Emoji name must be 2-32 characters (letters, numbers, underscores only).' }); return; }
+                    const attachment = interaction.options.getAttachment('image');
+                    const imageUrl = attachment?.url || interaction.options.getString('image_url');
+                    if (!imageUrl) { await safeEdit(interaction, { content: '❌ Provide either `image_url` or upload an `image`.' }); return; }
+                    try {
+                        const emoji = await interaction.guild.emojis.create({ attachment: imageUrl, name, reason: `Created by ${interaction.user.tag}` });
+                        await safeEdit(interaction, { content: `✅ Created emoji ${emoji} (\`:${emoji.name}:\`)` });
+                        await sendLog(interaction.guild, data, new EmbedBuilder().setTitle('😀 Emoji Created').setColor(0x00CC66).addFields({ name: 'Emoji', value: `${emoji} \`:${emoji.name}:\``, inline: true }, { name: 'By', value: `<@${interaction.user.id}>`, inline: true }).setTimestamp());
+                    } catch (e) { await safeEdit(interaction, { content: `❌ Failed to create emoji: ${e.message}` }); }
+                } else if (asSub === 'delete') {
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const name = interaction.options.getString('name').replace(/^:|:$/g, '');
+                    const emoji = interaction.guild.emojis.cache.find(e => e.name === name);
+                    if (!emoji) { await safeEdit(interaction, { content: `❌ No emoji named \`${name}\` found.` }); return; }
+                    await emoji.delete(`Deleted by ${interaction.user.tag}`).catch(() => {});
+                    await safeEdit(interaction, { content: `✅ Deleted emoji \`:${name}:\`` });
+                } else {
+                    const list = interaction.guild.emojis.cache.map(e => `${e} \`:${e.name}:\``).slice(0, 100).join(' ') || 'No custom emojis.';
+                    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('😀 Custom Emojis').setDescription(list.slice(0, 4000)).setColor(0x5865F2)], flags: MessageFlags.Ephemeral });
+                }
+
+            } else if (asGroup === 'sticker') {
+                const permErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageEmojisAndStickers, 'Manage Emojis & Stickers');
+                if (permErr) { await interaction.reply({ content: permErr, flags: MessageFlags.Ephemeral }); return; }
+                if (asSub === 'create') {
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const name = interaction.options.getString('name').slice(0, 30);
+                    const attachment = interaction.options.getAttachment('image');
+                    const tags = interaction.options.getString('tags');
+                    const description = interaction.options.getString('description') || '';
+                    if (attachment.size > 512000) { await safeEdit(interaction, { content: '❌ Sticker image must be under 512KB.' }); return; }
+                    try {
+                        const sticker = await interaction.guild.stickers.create({ file: attachment.url, name, tags, description, reason: `Created by ${interaction.user.tag}` });
+                        await safeEdit(interaction, { content: `✅ Created sticker **${sticker.name}**` });
+                        await sendLog(interaction.guild, data, new EmbedBuilder().setTitle('🏷️ Sticker Created').setColor(0x00CC66).addFields({ name: 'Sticker', value: sticker.name, inline: true }, { name: 'By', value: `<@${interaction.user.id}>`, inline: true }).setTimestamp());
+                    } catch (e) { await safeEdit(interaction, { content: `❌ Failed to create sticker: ${e.message}` }); }
+                } else if (asSub === 'delete') {
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const name = interaction.options.getString('name');
+                    const sticker = interaction.guild.stickers.cache.find(s => s.name === name);
+                    if (!sticker) { await safeEdit(interaction, { content: `❌ No sticker named \`${name}\` found.` }); return; }
+                    await sticker.delete(`Deleted by ${interaction.user.tag}`).catch(() => {});
+                    await safeEdit(interaction, { content: `✅ Deleted sticker **${name}**` });
+                } else {
+                    const list = interaction.guild.stickers.cache.map(s => s.name).slice(0, 100).join(', ') || 'No custom stickers.';
+                    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('🏷️ Custom Stickers').setDescription(list.slice(0, 4000)).setColor(0x5865F2)], flags: MessageFlags.Ephemeral });
+                }
+
+            } else if (asGroup === 'webhook') {
+                const permErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageWebhooks, 'Manage Webhooks');
+                if (permErr) { await interaction.reply({ content: permErr, flags: MessageFlags.Ephemeral }); return; }
+                if (asSub === 'create') {
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const name = interaction.options.getString('name').slice(0, 80);
+                    const chan = interaction.options.getChannel('channel') || interaction.channel;
+                    try {
+                        const wh = await chan.createWebhook({ name, reason: `Created by ${interaction.user.tag}` });
+                        await safeEdit(interaction, { content: `✅ Created webhook **${wh.name}** in ${chan}.\n🔗 URL (keep this secret!): ||${wh.url}||` });
+                        await sendLog(interaction.guild, data, new EmbedBuilder().setTitle('🔗 Webhook Created').setColor(0x00CC66).addFields({ name: 'Name', value: wh.name, inline: true }, { name: 'Channel', value: `${chan}`, inline: true }, { name: 'By', value: `<@${interaction.user.id}>`, inline: true }).setTimestamp());
+                    } catch (e) { await safeEdit(interaction, { content: `❌ Failed to create webhook: ${e.message}` }); }
+                } else if (asSub === 'delete') {
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const nameOrId = interaction.options.getString('name_or_id');
+                    const hooks = await interaction.guild.fetchWebhooks().catch(() => null);
+                    const wh = hooks?.find(h => h.id === nameOrId || h.name === nameOrId);
+                    if (!wh) { await safeEdit(interaction, { content: `❌ No webhook matching \`${nameOrId}\` found.` }); return; }
+                    await wh.delete(`Deleted by ${interaction.user.tag}`).catch(() => {});
+                    await safeEdit(interaction, { content: `✅ Deleted webhook **${wh.name}**.` });
+                } else if (asSub === 'list') {
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const hooks = await interaction.guild.fetchWebhooks().catch(() => null);
+                    const list = hooks?.map(h => `**${h.name}** — <#${h.channelId}> — \`${h.id}\``).join('\n') || 'No webhooks found.';
+                    await safeEdit(interaction, { embeds: [new EmbedBuilder().setTitle('🔗 Webhooks').setDescription(list.slice(0, 4000)).setColor(0x5865F2)] });
+                } else if (asSub === 'send') {
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const nameOrId = interaction.options.getString('name_or_id');
+                    const msgText = interaction.options.getString('message');
+                    const username = interaction.options.getString('username');
+                    const hooks = await interaction.guild.fetchWebhooks().catch(() => null);
+                    const wh = hooks?.find(h => h.id === nameOrId || h.name === nameOrId);
+                    if (!wh) { await safeEdit(interaction, { content: `❌ No webhook matching \`${nameOrId}\` found.` }); return; }
+                    await wh.send({ content: msgText.slice(0, 2000), username: username || undefined }).then(
+                        () => safeEdit(interaction, { content: `✅ Sent via webhook **${wh.name}**.` }),
+                        e => safeEdit(interaction, { content: `❌ Failed to send: ${e.message}` }),
+                    );
+                }
+            } else if (asGroup === 'thread') {
+                // Resolve the target thread once: explicit ID option, or fall back
+                // to the current channel if it's itself a thread.
+                const resolveThread = async () => {
+                    const tid = interaction.options.getString('thread_id');
+                    if (tid) return interaction.guild.channels.fetch(tid).catch(() => null);
+                    if (interaction.channel?.isThread?.()) return interaction.channel;
+                    return null;
+                };
+
+                if (asSub === 'create') {
+                    const permErr = checkModPermission(interaction.member, PermissionFlagsBits.CreatePublicThreads, 'Create Public Threads');
+                    if (permErr) { await interaction.reply({ content: permErr, flags: MessageFlags.Ephemeral }); return; }
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const name = interaction.options.getString('name').slice(0, 100);
+                    const chan = interaction.options.getChannel('channel') || interaction.channel;
+                    const typeOpt = interaction.options.getString('type') || 'public';
+                    const autoArchive = interaction.options.getInteger('auto_archive') || 1440;
+                    if (typeOpt === 'private') {
+                        const privErr = checkModPermission(interaction.member, PermissionFlagsBits.CreatePrivateThreads, 'Create Private Threads');
+                        if (privErr) { await safeEdit(interaction, { content: privErr }); return; }
+                    }
+                    try {
+                        const thread = await chan.threads.create({
+                            name,
+                            autoArchiveDuration: autoArchive,
+                            type: typeOpt === 'private' ? ChannelType.PrivateThread : ChannelType.PublicThread,
+                            reason: `Created by ${interaction.user.tag}`,
+                        });
+                        await safeEdit(interaction, { content: `✅ Created thread ${thread} in ${chan}.` });
+                        await sendLog(interaction.guild, data, new EmbedBuilder().setTitle('🧵 Thread Created').setColor(0x00CC66).addFields({ name: 'Thread', value: `${thread}`, inline: true }, { name: 'Parent', value: `${chan}`, inline: true }, { name: 'By', value: `<@${interaction.user.id}>`, inline: true }).setTimestamp());
+                    } catch (e) { await safeEdit(interaction, { content: `❌ Failed to create thread: ${e.message}` }); }
+                } else if (asSub === 'delete') {
+                    const permErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageThreads, 'Manage Threads');
+                    if (permErr) { await interaction.reply({ content: permErr, flags: MessageFlags.Ephemeral }); return; }
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const reason = interaction.options.getString('reason') || `Deleted by ${interaction.user.tag}`;
+                    const thread = await resolveThread();
+                    if (!thread) { await safeEdit(interaction, { content: '❌ No thread found — provide `thread_id` or run this inside the thread.' }); return; }
+                    const threadName = thread.name;
+                    try {
+                        await thread.delete(reason);
+                        await safeEdit(interaction, { content: `✅ Deleted thread **${threadName}**.` });
+                        await sendLog(interaction.guild, data, new EmbedBuilder().setTitle('🧵 Thread Deleted').setColor(0xFF4444).addFields({ name: 'Thread', value: threadName, inline: true }, { name: 'By', value: `<@${interaction.user.id}>`, inline: true }, { name: 'Reason', value: reason, inline: false }).setTimestamp());
+                    } catch (e) { await safeEdit(interaction, { content: `❌ Failed to delete thread: ${e.message}` }); }
+                } else if (asSub === 'archive') {
+                    const permErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageThreads, 'Manage Threads');
+                    if (permErr) { await interaction.reply({ content: permErr, flags: MessageFlags.Ephemeral }); return; }
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const thread = await resolveThread();
+                    if (!thread) { await safeEdit(interaction, { content: '❌ No thread found — provide `thread_id` or run this inside the thread.' }); return; }
+                    const state = interaction.options.getString('state') || 'archive';
+                    try {
+                        await thread.setArchived(state === 'archive', `${state === 'archive' ? 'Archived' : 'Unarchived'} by ${interaction.user.tag}`);
+                        await safeEdit(interaction, { content: `✅ Thread **${thread.name}** ${state === 'archive' ? 'archived' : 'unarchived'}.` });
+                    } catch (e) { await safeEdit(interaction, { content: `❌ Failed: ${e.message}` }); }
+                } else if (asSub === 'lock') {
+                    const permErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageThreads, 'Manage Threads');
+                    if (permErr) { await interaction.reply({ content: permErr, flags: MessageFlags.Ephemeral }); return; }
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    const thread = await resolveThread();
+                    if (!thread) { await safeEdit(interaction, { content: '❌ No thread found — provide `thread_id` or run this inside the thread.' }); return; }
+                    const state = interaction.options.getString('state') || 'lock';
+                    try {
+                        await thread.setLocked(state === 'lock', `${state === 'lock' ? 'Locked' : 'Unlocked'} by ${interaction.user.tag}`);
+                        await safeEdit(interaction, { content: `✅ Thread **${thread.name}** ${state === 'lock' ? 'locked' : 'unlocked'}.` });
+                    } catch (e) { await safeEdit(interaction, { content: `❌ Failed: ${e.message}` }); }
+                } else if (asSub === 'list') {
+                    await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
+                    try {
+                        const active = await interaction.guild.channels.fetchActiveThreads();
+                        const list = active?.threads?.map(t => `**${t.name}** — <#${t.parentId}> — \`${t.id}\``).join('\n') || 'No active threads found.';
+                        await safeEdit(interaction, { embeds: [new EmbedBuilder().setTitle('🧵 Active Threads').setDescription(list.slice(0, 4000)).setColor(0x5865F2)] });
+                    } catch (e) { await safeEdit(interaction, { content: `❌ Failed to list threads: ${e.message}` }); }
+                }
+            }
+            break;
+        }
+
+        case 'sticky': {
+            if (!isAdmin && !isMod) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+            data.stickies = data.stickies || {};
+            const stSub = interaction.options.getSubcommand();
+            const stChan = interaction.options.getChannel('channel') || interaction.channel;
+            if (stSub === 'set') {
+                const permErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+                if (permErr) { await interaction.reply({ content: permErr, flags: MessageFlags.Ephemeral }); return; }
+                const text = interaction.options.getString('text');
+                if (data.stickies[stChan.id]?.messageId) {
+                    const old = await stChan.messages.fetch(data.stickies[stChan.id].messageId).catch(() => null);
+                    if (old) old.delete().catch(() => {});
+                }
+                const sticky = { guildId, content: text, messageId: null, authorId: interaction.user.id, createdAt: Date.now() };
+                data.stickies[stChan.id] = sticky;
+                const posted = await stChan.send({ embeds: [buildStickyEmbed(sticky)] }).catch(() => null);
+                if (posted) sticky.messageId = posted.id;
+                saveData(data);
+                await interaction.reply({ content: `📌 Sticky note set in ${stChan}.`, flags: MessageFlags.Ephemeral });
+            } else if (stSub === 'remove') {
+                const existing = data.stickies[stChan.id];
+                if (!existing) { await interaction.reply({ content: `❌ ${stChan} doesn't have an active sticky.`, flags: MessageFlags.Ephemeral }); return; }
+                if (existing.messageId) { const old = await stChan.messages.fetch(existing.messageId).catch(() => null); if (old) old.delete().catch(() => {}); }
+                delete data.stickies[stChan.id];
+                saveData(data);
+                await interaction.reply({ content: `✅ Sticky note removed from ${stChan}.`, flags: MessageFlags.Ephemeral });
+            } else {
+                const existing = data.stickies[stChan.id];
+                await interaction.reply({ content: existing ? `📌 ${stChan} has an active sticky:\n> ${existing.content.slice(0, 500)}` : `${stChan} has no active sticky.`, flags: MessageFlags.Ephemeral });
+            }
+            break;
+        }
+
+        case 'antinuke': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            gs.antinuke = gs.antinuke || {};
+            const anGroup = interaction.options.getSubcommandGroup(false);
+            const anSub = interaction.options.getSubcommand();
+
+            if (anGroup === 'whitelist') {
+                gs.antinuke.whitelistUserIds = gs.antinuke.whitelistUserIds || [];
+                gs.antinuke.whitelistRoleIds = gs.antinuke.whitelistRoleIds || [];
+                if (anSub === 'list') {
+                    const uLines = gs.antinuke.whitelistUserIds.map(id => `<@${id}>`).join(', ') || 'None';
+                    const rLines = gs.antinuke.whitelistRoleIds.map(id => `<@&${id}>`).join(', ') || 'None';
+                    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('🛡️ Anti-Nuke Whitelist').setColor(0x5865F2).addFields({ name: 'Users', value: uLines, inline: false }, { name: 'Roles', value: rLines, inline: false })], flags: MessageFlags.Ephemeral });
+                } else {
+                    const target = interaction.options.getMentionable('target');
+                    const isRole = !!target.permissions; // Role objects have .permissions, GuildMember doesn't at top level the same way — check via constructor name instead for safety
+                    const targetIsRole = target.constructor?.name === 'Role';
+                    const list = targetIsRole ? gs.antinuke.whitelistRoleIds : gs.antinuke.whitelistUserIds;
+                    const id = target.id;
+                    if (anSub === 'add') {
+                        if (!list.includes(id)) list.push(id);
+                        saveData(data);
+                        await interaction.reply({ content: `✅ Whitelisted ${targetIsRole ? `<@&${id}>` : `<@${id}>`} from anti-nuke.`, flags: MessageFlags.Ephemeral });
+                    } else {
+                        const idx = list.indexOf(id);
+                        if (idx !== -1) list.splice(idx, 1);
+                        saveData(data);
+                        await interaction.reply({ content: `✅ Removed ${targetIsRole ? `<@&${id}>` : `<@${id}>`} from the anti-nuke whitelist.`, flags: MessageFlags.Ephemeral });
+                    }
+                }
+                break;
+            }
+
+            if (anSub === 'toggle') {
+                gs.antinuke.enabled = interaction.options.getString('state') === 'on';
+                saveData(data);
+                await interaction.reply({ content: `✅ Anti-nuke is now **${gs.antinuke.enabled ? 'enabled' : 'disabled'}**.${gs.antinuke.enabled ? '\n⚠️ Make sure to whitelist your trusted staff with `/antinuke whitelist add` so they don\'t get caught by normal moderation activity.' : ''}`, flags: MessageFlags.Ephemeral });
+            } else if (anSub === 'punishment') {
+                gs.antinuke.punishment = interaction.options.getString('action');
+                saveData(data);
+                await interaction.reply({ content: `✅ Anti-nuke punishment set to **${gs.antinuke.punishment}**.`, flags: MessageFlags.Ephemeral });
+            } else if (anSub === 'threshold') {
+                const actionType = interaction.options.getString('action_type');
+                const count = interaction.options.getInteger('count');
+                const windowSec = interaction.options.getInteger('window_seconds');
+                gs.antinuke.thresholds = gs.antinuke.thresholds || {};
+                gs.antinuke.thresholds[actionType] = { count, windowSec };
+                saveData(data);
+                await interaction.reply({ content: `✅ Threshold for **${actionType}** set to **${count}** in **${windowSec}s**.`, flags: MessageFlags.Ephemeral });
+            } else {
+                const an = getAntiNukeConfig(gs);
+                const tLines = Object.entries(an.thresholds).map(([k, v]) => `${k}: ${v.count} / ${v.windowSec}s`).join('\n');
+                await interaction.reply({ embeds: [new EmbedBuilder().setTitle('🛡️ Anti-Nuke Status').setColor(0x5865F2)
+                    .addFields(
+                        { name: 'Enabled', value: an.enabled ? '✅' : '❌', inline: true },
+                        { name: 'Punishment', value: an.punishment, inline: true },
+                        { name: 'Whitelisted users', value: `${an.whitelistUserIds.length}`, inline: true },
+                        { name: 'Whitelisted roles', value: `${an.whitelistRoleIds.length}`, inline: true },
+                        { name: 'Thresholds', value: tLines || 'Defaults', inline: false },
+                    ).setTimestamp()], flags: MessageFlags.Ephemeral });
+            }
+            break;
+        }
+
+        case 'level': {
+            const lvlGroup = interaction.options.getSubcommandGroup(false);
+            const lvlSub = interaction.options.getSubcommand();
+            gs.leveling = gs.leveling || {};
+
+            if (lvlGroup === 'config') {
+                if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+                if (lvlSub === 'toggle') {
+                    gs.leveling.enabled = interaction.options.getString('state') === 'on';
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Leveling is now **${gs.leveling.enabled ? 'enabled' : 'disabled'}**.`, flags: MessageFlags.Ephemeral });
+                } else if (lvlSub === 'curve') {
+                    gs.leveling.curveType = interaction.options.getString('type');
+                    gs.leveling.baseXp = interaction.options.getInteger('base_xp');
+                    gs.leveling.growthFactor = interaction.options.getInteger('growth_factor');
+                    saveData(data);
+                    await interaction.reply({ content: `✅ XP curve updated: **${gs.leveling.curveType}**, base **${gs.leveling.baseXp}**, growth **${gs.leveling.growthFactor}**.\nExample: level 1->2 now needs **${xpNeededForLevel(getLevelingConfig(gs), 1)}** XP.`, flags: MessageFlags.Ephemeral });
+                } else if (lvlSub === 'xprange') {
+                    const min = interaction.options.getInteger('min'), max = interaction.options.getInteger('max');
+                    if (min > max) { await interaction.reply({ content: '❌ Minimum must be ≤ maximum.', flags: MessageFlags.Ephemeral }); return; }
+                    gs.leveling.xpMin = min; gs.leveling.xpMax = max;
+                    saveData(data);
+                    await interaction.reply({ content: `✅ XP per message is now **${min}-${max}**.`, flags: MessageFlags.Ephemeral });
+                } else if (lvlSub === 'cooldown') {
+                    gs.leveling.cooldownSec = interaction.options.getInteger('seconds');
+                    saveData(data);
+                    await interaction.reply({ content: `✅ XP cooldown is now **${gs.leveling.cooldownSec}s** between messages.`, flags: MessageFlags.Ephemeral });
+                } else if (lvlSub === 'rolereward') {
+                    const lvl = interaction.options.getInteger('level');
+                    const role = interaction.options.getRole('role');
+                    gs.leveling.roles = gs.leveling.roles || {};
+                    if (role) { gs.leveling.roles[lvl] = role.id; } else { delete gs.leveling.roles[lvl]; }
+                    saveData(data);
+                    await interaction.reply({ content: role ? `✅ Members now get <@&${role.id}> at level **${lvl}**.` : `✅ Removed the role reward for level **${lvl}**.`, flags: MessageFlags.Ephemeral });
+                } else if (lvlSub === 'message') {
+                    gs.leveling.levelUpMessage = interaction.options.getString('text').slice(0, 500);
+                    saveData(data);
+                    await interaction.reply({ content: `✅ Level-up message updated:\n> ${gs.leveling.levelUpMessage}`, flags: MessageFlags.Ephemeral });
+                } else if (lvlSub === 'channel') {
+                    const chan = interaction.options.getChannel('channel');
+                    gs.leveling.levelUpChannelId = chan ? chan.id : null;
+                    saveData(data);
+                    await interaction.reply({ content: chan ? `✅ Level-ups will be announced in ${chan}.` : '✅ Level-ups will be announced in whatever channel triggered them.', flags: MessageFlags.Ephemeral });
+                } else if (lvlSub === 'reset') {
+                    gs.leveling.curveType = 'linear'; gs.leveling.baseXp = 100; gs.leveling.growthFactor = 50;
+                    saveData(data);
+                    await interaction.reply({ content: '✅ XP curve reset to defaults (linear, base 100, growth 50).', flags: MessageFlags.Ephemeral });
+                } else {
+                    const lc = getLevelingConfig(gs);
+                    const roleLines = Object.entries(lc.roles).map(([lvl, rid]) => `Lvl ${lvl}: <@&${rid}>`).join('\n') || 'None';
+                    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('📈 Leveling Configuration').setColor(0x5865F2)
+                        .addFields(
+                            { name: 'Enabled', value: lc.enabled ? '✅' : '❌', inline: true },
+                            { name: 'Curve', value: lc.curveType, inline: true },
+                            { name: 'Base XP / Growth', value: `${lc.baseXp} / ${lc.growthFactor}`, inline: true },
+                            { name: 'XP per message', value: `${lc.xpMin}-${lc.xpMax}`, inline: true },
+                            { name: 'Cooldown', value: `${lc.cooldownSec}s`, inline: true },
+                            { name: 'Channel', value: lc.levelUpChannelId ? `<#${lc.levelUpChannelId}>` : 'Same channel', inline: true },
+                            { name: 'Role rewards', value: roleLines, inline: false },
+                            { name: 'Message template', value: lc.levelUpMessage, inline: false },
+                        ).setTimestamp()], flags: MessageFlags.Ephemeral });
+                }
+                break;
+            }
+
+            if (lvlSub === 'check') {
+                const targetUser = interaction.options.getUser('user') || interaction.user;
+                const lc = getLevelingConfig(gs);
+                const totalXp = getTotalXp(data, guildId, targetUser.id);
+                const info = computeLevelFromXp(lc, totalXp);
+                const lbRows = buildLevelLeaderboard(data, guildId);
+                const rank = lbRows.findIndex(r => r.uid === targetUser.id) + 1;
+                await interaction.reply({ embeds: [new EmbedBuilder().setTitle(`📈 Level — ${targetUser.username}`).setThumbnail(targetUser.displayAvatarURL({ dynamic: true })).setColor(0x5865F2)
+                    .addFields(
+                        { name: 'Level', value: `${info.level}`, inline: true },
+                        { name: 'XP', value: `${info.xpIntoLevel} / ${info.xpForNextLevel}`, inline: true },
+                        { name: 'Rank', value: rank ? `#${rank}` : 'Unranked', inline: true },
+                        { name: 'Total XP', value: `${totalXp.toLocaleString()}`, inline: true },
+                    ).setTimestamp()] });
+            } else if (lvlSub === 'leaderboard') {
+                const rows = buildLevelLeaderboard(data, guildId);
+                const lc = getLevelingConfig(gs);
+                const { start, end } = getLeaderboardPageBounds(0);
+                const lines = rows.slice(start, end).map((r, i) => {
+                    const rank = start + i + 1;
+                    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
+                    return `${medal} <@${r.uid}> — **Level ${computeLevelFromXp(lc, r.xp).level}** (${r.xp.toLocaleString()} XP)`;
+                });
+                const embed = new EmbedBuilder().setTitle('📈 XP Leaderboard').setDescription(lines.length ? lines.join('\n') : 'No XP recorded yet.').setColor(0x5865F2)
+                    .setFooter({ text: rows.length ? `Showing ${start + 1}–${Math.min(end, rows.length)} of ${rows.length}` : 'No data' }).setTimestamp();
+                const components = rows.length > 10 ? [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`levellb_${guildId}_1`).setLabel('Next ▶').setStyle(ButtonStyle.Primary))] : [];
+                await interaction.reply({ embeds: [embed], components });
+            } else if (lvlSub === 'set') {
+                if (!isAdmin && !isMod) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+                const targetUser = interaction.options.getUser('user');
+                const newLevel = interaction.options.getInteger('level');
+                const lc = getLevelingConfig(gs);
+                const newXp = totalXpForLevel(lc, newLevel);
+                data.levels = data.levels || {}; data.levels[guildId] = data.levels[guildId] || {};
+                data.levels[guildId][targetUser.id] = { xp: newXp };
+                _xpBuffer.delete(`${guildId}:${targetUser.id}`);
+                saveData(data);
+                await interaction.reply({ content: `✅ Set ${targetUser} to level **${newLevel}** (${newXp.toLocaleString()} XP).` });
+            } else if (lvlSub === 'addxp' || lvlSub === 'removexp') {
+                if (!isAdmin && !isMod) { await interaction.reply({ content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+                const targetUser = interaction.options.getUser('user');
+                const amount = interaction.options.getInteger('amount');
+                const delta = lvlSub === 'addxp' ? amount : -amount;
+                data.levels = data.levels || {}; data.levels[guildId] = data.levels[guildId] || {};
+                const rec = data.levels[guildId][targetUser.id] || (data.levels[guildId][targetUser.id] = { xp: 0 });
+                rec.xp = Math.max(0, (rec.xp || 0) + delta);
+                saveData(data);
+                await interaction.reply({ content: `✅ ${lvlSub === 'addxp' ? 'Added' : 'Removed'} **${amount}** XP ${lvlSub === 'addxp' ? 'to' : 'from'} ${targetUser}. New total: **${getTotalXp(data, guildId, targetUser.id).toLocaleString()}**.` });
+            }
+            break;
+        }
+
+        case 'giveaway': {
+            const gwSub = interaction.options.getSubcommand();
+            data.giveaways = data.giveaways || {};
+
+            if (gwSub === 'start') {
+                const gwPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+                if (gwPermErr) { await interaction.reply({ content: gwPermErr, flags: MessageFlags.Ephemeral }); return; }
+                const durMins = parseDuration(interaction.options.getString('duration'));
+                if (!durMins || durMins <= 0) { await interaction.reply({ content: '❌ Invalid duration. Examples: `30m`, `2h`, `1d`.', flags: MessageFlags.Ephemeral }); return; }
+                const prize = interaction.options.getString('prize');
+                const winnerCount = interaction.options.getInteger('winners') || 1;
+                const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+                const requiredRole = interaction.options.getRole('required_role');
+                const blacklistRole = interaction.options.getRole('blacklist_role');
+                const minMessages = interaction.options.getInteger('min_messages') || 0;
+                const minAccountAgeDays = interaction.options.getInteger('min_account_age') || 0;
+                const minJoinAgeDays = interaction.options.getInteger('min_join_age') || 0;
+                const endsAt = Date.now() + durMins * 60000;
+
+                await interaction.reply({ content: '🎉 Starting giveaway...', flags: MessageFlags.Ephemeral });
+                const gw = {
+                    guildId, channelId: targetChannel.id, prize, winnerCount, endsAt,
+                    hostId: interaction.user.id, hostTag: interaction.user.username,
+                    entries: [], ended: false,
+                    requiredRoleId: requiredRole?.id || null,
+                    blacklistRoleId: blacklistRole?.id || null,
+                    minMessages, minAccountAgeDays, minJoinAgeDays,
+                    bonusRoles: {},
+                };
+                const msg = await targetChannel.send({ embeds: [buildGiveawayEmbed(gw, false)], components: buildGiveawayComponents('pending', false) }).catch(() => null);
+                if (!msg) { await interaction.editReply({ content: '❌ Could not post the giveaway (check my permissions in that channel).' }); return; }
+                data.giveaways[msg.id] = gw;
+                saveData(data);
+                await msg.edit({ components: buildGiveawayComponents(msg.id, false) }).catch(() => {});
+                await interaction.editReply({ content: `✅ Giveaway started in ${targetChannel}! Ends <t:${Math.floor(endsAt / 1000)}:R>.` });
+
+            } else if (gwSub === 'bonusrole') {
+                const gwPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+                if (gwPermErr) { await interaction.reply({ content: gwPermErr, flags: MessageFlags.Ephemeral }); return; }
+                const msgId = interaction.options.getString('message_id').trim();
+                const gw = data.giveaways[msgId];
+                if (!gw || gw.guildId !== guildId) { await interaction.reply({ content: '❌ No giveaway found with that message ID in this server.', flags: MessageFlags.Ephemeral }); return; }
+                if (gw.ended) { await interaction.reply({ content: '❌ That giveaway has already ended.', flags: MessageFlags.Ephemeral }); return; }
+                const role = interaction.options.getRole('role');
+                const extra = interaction.options.getInteger('extra_entries');
+                gw.bonusRoles = gw.bonusRoles || {};
+                gw.bonusRoles[role.id] = extra;
+                saveData(data);
+                const chan = await client.channels.fetch(gw.channelId).catch(() => null);
+                const msg = chan ? await chan.messages.fetch(msgId).catch(() => null) : null;
+                if (msg) msg.edit({ embeds: [buildGiveawayEmbed(gw, false)] }).catch(() => {});
+                await interaction.reply({ content: `✅ Members with ${role} now get **+${extra}** bonus entries in that giveaway.`, flags: MessageFlags.Ephemeral });
+
+            } else if (gwSub === 'end' || gwSub === 'reroll') {
+                const gwPermErr = checkModPermission(interaction.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+                if (gwPermErr) { await interaction.reply({ content: gwPermErr, flags: MessageFlags.Ephemeral }); return; }
+                const msgId = interaction.options.getString('message_id').trim();
+                const gw = data.giveaways[msgId];
+                if (!gw || gw.guildId !== guildId) { await interaction.reply({ content: '❌ No giveaway found with that message ID in this server.', flags: MessageFlags.Ephemeral }); return; }
+                if (gwSub === 'end' && gw.ended) { await interaction.reply({ content: '❌ That giveaway has already ended.', flags: MessageFlags.Ephemeral }); return; }
+                if (gwSub === 'reroll' && !gw.ended) { await interaction.reply({ content: "❌ That giveaway hasn't ended yet — use `/giveaway end` first.", flags: MessageFlags.Ephemeral }); return; }
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+                const winners = await pickGiveawayWinners(interaction.guild, gw, gw.winnerCount);
+                gw.ended = true;
+                saveData(data);
+                const chan = await client.channels.fetch(gw.channelId).catch(() => null);
+                const msg = chan ? await chan.messages.fetch(msgId).catch(() => null) : null;
+                if (msg) msg.edit({ embeds: [buildGiveawayEmbed(gw, true, winners)], components: [] }).catch(() => {});
+                if (chan && winners.length) chan.send({ content: `🎉 Congratulations ${winners.map(w => `<@${w}>`).join(', ')}! You won **${gw.prize}**!`, allowedMentions: { users: winners } }).catch(() => {});
+                await interaction.editReply({ content: winners.length ? `✅ Winner(s): ${winners.map(w => `<@${w}>`).join(', ')}` : '😔 No valid entrants — no winner could be picked.' });
+
+            } else if (gwSub === 'list') {
+                const active = Object.entries(data.giveaways).filter(([, g]) => g.guildId === guildId && !g.ended);
+                if (!active.length) { await interaction.reply({ content: 'There are no active giveaways in this server.', flags: MessageFlags.Ephemeral }); return; }
+                const lines = active.map(([id, g]) => `🎉 **${g.prize}** — ${(g.entries || []).length} entrants — ends <t:${Math.floor(g.endsAt / 1000)}:R> — ID: \`${id}\``);
+                await interaction.reply({ embeds: [new EmbedBuilder().setTitle('🎉 Active Giveaways').setDescription(lines.join('\n')).setColor(0x00D26A)], flags: MessageFlags.Ephemeral });
+            }
+            break;
+        }
+
+        case 'messages': {
+            const msgSub = interaction.options.getSubcommand();
+            if (msgSub === 'stats') {
+                const targetUser = interaction.options.getUser('user') || interaction.user;
+                const embed = new EmbedBuilder()
+                    .setTitle(`💬 Message Stats — ${targetUser.username}`)
+                    .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+                    .setColor(0x5865F2)
+                    .addFields(
+                        { name: 'Today', value: `${getMessageCount(data, guildId, targetUser.id, 1).toLocaleString()}`, inline: true },
+                        { name: 'This Week', value: `${getMessageCount(data, guildId, targetUser.id, 7).toLocaleString()}`, inline: true },
+                        { name: 'This Month', value: `${getMessageCount(data, guildId, targetUser.id, 30).toLocaleString()}`, inline: true },
+                        { name: 'This Year', value: `${getMessageCount(data, guildId, targetUser.id, 365).toLocaleString()}`, inline: true },
+                        { name: 'All-Time', value: `${getMessageCount(data, guildId, targetUser.id, null).toLocaleString()}`, inline: true },
+                    ).setTimestamp();
+                await interaction.reply({ embeds: [embed] });
+            } else {
+                const period = interaction.options.getString('period') || 'alltime';
+                const rows = buildMessageLeaderboard(data, guildId, period);
+                const embed = buildLeaderboardEmbed(rows, 0, period);
+                const components = buildLeaderboardComponents(guildId, period, 0, rows.length);
+                await interaction.reply({ embeds: [embed], components });
+            }
+            break;
+        }
+
+        case 'verify': {
+            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+            const vSub = interaction.options.getSubcommand();
+            if (vSub === 'setup') {
+                const role = interaction.options.getRole('role');
+                const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+                if (role.managed) { await interaction.reply({ content: '❌ Cannot use integration-managed roles.', flags: MessageFlags.Ephemeral }); return; }
+                const _vHierErr = checkRoleHierarchy(interaction.member, role);
+                if (_vHierErr) { await interaction.reply({ content: _vHierErr, flags: MessageFlags.Ephemeral }); return; }
+                gs.verify = { enabled: true, roleId: role.id, channelId: targetChannel.id };
+                saveData(data);
+                const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`verify_start_${guildId}`).setLabel('✅ Verify').setStyle(ButtonStyle.Success));
+                const posted = await targetChannel.send({ embeds: [new EmbedBuilder().setTitle('✅ Server Verification').setDescription('Click the button below and enter the code you\'re shown to verify yourself and unlock the rest of the server.').setColor(0x00CC66)], components: [row] }).catch(() => null);
+                if (!posted) { await interaction.reply({ content: `❌ Set up, but I couldn't post in ${targetChannel} — check my permissions there.`, flags: MessageFlags.Ephemeral }); return; }
+                await interaction.reply({ content: `✅ Verification set up in ${targetChannel}. Members who pass the captcha get <@&${role.id}>.`, flags: MessageFlags.Ephemeral });
+            } else if (vSub === 'disable') {
+                gs.verify = { enabled: false, roleId: gs.verify?.roleId || null, channelId: gs.verify?.channelId || null };
+                saveData(data);
+                await interaction.reply({ content: '✅ Verification disabled.', flags: MessageFlags.Ephemeral });
+            } else {
+                const v = gs.verify || {};
+                await interaction.reply({ embeds: [new EmbedBuilder().setTitle('✅ Verification Status').setColor(0x5865F2)
+                    .addFields(
+                        { name: 'Enabled', value: v.enabled ? '✅ Yes' : '❌ No', inline: true },
+                        { name: 'Role', value: v.roleId ? `<@&${v.roleId}>` : 'Not set', inline: true },
+                        { name: 'Channel', value: v.channelId ? `<#${v.channelId}>` : 'Not set', inline: true },
+                    ).setTimestamp()], flags: MessageFlags.Ephemeral });
+            }
+            break;
+        }
+
+        case 'afk': {
+            const afkSub = interaction.options.getSubcommand();
+            data.afk = data.afk || {};
+            data.afk[guildId] = data.afk[guildId] || {};
+            if (afkSub === 'set') {
+                const afkReason = interaction.options.getString('reason') || 'No reason given';
+                data.afk[guildId][interaction.user.id] = { reason: afkReason, since: Date.now(), mentionsWhileAway: 0 };
+                saveData(data);
+                if (interaction.member?.manageable && interaction.guild.members.me?.permissions.has(PermissionFlagsBits.ManageNicknames) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                    const base = interaction.member.nickname || interaction.user.username;
+                    if (!base.startsWith('[AFK] ')) interaction.member.setNickname(`[AFK] ${base}`.slice(0, 32)).catch(() => {});
+                }
+                await interaction.reply({ embeds: [new EmbedBuilder().setDescription(`💤 You are now AFK: **${afkReason}**`).setColor(0xFFAA00)] });
+            } else {
+                const had = !!data.afk[guildId][interaction.user.id];
+                delete data.afk[guildId][interaction.user.id];
+                saveData(data);
+                await interaction.reply({ embeds: [new EmbedBuilder().setDescription(had ? '✅ Your AFK status has been cleared.' : "You weren't marked AFK.").setColor(0x00FF88)], flags: MessageFlags.Ephemeral });
+            }
+            break;
+        }
+
         case 'info': {
             await safeDefer(interaction, { flags: MessageFlags.Ephemeral });
             let infoUser = interaction.options.getUser('user');
@@ -17134,70 +18711,6 @@ client.on('interactionCreate', async interaction => {
             gs.exileDurationMins = mins;
             saveData(data);
             await interaction.reply({ content: `✅ Default exile duration set to **${mins} minutes**.`, flags: MessageFlags.Ephemeral });
-            break;
-        }
-
-        case 'exileduration': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            const edSub = interaction.options.getSubcommand();
-
-            if (edSub === 'status') {
-                const cur = gs.exileDurationMins || EXILE_DURATION_MINS;
-                const d = Math.floor(cur / 1440), h = Math.floor((cur % 1440) / 60), m = cur % 60;
-                const parts = [];
-                if (d) parts.push(`${d}d`);
-                if (h) parts.push(`${h}h`);
-                if (m || !parts.length) parts.push(`${m}m`);
-                await interaction.reply({
-                    embeds: [new EmbedBuilder()
-                        .setTitle('⏱️ Default Exile Duration')
-                        .setColor(0x5865F2)
-                        .addFields(
-                            { name: 'Current default', value: `**${parts.join(' ')}** (${cur} minutes)`, inline: false },
-                        )
-                        .setFooter({ text: 'Change with /exileduration set <duration>' })
-                        .setTimestamp()],
-                    flags: MessageFlags.Ephemeral,
-                });
-                break;
-            }
-
-            if (edSub === 'set') {
-                const raw = interaction.options.getString('duration') || '';
-                const parsed = parseDuration(raw);
-                if (!parsed || parsed < 1) {
-                    await interaction.reply({ content: '❌ Invalid duration. Examples: `30s`, `10m`, `2h`, `1d`, `1w`', flags: MessageFlags.Ephemeral });
-                    return;
-                }
-                const prev = gs.exileDurationMins || EXILE_DURATION_MINS;
-                gs.exileDurationMins = parsed;
-                saveData(data);
-
-                // Human-readable breakdown of new duration
-                const dd = Math.floor(parsed / 1440), hh = Math.floor((parsed % 1440) / 60), mm = parsed % 60;
-                const parts = [];
-                if (dd) parts.push(`${dd}d`);
-                if (hh) parts.push(`${hh}h`);
-                if (mm || !parts.length) parts.push(`${mm}m`);
-                const label = parts.join(' ');
-
-                await interaction.reply({
-                    embeds: [new EmbedBuilder()
-                        .setTitle('⏱️ Default Exile Duration Updated')
-                        .setColor(0x00FF88)
-                        .addFields(
-                            { name: 'Previous', value: `${prev} minutes`, inline: true },
-                            { name: 'New default', value: `**${label}** (${parsed} minutes)`, inline: true },
-                        )
-                        .setFooter({ text: `Set by ${interaction.user.username}` })
-                        .setTimestamp()],
-                });
-                await sendConfigLog(interaction.guild, data, interaction.user.id, '⚙️ Exile Duration Updated', [
-                    `exileDurationMins: **${prev}** → **${parsed}** (${label})`,
-                ]);
-                break;
-            }
-            await interaction.reply({ content: '❌ Unknown subcommand.', flags: MessageFlags.Ephemeral });
             break;
         }
 
@@ -17386,58 +18899,6 @@ client.on('interactionCreate', async interaction => {
             }
 
             await interaction.reply({ content: '❓ Unknown subcommand. Use `/bloxfruits status` for an overview.', flags: MessageFlags.Ephemeral });
-            break;
-        }
-
-        case 'spamwarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) {
-                await interaction.reply({ content: `⚠️ Spam warnings are currently **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
-                break;
-            }
-            gs.spamWarnEnabled = !!enabled;
-            saveData(data);
-            await interaction.reply({ content: `✅ Spam warnings are now **${gs.spamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
-            break;
-        }
-
-        case 'begwarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) {
-                await interaction.reply({ content: `🚫 Begging warnings are currently **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
-                break;
-            }
-            gs.begWarnEnabled = !!enabled;
-            saveData(data);
-            await interaction.reply({ content: `✅ Begging warnings are now **${gs.begWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
-            break;
-        }
-
-        case 'scamwarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) {
-                await interaction.reply({ content: `🚨 Scam warnings are currently **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
-                break;
-            }
-            gs.scamWarnEnabled = !!enabled;
-            saveData(data);
-            await interaction.reply({ content: `✅ Scam warnings are now **${gs.scamWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
-            break;
-        }
-
-        case 'acctradewarn': {
-            if (!isAdmin) { await interaction.reply({ content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-            const enabled = interaction.options.getBoolean('enabled');
-            if (enabled === null) {
-                await interaction.reply({ content: `🚫 Account trading warnings are currently **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
-                break;
-            }
-            gs.accTradeWarnEnabled = !!enabled;
-            saveData(data);
-            await interaction.reply({ content: `✅ Account trading warnings are now **${gs.accTradeWarnEnabled ? 'ENABLED' : 'DISABLED'}**.`, flags: MessageFlags.Ephemeral });
             break;
         }
 
@@ -17797,7 +19258,10 @@ client.on('interactionCreate', async interaction => {
             const painUpg  = scanForPainUpgrades(cleaned);
             const lightUpg = scanForLightningUpgrades(cleaned);
 
-            for (const f of FRUITS) { const fc=f.replace(/[\s\-]/g,''); if(ns.includes(fc)&&!fruits.includes(f)) fruits.push(f); }
+            for (const tok of (cleaned.match(/[a-z0-9]+/g) || [])) {
+                const m = tokenMatchesList(tok, FRUITS, FRUIT_ALIASES);
+                if (m && !fruits.includes(m)) fruits.push(m);
+            }
 
             const intent     = scanForIntent(cleaned);
             const svcIntent  = scanForServiceIntent(cleaned);
@@ -19530,6 +20994,7 @@ client.on('guildMemberRemove', async member => {
     } catch {}
 
     if (kickEntry) {
+        if (kickEntry.executor) recordAntiNukeAction(member.guild, data, kickEntry.executor.id, 'kick').catch(() => {});
         await universalLog(member.guild, data, gs, 'memberKick', new EmbedBuilder()
             .setTitle('👢 Member Kicked')
             .setColor(0xFF6600)
@@ -19688,6 +21153,7 @@ client.on('channelDelete', async channel => {
     const gs   = getGuildSettings(channel.guild.id, data);
     const auditEntry = await channel.guild.fetchAuditLogs({ type: 12/*CHANNEL_DELETE*/, limit: 1 }).catch(()=>null);
     const by = auditEntry?.entries.first()?.executor;
+    if (by) recordAntiNukeAction(channel.guild, data, by.id, 'channelDelete').catch(() => {});
     await universalLog(channel.guild, data, gs, 'channelDelete', new EmbedBuilder()
         .setTitle('📂 Channel Deleted')
         .setColor(0xFF4444)
@@ -19779,6 +21245,7 @@ client.on('roleDelete', async role => {
     const gs   = getGuildSettings(role.guild.id, data);
     const auditEntry = await role.guild.fetchAuditLogs({ type: 32/*ROLE_DELETE*/, limit: 1 }).catch(()=>null);
     const by = auditEntry?.entries.first()?.executor;
+    if (by) recordAntiNukeAction(role.guild, data, by.id, 'roleDelete').catch(() => {});
     await universalLog(role.guild, data, gs, 'roleDelete', new EmbedBuilder()
         .setTitle('🗑️ Role Deleted')
         .setColor(0xFF4444)
@@ -19884,11 +21351,25 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 });
 
 // ── Ban ────────────────────────────────────────────────────────────────────────
+// ── Webhook creation tracking (anti-nuke) ───────────────────────────────────
+client.on('webhooksUpdate', async channel => {
+    if (!channel.guild) return;
+    const data = loadData();
+    const gs = getGuildSettings(channel.guild.id, data);
+    if (!getAntiNukeConfig(gs).enabled) return;
+    try {
+        const logs = await channel.guild.fetchAuditLogs({ type: AuditLogEvent.WebhookCreate, limit: 3 });
+        const entry = logs.entries.find(e => (Date.now() - e.createdTimestamp) < 10000);
+        if (entry?.executor) recordAntiNukeAction(channel.guild, data, entry.executor.id, 'webhookCreate').catch(() => {});
+    } catch {}
+});
+
 client.on('guildBanAdd', async ban => {
     const data = loadData();
     const gs   = getGuildSettings(ban.guild.id, data);
     const auditEntry = await ban.guild.fetchAuditLogs({ type: 22/*MEMBER_BAN_ADD*/, limit: 1 }).catch(()=>null);
     const entry = auditEntry?.entries.first();
+    if (entry?.executor) recordAntiNukeAction(ban.guild, data, entry.executor.id, 'ban').catch(() => {});
     await universalLog(ban.guild, data, gs, 'guildBan', new EmbedBuilder()
         .setTitle('🔨 Member Banned')
         .setColor(0xFF0000)
@@ -20555,6 +22036,63 @@ client.on('messageCreate', async message => {
     const content = rawContent.trim();
     const uid = message.author.id;
     const roastKey = `${guildId}:${message.channel.id}:${uid}`;
+    bufferMessageStat(guildId, uid);
+    if (data.stickies?.[message.channel.id]) repostSticky(message.channel, data).catch(() => {});
+
+    // ── Leveling: XP gain + level-up detection ─────────────────────────────
+    {
+        const lc = getLevelingConfig(gs);
+        if (lc.enabled) {
+            const xpKey = `${guildId}:${uid}`;
+            const lastGain = _lastXpGainAt.get(xpKey) || 0;
+            if (Date.now() - lastGain >= lc.cooldownSec * 1000) {
+                _lastXpGainAt.set(xpKey, Date.now());
+                const gain = Math.floor(Math.random() * (lc.xpMax - lc.xpMin + 1)) + lc.xpMin;
+                const beforeXp = getTotalXp(data, guildId, uid);
+                const beforeLevel = computeLevelFromXp(lc, beforeXp).level;
+                _xpBuffer.set(xpKey, (_xpBuffer.get(xpKey) || 0) + gain);
+                const afterLevel = computeLevelFromXp(lc, beforeXp + gain).level;
+                if (afterLevel > beforeLevel) {
+                    const announceText = lc.levelUpMessage.replace(/\{user\}/g, `${message.author}`).replace(/\{level\}/g, `${afterLevel}`);
+                    const targetChan = lc.levelUpChannelId ? await client.channels.fetch(lc.levelUpChannelId).catch(() => null) : message.channel;
+                    const levelUpEmbed = new EmbedBuilder()
+                        .setTitle('🎉 Level Up!')
+                        .setColor(0x00FF88)
+                        .setDescription(announceText)
+                        .setThumbnail(message.author.displayAvatarURL())
+                        .setTimestamp();
+                    (targetChan || message.channel).send({ embeds: [levelUpEmbed] }).catch(() => {});
+                    for (let lvl = beforeLevel + 1; lvl <= afterLevel; lvl++) {
+                        const roleId = lc.roles[lvl];
+                        if (roleId && message.member) message.member.roles.add(roleId, `Reached level ${lvl}`).catch(() => {});
+                    }
+                }
+            }
+        }
+    }
+
+    // ── AFK system ──────────────────────────────────────────────────────────
+    if (data.afk?.[guildId]?.[uid]) {
+        const afkEntry = data.afk[guildId][uid];
+        delete data.afk[guildId][uid];
+        saveData(data);
+        if (message.member?.nickname?.startsWith('[AFK] ') && message.guild.members.me?.permissions.has(PermissionFlagsBits.ManageNicknames)) {
+            message.member.setNickname(message.member.nickname.replace(/^\[AFK\] /, '')).catch(() => {});
+        }
+        message.channel.send({ embeds: [new EmbedBuilder().setDescription(`👋 Welcome back, ${message.author}! I've removed your AFK status.${afkEntry.mentionsWhileAway ? ` You were mentioned **${afkEntry.mentionsWhileAway}** time(s) while away.` : ''}`).setColor(0x00FF88)] })
+            .then(m => setTimeout(() => m.delete().catch(() => {}), 8000)).catch(() => {});
+    }
+    if (message.mentions.users.size && data.afk?.[guildId]) {
+        for (const [mentionedId, mUser] of message.mentions.users) {
+            if (mentionedId === uid) continue;
+            const entry = data.afk[guildId][mentionedId];
+            if (entry) {
+                entry.mentionsWhileAway = (entry.mentionsWhileAway || 0) + 1;
+                saveData(data);
+                message.channel.send({ embeds: [new EmbedBuilder().setDescription(`💤 **${mUser.username}** is AFK: ${String(entry.reason || 'No reason given').slice(0, 512)} (since <t:${Math.floor(entry.since / 1000)}:R>)`).setColor(0xFFAA00)] }).catch(() => {});
+            }
+        }
+    }
 
     if (roastBattles.has(roastKey)) {
         const lower = content.toLowerCase();
@@ -20927,7 +22465,7 @@ client.on('messageCreate', async message => {
     }
 
     // ── COMMAND LOCKDOWN ──────────────────────────────────
-    if (isServerSetup(gs) && (gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message, gs)) {
+    if (isServerSetup(gs) && (gs.commandRedirectEnabled !== false) && !isCheckDisabled(gs, 'command', message.channel.id) && !isCategoryImmune(message.member, guildId, data, 'command') && isMessageCommand(message, gs)) {
         if (!isGamesHubChannelId(message.channel.id, gs)) {
             try { await message.delete(); } catch {}
             recordCommandAbuse(message.author.id);
@@ -20945,7 +22483,7 @@ client.on('messageCreate', async message => {
         }
     }
 
-    if (isServerSetup(gs) && (gs.commandRedirectEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'command') && !isGamesHubChannelId(message.channel.id, gs)) {
+    if (isServerSetup(gs) && (gs.commandRedirectEnabled !== false) && !isCheckDisabled(gs, 'command', message.channel.id) && !isCategoryImmune(message.member, guildId, data, 'command') && !isGamesHubChannelId(message.channel.id, gs)) {
         const { contentClean: cmdClean } = prepareText(message.content);
         if (looksLikeCommandButNotCaught(message.content, cmdClean)) {
             try { await message.delete(); } catch {}
@@ -21212,7 +22750,7 @@ client.on('messageCreate', async message => {
     // Short messages like "e", "w", "wd" are classic spam floods — they have
     // fewer than 4 alphanumeric chars so the guard would return early and the
     // spam tracker would never record them, making the threshold unreachable.
-    if (gs.spamWarnEnabled !== false && !isCategoryImmune(message.member, guildId, data, 'spam')) {
+    if (gs.spamWarnEnabled !== false && !isCheckDisabled(gs, 'spam', message.channel.id) && !isCategoryImmune(message.member, guildId, data, 'spam')) {
         const spamResult = checkSpam(message.author.id, message.content, gs, guildId);
         if (spamResult.spam) {
             clearSpamHistory(message.author.id, guildId);
@@ -21256,7 +22794,8 @@ client.on('messageCreate', async message => {
         const _aiThreshInline = getAiConfidenceThreshold(gs);
         if (aiResult?.violation && aiResult.confidence > _aiThreshInline && aiResult.category && aiResult.category !== 'none') {
             const cat = String(aiResult.category || '').toLowerCase();
-            if (!isCategoryImmune(message.member, guildId, data, cat)) {
+            const _catNorm = (cat === 'account') ? 'acctrade' : cat;
+            if (!isCategoryImmune(message.member, guildId, data, cat) && !isCheckDisabled(gs, _catNorm, message.channel.id)) {
                 incStat(guildId, data, 'aiFlag', 1);
 
                 if (cat === 'spam' && gs.spamWarnEnabled !== false) {
@@ -21340,7 +22879,7 @@ client.on('messageCreate', async message => {
 
     // ── ACCOUNT TRADING ───────────────────────────────────
     const scam = gs.scamEnabled ? detectScamByMode(gs, contentClean, message.content) : { hit: false };
-    if ((gs.scamWarnEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'scam') && scam?.hit) {
+    if ((gs.scamWarnEnabled !== false) && !isCheckDisabled(gs, 'scam', message.channel.id) && !isCategoryImmune(message.member, guildId, data, 'scam') && scam?.hit) {
         incStat(guildId, data, 'scam', 1);
         const action = gs.linkAction || 'warn';
         await applyConfiguredAction(message, data, gs, {
@@ -21354,13 +22893,13 @@ client.on('messageCreate', async message => {
         });
         return;
     }
-    if ((gs.accTradeWarnEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'acctrade') && detectAccountTrading(contentClean)) {
+    if ((gs.accTradeWarnEnabled !== false) && !isCheckDisabled(gs, 'acctrade', message.channel.id) && !isCategoryImmune(message.member, guildId, data, 'acctrade') && detectAccountTrading(contentClean)) {
         await checkAccountTrading(message, contentClean, data, gs);
         return;
     }
 
     // ── BEGGING ───────────────────────────────────────────
-    if ((gs.begWarnEnabled !== false) && !isCategoryImmune(message.member, guildId, data, 'beg') && detectBegging(contentClean)) {
+    if ((gs.begWarnEnabled !== false) && !isCheckDisabled(gs, 'beg', message.channel.id) && !isCategoryImmune(message.member, guildId, data, 'beg') && detectBegging(contentClean)) {
         await handlePolicyViolation(message, data, gs, 'beg', {
             title: '🚫 Begging Detected',
             color: 0xFF4500,
@@ -21424,19 +22963,19 @@ client.on('messageCreate', async message => {
     // ── SERVICES / ITEMS ──────────────────────────────────
     // noAffiliationEnabled bypasses the serverReady gate so the no-affiliation
     // notice still fires even when redirects are turned off.
-    if ((_serverReady || gs.noAffiliationEnabled) && (gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
+    if ((_serverReady || gs.noAffiliationEnabled) && (gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCheckDisabled(gs, 'service', message.channel.id) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
         const flagged = await checkServicesViolation(message, contentClean, contentNospace, emojiNames, data, gs);
         if (flagged) return;
     }
 
     // ── TRADE ─────────────────────────────────────────────
-    if ((_serverReady || gs.noAffiliationEnabled) && (gs.tradeRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'trade') && (gs.noAffiliationEnabled || !isInCorrectTradeChannel(message.channel.id, gs))) {
+    if ((_serverReady || gs.noAffiliationEnabled) && (gs.tradeRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCheckDisabled(gs, 'trade', message.channel.id) && !isCategoryImmune(message.member, guildId, data, 'trade') && (gs.noAffiliationEnabled || !isInCorrectTradeChannel(message.channel.id, gs))) {
         const flagged = await checkTradeViolation(message, contentClean, contentNospace, data, gs);
         if (flagged) return;
     }
 
     // ── RACE + TIER + INTENT ──────────────────────────────
-    if (_serverReady && (gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
+    if (_serverReady && (gs.serviceRedirectEnabled !== false || gs.noAffiliationEnabled) && !isCheckDisabled(gs, 'service', message.channel.id) && !isCategoryImmune(message.member, guildId, data, 'service') && (gs.noAffiliationEnabled || !isInCorrectServiceChannel(message.channel.id, gs))) {
         await checkRaceViolation(message, contentClean, contentNospace, data, gs);
     }
 
@@ -21758,7 +23297,10 @@ async function checkTradeViolation(message, contentClean, contentNospace, data, 
     // ─────────────────────────────────────────────────────────────────────────
 
     const fruitsFound = scanForFruits(contentClean);
-    for (const f of FRUITS) { const fc=f.replace(/[\s\-]/g,''); if(contentNospace.includes(fc)&&!fruitsFound.includes(f)) fruitsFound.push(f); }
+    for (const tok of (contentClean.match(/[a-z0-9]+/g) || [])) {
+        const m = tokenMatchesList(tok, FRUITS, FRUIT_ALIASES);
+        if (m && !fruitsFound.includes(m)) fruitsFound.push(m);
+    }
 
     // ── Perm-context rescan ────────────────────────────────────────────────────
     // Short fruit names like "ice", "gas", "sand", "dark" are in COMMON_WORD_WHITELIST
@@ -21766,12 +23308,10 @@ async function checkTradeViolation(message, contentClean, contentNospace, data, 
     // present in the message the context is unambiguous, so we rescan FRUITS directly
     // (bypassing the whitelist) to catch patterns like "who has perm ice dm me".
     if (/\bperm(s|anent)?\b/i.test(contentClean) && fruitsFound.length === 0) {
-        for (const f of FRUITS) {
-            const fc = f.replace(/[\s\-]/g, '');
-            const fRe = new RegExp(`(?<![a-z])${f.replace(/[-]/g,'\\-')}(?![a-z])`, 'i');
-            if (fRe.test(contentClean) || (fc.length >= 3 && contentNospace.includes(fc))) {
-                if (!fruitsFound.includes(f)) fruitsFound.push(f);
-            }
+        const permToks = (contentClean.match(/[a-z0-9]+/g) || []);
+        for (const tok of permToks) {
+            const m = tokenMatchesList(tok, FRUITS, FRUIT_ALIASES);
+            if (m && !fruitsFound.includes(m)) fruitsFound.push(m);
         }
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -22071,6 +23611,131 @@ async function performUnexile(member, guild, data) {
 }
 
 // ══════════════════════════════════════════════════════════
+//  PREFIX COMMAND ARGUMENT SPECS
+//  For every prefix command that needs at least one positional argument,
+//  this records the minimum number required and the exact usage string to
+//  show if the person doesn't provide enough. Commands that take zero
+//  required arguments (info displays, toggles with no target, etc.) are
+//  simply left out — there's nothing that can be "missing" for those.
+// ══════════════════════════════════════════════════════════
+const PREFIX_CMD_SPECS = {
+    // ── Moderation actions ──────────────────────────────────────────────────
+    timeout:    { need: 1, names: ['user'],   usage: '!timeout <@user|id> [duration] [reason...]' },
+    untimeout:  { need: 1, names: ['user'],   usage: '!untimeout <@user|id> [reason...]' },
+    kick:       { need: 1, names: ['user'],   usage: '!kick <@user|id> [reason...] [dt:<time>] [dc:<count>] [ch:#channel]' },
+    ban:        { need: 1, names: ['user'],   usage: '!ban <@user|id> [duration] [reason...] [dt:<time>] [dc:<count>] [ch:#channel]' },
+    unban:      { need: 1, names: ['user'],   usage: '!unban <userId|@user> [reason...]' },
+    hardban:    { need: 1, names: ['user'],   usage: '!hardban <@user|id> [reason...] [dt:<time>] [dc:<count>] [ch:#channel]' },
+    softban:    { need: 1, names: ['user'],   usage: '!softban <@user|id> [reason...] [dt:<time>] [dc:<count>] [ch:#channel]' },
+    warn:       { need: 1, names: ['user'],   usage: '!warn <@user|id> [duration] [reason...]' },
+    unwarn:     { need: 1, names: ['user'],   usage: '!unwarn <@user|id> [reason...]' },
+    exile:      { need: 1, names: ['user'],   usage: '!exile <@user|id> [duration] [reason...]' },
+    unexile:    { need: 1, names: ['user'],   usage: '!unexile <@user|id>' },
+    lookup:     { need: 1, names: ['user'],   usage: '!lookup <@user|id>' },
+    modnote:    { need: 1, names: ['user'],   usage: '!modnote <@user|id> [note text...] (omit note to view existing notes)' },
+    slowmode:   { need: 1, names: ['seconds'],usage: '!slowmode <seconds> (0 to disable)' },
+    role:       { need: 1, names: ['action'], usage: '!role add|remove <@user> <@role> [reason]  or  !role info <@role>' },
+    massban:    { need: 1, names: ['userIds'],usage: '!massban <id1> <id2> ... [reason at end]' },
+    dm:         { need: 2, names: ['user','message'], usage: '!dm <@user|id> <message text...>' },
+    reason:     { need: 2, names: ['caseId','newReason'], usage: '!reason <caseId> <new reason text...>' },
+    violations: { need: 1, names: ['user'],   usage: '!violations <@user|id>' },
+    case:       { need: 1, names: ['subcommand'], usage: '!case note <id> <text>  or  !case view <id>' },
+    appeal:     { need: 1, names: ['subcommand'], usage: '!appeal approve|deny <appealId> [reason]' },
+
+    // ── Server / permission management ──────────────────────────────────────
+    manager:      { need: 1, names: ['action'], usage: '!manager addrole|removerole|adduser|removeuser <@role|@user>  or  !manager list' },
+    immunity:     { need: 1, names: ['action'], usage: '!immunity enable|disable|status|addrole|removerole|adduser|removeuser [@role|@user]' },
+    newrole:      { need: 1, names: ['name'],   usage: '!newrole <name> [hex color] [hoist:yes|no] [mentionable:yes|no]' },
+    roleall:      { need: 2, names: ['action','role'], usage: '!roleall add|remove <@role>' },
+    roledelete:   { need: 1, names: ['role'],   usage: '!roledelete <@role> [reason...]' },
+    autorole:     { need: 1, names: ['action'], usage: '!autorole add|remove <@role>  or  !autorole list' },
+    exilechannel: { need: 1, names: ['action'], usage: '!exilechannel create' },
+    exilerole:    { need: 1, names: ['action'], usage: '!exilerole create' },
+    exileconfig:  { need: 1, names: ['action'], usage: '!exileconfig setrole <@role> | striproles <on|off> | removerole <@role>' },
+    setgameshub:      { need: 1, names: ['channel'],  usage: '!setgameshub <#channel>' },
+    setthreshold:     { need: 1, names: ['number'],   usage: '!setthreshold <1-10>' },
+    setexileduration: { need: 1, names: ['minutes'],  usage: '!setexileduration <minutes>' },
+    strictness:       { need: 1, names: ['number'],   usage: '!strictness <1-10>' },
+    crashtimeout:     { need: 1, names: ['duration'], usage: '!crashtimeout <duration, e.g. 30s>' },
+    setowner:         { need: 1, names: ['user'],     usage: '!setowner <@user|id>' },
+    setfooter:        { need: 1, names: ['text'],     usage: '!setfooter <footer text...>' },
+    logsetup:         { need: 1, names: ['action'],   usage: '!logsetup webhook <url|off>  or  !logsetup toggle <event> <on|off>' },
+
+    // ── Community features ──────────────────────────────────────────────────
+    announce:     { need: 1, names: ['message'], usage: '!announce [#channel] <message...>' },
+    welcome:      { need: 1, names: ['action'],  usage: '!welcome setup <#channel> | message <text> | disable | status' },
+    starboard:    { need: 1, names: ['action'],  usage: '!starboard setup <#channel> | threshold <n> | emoji <emoji> | disable | status' },
+    tag:          { need: 1, names: ['action'],  usage: '!tag create|edit <name> <content>  or  !tag view|delete <name>  or  !tag list' },
+    reactionrole: { need: 1, names: ['action'],  usage: '!reactionrole add <messageId> <emoji> <@role>  or  !reactionrole remove|list' },
+
+    // ── Link / domain / detection config ────────────────────────────────────
+    linkmode:        { need: 1, names: ['mode'],   usage: '!linkmode <off|warn|delete|timeout>' },
+    linkaction:      { need: 1, names: ['action'], usage: '!linkaction <warn|delete|timeout>' },
+    linkpolicy:      { need: 1, names: ['policy'], usage: '!linkpolicy <allow-list|deny-list|all>' },
+    allowdomain:     { need: 1, names: ['domain'], usage: '!allowdomain <domain.com>' },
+    denydomain:      { need: 1, names: ['domain'], usage: '!denydomain <domain.com>' },
+    domainremove:    { need: 1, names: ['domain'], usage: '!domainremove <domain.com>' },
+    mentionlimit:    { need: 1, names: ['number'], usage: '!mentionlimit <max mentions per message>' },
+    togglescanedits: { need: 1, names: ['state'],  usage: '!togglescanedits <on|off>' },
+    togglescam:      { need: 1, names: ['state'],  usage: '!togglescam <on|off>' },
+    invitepolicy:    { need: 1, names: ['policy'], usage: '!invitepolicy <allow|deny|own-server-only>' },
+    invitechannel:   { need: 1, names: ['channel'],usage: '!invitechannel <#channel>' },
+    attachmentpolicy:{ need: 1, names: ['policy'], usage: '!attachmentpolicy <allow|deny>' },
+    attachmentext:   { need: 1, names: ['ext'],    usage: '!attachmentext add|remove <.ext>' },
+    capsconfig:      { need: 1, names: ['value'],  usage: '!capsconfig <percent threshold>' },
+    emojiconfig:     { need: 1, names: ['value'],  usage: '!emojiconfig <max emoji per message>' },
+    zalgoconfig:     { need: 1, names: ['state'],  usage: '!zalgoconfig <on|off>' },
+    stretchconfig:   { need: 1, names: ['value'],  usage: '!stretchconfig <max repeated chars>' },
+    dupeconfig:      { need: 1, names: ['value'],  usage: '!dupeconfig <window seconds> <max dupes>' },
+    raidconfig:      { need: 1, names: ['key'],    usage: '!raidconfig window <s> threshold <n> lockdown <m>' },
+    raidmode:        { need: 1, names: ['state'],  usage: '!raidmode <on|off>' },
+    disablecheck:    { need: 1, names: ['check'],  usage: '!disablecheck <category>' },
+    enablecheck:     { need: 1, names: ['check'],  usage: '!enablecheck <category>' },
+    begwarn:         { need: 1, names: ['number'], usage: '!begwarn <violations before action>' },
+    scamwarn:        { need: 1, names: ['number'], usage: '!scamwarn <violations before action>' },
+    acctradewarn:    { need: 1, names: ['number'], usage: '!acctradewarn <violations before action>' },
+    policymode:      { need: 1, names: ['mode'],   usage: '!policymode <preset name>' },
+    policyset:       { need: 1, names: ['key'],    usage: '!policyset <key> <value>' },
+    testscan:        { need: 1, names: ['text'],   usage: '!testscan <sample message text>' },
+    config:          { need: 1, names: ['key'],    usage: '!config <key> [value]' },
+
+    // ── Tickets ──────────────────────────────────────────────────────────────
+    ticketpanel:   { need: 1, names: ['channel'], usage: '!ticketpanel <#channel>' },
+    ticketadd:     { need: 1, names: ['user'],    usage: '!ticketadd <@user>  (used inside a ticket channel)' },
+    ticketremove:  { need: 1, names: ['user'],    usage: '!ticketremove <@user>  (used inside a ticket channel)' },
+    ticketrename:  { need: 1, names: ['name'],    usage: '!ticketrename <new name>  (used inside a ticket channel)' },
+    tickettransfer:{ need: 1, names: ['user'],    usage: '!tickettransfer <@user>  (used inside a ticket channel)' },
+
+    // ── Giveaways ────────────────────────────────────────────────────────────
+    giveaway: { need: 1, names: ['action'], usage: '!giveaway start <duration> <prize...> [role:@role] [blacklist:@role] [minmsg:N] [minaccage:N] [minjoinage:N] [ch:#channel]  |  end/reroll <messageId>  |  list  |  bonusrole <messageId> <@role> <extra>' },
+
+    // ── Leveling ─────────────────────────────────────────────────────────────
+    levelset:    { need: 2, names: ['user', 'level'],  usage: '!levelset <@user> <level>' },
+    addxp:       { need: 2, names: ['user', 'amount'], usage: '!addxp <@user> <amount>' },
+    removexp:    { need: 2, names: ['user', 'amount'], usage: '!removexp <@user> <amount>' },
+    levelconfig: { need: 1, names: ['action'],          usage: '!levelconfig toggle|curve|xprange|cooldown|rolereward|message|channel|status|reset ...' },
+
+    // ── Anti-nuke ────────────────────────────────────────────────────────────
+    antinuke: { need: 1, names: ['action'], usage: '!antinuke toggle <on|off>  |  punishment <strip_roles|kick|ban>  |  threshold <type> <count> <windowSec>  |  whitelist add|remove|list [@user|@role]  |  status' },
+
+    // ── Sticky notes ─────────────────────────────────────────────────────────
+    sticky: { need: 1, names: ['text'], usage: '!sticky <message text>  (use !unsticky to remove)' },
+
+    // ── Assets: emoji / sticker / webhook ──────────────────────────────────────
+    emoji:   { need: 1, names: ['action'], usage: '!emoji create <name> <imageUrl|attach image>  |  delete <name>  |  list' },
+    sticker: { need: 1, names: ['action'], usage: '!sticker create <name> <tags> [description] (attach an image)  |  delete <name>  |  list' },
+    webhook: { need: 1, names: ['action'], usage: '!webhook create <name> [#channel]  |  delete <nameOrId>  |  list  |  send <nameOrId> <message>' },
+};
+
+function checkPrefixArgs(cmd, args) {
+    const spec = PREFIX_CMD_SPECS[cmd];
+    if (!spec) return null;
+    if (args.length >= spec.need) return null;
+    const missingName = (spec.names && spec.names[args.length]) || `argument #${args.length + 1}`;
+    return `❌ Missing parameter: **${missingName}**\nUsage: \`${spec.usage}\``;
+}
+
+// ══════════════════════════════════════════════════════════
 //  PREFIX COMMAND HANDLER (!commands)
 // ══════════════════════════════════════════════════════════
 async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
@@ -22085,6 +23750,18 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         : rawContent.slice(guildPrefix.length).trim().split(/\s+/);
     const cmd  = args.shift().toLowerCase();
     logCmdStats('message', '!' + cmd);
+
+    // ── Generic "missing parameter" guard ──────────────────────────────────
+    // For every prefix command that needs at least one positional argument,
+    // this checks the raw arg count BEFORE the command's own logic runs, and
+    // if something required is missing, replies with exactly which parameter
+    // is missing plus the correct usage — instead of the command silently
+    // no-op'ing or falling through to a generic "not found" message.
+    {
+        const _argErr = checkPrefixArgs(cmd, args);
+        if (_argErr) return message.channel.send({ embeds: [modEmbed(_argErr)] });
+    }
+
     const threshold = Math.max(1, Math.min(10, gs.violationThreshold || VIOLATION_THRESHOLD));
     const exileMins = Math.max(1, Math.min(1440, gs.exileDurationMins || EXILE_DURATION_MINS));
 
@@ -22347,6 +24024,39 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         return null;
     }
 
+
+    // resolves a raw user ID from a mention or ID string WITHOUT requiring the
+    // user to be a current guild member (needed for ban/unban/hardban/softban,
+    // since Discord allows banning/unbanning users who have already left or
+    // never joined). Returns { id, user } where `user` is a fetched User object
+    // if reachable, or null if the ID doesn't resolve to a real Discord user.
+    async function resolveUserId(token) {
+        if (!token) return null;
+        const mention = token.match(/^<@!?(\d+)>$/);
+        const rawId = mention ? mention[1] : (/^\d{15,20}$/.test(token) ? token : null);
+        if (!rawId) return null;
+        const user = await client.users.fetch(rawId).catch(() => null);
+        return { id: rawId, user };
+    }
+
+    // Extracts optional dt:<time> / dc:<count> / ch:<#channel|id> tokens from
+    // anywhere in a prefix command's trailing args (used by kick/ban/hardban/
+    // softban to mirror the delete_time/delete_count/channel slash options),
+    // returning the parsed delete plan plus the remaining words for the reason.
+    function extractDeleteOptsFromArgs(rawArgs) {
+        let deleteTimeRaw = null, deleteCount = 0, channelToken = null;
+        const remaining = [];
+        for (const tok of rawArgs) {
+            const dt = tok.match(/^dt:(.+)$/i);
+            const dc = tok.match(/^dc:(\d+)$/i);
+            const ch = tok.match(/^ch:(.+)$/i);
+            if (dt) { deleteTimeRaw = dt[1]; continue; }
+            if (dc) { deleteCount = parseInt(dc[1], 10) || 0; continue; }
+            if (ch) { channelToken = ch[1]; continue; }
+            remaining.push(tok);
+        }
+        return { deleteTimeRaw, deleteCount, channelToken, reason: remaining.join(' ') };
+    }
 
     // ─── modEmbed: build a simple embed for mod command responses ───────────────
     function modEmbed(text, color) {
@@ -23000,10 +24710,15 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         if (target.user?.bot) return message.channel.send({ embeds: [modEmbed('❌ You cannot warn a bot.')] });
         const _warnHierErr = checkHierarchy(message.member, target);
         if (_warnHierErr) return message.channel.send({ embeds: [modEmbed(_warnHierErr)] });
-        const reason = args.slice(1).join(' ') || 'Manual warn';
-        const count  = addViolationEntry(data, target.id, { reason, category: 'manual', by: message.author.id });
+        const durArg    = args.slice(1).find(a => /^\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/.test(a.trim().toLowerCase()));
+        const warnDurMins = durArg ? parseDuration(durArg) : null;
+        if (durArg && !warnDurMins) return message.channel.send({ embeds: [modEmbed(`❌ Couldn't understand duration \`${durArg}\`. Try something like \`30m\`, \`12h\`, or \`7d\`.`)] });
+        const expiresAt = warnDurMins ? Date.now() + warnDurMins * 60000 : null;
+        const reason = args.slice(1).filter(a => a !== durArg).join(' ') || 'Manual warn';
+        const count  = addViolationEntry(data, target.id, { reason, category: 'manual', by: message.author.id, expiresAt, guildId: message.guildId });
         const warnId = getLastWarnId(data, target.id);
         saveData(data);
+        const expiryLine = expiresAt ? ` — ⏳ auto-removes <t:${Math.floor(expiresAt/1000)}:R>` : '';
 
         if (count >= threshold) {
             // Threshold hit — exile
@@ -23014,7 +24729,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
             saveData(data);
             await message.channel.send({ embeds: [modEmbed(`⛓️ Warned ${target} and threshold reached — exiled for **${exileMins}m**. Reason: ${reason}`)] });
         } else {
-            await message.channel.send({ embeds: [modEmbed(`✅ Warned ${target}. Violations: **${count}/${threshold}**`)] });
+            await message.channel.send({ embeds: [modEmbed(`✅ Warned ${target}. Violations: **${count}/${threshold}**${expiryLine}`)] });
             if (warnId) {
                 const appealEmbed = new EmbedBuilder()
                     .setTitle('⚠️ You received a warning')
@@ -23025,6 +24740,7 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
                         { name: 'Issued by',   value: `<@${message.author.id}>`,     inline: true },
                         { name: 'Violations',  value: `${count}/${threshold}`,        inline: true },
                         { name: 'Reason',      value: reason.slice(0, 1024),         inline: false },
+                        ...(expiresAt ? [{ name: 'Expires', value: `<t:${Math.floor(expiresAt/1000)}:R>`, inline: true }] : []),
                     )
                     .setTimestamp();
                 const appealRow = new ActionRowBuilder().addComponents(
@@ -23097,6 +24813,258 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         }
     }
 
+    // !timeout <@user|id> [duration] [reason...]
+    else if (cmd === 'timeout' && isAdmin) {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.ModerateMembers, 'Timeout Members');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const idInfo = await resolveUserId(args[0]);
+        if (!idInfo || !idInfo.user) return message.channel.send({ embeds: [modEmbed('❌ Could not find that user.')] });
+        if (idInfo.user.bot) return message.channel.send({ embeds: [modEmbed('❌ You cannot timeout a bot.')] });
+        if (idInfo.id === message.author.id) return message.channel.send({ embeds: [modEmbed('❌ You cannot timeout yourself.')] });
+        const target = await message.guild.members.fetch(idInfo.id).catch(() => null);
+        if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found in this server.')] });
+        const hierErr = checkHierarchy(message.member, target);
+        if (hierErr) return message.channel.send({ embeds: [modEmbed(hierErr)] });
+
+        const durArg   = args.slice(1).find(a => /^\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/.test(a.trim().toLowerCase()));
+        const durMins  = (durArg ? parseDuration(durArg) : null) ?? 45;
+        if (!durMins || durMins <= 0) return message.channel.send({ embeds: [modEmbed('❌ Invalid duration. Examples: `30m`, `2h`, `1d`, `1w`.')] });
+        const durMs    = durMins * 60 * 1000;
+        const reason   = args.slice(1).filter(a => a !== durArg).join(' ') || 'No reason provided';
+        const timeoutId = `to_${Date.now()}_${target.id}`;
+        const endsAt = Date.now() + durMs;
+
+        data.timeouts = data.timeouts || {};
+        data.timeouts[message.guildId] = data.timeouts[message.guildId] || {};
+        data.timeouts[message.guildId][target.id] = { timeoutId, reason, issuedBy: message.author.id, totalMs: durMs, endsAt, issuedAt: Date.now() };
+        saveData(data);
+
+        await target.timeout(Math.min(durMs, MAX_DISCORD_TIMEOUT_MS), reason).catch(() => {});
+        if (durMs > MAX_DISCORD_TIMEOUT_MS) scheduleLongTimeout(client, message.guildId, target.id, data);
+
+        logModAction(data, message.guildId, target.id, { type: 'timeout', reason, by: message.author.id });
+        saveData(data);
+        await sendLog(message.guild, data, new EmbedBuilder().setTitle('🔇 Manual Timeout').setColor(0xFF8C00)
+            .addFields(
+                { name: 'User', value: `<@${target.id}> (${target.id})`, inline: true },
+                { name: 'By', value: `<@${message.author.id}>`, inline: true },
+                { name: 'Expires', value: `<t:${Math.floor(endsAt/1000)}:R>`, inline: true },
+                { name: 'Reason', value: reason.slice(0, 1024), inline: false },
+            ).setFooter({ text: `Timeout ID: ${timeoutId}` }).setTimestamp());
+
+        const appealRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`open_timeout_appeal_${message.guildId}_${timeoutId}`).setLabel('📩 Appeal this Timeout').setStyle(ButtonStyle.Primary));
+        target.send({ embeds: [new EmbedBuilder().setTitle('🔇 You have been Timed Out').setColor(0xFF8C00)
+            .setDescription(`You have been **timed out** in **${message.guild.name}**.\nIf you believe this was a mistake, you can appeal below — but you only get **one shot**.`)
+            .addFields(
+                { name: '📝 Reason', value: reason.slice(0, 1024), inline: false },
+                { name: '🔚 Expires', value: `<t:${Math.floor(endsAt/1000)}:R>`, inline: true },
+            ).setFooter({ text: 'You may submit exactly 1 appeal per timeout.' }).setTimestamp()], components: [appealRow] }).catch(() => {});
+
+        await message.channel.send({ embeds: [modEmbed(`🔇 Timed out ${target} until <t:${Math.floor(endsAt/1000)}:R>. Reason: ${reason}`)] });
+    }
+
+    // !untimeout <@user|id> [reason...]
+    else if (cmd === 'untimeout' && isAdmin) {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.ModerateMembers, 'Timeout Members');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const idInfo = await resolveUserId(args[0]);
+        if (!idInfo || !idInfo.user) return message.channel.send({ embeds: [modEmbed('❌ Could not find that user.')] });
+        if (idInfo.id === message.author.id && !isSuperUser(message.author.id)) return message.channel.send({ embeds: [modEmbed('❌ You cannot remove your own timeout.')] });
+        const target = await message.guild.members.fetch(idInfo.id).catch(() => null);
+        if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found in this server.')] });
+        const reason = args.slice(1).join(' ') || 'No reason provided';
+
+        await target.timeout(null, reason).catch(() => {});
+        if (data.timeouts?.[message.guildId]?.[target.id]) delete data.timeouts[message.guildId][target.id];
+        saveData(data);
+        await sendLog(message.guild, data, new EmbedBuilder().setTitle('🔊 Manual Untimeout').setColor(0x00FF88)
+            .addFields({ name: 'User', value: `<@${target.id}>`, inline: true }, { name: 'By', value: `<@${message.author.id}>`, inline: true }, { name: 'Reason', value: reason.slice(0, 1024), inline: false }).setTimestamp());
+        target.send({ embeds: [new EmbedBuilder().setTitle('🔊 Your Timeout Was Removed').setDescription(`Your timeout in **${message.guild.name}** has been lifted.`).setColor(0x00FF88).setTimestamp()] }).catch(() => {});
+        await message.channel.send({ embeds: [modEmbed(`🔊 Removed timeout from ${target}.`)] });
+    }
+
+    // !kick <@user|id> [reason...] [dt:<time>] [dc:<count>] [ch:#channel]
+    else if (cmd === 'kick' && isAdmin) {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.KickMembers, 'Kick Members');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const idInfo = await resolveUserId(args[0]);
+        if (!idInfo || !idInfo.user) return message.channel.send({ embeds: [modEmbed('❌ Could not find that user.')] });
+        if (idInfo.user.bot) return message.channel.send({ embeds: [modEmbed('❌ You cannot kick a bot.')] });
+        if (idInfo.id === message.author.id) return message.channel.send({ embeds: [modEmbed('❌ You cannot kick yourself.')] });
+        const target = await message.guild.members.fetch(idInfo.id).catch(() => null);
+        if (!target) return message.channel.send({ embeds: [modEmbed('❌ Member not found in this server.')] });
+        const hierErr = checkHierarchy(message.member, target);
+        if (hierErr) return message.channel.send({ embeds: [modEmbed(hierErr)] });
+
+        const { deleteTimeRaw, deleteCount, channelToken, reason: rawReason } = extractDeleteOptsFromArgs(args.slice(1));
+        const reason = rawReason || 'No reason provided';
+        const delChannel = channelToken ? await resolveChannel(channelToken) : null;
+        const plan = resolveDeletePlan({ seconds: parseDeleteDuration(deleteTimeRaw) || 0, count: deleteCount, channelId: delChannel ? delChannel.id : null });
+
+        await target.send({ embeds: [new EmbedBuilder().setTitle('👢 You Have Been Kicked').setColor(0xFF6600)
+            .setDescription(`You have been **kicked** from **${message.guild.name}**.\nYou are free to rejoin using a valid invite link.`)
+            .addFields({ name: '📝 Reason', value: reason.slice(0, 1024), inline: false }).setTimestamp()] }).catch(() => {});
+        await target.kick(reason).catch(() => {});
+
+        let purgeResult = null;
+        if (plan.seconds > 0 || plan.count > 0) purgeResult = await tryPurgeMemberMessages(message.guild, target.id, { seconds: plan.seconds, count: plan.count, channelId: plan.channelId });
+        const delStr = purgeResult ? `${purgeResult.deletedCount} msg(s)` + (delChannel ? ` in <#${delChannel.id}>` : ' (all channels)') : 'None';
+
+        logModAction(data, message.guildId, target.id, { type: 'kick', reason, by: message.author.id });
+        saveData(data);
+        await sendLog(message.guild, data, new EmbedBuilder().setTitle('👢 Manual Kick').setColor(0xFF6600)
+            .addFields({ name: 'User', value: `<@${target.id}> (${target.id})`, inline: true }, { name: 'By', value: `<@${message.author.id}>`, inline: true }, { name: 'Reason', value: reason.slice(0, 1024), inline: false }, { name: '🗑️ Msgs Del', value: delStr, inline: true }).setTimestamp());
+        await message.channel.send({ embeds: [modEmbed(`👢 Kicked ${target}. Reason: ${reason} (deleted: ${delStr})`)] });
+    }
+
+    // !ban <@user|id> [duration] [reason...] [dt:<time>] [dc:<count>] [ch:#channel]
+    else if (cmd === 'ban' && isAdmin) {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const idInfo = await resolveUserId(args[0]);
+        if (!idInfo || !idInfo.user) return message.channel.send({ embeds: [modEmbed('❌ Could not find that user.')] });
+        if (idInfo.user.bot) return message.channel.send({ embeds: [modEmbed('❌ You cannot ban a bot.')] });
+        if (idInfo.id === message.author.id) return message.channel.send({ embeds: [modEmbed('❌ You cannot ban yourself.')] });
+        const target = await message.guild.members.fetch(idInfo.id).catch(() => null);
+        if (target) { const hierErr = checkHierarchy(message.member, target); if (hierErr) return message.channel.send({ embeds: [modEmbed(hierErr)] }); }
+
+        const { deleteTimeRaw, deleteCount, channelToken, reason: afterDurArgs } = extractDeleteOptsFromArgs(args.slice(1));
+        const restTokens = afterDurArgs.split(' ').filter(Boolean);
+        const durArg  = restTokens.find(a => /^\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/.test(a.trim().toLowerCase()));
+        const durMins = durArg ? parseDuration(durArg) : null;
+        const durMs   = durMins ? durMins * 60 * 1000 : null;
+        const reason  = restTokens.filter(a => a !== durArg).join(' ') || 'No reason provided';
+        const banId   = `ban_${Date.now()}_${idInfo.id}`;
+        const bannedAt = Date.now();
+        const delChannel = channelToken ? await resolveChannel(channelToken) : null;
+        const plan = resolveDeletePlan({ seconds: parseDeleteDuration(deleteTimeRaw) || 0, count: deleteCount, channelId: delChannel ? delChannel.id : null });
+
+        data.bans = data.bans || {};
+        data.bans[message.guildId] = data.bans[message.guildId] || {};
+        data.bans[message.guildId][idInfo.id] = { banId, reason, issuedBy: message.author.id, bannedAt, duration: durMs || null, hardban: false };
+        saveData(data);
+
+        const appealUnlockTs = Math.floor((bannedAt + 14 * 24 * 60 * 60 * 1000) / 1000);
+        const appealRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`open_ban_appeal_${message.guildId}_${banId}`).setLabel('📩 Appeal this Ban (available after 14 days)').setStyle(ButtonStyle.Primary));
+        const dmEmbed = new EmbedBuilder().setTitle('🔨 You Have Been Banned').setColor(0xFF0000)
+            .setDescription(`You have been **banned** from **${message.guild.name}**.\nYou may appeal this ban **after 14 days** (<t:${appealUnlockTs}:R>). You only get **one appeal**.`)
+            .addFields({ name: '📝 Reason', value: reason.slice(0, 1024), inline: false }, { name: '⏱️ Duration', value: durMs ? durArg : 'Permanent (until unbanned)', inline: true })
+            .setFooter({ text: 'You may submit exactly 1 appeal per ban.' }).setTimestamp();
+        (target || idInfo.user).send({ embeds: [dmEmbed], components: [appealRow] }).catch(() => {});
+
+        await message.guild.bans.create(idInfo.id, { reason: reason.slice(0, 512), deleteMessageSeconds: plan.needsManualPurge ? 0 : plan.nativeSeconds }).catch(() => {});
+        let purgeResult = null;
+        if (plan.needsManualPurge) purgeResult = await tryPurgeMemberMessages(message.guild, idInfo.id, { seconds: plan.seconds, count: plan.count, channelId: plan.channelId });
+        const delStr = plan.needsManualPurge && purgeResult ? `${purgeResult.deletedCount} msg(s)` + (delChannel ? ` in <#${delChannel.id}>` : ' (all channels)') : (plan.nativeSeconds > 0 ? `Last ${formatDeleteDuration(plan.nativeSeconds)} (native)` : 'None');
+        const durStr = durMs ? (durMins < 1440 ? `${Math.round(durMins/60)}h` : `${Math.round(durMins/1440)}d`) : 'Permanent';
+
+        logModAction(data, message.guildId, idInfo.id, { type: 'ban', reason, by: message.author.id, extra: durStr });
+        saveData(data);
+        await sendLog(message.guild, data, new EmbedBuilder().setTitle('🔨 Manual Ban').setColor(0xFF0000)
+            .addFields({ name: 'User', value: `<@${idInfo.id}> (${idInfo.id})`, inline: true }, { name: 'By', value: `<@${message.author.id}>`, inline: true }, { name: 'Duration', value: durStr, inline: true }, { name: 'Reason', value: reason.slice(0, 1024), inline: false }, { name: '🗑️ Msgs Del', value: delStr, inline: true }).setFooter({ text: `Ban ID: ${banId}` }).setTimestamp());
+        await message.channel.send({ embeds: [modEmbed(`🔨 Banned ${idInfo.user.tag} (${idInfo.id}). Duration: ${durStr}. Reason: ${reason} (deleted: ${delStr})`)] });
+    }
+
+    // !unban <userId|@user> [reason...]
+    else if (cmd === 'unban' && isAdmin) {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const idInfo = await resolveUserId(args[0]);
+        const rawId = idInfo?.id || (/^\d{15,20}$/.test(args[0]) ? args[0] : null);
+        if (!rawId) return message.channel.send({ embeds: [modEmbed('❌ Please provide a valid user ID or mention.')] });
+        if (rawId === message.author.id && !isSuperUser(message.author.id)) return message.channel.send({ embeds: [modEmbed('❌ You cannot unban yourself.')] });
+        const reason = args.slice(1).join(' ') || 'No reason provided';
+
+        await message.guild.bans.remove(rawId, reason).catch(() => {});
+        if (data.bans?.[message.guildId]?.[rawId]) delete data.bans[message.guildId][rawId];
+        saveData(data);
+        await sendLog(message.guild, data, new EmbedBuilder().setTitle('🔓 Manual Unban').setColor(0x00FF88)
+            .addFields({ name: 'User', value: `<@${rawId}> (${rawId})`, inline: true }, { name: 'By', value: `<@${message.author.id}>`, inline: true }, { name: 'Reason', value: reason.slice(0, 1024), inline: false }).setTimestamp());
+        const unbannedUser = idInfo?.user || await client.users.fetch(rawId).catch(() => null);
+        if (unbannedUser) unbannedUser.send({ embeds: [new EmbedBuilder().setTitle('✅ You Have Been Unbanned').setDescription(`Your ban from **${message.guild.name}** has been lifted. You may now rejoin using an invite link.`).setColor(0x00FF88).setTimestamp()] }).catch(() => {});
+        await message.channel.send({ embeds: [modEmbed(`✅ Unbanned <@${rawId}>.`)] });
+    }
+
+    // !hardban <@user|id> [reason...] [dt:<time>] [dc:<count>] [ch:#channel]
+    else if (cmd === 'hardban' && isAdmin) {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const idInfo = await resolveUserId(args[0]);
+        if (!idInfo || !idInfo.user) return message.channel.send({ embeds: [modEmbed('❌ Could not find that user.')] });
+        if (idInfo.user.bot) return message.channel.send({ embeds: [modEmbed('❌ You cannot hardban a bot.')] });
+        if (idInfo.id === message.author.id) return message.channel.send({ embeds: [modEmbed('❌ You cannot hardban yourself.')] });
+        const target = await message.guild.members.fetch(idInfo.id).catch(() => null);
+        if (target) { const hierErr = checkHierarchy(message.member, target); if (hierErr) return message.channel.send({ embeds: [modEmbed(hierErr)] }); }
+
+        const { deleteTimeRaw, deleteCount, channelToken, reason: rawReason } = extractDeleteOptsFromArgs(args.slice(1));
+        const reason = rawReason || 'No reason provided';
+        const banId = `hban_${Date.now()}_${idInfo.id}`;
+        const delChannel = channelToken ? await resolveChannel(channelToken) : null;
+        const plan = resolveDeletePlan({ seconds: parseDeleteDuration(deleteTimeRaw) || 0, count: deleteCount, channelId: delChannel ? delChannel.id : null });
+
+        data.bans = data.bans || {};
+        data.bans[message.guildId] = data.bans[message.guildId] || {};
+        data.bans[message.guildId][idInfo.id] = { banId, reason, issuedBy: message.author.id, bannedAt: Date.now(), duration: null, hardban: true };
+        saveData(data);
+
+        const dmPayload = { embeds: [new EmbedBuilder().setTitle('🔒 You Have Been Permanently Banned').setColor(0x800000)
+            .setDescription(`You have been **permanently banned** from **${message.guild.name}**.\nThis ban has **no appeal process**.`)
+            .addFields({ name: '📝 Reason', value: reason.slice(0, 1024), inline: false }).setTimestamp()] };
+        (target || idInfo.user).send(dmPayload).catch(() => {});
+
+        await message.guild.bans.create(idInfo.id, { reason: reason.slice(0, 512), deleteMessageSeconds: plan.needsManualPurge ? 0 : plan.nativeSeconds }).catch(() => {});
+        let purgeResult = null;
+        if (plan.needsManualPurge) purgeResult = await tryPurgeMemberMessages(message.guild, idInfo.id, { seconds: plan.seconds, count: plan.count, channelId: plan.channelId });
+        const delStr = plan.needsManualPurge && purgeResult ? `${purgeResult.deletedCount} msg(s)` + (delChannel ? ` in <#${delChannel.id}>` : ' (all channels)') : (plan.nativeSeconds > 0 ? `Last ${formatDeleteDuration(plan.nativeSeconds)} (native)` : 'None');
+
+        logModAction(data, message.guildId, idInfo.id, { type: 'hardban', reason, by: message.author.id });
+        saveData(data);
+        await sendLog(message.guild, data, new EmbedBuilder().setTitle('🔒 Hardban (Permanent)').setColor(0x800000)
+            .addFields({ name: 'User', value: `<@${idInfo.id}> (${idInfo.id})`, inline: true }, { name: 'By', value: `<@${message.author.id}>`, inline: true }, { name: 'Reason', value: reason.slice(0, 1024), inline: false }, { name: '🗑️ Msgs Del', value: delStr, inline: true }).setFooter({ text: 'HARDBAN — No appeal allowed.' }).setTimestamp());
+        await message.channel.send({ embeds: [modEmbed(`🔒 Hard-banned ${idInfo.user.tag} (${idInfo.id}) — **permanent, no appeal**. Reason: ${reason}`)] });
+    }
+
+    // !softban <@user|id> [reason...] [dt:<time>] [dc:<count>] [ch:#channel]
+    else if (cmd === 'softban' && isAdmin) {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.BanMembers, 'Ban Members');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const idInfo = await resolveUserId(args[0]);
+        if (!idInfo || !idInfo.user) return message.channel.send({ embeds: [modEmbed('❌ Could not find that user.')] });
+        if (idInfo.user.bot) return message.channel.send({ embeds: [modEmbed('❌ You cannot softban a bot.')] });
+        if (idInfo.id === message.author.id) return message.channel.send({ embeds: [modEmbed('❌ You cannot softban yourself.')] });
+        const target = await message.guild.members.fetch(idInfo.id).catch(() => null);
+        if (target) { const hierErr = checkHierarchy(message.member, target); if (hierErr) return message.channel.send({ embeds: [modEmbed(hierErr)] }); }
+
+        const { deleteTimeRaw, deleteCount, channelToken, reason: rawReason } = extractDeleteOptsFromArgs(args.slice(1));
+        const reason = rawReason || 'No reason provided';
+        const delChannel = channelToken ? await resolveChannel(channelToken) : null;
+        // Softban defaults to a 7-day purge unless dt: explicitly overrides (dt:0 = no delete)
+        const sbanSecsRaw = deleteTimeRaw !== null ? parseDeleteDuration(deleteTimeRaw) : undefined;
+        const sbanSecs = (sbanSecsRaw === undefined) ? NATIVE_BAN_DELETE_MAX_SECONDS : (sbanSecsRaw || 0);
+        const plan = resolveDeletePlan({ seconds: sbanSecs, count: deleteCount, channelId: delChannel ? delChannel.id : null });
+
+        const dmPayload = { embeds: [new EmbedBuilder().setTitle('🧹 You Have Been Softbanned').setColor(0xFFA500)
+            .setDescription(`You have been **softbanned** from **${message.guild.name}**.\nA softban means you were briefly banned and immediately unbanned to clear your recent messages. **You are free to rejoin using an invite.**`)
+            .addFields({ name: '📝 Reason', value: reason.slice(0, 1024), inline: false }).setTimestamp()] };
+        (target || idInfo.user).send(dmPayload).catch(() => {});
+
+        await message.guild.bans.create(idInfo.id, { reason: `[SOFTBAN] ${reason}`.slice(0, 512), deleteMessageSeconds: plan.needsManualPurge ? 0 : plan.nativeSeconds }).catch(() => {});
+        await new Promise(r => setTimeout(r, 1500));
+        await message.guild.bans.remove(idInfo.id, `[SOFTBAN unban] ${reason}`.slice(0, 512)).catch(() => {});
+
+        let purgeResult = null;
+        if (plan.needsManualPurge) purgeResult = await tryPurgeMemberMessages(message.guild, idInfo.id, { seconds: plan.seconds, count: plan.count, channelId: plan.channelId });
+        const delStr = plan.needsManualPurge && purgeResult ? `${purgeResult.deletedCount} msg(s)` + (delChannel ? ` in <#${delChannel.id}>` : ' (all channels)') : (plan.nativeSeconds > 0 ? `Last ${formatDeleteDuration(plan.nativeSeconds)} (native)` : 'None');
+
+        logModAction(data, message.guildId, idInfo.id, { type: 'softban', reason, by: message.author.id });
+        saveData(data);
+        await sendLog(message.guild, data, new EmbedBuilder().setTitle('🧹 Softban').setColor(0xFFA500)
+            .addFields({ name: 'User', value: `<@${idInfo.id}> (${idInfo.id})`, inline: true }, { name: 'By', value: `<@${message.author.id}>`, inline: true }, { name: 'Reason', value: reason.slice(0, 1024), inline: false }, { name: '🗑️ Msgs Del', value: delStr, inline: true }).setTimestamp());
+        await message.channel.send({ embeds: [modEmbed(`🧹 Softbanned ${idInfo.user.tag} (${idInfo.id}). Reason: ${reason} (deleted: ${delStr})`)] });
+    }
+
     // !lock [#channel|id] [reason...]
     else if (cmd === 'lock' && isAdmin) {
         {
@@ -23161,6 +25129,559 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         }
     }
     // !info [@user|id] — also reachable as "?info" regardless of the guild's configured prefix (see top of this function)
+    // !afk [reason...]  or  !afk clear
+    else if (cmd === 'afk') {
+        data.afk = data.afk || {};
+        data.afk[message.guildId] = data.afk[message.guildId] || {};
+        if ((args[0] || '').toLowerCase() === 'clear') {
+            const had = !!data.afk[message.guildId][message.author.id];
+            delete data.afk[message.guildId][message.author.id];
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(had ? '✅ Your AFK status has been cleared.' : "You weren't marked AFK.")] });
+        } else {
+            const afkReason = args.join(' ') || 'No reason given';
+            data.afk[message.guildId][message.author.id] = { reason: afkReason, since: Date.now(), mentionsWhileAway: 0 };
+            saveData(data);
+            if (message.member?.manageable && message.guild.members.me?.permissions.has(PermissionFlagsBits.ManageNicknames) && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                const base = message.member.nickname || message.author.username;
+                if (!base.startsWith('[AFK] ')) message.member.setNickname(`[AFK] ${base}`.slice(0, 32)).catch(() => {});
+            }
+            await message.channel.send({ embeds: [modEmbed(`💤 You are now AFK: **${afkReason}**`, 0xFFAA00)] });
+        }
+    }
+
+    // !messages [@user]
+    else if (cmd === 'messages') {
+        const token = args[0] || null;
+        const mention = token && token.match(/^<@!?(\d+)>$/);
+        const rawId = mention ? mention[1] : (token && token.match(/^\d{15,20}$/) ? token : null);
+        const targetUser = rawId ? (await client.users.fetch(rawId).catch(() => null)) : message.author;
+        if (!targetUser) return message.channel.send({ embeds: [modEmbed('❌ Could not find that user.')] });
+        const embed = new EmbedBuilder()
+            .setTitle(`💬 Message Stats — ${targetUser.username}`)
+            .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+            .setColor(0x5865F2)
+            .addFields(
+                { name: 'Today', value: `${getMessageCount(data, message.guildId, targetUser.id, 1).toLocaleString()}`, inline: true },
+                { name: 'This Week', value: `${getMessageCount(data, message.guildId, targetUser.id, 7).toLocaleString()}`, inline: true },
+                { name: 'This Month', value: `${getMessageCount(data, message.guildId, targetUser.id, 30).toLocaleString()}`, inline: true },
+                { name: 'This Year', value: `${getMessageCount(data, message.guildId, targetUser.id, 365).toLocaleString()}`, inline: true },
+                { name: 'All-Time', value: `${getMessageCount(data, message.guildId, targetUser.id, null).toLocaleString()}`, inline: true },
+            ).setTimestamp();
+        await message.channel.send({ embeds: [embed] });
+    }
+
+    // !leaderboard [daily|weekly|monthly|yearly|alltime]
+    else if (cmd === 'leaderboard') {
+        const period = ['daily', 'weekly', 'monthly', 'yearly', 'alltime'].includes((args[0] || '').toLowerCase()) ? args[0].toLowerCase() : 'alltime';
+        const rows = buildMessageLeaderboard(data, message.guildId, period);
+        const embed = buildLeaderboardEmbed(rows, 0, period);
+        const components = buildLeaderboardComponents(message.guildId, period, 0, rows.length);
+        await message.channel.send({ embeds: [embed], components });
+    }
+
+    // !reactionrole add <messageId> <emoji> <@role>  |  remove <messageId> <emoji>  |  clear <messageId>  |  list
+    else if (cmd === 'reactionrole' && isAdmin) {
+        gs.reactionRoles = gs.reactionRoles || {};
+        const rrAction = (args[0] || '').toLowerCase();
+
+        if (rrAction === 'add') {
+            const rrMsgId = args[1], rrEmoji = args[2];
+            if (!rrMsgId || !/^\d{15,20}$/.test(rrMsgId)) return message.channel.send({ embeds: [modEmbed('❌ Invalid message ID.\nUsage: `!reactionrole add <messageId> <emoji> <@role>`')] });
+            if (!rrEmoji) return message.channel.send({ embeds: [modEmbed('❌ Missing emoji.\nUsage: `!reactionrole add <messageId> <emoji> <@role>`')] });
+            const rrRole = await resolveRole(args[3]);
+            if (!rrRole) return message.channel.send({ embeds: [modEmbed('❌ Missing or invalid role.\nUsage: `!reactionrole add <messageId> <emoji> <@role>`')] });
+            if (rrRole.managed) return message.channel.send({ embeds: [modEmbed('❌ Cannot use integration-managed roles.')] });
+            const _rrHierErr = checkRoleHierarchy(message.member, rrRole);
+            if (_rrHierErr) return message.channel.send({ embeds: [modEmbed(_rrHierErr)] });
+            const _rrElevErr = checkPermissionElevation(message.member, rrRole.permissions);
+            if (_rrElevErr) return message.channel.send({ embeds: [modEmbed(_rrElevErr)] });
+            if (!gs.reactionRoles[rrMsgId]) gs.reactionRoles[rrMsgId] = [];
+            if (gs.reactionRoles[rrMsgId].some(r => r.emoji === rrEmoji)) return message.channel.send({ embeds: [modEmbed('❌ That emoji is already mapped on this message.')] });
+            gs.reactionRoles[rrMsgId].push({ emoji: rrEmoji, roleId: rrRole.id });
+            saveData(data);
+            const rrMsg = await message.channel.messages.fetch(rrMsgId).catch(() => null);
+            if (rrMsg) await rrMsg.react(rrEmoji).catch(() => {});
+            await message.channel.send({ embeds: [modEmbed(`✅ Reacting with ${rrEmoji} on message \`${rrMsgId}\` will now give <@&${rrRole.id}>.`)] });
+
+        } else if (rrAction === 'remove') {
+            const rrMsgId = args[1], rrEmoji = args[2];
+            if (!rrMsgId || !rrEmoji) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!reactionrole remove <messageId> <emoji>`')] });
+            if (!gs.reactionRoles[rrMsgId]) return message.channel.send({ embeds: [modEmbed('❌ No reaction roles on that message.')] });
+            gs.reactionRoles[rrMsgId] = gs.reactionRoles[rrMsgId].filter(r => r.emoji !== rrEmoji);
+            if (!gs.reactionRoles[rrMsgId].length) delete gs.reactionRoles[rrMsgId];
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ Removed reaction role for ${rrEmoji} on message \`${rrMsgId}\`.`)] });
+
+        } else if (rrAction === 'clear') {
+            const rrMsgId = args[1];
+            if (!rrMsgId) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!reactionrole clear <messageId>`')] });
+            delete gs.reactionRoles[rrMsgId];
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ Cleared all reaction roles from message \`${rrMsgId}\`.`)] });
+
+        } else if (rrAction === 'list') {
+            const entries = Object.entries(gs.reactionRoles);
+            if (!entries.length) return message.channel.send({ embeds: [modEmbed('❌ No reaction roles configured.')] });
+            const lines = entries.flatMap(([msgId, rrs]) => rrs.map(r => `Message \`${msgId}\`: ${r.emoji} → <@&${r.roleId}>`)).slice(0, 25).join('\n');
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🎭 Reaction Roles').setDescription(lines.slice(0, 2048)).setColor(0x5865F2).setTimestamp()] });
+        } else {
+            await message.channel.send({ embeds: [modEmbed('❌ Usage: `!reactionrole add|remove|clear|list ...`')] });
+        }
+    }
+
+    // !verify setup <@role> [#channel]  |  disable  |  status  |  (bare = self-verify)
+    else if (cmd === 'verify') {
+        const vAction = (args[0] || '').toLowerCase();
+        if (vAction === 'setup') {
+            if (!isAdmin) return message.channel.send({ embeds: [modEmbed('❌ Admins only.')] });
+            const role = await resolveRole(args[1]);
+            if (!role) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!verify setup <@role> [#channel]`')] });
+            if (role.managed) return message.channel.send({ embeds: [modEmbed('❌ Cannot use integration-managed roles.')] });
+            const _vHierErr = checkRoleHierarchy(message.member, role);
+            if (_vHierErr) return message.channel.send({ embeds: [modEmbed(_vHierErr)] });
+            const targetChannel = args[2] ? await resolveChannel(args[2]) : message.channel;
+            if (!targetChannel) return message.channel.send({ embeds: [modEmbed('❌ Could not find that channel.')] });
+            gs.verify = { enabled: true, roleId: role.id, channelId: targetChannel.id };
+            saveData(data);
+            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`verify_start_${message.guildId}`).setLabel('✅ Verify').setStyle(ButtonStyle.Success));
+            const posted = await targetChannel.send({ embeds: [new EmbedBuilder().setTitle('✅ Server Verification').setDescription("Click the button below and enter the code you're shown to verify yourself and unlock the rest of the server.").setColor(0x00CC66)], components: [row] }).catch(() => null);
+            if (!posted) return message.channel.send({ embeds: [modEmbed(`❌ Set up, but I couldn't post in ${targetChannel} — check my permissions there.`)] });
+            await message.channel.send({ embeds: [modEmbed(`✅ Verification set up in ${targetChannel}. Members who pass the captcha get <@&${role.id}>.`)] });
+
+        } else if (vAction === 'disable') {
+            if (!isAdmin) return message.channel.send({ embeds: [modEmbed('❌ Admins only.')] });
+            gs.verify = { enabled: false, roleId: gs.verify?.roleId || null, channelId: gs.verify?.channelId || null };
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed('✅ Verification disabled.')] });
+
+        } else if (vAction === 'status') {
+            const v = gs.verify || {};
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('✅ Verification Status').setColor(0x5865F2)
+                .addFields(
+                    { name: 'Enabled', value: v.enabled ? '✅ Yes' : '❌ No', inline: true },
+                    { name: 'Role', value: v.roleId ? `<@&${v.roleId}>` : 'Not set', inline: true },
+                    { name: 'Channel', value: v.channelId ? `<#${v.channelId}>` : 'Not set', inline: true },
+                ).setTimestamp()] });
+
+        } else {
+            // Bare "!verify" — self-serve flow for a regular member (no modal available here)
+            if (!gs.verify?.enabled) return message.channel.send({ embeds: [modEmbed('❌ Verification is not enabled on this server.')] });
+            const code = generateCaptchaCode();
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🔐 Verification Code').setDescription(`Reply with this code within **60 seconds**:\n\n\`\`\`${code}\`\`\``).setColor(0xFFAA00)] });
+            const collected = await message.channel.awaitMessages({ filter: m => m.author.id === message.author.id, max: 1, time: 60000 }).catch(() => null);
+            const replyMsg = collected?.first();
+            if (!replyMsg || replyMsg.content.trim().toUpperCase() !== code) {
+                return message.channel.send({ embeds: [modEmbed('❌ Incorrect or no response in time — verification failed. Run `!verify` again to retry.')] });
+            }
+            await message.member.roles.add(gs.verify.roleId, 'Passed captcha verification').catch(() => {});
+            await message.channel.send({ embeds: [modEmbed('✅ Verified! Welcome to the server.')] });
+        }
+    }
+
+    // !giveaway start <duration> <prize...> [role:@role] [blacklist:@role] [minmsg:N] [minaccage:N] [minjoinage:N] [ch:#channel]
+    // !giveaway end <messageId>  |  reroll <messageId>  |  list  |  bonusrole <messageId> <@role> <extra>
+    else if (cmd === 'giveaway' && isAdmin) {
+        const gwAction = (args[0] || '').toLowerCase();
+        data.giveaways = data.giveaways || {};
+        const gwPermErr = checkModPermission(message.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+        if (gwPermErr) return message.channel.send({ embeds: [modEmbed(gwPermErr)] });
+
+        if (gwAction === 'start') {
+            const durArg = args[1];
+            const durMins = durArg ? parseDuration(durArg) : null;
+            if (!durMins || durMins <= 0) return message.channel.send({ embeds: [modEmbed('❌ Invalid duration.\nUsage: `!giveaway start <duration> <prize...> [role:@role] [blacklist:@role] [minmsg:N] [minaccage:N] [minjoinage:N] [ch:#channel]`')] });
+            const rest = args.slice(2);
+            const tokens = { role: null, blacklist: null, minmsg: null, minaccage: null, minjoinage: null, ch: null };
+            const prizeWords = [];
+            for (const tok of rest) {
+                const m = tok.match(/^(role|blacklist|minmsg|minaccage|minjoinage|ch):(.+)$/i);
+                if (m) tokens[m[1].toLowerCase()] = m[2]; else prizeWords.push(tok);
+            }
+            const prize = prizeWords.join(' ');
+            if (!prize) return message.channel.send({ embeds: [modEmbed('❌ Missing prize.\nUsage: `!giveaway start <duration> <prize...>`')] });
+            const requiredRole = tokens.role ? await resolveRole(tokens.role) : null;
+            const blacklistRole = tokens.blacklist ? await resolveRole(tokens.blacklist) : null;
+            const targetChannel = tokens.ch ? await resolveChannel(tokens.ch) : message.channel;
+            const endsAt = Date.now() + durMins * 60000;
+
+            const gw = {
+                guildId: message.guildId, channelId: targetChannel.id, prize, winnerCount: 1, endsAt,
+                hostId: message.author.id, hostTag: message.author.username,
+                entries: [], ended: false,
+                requiredRoleId: requiredRole?.id || null,
+                blacklistRoleId: blacklistRole?.id || null,
+                minMessages: parseInt(tokens.minmsg, 10) || 0,
+                minAccountAgeDays: parseInt(tokens.minaccage, 10) || 0,
+                minJoinAgeDays: parseInt(tokens.minjoinage, 10) || 0,
+                bonusRoles: {},
+            };
+            const msg = await targetChannel.send({ embeds: [buildGiveawayEmbed(gw, false)], components: buildGiveawayComponents('pending', false) }).catch(() => null);
+            if (!msg) return message.channel.send({ embeds: [modEmbed('❌ Could not post the giveaway (check my permissions in that channel).')] });
+            data.giveaways[msg.id] = gw;
+            saveData(data);
+            await msg.edit({ components: buildGiveawayComponents(msg.id, false) }).catch(() => {});
+            await message.channel.send({ embeds: [modEmbed(`✅ Giveaway started in ${targetChannel}! Ends <t:${Math.floor(endsAt / 1000)}:R>. (Tip: use \`!giveaway bonusrole\` to add extra-entry roles, or start with 1 winner and \`/giveaway\` for more winner-count options.)`)] });
+
+        } else if (gwAction === 'bonusrole') {
+            const gw = data.giveaways[args[1]];
+            if (!gw || gw.guildId !== message.guildId) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!giveaway bonusrole <messageId> <@role> <extraEntries>`')] });
+            if (gw.ended) return message.channel.send({ embeds: [modEmbed('❌ That giveaway has already ended.')] });
+            const role = await resolveRole(args[2]);
+            const extra = parseInt(args[3], 10);
+            if (!role || !extra || extra < 1) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!giveaway bonusrole <messageId> <@role> <extraEntries>`')] });
+            gw.bonusRoles = gw.bonusRoles || {};
+            gw.bonusRoles[role.id] = extra;
+            saveData(data);
+            const chan = await client.channels.fetch(gw.channelId).catch(() => null);
+            const msg = chan ? await chan.messages.fetch(args[1]).catch(() => null) : null;
+            if (msg) msg.edit({ embeds: [buildGiveawayEmbed(gw, false)] }).catch(() => {});
+            await message.channel.send({ embeds: [modEmbed(`✅ Members with <@&${role.id}> now get **+${extra}** bonus entries in that giveaway.`)] });
+
+        } else if (gwAction === 'end' || gwAction === 'reroll') {
+            const msgId = args[1];
+            const gw = data.giveaways[msgId];
+            if (!gw || gw.guildId !== message.guildId) return message.channel.send({ embeds: [modEmbed('❌ No giveaway found with that message ID in this server.')] });
+            if (gwAction === 'end' && gw.ended) return message.channel.send({ embeds: [modEmbed('❌ That giveaway has already ended.')] });
+            if (gwAction === 'reroll' && !gw.ended) return message.channel.send({ embeds: [modEmbed('❌ That giveaway hasn\'t ended yet — use `!giveaway end` first.')] });
+            const winners = await pickGiveawayWinners(message.guild, gw, gw.winnerCount);
+            gw.ended = true;
+            saveData(data);
+            const chan = await client.channels.fetch(gw.channelId).catch(() => null);
+            const msg = chan ? await chan.messages.fetch(msgId).catch(() => null) : null;
+            if (msg) msg.edit({ embeds: [buildGiveawayEmbed(gw, true, winners)], components: [] }).catch(() => {});
+            if (chan && winners.length) chan.send({ content: `🎉 Congratulations ${winners.map(w => `<@${w}>`).join(', ')}! You won **${gw.prize}**!`, allowedMentions: { users: winners } }).catch(() => {});
+            await message.channel.send({ embeds: [modEmbed(winners.length ? `✅ Winner(s): ${winners.map(w => `<@${w}>`).join(', ')}` : '😔 No valid entrants — no winner could be picked.')] });
+
+        } else if (gwAction === 'list') {
+            const active = Object.entries(data.giveaways).filter(([, g]) => g.guildId === message.guildId && !g.ended);
+            if (!active.length) return message.channel.send({ embeds: [modEmbed('There are no active giveaways in this server.', 0x5865F2)] });
+            const lines = active.map(([id, g]) => `🎉 **${g.prize}** — ${(g.entries || []).length} entrants — ends <t:${Math.floor(g.endsAt / 1000)}:R> — ID: \`${id}\``);
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🎉 Active Giveaways').setDescription(lines.join('\n')).setColor(0x00D26A)] });
+        } else {
+            await message.channel.send({ embeds: [modEmbed('❌ Usage: `!giveaway start|end|reroll|list|bonusrole ...`')] });
+        }
+    }
+
+    // !level [@user]
+    else if (cmd === 'level') {
+        const token = args[0] || null;
+        const mention = token && token.match(/^<@!?(\d+)>$/);
+        const rawId = mention ? mention[1] : (token && token.match(/^\d{15,20}$/) ? token : null);
+        const targetUser = rawId ? (await client.users.fetch(rawId).catch(() => null)) : message.author;
+        if (!targetUser) return message.channel.send({ embeds: [modEmbed('❌ Could not find that user.')] });
+        const lc = getLevelingConfig(gs);
+        const totalXp = getTotalXp(data, message.guildId, targetUser.id);
+        const info = computeLevelFromXp(lc, totalXp);
+        const rows = buildLevelLeaderboard(data, message.guildId);
+        const rank = rows.findIndex(r => r.uid === targetUser.id) + 1;
+        await message.channel.send({ embeds: [new EmbedBuilder().setTitle(`📈 Level — ${targetUser.username}`).setThumbnail(targetUser.displayAvatarURL({ dynamic: true })).setColor(0x5865F2)
+            .addFields(
+                { name: 'Level', value: `${info.level}`, inline: true },
+                { name: 'XP', value: `${info.xpIntoLevel} / ${info.xpForNextLevel}`, inline: true },
+                { name: 'Rank', value: rank ? `#${rank}` : 'Unranked', inline: true },
+                { name: 'Total XP', value: `${totalXp.toLocaleString()}`, inline: true },
+            ).setTimestamp()] });
+    }
+
+    // !levellb
+    else if (cmd === 'levellb') {
+        const lc = getLevelingConfig(gs);
+        const rows = buildLevelLeaderboard(data, message.guildId);
+        const { start, end } = getLeaderboardPageBounds(0);
+        const lines = rows.slice(start, end).map((r, i) => {
+            const rank = start + i + 1;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
+            return `${medal} <@${r.uid}> — **Level ${computeLevelFromXp(lc, r.xp).level}** (${r.xp.toLocaleString()} XP)`;
+        });
+        const embed = new EmbedBuilder().setTitle('📈 XP Leaderboard').setDescription(lines.length ? lines.join('\n') : 'No XP recorded yet.').setColor(0x5865F2)
+            .setFooter({ text: rows.length ? `Showing ${start + 1}–${Math.min(end, rows.length)} of ${rows.length}` : 'No data' }).setTimestamp();
+        const components = rows.length > 10 ? [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`levellb_${message.guildId}_1`).setLabel('Next ▶').setStyle(ButtonStyle.Primary))] : [];
+        await message.channel.send({ embeds: [embed], components });
+    }
+
+    // !levelset <@user> <level>
+    else if (cmd === 'levelset' && (isAdmin || isMod)) {
+        const target = await resolveMember(args[0]);
+        const newLevel = parseInt(args[1], 10);
+        if (!target || !Number.isFinite(newLevel) || newLevel < 0) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!levelset <@user> <level>`')] });
+        const lc = getLevelingConfig(gs);
+        const newXp = totalXpForLevel(lc, newLevel);
+        data.levels = data.levels || {}; data.levels[message.guildId] = data.levels[message.guildId] || {};
+        data.levels[message.guildId][target.id] = { xp: newXp };
+        _xpBuffer.delete(`${message.guildId}:${target.id}`);
+        saveData(data);
+        await message.channel.send({ embeds: [modEmbed(`✅ Set ${target} to level **${newLevel}** (${newXp.toLocaleString()} XP).`)] });
+    }
+
+    // !addxp <@user> <amount>  |  !removexp <@user> <amount>
+    else if ((cmd === 'addxp' || cmd === 'removexp') && (isAdmin || isMod)) {
+        const target = await resolveMember(args[0]);
+        const amount = parseInt(args[1], 10);
+        if (!target || !Number.isFinite(amount) || amount < 1) return message.channel.send({ embeds: [modEmbed(`❌ Usage: \`!${cmd} <@user> <amount>\``)] });
+        const delta = cmd === 'addxp' ? amount : -amount;
+        data.levels = data.levels || {}; data.levels[message.guildId] = data.levels[message.guildId] || {};
+        const rec = data.levels[message.guildId][target.id] || (data.levels[message.guildId][target.id] = { xp: 0 });
+        rec.xp = Math.max(0, (rec.xp || 0) + delta);
+        saveData(data);
+        await message.channel.send({ embeds: [modEmbed(`✅ ${cmd === 'addxp' ? 'Added' : 'Removed'} **${amount}** XP ${cmd === 'addxp' ? 'to' : 'from'} ${target}. New total: **${getTotalXp(data, message.guildId, target.id).toLocaleString()}**.`)] });
+    }
+
+    // !levelconfig toggle|curve|xprange|cooldown|rolereward|message|channel|status|reset ...
+    else if (cmd === 'levelconfig' && isAdmin) {
+        gs.leveling = gs.leveling || {};
+        const lcAction = (args[0] || '').toLowerCase();
+        if (lcAction === 'toggle') {
+            const state = (args[1] || '').toLowerCase();
+            if (!['on', 'off'].includes(state)) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!levelconfig toggle <on|off>`')] });
+            gs.leveling.enabled = state === 'on';
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ Leveling is now **${gs.leveling.enabled ? 'enabled' : 'disabled'}**.`)] });
+        } else if (lcAction === 'curve') {
+            const type = (args[1] || '').toLowerCase();
+            const base = parseInt(args[2], 10), growth = parseInt(args[3], 10);
+            if (!['linear', 'quadratic', 'exponential'].includes(type) || !Number.isFinite(base) || !Number.isFinite(growth)) {
+                return message.channel.send({ embeds: [modEmbed('❌ Usage: `!levelconfig curve <linear|quadratic|exponential> <baseXp> <growthFactor>`')] });
+            }
+            gs.leveling.curveType = type; gs.leveling.baseXp = base; gs.leveling.growthFactor = growth;
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ XP curve updated: **${type}**, base **${base}**, growth **${growth}**.\nExample: level 1->2 now needs **${xpNeededForLevel(getLevelingConfig(gs), 1)}** XP.`)] });
+        } else if (lcAction === 'xprange') {
+            const min = parseInt(args[1], 10), max = parseInt(args[2], 10);
+            if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!levelconfig xprange <min> <max>`')] });
+            gs.leveling.xpMin = min; gs.leveling.xpMax = max;
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ XP per message is now **${min}-${max}**.`)] });
+        } else if (lcAction === 'cooldown') {
+            const secs = parseInt(args[1], 10);
+            if (!Number.isFinite(secs) || secs < 0) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!levelconfig cooldown <seconds>`')] });
+            gs.leveling.cooldownSec = secs;
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ XP cooldown is now **${secs}s**.`)] });
+        } else if (lcAction === 'rolereward') {
+            const lvl = parseInt(args[1], 10);
+            const role = args[2] ? await resolveRole(args[2]) : null;
+            if (!Number.isFinite(lvl) || lvl < 1) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!levelconfig rolereward <level> <@role>` (omit role to remove)')] });
+            gs.leveling.roles = gs.leveling.roles || {};
+            if (role) gs.leveling.roles[lvl] = role.id; else delete gs.leveling.roles[lvl];
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(role ? `✅ Members now get <@&${role.id}> at level **${lvl}**.` : `✅ Removed the role reward for level **${lvl}**.`)] });
+        } else if (lcAction === 'message') {
+            const text = args.slice(1).join(' ');
+            if (!text) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!levelconfig message <text using {user} and {level}>`')] });
+            gs.leveling.levelUpMessage = text.slice(0, 500);
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ Level-up message updated:\n> ${gs.leveling.levelUpMessage}`)] });
+        } else if (lcAction === 'channel') {
+            const chan = args[1] ? await resolveChannel(args[1]) : null;
+            gs.leveling.levelUpChannelId = chan ? chan.id : null;
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(chan ? `✅ Level-ups will be announced in ${chan}.` : '✅ Level-ups will be announced in whatever channel triggered them.')] });
+        } else if (lcAction === 'reset') {
+            gs.leveling.curveType = 'linear'; gs.leveling.baseXp = 100; gs.leveling.growthFactor = 50;
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed('✅ XP curve reset to defaults (linear, base 100, growth 50).')] });
+        } else {
+            const lc = getLevelingConfig(gs);
+            const roleLines = Object.entries(lc.roles).map(([lvl, rid]) => `Lvl ${lvl}: <@&${rid}>`).join('\n') || 'None';
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('📈 Leveling Configuration').setColor(0x5865F2)
+                .addFields(
+                    { name: 'Enabled', value: lc.enabled ? '✅' : '❌', inline: true },
+                    { name: 'Curve', value: lc.curveType, inline: true },
+                    { name: 'Base XP / Growth', value: `${lc.baseXp} / ${lc.growthFactor}`, inline: true },
+                    { name: 'XP per message', value: `${lc.xpMin}-${lc.xpMax}`, inline: true },
+                    { name: 'Cooldown', value: `${lc.cooldownSec}s`, inline: true },
+                    { name: 'Channel', value: lc.levelUpChannelId ? `<#${lc.levelUpChannelId}>` : 'Same channel', inline: true },
+                    { name: 'Role rewards', value: roleLines, inline: false },
+                    { name: 'Message template', value: lc.levelUpMessage, inline: false },
+                ).setTimestamp()] });
+        }
+    }
+
+    // !antinuke toggle <on|off>  |  punishment <strip_roles|kick|ban>  |  threshold <type> <count> <windowSec>  |  whitelist add|remove|list <@user|@role>  |  status
+    else if (cmd === 'antinuke' && isAdmin) {
+        gs.antinuke = gs.antinuke || {};
+        const anAction = (args[0] || '').toLowerCase();
+        if (anAction === 'toggle') {
+            const state = (args[1] || '').toLowerCase();
+            if (!['on', 'off'].includes(state)) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!antinuke toggle <on|off>`')] });
+            gs.antinuke.enabled = state === 'on';
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ Anti-nuke is now **${gs.antinuke.enabled ? 'enabled' : 'disabled'}**.${gs.antinuke.enabled ? ' Remember to whitelist your trusted staff with `!antinuke whitelist add`.' : ''}`)] });
+        } else if (anAction === 'punishment') {
+            const p = (args[1] || '').toLowerCase();
+            if (!['strip_roles', 'kick', 'ban'].includes(p)) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!antinuke punishment <strip_roles|kick|ban>`')] });
+            gs.antinuke.punishment = p;
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ Anti-nuke punishment set to **${p}**.`)] });
+        } else if (anAction === 'threshold') {
+            const actionType = args[1];
+            const count = parseInt(args[2], 10), windowSec = parseInt(args[3], 10);
+            if (!['channelDelete', 'roleDelete', 'ban', 'kick', 'webhookCreate'].includes(actionType) || !Number.isFinite(count) || !Number.isFinite(windowSec)) {
+                return message.channel.send({ embeds: [modEmbed('❌ Usage: `!antinuke threshold <channelDelete|roleDelete|ban|kick|webhookCreate> <count> <windowSeconds>`')] });
+            }
+            gs.antinuke.thresholds = gs.antinuke.thresholds || {};
+            gs.antinuke.thresholds[actionType] = { count, windowSec };
+            saveData(data);
+            await message.channel.send({ embeds: [modEmbed(`✅ Threshold for **${actionType}** set to **${count}** in **${windowSec}s**.`)] });
+        } else if (anAction === 'whitelist') {
+            gs.antinuke.whitelistUserIds = gs.antinuke.whitelistUserIds || [];
+            gs.antinuke.whitelistRoleIds = gs.antinuke.whitelistRoleIds || [];
+            const sub = (args[1] || '').toLowerCase();
+            if (sub === 'list') {
+                const uLines = gs.antinuke.whitelistUserIds.map(id => `<@${id}>`).join(', ') || 'None';
+                const rLines = gs.antinuke.whitelistRoleIds.map(id => `<@&${id}>`).join(', ') || 'None';
+                await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🛡️ Anti-Nuke Whitelist').setColor(0x5865F2).addFields({ name: 'Users', value: uLines }, { name: 'Roles', value: rLines })] });
+            } else if (sub === 'add' || sub === 'remove') {
+                const role = await resolveRole(args[2]);
+                const member = role ? null : await resolveMember(args[2]);
+                if (!role && !member) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!antinuke whitelist add|remove <@user|@role>`')] });
+                const list = role ? gs.antinuke.whitelistRoleIds : gs.antinuke.whitelistUserIds;
+                const id = role ? role.id : member.id;
+                if (sub === 'add') { if (!list.includes(id)) list.push(id); } else { const i = list.indexOf(id); if (i !== -1) list.splice(i, 1); }
+                saveData(data);
+                await message.channel.send({ embeds: [modEmbed(`✅ ${sub === 'add' ? 'Whitelisted' : 'Removed'} ${role ? `<@&${id}>` : `<@${id}>`}${sub === 'add' ? ' from' : ' from the'} anti-nuke${sub === 'add' ? '' : ' whitelist'}.`)] });
+            } else {
+                await message.channel.send({ embeds: [modEmbed('❌ Usage: `!antinuke whitelist add|remove|list [@user|@role]`')] });
+            }
+        } else {
+            const an = getAntiNukeConfig(gs);
+            const tLines = Object.entries(an.thresholds).map(([k, v]) => `${k}: ${v.count} / ${v.windowSec}s`).join('\n');
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🛡️ Anti-Nuke Status').setColor(0x5865F2)
+                .addFields(
+                    { name: 'Enabled', value: an.enabled ? '✅' : '❌', inline: true },
+                    { name: 'Punishment', value: an.punishment, inline: true },
+                    { name: 'Whitelisted users', value: `${an.whitelistUserIds.length}`, inline: true },
+                    { name: 'Whitelisted roles', value: `${an.whitelistRoleIds.length}`, inline: true },
+                    { name: 'Thresholds', value: tLines || 'Defaults', inline: false },
+                ).setTimestamp()] });
+        }
+    }
+
+    // !sticky <text...>
+    else if (cmd === 'sticky' && (isAdmin || isMod)) {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.ManageMessages, 'Manage Messages');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const text = args.join(' ');
+        if (!text) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!sticky <message text>`  (use `!unsticky` to remove)')] });
+        data.stickies = data.stickies || {};
+        if (data.stickies[message.channel.id]?.messageId) {
+            const old = await message.channel.messages.fetch(data.stickies[message.channel.id].messageId).catch(() => null);
+            if (old) old.delete().catch(() => {});
+        }
+        const sticky = { guildId: message.guildId, content: text, messageId: null, authorId: message.author.id, createdAt: Date.now() };
+        data.stickies[message.channel.id] = sticky;
+        const posted = await message.channel.send({ embeds: [buildStickyEmbed(sticky)] }).catch(() => null);
+        if (posted) sticky.messageId = posted.id;
+        saveData(data);
+    }
+
+    // !unsticky
+    else if (cmd === 'unsticky' && (isAdmin || isMod)) {
+        const existing = data.stickies?.[message.channel.id];
+        if (!existing) return message.channel.send({ embeds: [modEmbed('❌ This channel doesn\'t have an active sticky.')] });
+        if (existing.messageId) { const old = await message.channel.messages.fetch(existing.messageId).catch(() => null); if (old) old.delete().catch(() => {}); }
+        delete data.stickies[message.channel.id];
+        saveData(data);
+        await message.channel.send({ embeds: [modEmbed('✅ Sticky note removed from this channel.')] });
+    }
+
+    // !emoji create <name> <imageUrl>  |  delete <name>  |  list   (or attach an image with create)
+    else if (cmd === 'emoji') {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.ManageEmojisAndStickers, 'Manage Emojis & Stickers');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const emAction = (args[0] || '').toLowerCase();
+        if (emAction === 'create') {
+            const name = (args[1] || '').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 32);
+            const imageUrl = message.attachments.first()?.url || args[2];
+            if (name.length < 2 || !imageUrl) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!emoji create <name> <imageUrl>` (or attach an image)')] });
+            try {
+                const emoji = await message.guild.emojis.create({ attachment: imageUrl, name, reason: `Created by ${message.author.tag}` });
+                await message.channel.send({ embeds: [modEmbed(`✅ Created emoji ${emoji} (\`:${emoji.name}:\`)`)] });
+            } catch (e) { await message.channel.send({ embeds: [modEmbed(`❌ Failed to create emoji: ${e.message}`)] }); }
+        } else if (emAction === 'delete') {
+            const name = (args[1] || '').replace(/^:|:$/g, '');
+            const emoji = message.guild.emojis.cache.find(e => e.name === name);
+            if (!emoji) return message.channel.send({ embeds: [modEmbed(`❌ No emoji named \`${name}\` found.`)] });
+            await emoji.delete(`Deleted by ${message.author.tag}`).catch(() => {});
+            await message.channel.send({ embeds: [modEmbed(`✅ Deleted emoji \`:${name}:\``)] });
+        } else {
+            const list = message.guild.emojis.cache.map(e => `${e} \`:${e.name}:\``).slice(0, 100).join(' ') || 'No custom emojis.';
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('😀 Custom Emojis').setDescription(list.slice(0, 4000)).setColor(0x5865F2)] });
+        }
+    }
+
+    // !sticker create <name> <tags> [description]  (must attach an image)  |  delete <name>  |  list
+    else if (cmd === 'sticker') {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.ManageEmojisAndStickers, 'Manage Emojis & Stickers');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const stAction = (args[0] || '').toLowerCase();
+        if (stAction === 'create') {
+            const name = (args[1] || '').slice(0, 30);
+            const tags = args[2];
+            const description = args.slice(3).join(' ');
+            const attachment = message.attachments.first();
+            if (!name || !tags || !attachment) return message.channel.send({ embeds: [modEmbed('❌ Usage: attach an image and `!sticker create <name> <tags> [description]`')] });
+            if (attachment.size > 512000) return message.channel.send({ embeds: [modEmbed('❌ Sticker image must be under 512KB.')] });
+            try {
+                const sticker = await message.guild.stickers.create({ file: attachment.url, name, tags, description, reason: `Created by ${message.author.tag}` });
+                await message.channel.send({ embeds: [modEmbed(`✅ Created sticker **${sticker.name}**`)] });
+            } catch (e) { await message.channel.send({ embeds: [modEmbed(`❌ Failed to create sticker: ${e.message}`)] }); }
+        } else if (stAction === 'delete') {
+            const name = args[1];
+            const sticker = message.guild.stickers.cache.find(s => s.name === name);
+            if (!sticker) return message.channel.send({ embeds: [modEmbed(`❌ No sticker named \`${name}\` found.`)] });
+            await sticker.delete(`Deleted by ${message.author.tag}`).catch(() => {});
+            await message.channel.send({ embeds: [modEmbed(`✅ Deleted sticker **${name}**`)] });
+        } else {
+            const list = message.guild.stickers.cache.map(s => s.name).slice(0, 100).join(', ') || 'No custom stickers.';
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🏷️ Custom Stickers').setDescription(list.slice(0, 4000)).setColor(0x5865F2)] });
+        }
+    }
+
+    // !webhook create <name> [#channel]  |  delete <nameOrId>  |  list  |  send <nameOrId> <message...>
+    else if (cmd === 'webhook') {
+        const permErr = checkModPermission(message.member, PermissionFlagsBits.ManageWebhooks, 'Manage Webhooks');
+        if (permErr) return message.channel.send({ embeds: [modEmbed(permErr)] });
+        const whAction = (args[0] || '').toLowerCase();
+        if (whAction === 'create') {
+            const chanToken = args[args.length - 1];
+            const maybeChan = chanToken ? await resolveChannel(chanToken) : null;
+            const nameEnd = maybeChan ? args.length - 1 : args.length;
+            const name = args.slice(1, nameEnd).join(' ').slice(0, 80);
+            const chan = maybeChan || message.channel;
+            if (!name) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!webhook create <name> [#channel]`')] });
+            try {
+                const wh = await chan.createWebhook({ name, reason: `Created by ${message.author.tag}` });
+                await message.channel.send({ embeds: [modEmbed(`✅ Created webhook **${wh.name}** in ${chan}.\n🔗 URL (keep this secret!): ||${wh.url}||`)] });
+            } catch (e) { await message.channel.send({ embeds: [modEmbed(`❌ Failed to create webhook: ${e.message}`)] }); }
+        } else if (whAction === 'delete') {
+            const nameOrId = args[1];
+            const hooks = await message.guild.fetchWebhooks().catch(() => null);
+            const wh = hooks?.find(h => h.id === nameOrId || h.name === nameOrId);
+            if (!wh) return message.channel.send({ embeds: [modEmbed(`❌ No webhook matching \`${nameOrId}\` found.`)] });
+            await wh.delete(`Deleted by ${message.author.tag}`).catch(() => {});
+            await message.channel.send({ embeds: [modEmbed(`✅ Deleted webhook **${wh.name}**.`)] });
+        } else if (whAction === 'list') {
+            const hooks = await message.guild.fetchWebhooks().catch(() => null);
+            const list = hooks?.map(h => `**${h.name}** — <#${h.channelId}> — \`${h.id}\``).join('\n') || 'No webhooks found.';
+            await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🔗 Webhooks').setDescription(list.slice(0, 4000)).setColor(0x5865F2)] });
+        } else if (whAction === 'send') {
+            const nameOrId = args[1];
+            const msgText = args.slice(2).join(' ');
+            if (!nameOrId || !msgText) return message.channel.send({ embeds: [modEmbed('❌ Usage: `!webhook send <nameOrId> <message>`')] });
+            const hooks = await message.guild.fetchWebhooks().catch(() => null);
+            const wh = hooks?.find(h => h.id === nameOrId || h.name === nameOrId);
+            if (!wh) return message.channel.send({ embeds: [modEmbed(`❌ No webhook matching \`${nameOrId}\` found.`)] });
+            await wh.send({ content: msgText.slice(0, 2000) }).then(
+                () => message.channel.send({ embeds: [modEmbed(`✅ Sent via webhook **${wh.name}**.`)] }),
+                e => message.channel.send({ embeds: [modEmbed(`❌ Failed to send: ${e.message}`)] }),
+            );
+        } else {
+            await message.channel.send({ embeds: [modEmbed('❌ Usage: `!webhook create|delete|list|send ...`')] });
+        }
+    }
+
     else if (cmd === 'info') {
         const token = args[0] || null;
         const mention = token && token.match(/^<@!?(\d+)>$/);
@@ -23751,7 +26272,10 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         const cleaned = fullClean(text);
         const ns      = cleaned.replace(/[\s_]/g,'');
         const fruits  = scanForFruits(cleaned);
-        for (const f of FRUITS) { const fc=f.replace(/[\s\-]/g,''); if(ns.includes(fc)&&!fruits.includes(f)) fruits.push(f); }
+        for (const tok of (cleaned.match(/[a-z0-9]+/g) || [])) {
+            const m = tokenMatchesList(tok, FRUITS, FRUIT_ALIASES);
+            if (m && !fruits.includes(m)) fruits.push(m);
+        }
         const bosses  = scanForBosses(cleaned);
         const swords  = scanForSwords(cleaned);
         const painUpg = scanForPainUpgrades(cleaned);
