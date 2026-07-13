@@ -3859,6 +3859,34 @@ function getTicketStaffRoleIds(gs) {
     if (Array.isArray(gs.ticketExtraRoleIds)) for (const id of gs.ticketExtraRoleIds) if (!ids.includes(id)) ids.push(id);
     return ids;
 }
+// Shared AFK-return handling: builds the "welcome back" embed (including any pending
+// messages) and DMs everyone who asked to be notified. Does NOT send/delete the entry itself —
+// caller is responsible for deleting data.afk[guildId][userId] and saving.
+function buildAfkReturnEmbed(user, afkEntry) {
+    const embed = new EmbedBuilder()
+        .setDescription(`👋 Welcome back, ${user}! I've removed your AFK status.${afkEntry.mentionsWhileAway ? ` You were mentioned **${afkEntry.mentionsWhileAway}** time(s) while away.` : ''}`)
+        .setColor(0x00FF88);
+    if (Array.isArray(afkEntry.pendingMessages) && afkEntry.pendingMessages.length) {
+        const lines = afkEntry.pendingMessages.slice(0, 10).map(pm =>
+            `**${pm.authorTag}** (<t:${Math.floor(pm.timestamp / 1000)}:R>): ${String(pm.content).slice(0, 300)}`
+        );
+        embed.addFields({ name: `📨 ${afkEntry.pendingMessages.length} message(s) left for you`, value: lines.join('\n').slice(0, 1024) });
+    }
+    return embed;
+}
+async function notifyAfkSubscribers(client, guild, user, afkEntry) {
+    if (!Array.isArray(afkEntry.notifyWhenBack) || !afkEntry.notifyWhenBack.length) return;
+    const notifyEmbed = new EmbedBuilder()
+        .setTitle('🔔 They\'re back!')
+        .setDescription(`**${user.tag}** is no longer AFK in **${guild.name}**.`)
+        .setColor(0x5865F2)
+        .setThumbnail(user.displayAvatarURL())
+        .setTimestamp();
+    for (const notifyId of afkEntry.notifyWhenBack) {
+        if (notifyId === user.id) continue;
+        client.users.fetch(notifyId).then(u => u.send({ embeds: [notifyEmbed] }).catch(() => {})).catch(() => {});
+    }
+}
 // Parses a free-text field like "@Mod @Support, 123456789012345678" into an array of role IDs,
 // validated against roles that actually exist in the guild.
 function parseRoleListInput(guild, raw) {
@@ -14574,10 +14602,77 @@ client.on('interactionCreate', async interaction => {
                 .setColor(0xFFA500).setTimestamp()] });
             return;
         }
+
+        // "Leave a Message" button on an AFK notice
+        if (cid.startsWith('afk_leavemsg_')) {
+            const rest = cid.slice('afk_leavemsg_'.length);
+            const sepIdx = rest.indexOf('_');
+            const aGuildId = rest.slice(0, sepIdx);
+            const aTargetId = rest.slice(sepIdx + 1);
+            if (aGuildId !== interaction.guild?.id) return;
+            if (interaction.user.id === aTargetId) { await interaction.reply({ content: "❌ You can't leave yourself a message.", flags: MessageFlags.Ephemeral }); return; }
+            const aData = loadData();
+            const aEntry = aData.afk?.[aGuildId]?.[aTargetId];
+            if (!aEntry) { await interaction.reply({ content: '❌ That person is no longer AFK.', flags: MessageFlags.Ephemeral }); return; }
+            const modal = new ModalBuilder()
+                .setCustomId(`afk_leavemsg_modal_${aGuildId}_${aTargetId}`)
+                .setTitle('Leave an AFK Message')
+                .addComponents(new ActionRowBuilder().addComponents(
+                    new TextInputBuilder().setCustomId('afk_msg_content').setLabel('Your message').setStyle(TextInputStyle.Paragraph).setMaxLength(500).setRequired(true)
+                ));
+            await interaction.showModal(modal);
+            return;
+        }
+
+        // "Notify When Back" button on an AFK notice
+        if (cid.startsWith('afk_notify_')) {
+            const rest = cid.slice('afk_notify_'.length);
+            const sepIdx = rest.indexOf('_');
+            const aGuildId = rest.slice(0, sepIdx);
+            const aTargetId = rest.slice(sepIdx + 1);
+            if (aGuildId !== interaction.guild?.id) return;
+            if (interaction.user.id === aTargetId) { await interaction.reply({ content: "❌ You can't notify yourself.", flags: MessageFlags.Ephemeral }); return; }
+            const aData = loadData();
+            const aEntry = aData.afk?.[aGuildId]?.[aTargetId];
+            if (!aEntry) { await interaction.reply({ content: '❌ That person is no longer AFK.', flags: MessageFlags.Ephemeral }); return; }
+            aEntry.notifyWhenBack = aEntry.notifyWhenBack || [];
+            if (aEntry.notifyWhenBack.includes(interaction.user.id)) {
+                await interaction.reply({ content: "✅ You're already set to be notified when they're back.", flags: MessageFlags.Ephemeral });
+                return;
+            }
+            aEntry.notifyWhenBack.push(interaction.user.id);
+            saveData(aData);
+            await interaction.reply({ content: "🔔 Got it — I'll DM you as soon as they're back.", flags: MessageFlags.Ephemeral });
+            return;
+        }
     }
 
     // ── MODALS (ticket creation + existing) ──────────────────────────────────
     if (interaction.isModalSubmit()) {
+        // ── AFK "leave a message" modal ─────────────────────────────────────────
+        if (interaction.customId.startsWith('afk_leavemsg_modal_')) {
+            const rest = interaction.customId.slice('afk_leavemsg_modal_'.length);
+            const sepIdx = rest.indexOf('_');
+            const aGuildId = rest.slice(0, sepIdx);
+            const aTargetId = rest.slice(sepIdx + 1);
+            if (aGuildId !== interaction.guild?.id) return;
+            const aData = loadData();
+            const aEntry = aData.afk?.[aGuildId]?.[aTargetId];
+            if (!aEntry) { await interaction.reply({ content: '❌ That person is no longer AFK — your message was not saved.', flags: MessageFlags.Ephemeral }); return; }
+            const msgContent = interaction.fields.getTextInputValue('afk_msg_content').trim();
+            aEntry.pendingMessages = aEntry.pendingMessages || [];
+            aEntry.pendingMessages.push({
+                authorId: interaction.user.id,
+                authorTag: interaction.user.tag,
+                content: msgContent,
+                timestamp: Date.now(),
+            });
+            if (aEntry.pendingMessages.length > 25) aEntry.pendingMessages = aEntry.pendingMessages.slice(-25);
+            saveData(aData);
+            await interaction.reply({ content: '📨 Your message will be shown to them when they return.', flags: MessageFlags.Ephemeral });
+            return;
+        }
+
         // ── Ticket creation modal ─────────────────────────────────────────────
         if (interaction.customId.startsWith('ticket_create_modal_')) {
             const tGuildId = interaction.customId.slice('ticket_create_modal_'.length);
@@ -18947,10 +19042,16 @@ client.on('interactionCreate', async interaction => {
                 }
                 await interaction.reply({ embeds: [new EmbedBuilder().setDescription(`💤 You are now AFK: **${afkReason}**`).setColor(0xFFAA00)] });
             } else {
-                const had = !!data.afk[guildId][interaction.user.id];
+                const existing = data.afk[guildId][interaction.user.id];
                 delete data.afk[guildId][interaction.user.id];
                 saveData(data);
-                await interaction.reply({ embeds: [new EmbedBuilder().setDescription(had ? '✅ Your AFK status has been cleared.' : "You weren't marked AFK.").setColor(0x00FF88)], flags: MessageFlags.Ephemeral });
+                if (existing) {
+                    const clearEmbed = buildAfkReturnEmbed(interaction.user, existing).setDescription('✅ Your AFK status has been cleared.' + (existing.mentionsWhileAway ? ` You were mentioned **${existing.mentionsWhileAway}** time(s) while away.` : ''));
+                    await interaction.reply({ embeds: [clearEmbed], flags: MessageFlags.Ephemeral });
+                    notifyAfkSubscribers(client, interaction.guild, interaction.user, existing);
+                } else {
+                    await interaction.reply({ embeds: [new EmbedBuilder().setDescription("You weren't marked AFK.").setColor(0x00FF88)], flags: MessageFlags.Ephemeral });
+                }
             }
             break;
         }
@@ -22909,8 +23010,9 @@ client.on('messageCreate', async message => {
         if (message.member?.nickname?.startsWith('[AFK] ') && message.guild.members.me?.permissions.has(PermissionFlagsBits.ManageNicknames)) {
             message.member.setNickname(message.member.nickname.replace(/^\[AFK\] /, '')).catch(() => {});
         }
-        message.channel.send({ embeds: [new EmbedBuilder().setDescription(`👋 Welcome back, ${message.author}! I've removed your AFK status.${afkEntry.mentionsWhileAway ? ` You were mentioned **${afkEntry.mentionsWhileAway}** time(s) while away.` : ''}`).setColor(0x00FF88)] })
-            .then(m => setTimeout(() => m.delete().catch(() => {}), 8000)).catch(() => {});
+        message.channel.send({ embeds: [buildAfkReturnEmbed(message.author, afkEntry)] })
+            .then(m => setTimeout(() => m.delete().catch(() => {}), 15000)).catch(() => {});
+        notifyAfkSubscribers(client, message.guild, message.author, afkEntry);
     }
     if (message.mentions.users.size && data.afk?.[guildId]) {
         for (const [mentionedId, mUser] of message.mentions.users) {
@@ -22919,7 +23021,11 @@ client.on('messageCreate', async message => {
             if (entry) {
                 entry.mentionsWhileAway = (entry.mentionsWhileAway || 0) + 1;
                 saveData(data);
-                message.channel.send({ embeds: [new EmbedBuilder().setDescription(`💤 **${mUser.username}** is AFK: ${String(entry.reason || 'No reason given').slice(0, 512)} (since <t:${Math.floor(entry.since / 1000)}:R>)`).setColor(0xFFAA00)] }).catch(() => {});
+                const afkNoticeRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`afk_leavemsg_${guildId}_${mentionedId}`).setLabel('📝 Leave a Message').setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder().setCustomId(`afk_notify_${guildId}_${mentionedId}`).setLabel('🔔 Notify When Back').setStyle(ButtonStyle.Secondary),
+                );
+                message.channel.send({ embeds: [new EmbedBuilder().setDescription(`💤 **${mUser.username}** is AFK: ${String(entry.reason || 'No reason given').slice(0, 512)} (since <t:${Math.floor(entry.since / 1000)}:R>)`).setColor(0xFFAA00)], components: [afkNoticeRow] }).catch(() => {});
             }
         }
     }
@@ -25964,10 +26070,16 @@ async function handlePrefixCommands(message, isAdmin, isMod, data, gs) {
         data.afk = data.afk || {};
         data.afk[message.guildId] = data.afk[message.guildId] || {};
         if ((args[0] || '').toLowerCase() === 'clear') {
-            const had = !!data.afk[message.guildId][message.author.id];
+            const existing = data.afk[message.guildId][message.author.id];
             delete data.afk[message.guildId][message.author.id];
             saveData(data);
-            await message.channel.send({ embeds: [modEmbed(had ? '✅ Your AFK status has been cleared.' : "You weren't marked AFK.")] });
+            if (existing) {
+                const clearEmbed = buildAfkReturnEmbed(message.author, existing).setDescription('✅ Your AFK status has been cleared.' + (existing.mentionsWhileAway ? ` You were mentioned **${existing.mentionsWhileAway}** time(s) while away.` : ''));
+                await message.channel.send({ embeds: [clearEmbed] });
+                notifyAfkSubscribers(client, message.guild, message.author, existing);
+            } else {
+                await message.channel.send({ embeds: [modEmbed("You weren't marked AFK.")] });
+            }
         } else {
             const afkReason = args.join(' ') || 'No reason given';
             data.afk[message.guildId][message.author.id] = { reason: afkReason, since: Date.now(), mentionsWhileAway: 0 };
