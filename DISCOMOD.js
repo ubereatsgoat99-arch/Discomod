@@ -3853,6 +3853,26 @@ function getTickets(data, guildId) {
     data.tickets[guildId] = data.tickets[guildId] || {};
     return data.tickets[guildId];
 }
+function getTicketStaffRoleIds(gs) {
+    const ids = [];
+    if (gs.ticketStaffRoleId) ids.push(gs.ticketStaffRoleId);
+    if (Array.isArray(gs.ticketExtraRoleIds)) for (const id of gs.ticketExtraRoleIds) if (!ids.includes(id)) ids.push(id);
+    return ids;
+}
+// Parses a free-text field like "@Mod @Support, 123456789012345678" into an array of role IDs,
+// validated against roles that actually exist in the guild.
+function parseRoleListInput(guild, raw) {
+    if (!raw) return [];
+    const ids = new Set();
+    const mentionRe = /<@&(\d+)>/g;
+    let m;
+    while ((m = mentionRe.exec(raw))) ids.add(m[1]);
+    const stripped = raw.replace(mentionRe, ' ');
+    for (const token of stripped.split(/[,\s]+/)) {
+        if (/^\d{15,25}$/.test(token)) ids.add(token);
+    }
+    return [...ids].filter(id => guild.roles.cache.has(id));
+}
 function getUserOpenTicket(data, guildId, userId) {
     data.userTickets = data.userTickets || {};
     data.userTickets[guildId] = data.userTickets[guildId] || {};
@@ -5195,7 +5215,10 @@ function isCategoryImmune(member, guildId, data, category) {
 
 // Parses a free-text option value ("#general, 123456789012345678 <#987654321098765432>")
 // into an array of unique channel-ID strings. Accepts raw IDs and <#id> mentions.
-function parseChannelIdsFromText(raw) {
+// Parses channel mentions/IDs from free text and validates them against the given guild's
+// channel cache — any ID that doesn't belong to this guild is silently dropped. This prevents
+// a raw channel ID from another server being accepted into per-guild config.
+function parseChannelIdsFromText(raw, guild = null) {
     if (!raw) return [];
     const ids = new Set();
     const mentionRe = /<#(\d{15,20})>/g;
@@ -5204,7 +5227,9 @@ function parseChannelIdsFromText(raw) {
     for (const tok of raw.split(/[\s,]+/)) {
         if (/^\d{15,20}$/.test(tok)) ids.add(tok);
     }
-    return Array.from(ids);
+    const all = Array.from(ids);
+    if (!guild) return all; // caller must validate guild membership itself if not provided
+    return all.filter(id => guild.channels.cache.has(id));
 }
 
 const CHECK_CATEGORIES = ['spam', 'scam', 'command', 'trade', 'service', 'beg', 'acctrade'];
@@ -13577,10 +13602,14 @@ const slashCommands = [
         .addSubcommand(s => s.setName('setup').setDescription('Configure the ticket system (opens a detailed setup form)')
             .addChannelOption(o => o.setName('panel_channel').setDescription('Channel where the "Open a Ticket" button panel is posted').setRequired(true))
             .addChannelOption(o => o.setName('category').setDescription('Category for new ticket channels').setRequired(true))
-            .addRoleOption(o => o.setName('staff_role').setDescription('Role auto-added to every ticket and pinged on open').setRequired(false))
+            .addStringOption(o => o.setName('staff_roles').setDescription('Staff roles — mention or paste IDs, space/comma separated (e.g. @Mod @Support)').setRequired(false))
             .addChannelOption(o => o.setName('log_channel').setDescription('Channel for ticket close logs and transcripts').setRequired(false))
             .addStringOption(o => o.setName('open_message').setDescription('Message shown inside a new ticket — supports {user} {subject} {reason}').setRequired(false))
             .addBooleanOption(o => o.setName('ping_staff').setDescription('Ping staff role when ticket opens (default: true)').setRequired(false)))
+        .addSubcommand(s => s.setName('addstaffrole').setDescription('Add another staff role to the ticket system')
+            .addRoleOption(o => o.setName('role').setDescription('Role to add as ticket staff').setRequired(true)))
+        .addSubcommand(s => s.setName('removestaffrole').setDescription('Remove a staff role from the ticket system')
+            .addRoleOption(o => o.setName('role').setDescription('Role to remove from ticket staff').setRequired(true)))
         .addSubcommand(s => s.setName('panel').setDescription('Post/refresh the ticket creation panel in a channel')
             .addChannelOption(o => o.setName('channel').setDescription('Channel to post the panel in (default: this channel)').setRequired(false)))
         .addSubcommand(s => s.setName('add').setDescription('Add a user or role to this ticket channel')
@@ -13594,6 +13623,7 @@ const slashCommands = [
         .addSubcommand(s => s.setName('rename').setDescription('Rename this ticket channel')
             .addStringOption(o => o.setName('name').setDescription('New channel name').setRequired(true)))
         .addSubcommand(s => s.setName('claim').setDescription('Claim this ticket (assign to yourself)'))
+        .addSubcommand(s => s.setName('unclaim').setDescription('Unclaim this ticket — restores access for all staff roles'))
         .addSubcommand(s => s.setName('transfer').setDescription('Transfer ticket claim to another staff member')
             .addUserOption(o => o.setName('user').setDescription('New owner of this ticket').setRequired(true)))
         .addSubcommand(s => s.setName('stats').setDescription('Show ticket system stats for this server')),
@@ -14481,23 +14511,22 @@ client.on('interactionCreate', async interaction => {
             if (!tInfo) { await interaction.reply({ content: '❌ Ticket not found.', flags: MessageFlags.Ephemeral }); return; }
             tInfo.claimedBy = interaction.user.id;
             saveData(tData);
-            // Kick all other staff from channel
-            if (tGs.ticketStaffRoleId) {
-                const staffRole = interaction.guild.roles.cache.get(tGs.ticketStaffRoleId);
-                if (staffRole) {
-                    for (const [mId, m] of interaction.guild.members.cache) {
-                        if (mId === interaction.user.id || mId === tInfo.userId || mId === client.user.id) continue;
-                        if (m.roles.cache.has(staffRole.id))
-                            await interaction.channel.permissionOverwrites.edit(mId, { ViewChannel: false }).catch(()=>{});
-                    }
+            // Kick all other staff (primary + extra roles) from channel
+            const claimBtnStaffRoleIds = getTicketStaffRoleIds(tGs);
+            if (claimBtnStaffRoleIds.length) {
+                for (const [mId, m] of interaction.guild.members.cache) {
+                    if (mId === interaction.user.id || mId === tInfo.userId || mId === client.user.id) continue;
+                    if (claimBtnStaffRoleIds.some(rid => m.roles.cache.has(rid)))
+                        await interaction.channel.permissionOverwrites.edit(mId, { ViewChannel: false }).catch(()=>{});
                 }
             }
             await interaction.channel.permissionOverwrites.edit(interaction.user.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }).catch(()=>{});
-            // Disable the claim button in the original message
+            // Update buttons: disable claim, enable unclaim
             try {
                 const updatedRow1 = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId(`ticket_close_btn_${tGuildId}_${tChannelId}`).setLabel('🔒 Close Ticket').setStyle(ButtonStyle.Danger),
                     new ButtonBuilder().setCustomId(`ticket_claim_btn_${tGuildId}_${tChannelId}`).setLabel(`✅ Claimed by ${interaction.user.username}`).setStyle(ButtonStyle.Success).setDisabled(true),
+                    new ButtonBuilder().setCustomId(`ticket_unclaim_btn_${tGuildId}_${tChannelId}`).setLabel('🙌 Unclaim').setStyle(ButtonStyle.Secondary),
                 );
                 await interaction.update({ components: [updatedRow1] });
             } catch { await interaction.deferUpdate().catch(()=>{}); }
@@ -14505,6 +14534,44 @@ client.on('interactionCreate', async interaction => {
                 .setTitle('🙋 Ticket Claimed')
                 .setDescription(`<@${interaction.user.id}> has claimed this ticket.\nAll other staff have been removed — only <@${interaction.user.id}> and <@${tInfo.userId}> remain.`)
                 .setColor(0x5865F2).setTimestamp()] });
+            return;
+        }
+
+        // "Unclaim ticket" button
+        if (cid.startsWith('ticket_unclaim_btn_')) {
+            const rest = cid.slice('ticket_unclaim_btn_'.length);
+            const [tGuildId, tChannelId] = rest.split('_');
+            if (tGuildId !== interaction.guild?.id) return;
+            const tData = loadData();
+            const tGs   = getGuildSettings(tGuildId, tData);
+            const tickets = getTickets(tData, tGuildId);
+            const tInfo = tickets[tChannelId];
+            if (!tInfo) { await interaction.reply({ content: '❌ Ticket not found.', flags: MessageFlags.Ephemeral }); return; }
+            const isTMod = interaction.member?.permissions.has(PermissionFlagsBits.ManageMessages) || isManagerMember(interaction.member, tGuildId, tData);
+            if (!tInfo.claimedBy) { await interaction.reply({ content: '❌ This ticket is not currently claimed.', flags: MessageFlags.Ephemeral }); return; }
+            if (tInfo.claimedBy !== interaction.user.id && !isTMod) { await interaction.reply({ content: '❌ Only the claimant or an admin can unclaim this ticket.', flags: MessageFlags.Ephemeral }); return; }
+
+            const prevClaimant = tInfo.claimedBy;
+            tInfo.claimedBy = null;
+            saveData(tData);
+
+            const unclaimBtnStaffRoleIds = getTicketStaffRoleIds(tGs);
+            for (const rid of unclaimBtnStaffRoleIds) {
+                await interaction.channel.permissionOverwrites.edit(rid, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }).catch(()=>{});
+            }
+
+            // Restore original claim/close button row
+            try {
+                const resetRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`ticket_close_btn_${tGuildId}_${tChannelId}`).setLabel('🔒 Close Ticket').setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId(`ticket_claim_btn_${tGuildId}_${tChannelId}`).setLabel('🙋 Claim Ticket').setStyle(ButtonStyle.Success),
+                );
+                await interaction.update({ components: [resetRow] });
+            } catch { await interaction.deferUpdate().catch(()=>{}); }
+            await interaction.channel.send({ embeds: [new EmbedBuilder()
+                .setTitle('🙌 Ticket Unclaimed')
+                .setDescription(`<@${prevClaimant}> has unclaimed this ticket.\nAll staff can view and respond again.`)
+                .setColor(0xFFA500).setTimestamp()] });
             return;
         }
     }
@@ -14621,29 +14688,52 @@ client.on('interactionCreate', async interaction => {
 
         // ── Setup modal page 1 — Core ────────────────────────
         if (interaction.customId === 'setup_modal_p1') {
+            // SECURITY: All IDs here are free-text and must be validated as belonging to THIS
+            // guild before being saved — otherwise a pasted ID from a foreign server could be
+            // accepted into config (cross-server channel/role injection).
             function parseIdsP1(raw) {
-                return raw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s));
+                return raw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s))
+                    .filter(id => interaction.guild.channels.cache.has(id));
             }
             const tradeRaw    = interaction.fields.getTextInputValue('trade_channel_ids').trim();
             const servicesRaw = interaction.fields.getTextInputValue('services_channel_ids').trim();
-            const exileRole   = interaction.fields.getTextInputValue('exile_role_id').trim();
-            const logId       = interaction.fields.getTextInputValue('log_channel_id').trim();
-            const appId       = interaction.fields.getTextInputValue('appeals_channel_id').trim();
+            const exileRoleRaw = interaction.fields.getTextInputValue('exile_role_id').trim();
+            const logIdRaw     = interaction.fields.getTextInputValue('log_channel_id').trim();
+            const appIdRaw     = interaction.fields.getTextInputValue('appeals_channel_id').trim();
+            const rejectedIds = [];
             if (tradeRaw !== '') {
+                const allTok = tradeRaw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s));
                 const ids = parseIdsP1(tradeRaw);
+                rejectedIds.push(...allTok.filter(id => !ids.includes(id)));
                 gs.tradeChannelIds = ids;
                 if (ids.length > 0) gs.tradeChannelId = ids[0];  // legacy single-ID compat
             }
             if (servicesRaw !== '') {
+                const allTok = servicesRaw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s));
                 const ids = parseIdsP1(servicesRaw);
+                rejectedIds.push(...allTok.filter(id => !ids.includes(id)));
                 gs.servicesChannelIds = ids;
                 if (ids.length > 0) gs.servicesChannelId = ids[0];  // legacy single-ID compat
             }
+            let exileRole = '', logId = '', appId = '';
+            if (exileRoleRaw && /^\d{15,20}$/.test(exileRoleRaw) && interaction.guild.roles.cache.has(exileRoleRaw)) exileRole = exileRoleRaw;
+            else if (exileRoleRaw) rejectedIds.push(exileRoleRaw);
+            if (logIdRaw && /^\d{15,20}$/.test(logIdRaw) && interaction.guild.channels.cache.has(logIdRaw)) logId = logIdRaw;
+            else if (logIdRaw) rejectedIds.push(logIdRaw);
+            if (appIdRaw && /^\d{15,20}$/.test(appIdRaw) && interaction.guild.channels.cache.has(appIdRaw)) appId = appIdRaw;
+            else if (appIdRaw) rejectedIds.push(appIdRaw);
             if (exileRole)  gs.exiledRoleId      = exileRole;
             if (logId)      gs.logChannelId      = logId;
             if (appId)      gs.appealsChannelId  = appId;
             // Channels saved — detections NOT enabled yet. Run /setup completeset when ready.
             saveData(data);
+            if (rejectedIds.length) {
+                await interaction.reply({
+                    content: `⚠️ Saved, but rejected ${rejectedIds.length} ID(s) that don't belong to this server: \`${rejectedIds.join('`, `')}\``,
+                    flags: MessageFlags.Ephemeral,
+                });
+                return;
+            }
             await interaction.reply({
                 embeds: [buildSetupPickerEmbed(gs)
                     .setTitle('✅ Setup — Page 1 Saved')
@@ -14656,8 +14746,10 @@ client.on('interactionCreate', async interaction => {
 
         // ── Setup modal page 2 — Channel Pools ──────────────
         if (interaction.customId === 'setup_modal_p2') {
+            // SECURITY: reject any ID that isn't an actual channel in this guild.
             function parseIds(raw) {
-                return raw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s));
+                return raw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s))
+                    .filter(id => interaction.guild.channels.cache.has(id));
             }
             const raidRaw  = interaction.fields.getTextInputValue('raid_channel_ids').trim();
             const raceRaw  = interaction.fields.getTextInputValue('race_channel_ids').trim();
@@ -14711,17 +14803,22 @@ client.on('interactionCreate', async interaction => {
         // ── Setup modal page 3 — Misc ────────────────────────
         if (interaction.customId === 'setup_modal_p3') {
             const hubRaw   = interaction.fields.getTextInputValue('games_hub_ids').trim();
-            const exileCh  = interaction.fields.getTextInputValue('exile_channel_id').trim();
+            const exileChRaw = interaction.fields.getTextInputValue('exile_channel_id').trim();
             const thresh   = parseInt(interaction.fields.getTextInputValue('violation_threshold').trim()) || 0;
             const dur      = parseInt(interaction.fields.getTextInputValue('exile_duration_mins').trim())  || 0;
             if (hubRaw !== '') {
-                const hubIds = hubRaw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s));
+                // SECURITY: only accept hub IDs that are actual channels in this guild.
+                const hubIds = hubRaw.split(/[\s,]+/).map(s => s.trim()).filter(s => /^\d{15,20}$/.test(s))
+                    .filter(id => interaction.guild.channels.cache.has(id));
                 if (hubIds.length > 0) {
                     gs.gamesHubIds = hubIds;
                     gs.gamesHubId  = hubIds[0]; // legacy single-ID compat
                 }
             }
-            if (exileCh) gs.exileChannelId    = exileCh;
+            // SECURITY: only accept the exile channel ID if it belongs to this guild.
+            if (exileChRaw && /^\d{15,20}$/.test(exileChRaw) && interaction.guild.channels.cache.has(exileChRaw)) {
+                gs.exileChannelId = exileChRaw;
+            }
             if (thresh)  gs.violationThreshold = Math.max(1, Math.min(10, thresh));
             if (dur)     gs.exileDurationMins  = Math.max(1, Math.min(1440, dur));
             saveData(data);
@@ -14737,15 +14834,42 @@ client.on('interactionCreate', async interaction => {
 
         // ── Legacy setup_modal (keep for backwards compat) ──
         if (interaction.customId === 'setup_modal') {
-            gs.tradeChannelId    = interaction.fields.getTextInputValue('trade_channel_id').trim();
-            gs.servicesChannelId = interaction.fields.getTextInputValue('services_channel_id').trim();
-            gs.exiledRoleId      = interaction.fields.getTextInputValue('exile_role_id').trim();
-            const logId          = interaction.fields.getTextInputValue('log_channel_id').trim();
-            const appId          = interaction.fields.getTextInputValue('appeals_channel_id').trim();
-            if (logId) gs.logChannelId = logId;
-            if (appId) gs.appealsChannelId = appId;
+            // SECURITY: validate every submitted ID actually belongs to this guild before saving.
+            const tradeIdRaw    = interaction.fields.getTextInputValue('trade_channel_id').trim();
+            const servicesIdRaw = interaction.fields.getTextInputValue('services_channel_id').trim();
+            const exileRoleRaw  = interaction.fields.getTextInputValue('exile_role_id').trim();
+            const logId         = interaction.fields.getTextInputValue('log_channel_id').trim();
+            const appId         = interaction.fields.getTextInputValue('appeals_channel_id').trim();
+            const legacyRejected = [];
+            if (tradeIdRaw) {
+                if (interaction.guild.channels.cache.has(tradeIdRaw)) gs.tradeChannelId = tradeIdRaw;
+                else legacyRejected.push(tradeIdRaw);
+            }
+            if (servicesIdRaw) {
+                if (interaction.guild.channels.cache.has(servicesIdRaw)) gs.servicesChannelId = servicesIdRaw;
+                else legacyRejected.push(servicesIdRaw);
+            }
+            if (exileRoleRaw) {
+                if (interaction.guild.roles.cache.has(exileRoleRaw)) gs.exiledRoleId = exileRoleRaw;
+                else legacyRejected.push(exileRoleRaw);
+            }
+            if (logId) {
+                if (interaction.guild.channels.cache.has(logId)) gs.logChannelId = logId;
+                else legacyRejected.push(logId);
+            }
+            if (appId) {
+                if (interaction.guild.channels.cache.has(appId)) gs.appealsChannelId = appId;
+                else legacyRejected.push(appId);
+            }
             // Channels saved — detections NOT enabled yet. Run /setup completeset when ready.
             saveData(data);
+            if (legacyRejected.length) {
+                await interaction.reply({
+                    content: `⚠️ Saved, but rejected ${legacyRejected.length} ID(s) that don't belong to this server: \`${legacyRejected.join('`, `')}\``,
+                    flags: MessageFlags.Ephemeral,
+                });
+                return;
+            }
             await interaction.reply({
                 embeds: [buildSetupPickerEmbed(gs).setTitle('✅ SKYNET V7 — Setup Complete').setColor(0x00FF88)],
                 components: buildSetupPickerComponents(),
@@ -16897,7 +17021,7 @@ client.on('interactionCreate', async interaction => {
 
             const catOpt = interaction.options.getString('category') || 'all';
             const channelsRaw = interaction.options.getString('channels') || '';
-            const channelIds = parseChannelIdsFromText(channelsRaw);
+            const channelIds = parseChannelIdsFromText(channelsRaw, interaction.guild);
             const categories = catOpt === 'all' ? CHECK_CATEGORIES : [catOpt];
 
             if (csub === 'disable') {
@@ -20295,20 +20419,29 @@ client.on('interactionCreate', async interaction => {
             // ── setup ─────────────────────────────────────────────────────────
             if (tSub === 'setup') {
                 if (!isAdmin) { await safeReply(interaction, { content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
-                const panelCh  = interaction.options.getChannel('panel_channel');
-                const cat      = interaction.options.getChannel('category');
-                const sr       = interaction.options.getRole('staff_role');
-                const lc       = interaction.options.getChannel('log_channel');
-                const openMsg  = interaction.options.getString('open_message');
-                const ping     = interaction.options.getBoolean('ping_staff') ?? true;
+                const panelCh    = interaction.options.getChannel('panel_channel');
+                const cat        = interaction.options.getChannel('category');
+                const staffRolesRaw = interaction.options.getString('staff_roles');
+                const lc         = interaction.options.getChannel('log_channel');
+                const openMsg    = interaction.options.getString('open_message');
+                const ping       = interaction.options.getBoolean('ping_staff') ?? true;
                 if (cat?.type !== ChannelType.GuildCategory) { await safeReply(interaction, { content: '❌ The `category` option must be a category channel.', flags: MessageFlags.Ephemeral }); return; }
                 gs.ticketEnabled        = true;
                 gs.ticketCategoryId     = cat.id;
                 gs.ticketPanelChannelId = panelCh.id;
-                if (sr)      gs.ticketStaffRoleId  = sr.id;
                 if (lc)      gs.ticketLogChannelId = lc.id;
                 if (openMsg) gs.ticketOpenMessage  = openMsg;
                 gs.ticketPingStaff = ping;
+                let parsedStaffRoleIds = null;
+                if (staffRolesRaw) {
+                    parsedStaffRoleIds = parseRoleListInput(interaction.guild, staffRolesRaw);
+                    if (!parsedStaffRoleIds.length) {
+                        await safeReply(interaction, { content: '❌ Could not find any valid roles in `staff_roles`. Mention roles (@Role) or paste role IDs, separated by spaces or commas.', flags: MessageFlags.Ephemeral });
+                        return;
+                    }
+                    gs.ticketStaffRoleId  = parsedStaffRoleIds[0];
+                    gs.ticketExtraRoleIds = parsedStaffRoleIds.slice(1);
+                }
                 saveData(data);
 
                 // Auto-post the panel in the chosen channel
@@ -20334,7 +20467,7 @@ client.on('interactionCreate', async interaction => {
                     .addFields(
                         { name: 'Panel Channel', value: `<#${panelCh.id}>`, inline: true },
                         { name: 'Category',      value: cat.name, inline: true },
-                        { name: 'Staff Role',    value: sr ? `<@&${sr.id}>` : '*(none)*', inline: true },
+                        { name: 'Staff Roles',   value: getTicketStaffRoleIds(gs).length ? getTicketStaffRoleIds(gs).map(id => `<@&${id}>`).join(', ') : '*(none)*', inline: false },
                         { name: 'Log Channel',   value: lc ? `<#${lc.id}>` : '*(none)*', inline: true },
                         { name: 'Ping Staff',    value: ping ? 'Yes' : 'No', inline: true },
                     )
@@ -20344,6 +20477,42 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🎫 Ticket System Configured')
                     .setDescription(`**By:** <@${interaction.user.id}>\n**Panel:** <#${panelCh.id}> | **Cat:** ${cat.name}`)
                     .setColor(0x2ECC71).setTimestamp());
+                break;
+            }
+
+            // ── addstaffrole ─────────────────────────────────────────────────
+            if (tSub === 'addstaffrole') {
+                if (!isAdmin) { await safeReply(interaction, { content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+                const role = interaction.options.getRole('role');
+                if (!Array.isArray(gs.ticketExtraRoleIds)) gs.ticketExtraRoleIds = [];
+                if (role.id === gs.ticketStaffRoleId || gs.ticketExtraRoleIds.includes(role.id)) {
+                    await safeReply(interaction, { content: `❌ <@&${role.id}> is already a ticket staff role.`, flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                gs.ticketExtraRoleIds.push(role.id);
+                saveData(data);
+                await safeReply(interaction, { embeds: [new EmbedBuilder().setDescription(`✅ Added <@&${role.id}> as a ticket staff role.`).setColor(0x2ECC71)], flags: MessageFlags.Ephemeral });
+                break;
+            }
+
+            // ── removestaffrole ──────────────────────────────────────────────
+            if (tSub === 'removestaffrole') {
+                if (!isAdmin) { await safeReply(interaction, { content: '❌ Admins only.', flags: MessageFlags.Ephemeral }); return; }
+                const role = interaction.options.getRole('role');
+                if (!Array.isArray(gs.ticketExtraRoleIds)) gs.ticketExtraRoleIds = [];
+                if (role.id === gs.ticketStaffRoleId) {
+                    gs.ticketStaffRoleId = null;
+                    saveData(data);
+                    await safeReply(interaction, { embeds: [new EmbedBuilder().setDescription(`✅ Removed <@&${role.id}> as the primary staff role.`).setColor(0x2ECC71)], flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                if (!gs.ticketExtraRoleIds.includes(role.id)) {
+                    await safeReply(interaction, { content: `❌ <@&${role.id}> is not currently a ticket staff role.`, flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                gs.ticketExtraRoleIds = gs.ticketExtraRoleIds.filter(id => id !== role.id);
+                saveData(data);
+                await safeReply(interaction, { embeds: [new EmbedBuilder().setDescription(`✅ Removed <@&${role.id}> as a ticket staff role.`).setColor(0x2ECC71)], flags: MessageFlags.Ephemeral });
                 break;
             }
 
@@ -20441,22 +20610,18 @@ client.on('interactionCreate', async interaction => {
                 saveData(data);
 
                 // ── KICK ALL OTHER STAFF from the channel ──────────────────────
-                // Remove every member that has the staff role EXCEPT the claimant
-                if (gs.ticketStaffRoleId) {
-                    const staffRole = interaction.guild.roles.cache.get(gs.ticketStaffRoleId);
-                    if (staffRole) {
-                        for (const [memberId, member] of interaction.guild.members.cache) {
-                            if (memberId === interaction.user.id)   continue; // keep claimant
-                            if (memberId === tInfo.userId)          continue; // keep opener
-                            if (memberId === client.user.id)        continue; // keep bot
-                            if (!member.roles.cache.has(staffRole.id)) continue;
-                            // This staff member should be removed from the ticket channel
-                            await interaction.channel.permissionOverwrites.edit(memberId, { ViewChannel: false }).catch(()=>{});
-                        }
+                // Remove every member that has any ticket staff role EXCEPT the claimant
+                const claimStaffRoleIds = getTicketStaffRoleIds(gs);
+                if (claimStaffRoleIds.length) {
+                    for (const [memberId, member] of interaction.guild.members.cache) {
+                        if (memberId === interaction.user.id)   continue; // keep claimant
+                        if (memberId === tInfo.userId)          continue; // keep opener
+                        if (memberId === client.user.id)        continue; // keep bot
+                        if (!claimStaffRoleIds.some(rid => member.roles.cache.has(rid))) continue;
+                        // This staff member should be removed from the ticket channel
+                        await interaction.channel.permissionOverwrites.edit(memberId, { ViewChannel: false }).catch(()=>{});
                     }
                 }
-                // Also explicitly block anyone in the ticketExtraRoleIds from seeing it if they have no other reason
-                // (they stay via role overrides, but individual overwrites take precedence — enough for claim)
 
                 // Make sure claimant has explicit view access
                 await interaction.channel.permissionOverwrites.edit(interaction.user.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }).catch(()=>{});
@@ -20470,6 +20635,37 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🎫 Ticket Claimed')
                     .setDescription(`**Channel:** ${interaction.channel.name}\n**Claimed by:** <@${interaction.user.id}>\n**Opened by:** <@${tInfo.userId}>`)
                     .setColor(0x5865F2).setTimestamp());
+                break;
+            }
+
+            // ── unclaim ───────────────────────────────────────────────────────
+            if (tSub === 'unclaim') {
+                if (!isMod && !isAdmin) { await safeReply(interaction, { content: '❌ Mods only.', flags: MessageFlags.Ephemeral }); return; }
+                const tickets = getTickets(data, guildId);
+                if (!tickets[interaction.channelId]) { await safeReply(interaction, { content: '❌ Must be used inside a ticket channel.', flags: MessageFlags.Ephemeral }); return; }
+                const tInfo = tickets[interaction.channelId];
+                if (!tInfo.claimedBy) { await safeReply(interaction, { content: '❌ This ticket is not currently claimed.', flags: MessageFlags.Ephemeral }); return; }
+                if (tInfo.claimedBy !== interaction.user.id && !isAdmin) { await safeReply(interaction, { content: '❌ Only the claimant or an admin can unclaim this ticket.', flags: MessageFlags.Ephemeral }); return; }
+
+                const prevClaimant = tInfo.claimedBy;
+                tInfo.claimedBy = null;
+                saveData(data);
+
+                // Restore access for all staff roles
+                const unclaimStaffRoleIds = getTicketStaffRoleIds(gs);
+                for (const rid of unclaimStaffRoleIds) {
+                    await interaction.channel.permissionOverwrites.edit(rid, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }).catch(()=>{});
+                }
+
+                await interaction.channel.send({ embeds: [new EmbedBuilder()
+                    .setTitle('🙌 Ticket Unclaimed')
+                    .setDescription(`<@${prevClaimant}> has unclaimed this ticket.\nAll staff can view and respond again.`)
+                    .setColor(0xFFA500).setTimestamp()] });
+                await safeReply(interaction, { content: '✅ Ticket unclaimed — staff access restored.', flags: MessageFlags.Ephemeral });
+                await sendLog(interaction.guild, data, new EmbedBuilder()
+                    .setTitle('🎫 Ticket Unclaimed')
+                    .setDescription(`**Channel:** ${interaction.channel.name}\n**Unclaimed by:** <@${interaction.user.id}>\n**Previously claimed by:** <@${prevClaimant}>`)
+                    .setColor(0xFFA500).setTimestamp());
                 break;
             }
 
@@ -20504,6 +20700,7 @@ client.on('interactionCreate', async interaction => {
                         { name: 'Open',           value: String(open),        inline: true },
                         { name: 'Closed',         value: String(closed),      inline: true },
                         { name: 'Staff Role',     value: gs.ticketStaffRoleId ? `<@&${gs.ticketStaffRoleId}>` : '*(not set)*', inline: true },
+                        { name: 'Extra Staff Roles', value: (gs.ticketExtraRoleIds || []).length ? gs.ticketExtraRoleIds.map(id => `<@&${id}>`).join(', ') : '*(none)*', inline: true },
                         { name: 'Category',       value: gs.ticketCategoryId ? `<#${gs.ticketCategoryId}>` : '*(not set)*', inline: true },
                         { name: 'Log Channel',    value: gs.ticketLogChannelId ? `<#${gs.ticketLogChannelId}>` : '*(not set)*', inline: true },
                     ).setTimestamp()], flags: MessageFlags.Ephemeral });
