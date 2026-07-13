@@ -18,7 +18,7 @@ echo ""
 echo "=== Required Configuration ==="
 read -p "Discord Token: " DISCORD_TOKEN
 read -p "Client ID: " CLIENT_ID
-read -p "Bot Owner: " SUPERUSER_ID
+read -p "Bot Owner ID: " SUPERUSER_ID
 read -p "Anthropic API Key: " ANTHROPIC_API_KEY
 read -p "OpenAI API Key: " OPENAI_API_KEY
 read -p "Groq API Key: " GROQ_API_KEY
