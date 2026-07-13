@@ -65,10 +65,15 @@ set_yaml_value() {
 
 # Required vars (.env)
 set_env "DISCORD_TOKEN" "$DISCORD_TOKEN"
-set_env "ANTHROPIC_API_KEY" "$ANTHROPIC_API_KEY"
-set_env "WOLFRAM_APPID" "$WOLFRAM_APPID"
-set_env "GROQ_API_KEY" "$GROQ_API_KEY"
 set_env "CLIENT_ID" "$CLIENT_ID"
+set_env "ANTHROPIC_API_KEY" "$ANTHROPIC_API_KEY"
+set_env "OPENAI_API_KEY" "$OPENAI_API_KEY"
+set_env "GROQ_API_KEY" "$GROQ_API_KEY"
+set_env "DEEPSEEK_API_KEY" "$DEEPSEEK_API_KEY"
+set_env "GEMINI_API_KEY" "$GEMINI_API_KEY"
+set_env "MISTRAL_API_KEY" "$MISTRAL_API_KEY"
+set_env "XAI_API_KEY" "$XAI_API_KEY"
+set_env "WOLFRAM_APPID" "$WOLFRAM_APPID"
 
 # Optional vars (.env)
 if [[ "$PYTHON_BIN" != "skip" && -n "$PYTHON_BIN" ]]; then

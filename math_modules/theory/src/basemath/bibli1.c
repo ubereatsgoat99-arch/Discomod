@@ -225,30 +225,28 @@ R_from_QR(GEN x, long prec)
 /********************************************************************/
 /**             QR Factorization via Gram-Schmidt                  **/
 /********************************************************************/
+/* return x + y, x possibly NULL (= initialized to gen_0) */
+static GEN
+_add(GEN x, GEN y) { return x? gadd(x, y): y; }
 
 /* return Gram-Schmidt orthogonal basis (f) attached to (e), B is the
  * vector of the (f_i . f_i)*/
 GEN
 RgM_gram_schmidt(GEN e, GEN *ptB)
 {
-  long i,j,lx = lg(e);
-  GEN f = RgM_shallowcopy(e), B, iB;
+  long i, j, lx = lg(e);
+  GEN f = RgM_shallowcopy(e), B = cgetg(lx, t_VEC), iB = cgetg(lx, t_VEC);
 
-  B = cgetg(lx, t_VEC);
-  iB= cgetg(lx, t_VEC);
-
-  for (i=1;i<lx;i++)
+  for (i = 1; i < lx; i++)
   {
-    GEN p1 = NULL;
     pari_sp av = avma;
-    for (j=1; j<i; j++)
+    GEN c = NULL;
+    for (j = 1; j < i; j++)
     {
       GEN mu = gmul(RgV_dotproduct(gel(e,i),gel(f,j)), gel(iB,j));
-      GEN p2 = gmul(mu, gel(f,j));
-      p1 = p1? gadd(p1,p2): p2;
+      c = _add(c, gmul(mu, gel(f,j)));
     }
-    p1 = p1? gc_upto(av, gsub(gel(e,i), p1)): gel(e,i);
-    gel(f,i) = p1;
+    gel(f,i) = c? gc_upto(av, gsub(gel(e,i), c)): gel(e,i);
     gel(B,i) = RgV_dotsquare(gel(f,i));
     gel(iB,i) = ginv(gel(B,i));
   }

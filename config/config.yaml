@@ -14,11 +14,11 @@ bot:
   claude_model: claude-haiku-4-5-20251001
   help_command_enabled: true
   hold_conversation: true
-  owner_id: "1427299411049840640"
+  owner_id: "67"
   prefix: '!'
   realistic_typing: false
   reply_ping: true
   trigger: cyber
 notifications:
-  error_webhook: https://discord.com/api/webhooks/1494034203371769997/T_nprdxd93SKV-bRudRqUos7gZmY2cqWdjtErO9k4pCZBiy2hJc9b0WXIJ5qqd_0gbkO
+  error_webhook: "dih"
   ratelimit_notifications: true
